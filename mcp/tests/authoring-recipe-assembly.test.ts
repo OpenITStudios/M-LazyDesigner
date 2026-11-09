@@ -174,6 +174,34 @@ describe("R2 explicit semantic assembly inside existing Recipe", () => {
       .toBe("SOURCE_IDENTITY_REVIEW_REQUIRED");
   });
 
+
+  test("anchor dependency cycles are flagged before canonical compiler rejects them", () => {
+    const recipe = assemblyRecipe();
+    recipe.symmetry = [];
+    recipe.constraints!.push({
+      ...recipe.constraints![0]!,
+      id: "reverse-attachment",
+      source_instance_id: "frame:0",
+      target_instance_id: "panel:0",
+    });
+    const review = reviewDeclaredRecipeAssembly(recipe, ["frame-feature", "hinge-feature"]);
+    for (const feature of review) {
+      expect(feature.state).toBe("SOURCE_IDENTITY_REVIEW_REQUIRED");
+      expect(feature.source_identity_issues).toContain("ANCHOR_DEPENDENCY_CYCLE");
+      expect(feature.native_mutation_executed).toBe(false);
+    }
+    expect(() => compileAuthoringRecipe(recipe)).toThrow(/cycle detected/i);
+  });
+
+  test("self-anchor is rejected in review without mislabelling native bone hierarchy", () => {
+    const recipe = assemblyRecipe();
+    recipe.constraints![0]!.target_instance_id = "panel:0";
+    const review = reviewDeclaredRecipeAssembly(recipe, ["hinge-feature", "frame-feature"]);
+    expect(review[0]?.source_identity_issues).toContain("ANCHOR_DEPENDENCY_CYCLE");
+    expect(review[1]?.source_identity_issues).not.toContain("ANCHOR_DEPENDENCY_CYCLE");
+    expect(() => compileAuthoringRecipe(recipe)).toThrow(/cannot target the same instance/i);
+  });
+
   test("large relation inventories remain bounded without blocking native compilation paths", () => {
     const recipe = assemblyRecipe();
     recipe.constraints = Array.from({ length: 129 }, (_, i) => ({

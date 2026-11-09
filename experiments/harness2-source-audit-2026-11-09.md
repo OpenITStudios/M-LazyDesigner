@@ -72,3 +72,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Falsifiers authored:** two-view mutually cyclic assembly, single-view self-parent without independent support, conflicting parent claims and incomplete external parent evidence. These are deterministic source regression cases; **NOT_EXECUTED**. The evaluator cannot establish whether an image really depicts the claimed parent or whether a native Blockbench rig is correct.
 
 **Expected value (unmeasured):** prevent internally impossible parent plans from being called cross-view consistent before Geometry/rig construction. No visual quality gain, time saving or native PASS is claimed.
+
+## Harness² iteration D — Recipe positional dependency cycle parity (2026-11-09)
+
+**Observed discrepancy:** `solveRecipeConstraints` rejects self-anchors and directed ANCHOR cycles, but the source-only `reviewDeclaredRecipeAssembly` previously labelled their relations `DECLARED_RELATIONS_UNVERIFIED` with no structural diagnostic. That allows planning to present an impossible assembly as merely awaiting reference review.
+
+**Candidate:** construct bounded directed positional-dependency edges from already resolved Recipe instance IDs; mark `ANCHOR_DEPENDENCY_CYCLE` for every affected feature. Do not conflate these ANCHOR dependencies with native Bone parenting, and do not create a second solver. Negative cases cover a two-feature cycle and a self-anchor; existing acyclic baseline remains. **Tests authored, NOT_EXECUTED**; no native or visual PASS.

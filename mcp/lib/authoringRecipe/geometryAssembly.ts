@@ -156,6 +156,43 @@ export function reviewDeclaredRecipeAssembly(
       evidence: "RECIPE_DECLARATION_ONLY_NOT_VISUAL_OR_NATIVE_PROOF",
     });
   }
+  // The canonical constraint solver rejects source→target cycles, including
+  // self-anchors. Surface the same causal impossibility during source-only
+  // review, before a candidate is mistaken for a viable assembly.
+  // These edges are positional dependencies, NOT native Bone parenting.
+  const anchorEdges = new Map<string, string[]>();
+  for (const row of rows) {
+    if (row.kind !== "ANCHOR") continue;
+    const targets = anchorEdges.get(row.source_instance_id) ?? [];
+    targets.push(row.target_instance_id);
+    anchorEdges.set(row.source_instance_id, targets);
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const stack: string[] = [];
+  const reportedCycles = new Set<string>();
+  const inspect = (id: string) => {
+    if (visited.has(id)) return;
+    if (visiting.has(id)) {
+      const cycle = stack.slice(stack.indexOf(id));
+      const key = [...cycle].sort().join("\\u0000");
+      if (!reportedCycles.has(key)) {
+        reportedCycles.add(key);
+        for (const memberId of cycle) {
+          markIssue("ANCHOR_DEPENDENCY_CYCLE", members.get(memberId)?.feature_id);
+        }
+      }
+      return;
+    }
+    visiting.add(id);
+    stack.push(id);
+    for (const target of anchorEdges.get(id) ?? []) inspect(target);
+    stack.pop();
+    visiting.delete(id);
+    visited.add(id);
+  };
+  for (const id of anchorEdges.keys()) inspect(id);
+
   for (const relation of recipe.symmetry ?? []) {
     const source = members.get(relation.source_instance_id);
     if (!source || !source.feature_id ||
