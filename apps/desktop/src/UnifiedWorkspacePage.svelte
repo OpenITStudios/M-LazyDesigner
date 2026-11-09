@@ -890,11 +890,14 @@
             </section>
           </div>
           <button type="button" class="sidebar-footer"
-            aria-label="Open Status: {readinessLabel}"
-            onclick={() => sidebarTab = 'status'}>
+            aria-label={'Open Status: ' + readinessLabel}
+            title={status?.observed_at_unix_ms
+              ? 'Last checked: ' + new Date(status.observed_at_unix_ms).toLocaleString()
+              : 'Status check time unavailable'}
+            onclick={() => { sidebarTab = 'status'; modelActionsId = null; projectActionsId = null; }}>
             <span class="connection-status"><i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
               class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i></span>
-            <span>{readinessLabel}</span>
+            <span>{readinessLabel === 'Ready at last check' ? 'Ready' : readinessLabel}</span>
             <EditorChromeIcon name="diagnostic"/>
           </button>
         {/if}
