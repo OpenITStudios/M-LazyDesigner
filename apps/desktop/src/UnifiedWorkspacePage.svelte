@@ -429,7 +429,6 @@
       </div>
     </div>
     <div class="editor-controls" role="group" aria-label="Editor actions and panels">
-      <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
         aria-pressed={layout.focusMode}
@@ -516,8 +515,8 @@
         <div class="project-primary-action">
           <button type="button" class="sidebar-open-model" disabled={actionBusy || fixture}
             onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/> Open model…</button>
-          <button type="button" class="sidebar-add-folder" title="Add existing project folder"
-            aria-label="Add project folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+          <button type="button" class="sidebar-add-folder" title="Add an existing project folder"
+            aria-label="Add existing project folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
             onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
         </div>
         {#if statusProbeFailures >= 2}
@@ -1297,7 +1296,7 @@
   .sidebar-page .project-group{position:relative}
   .sidebar-page .project-line{min-height:32px}
   .sidebar-page .project-expand{height:32px;font-weight:550}
-  .sidebar-page .project-actions-toggle{opacity:0}
+  .sidebar-page .project-actions-toggle{opacity:.48}
   .sidebar-page .project-line:hover .project-actions-toggle,
   .sidebar-page .project-line:focus-within .project-actions-toggle,
   .sidebar-page .project-actions-toggle[aria-expanded="true"]{opacity:1}
