@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">LazyDesigner LD monogram</title>
+  <desc id="desc">A blue mirrored D overlapping a silver L.</desc>
+  <defs>
+    <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f6fb"/>
+      <stop offset="1" stop-color="#c5cad5"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#43a6ff"/>
+      <stop offset="1" stop-color="#2780f3"/>
+    </linearGradient>
+  </defs>
+  <!-- Silver L base, deliberately offset left and below the blue mirrored D. -->
+  <path fill="url(#silver)" d="M98 169 151 141 151 381 415 381 371 431 122 431 Q98 431 98 406Z"/>
+  <!-- Mirrored D: opening faces left; upper and lower horizontal strokes remain distinct. -->
+  <path fill="url(#blue)" d="M205 83 Q215 72 230 72 H322 C400 72 446 128 446 198 V299 C446 372 399 394 335 394 H182 V315 H326 C352 315 365 298 365 274 V208 C365 183 352 166 325 166 H181 Q169 166 176 154Z"/>
+</svg>
