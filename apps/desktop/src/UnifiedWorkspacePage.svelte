@@ -178,8 +178,10 @@
     projectActionsId = opening ? id : null;
     if (opening) {
       fitContextMenu(id, 'project');
-      void tick().then(() =>
-        editorRoot.ownerDocument.getElementById('ld-project-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+      void tick().then(() => {
+        if (projectActionsId !== id) return;
+        editorRoot.ownerDocument.getElementById('ld-project-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+      });
     }
   }
   function toggleModelActions(id: string) {
@@ -188,8 +190,10 @@
     modelActionsId = opening ? id : null;
     if (opening) {
       fitContextMenu(id, 'model');
-      void tick().then(() =>
-        editorRoot.ownerDocument.getElementById('ld-model-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+      void tick().then(() => {
+        if (modelActionsId !== id) return;
+        editorRoot.ownerDocument.getElementById('ld-model-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+      });
     }
   }
   function closeModelActions(event: KeyboardEvent, id: string) {
