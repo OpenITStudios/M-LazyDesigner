@@ -102,6 +102,9 @@
   // A composed native editor must be restored BEFORE showing another
   // application page, not merely after Svelte has removed its aperture.
   function navigate(next: Page) {
+    // Unified Editor is development-only until native composition is accepted.
+    // Do not let a production route silently fall through to Support.
+    if (next === 'Editor' && !import.meta.env.DEV) return;
     if (editorNavigationPending) return;
     if (page === 'Editor' && next !== 'Editor') {
       // A missing Svelte ref is NOT proof the Rust-owned native window lease
