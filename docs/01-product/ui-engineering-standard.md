@@ -130,3 +130,10 @@ Every interactive control has: accessible name, visible affordance, action desti
 - **Open:** native acceptance, production Editor route, safe Rename/Delete, responsive/zoom measurements, contrast measurements, menu clipping, and systematic dead-selector removal. The UI must not be labeled package-ready while these remain unverified.
 
 **Review rule:** each subsequent UI change must update this record or the blind-spot register with exact source evidence, and must never mark a runtime gap closed based on a document or a preview alone.
+
+## L. Status and AI Activity source audit — 2026-11-09
+
+- **Resolved in source:** the Status Refresh action referenced `EditorChromeIcon name="refresh"`, but the typed SVG registry did not contain `refresh`. The glyph is now implemented with the existing 24×24, currentColor, 1.85px stroke contract.
+- **Resolved in source:** the Status details link to AI Activity is disabled in fixture mode, avoiding a preview-only action that suggests real navigation; disabled styling is explicit.
+- **Observed navigation safety:** `App.svelte` records the Analytics origin and its Back action returns to that origin. Leaving Editor is gated on the native detach receipt; source inspection is not native proof.
+- **Still open:** actual Refresh/Analytics click behavior, keyboard and screen-reader checks, fixture appearance, production Unified Editor gating, and native restore acceptance. Do not close these based on source inspection alone.
