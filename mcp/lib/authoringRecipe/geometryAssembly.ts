@@ -137,6 +137,7 @@ export function reviewDeclaredRecipeAssembly(
 
   // The Recipe compiler processes anchors BEFORE generating symmetry targets.
   const rows: DeclaredAssemblyRelation[] = [];
+  const seenAnchorIds = new Set<string>();
   for (const constraint of recipe.constraints ?? []) {
     const source = members.get(constraint.source_instance_id);
     const target = members.get(constraint.target_instance_id);
@@ -146,6 +147,18 @@ export function reviewDeclaredRecipeAssembly(
         source?.feature_id, target?.feature_id);
       continue;
     }
+    // Match the canonical constraint solver's structural preconditions
+    // during advisory review; a declaration is not a valid plan merely
+    // because both endpoint instance IDs exist.
+    if (!constraint.id || seenAnchorIds.has(constraint.id) ||
+        !Array.isArray(constraint.axes) ||
+        constraint.axes.length === 0 ||
+        new Set(constraint.axes).size !== constraint.axes.length ||
+        constraint.axes.some(axis => !["X", "Y", "Z"].includes(axis))) {
+      markIssue("ANCHOR_DECLARATION_INVALID", source.feature_id, target.feature_id);
+      continue;
+    }
+    seenAnchorIds.add(constraint.id);
     rows.push({
       kind: "ANCHOR", id: constraint.id,
       source_instance_id: constraint.source_instance_id,

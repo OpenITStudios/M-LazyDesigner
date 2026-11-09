@@ -104,3 +104,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source regression identified by inspection:** the previous source-owned anchor replay rejected *all* constraints with an external endpoint, even if the external feature was merely dependent on the selected source cohort. That can falsely block valid persisted-source verification in multi-feature Recipes.
 
 **Correction:** replay only ANCHORs whose dependent/source instance belongs to the source-owned cohort; reject external targets of selected instances, but ignore external dependents that cannot move selected instances. Symmetry selection follows generated ownership in declaration order; preserve the canonical final compiled-placement equality check. This is a bounded source-only correction, not visual proof. **Regression authored, NOT_EXECUTED**.
+
+## Harness² iteration I — precompile anchor declaration validity (2026-11-10)
+
+**Source defect:** the source-only Assembly Review checked ANCHOR endpoints but not duplicate/empty IDs, missing/duplicated axes or unsupported axis labels. The canonical Recipe constraint solver rejects these declarations, so review could otherwise label a structurally impossible plan merely `DECLARED_RELATIONS_UNVERIFIED`.
+
+**Candidate:** reject invalid ANCHOR declaration structure in the existing review owner with `ANCHOR_DECLARATION_INVALID` for affected feature IDs. Preserve canonical compiler as the final authority; do not infer source geometry or native parenting. Negative cases: zero axes, duplicate axes, unsupported axis and duplicate constraint ID. **Tests authored, NOT_EXECUTED; native/visual UNVERIFIED.**

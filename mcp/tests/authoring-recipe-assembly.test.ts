@@ -175,6 +175,35 @@ describe("R2 explicit semantic assembly inside existing Recipe", () => {
   });
 
 
+  test("invalid anchor axes are rejected in review before canonical compile", () => {
+    for (const axes of [[], ["X", "X"], ["Q"]]) {
+      const recipe = assemblyRecipe();
+      recipe.symmetry = [];
+      recipe.constraints![0]!.axes = axes as ("X" | "Y" | "Z")[];
+      const review = reviewDeclaredRecipeAssembly(recipe, ["frame-feature", "hinge-feature"]);
+      for (const feature of review) {
+        expect(feature.state).toBe("SOURCE_IDENTITY_REVIEW_REQUIRED");
+        expect(feature.source_identity_issues).toContain("ANCHOR_DECLARATION_INVALID");
+        expect(feature.native_parent_verified).toBe(false);
+      }
+      expect(() => compileAuthoringRecipe(recipe)).toThrow();
+    }
+  });
+
+  test("duplicate anchor identity is not presented as valid declared assembly", () => {
+    const recipe = assemblyRecipe();
+    recipe.symmetry = [];
+    recipe.constraints!.push({
+      ...recipe.constraints![0]!,
+      source_instance_id: "frame:0",
+      target_instance_id: "panel:0",
+    });
+    const review = reviewDeclaredRecipeAssembly(recipe, ["frame-feature", "hinge-feature"]);
+    expect(review.every(feature =>
+      feature.source_identity_issues.includes("ANCHOR_DECLARATION_INVALID"))).toBe(true);
+    expect(() => compileAuthoringRecipe(recipe)).toThrow(/unique and non-empty/i);
+  });
+
   test("anchor dependency cycles are flagged before canonical compiler rejects them", () => {
     const recipe = assemblyRecipe();
     recipe.symmetry = [];
