@@ -836,10 +836,12 @@
             </div>
             <div class="status-overview-row">
               <span class="status-overview-label">AI</span>
-              <span class="status-overview-value">
+              <span class="status-overview-value" tabindex="0"
+                aria-label={`AI: ${loading ? 'Checking' : aiStatus?.label ?? 'Not verified'}. ${aiStatus?.detail ?? 'Connection has not been verified.'}`}
+                title={aiStatus?.detail ?? 'Connection has not been verified.'}>
                 <i class:verified={Boolean(aiStatus?.recentlyVerified && !loading)}
                   class:stale={Boolean(aiStatus?.needsRefresh || loading)} aria-hidden="true"></i>
-                {loading ? 'Checking…' : aiStatus?.label === 'Recently verified' ? 'Verified recently' : aiStatus?.label ?? 'Not verified'}
+                {loading ? 'Checking…' : aiStatus?.label === 'Verified at last check' ? 'Verified' : aiStatus?.label ?? 'Not verified'}
               </span>
             </div>
             {#if statusProbeFailures >= 2 || readinessOutdated || !status?.readiness.ready}
