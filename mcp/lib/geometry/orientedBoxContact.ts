@@ -196,6 +196,11 @@ export function analyzeOrientedBoxContact(
       projectedRadius(first, axis) +
       projectedRadius(second, axis) -
       centerDistance;
+    // Finite inputs can still overflow intermediate projections. NaN or
+    // Infinity must never become a seemingly valid contact classification.
+    if (!Number.isFinite(centerDistance) || !Number.isFinite(overlap)) {
+      throw new Error("OBB contact projection exceeded finite bounds.");
+    }
 
     candidates.push({
       gap: -overlap,

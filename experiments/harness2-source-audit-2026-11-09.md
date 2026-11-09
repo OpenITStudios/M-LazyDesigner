@@ -116,3 +116,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Observed source defect:** `requireFiniteVec3` checked finiteness of *present* entries but not the required length; `normalizeBox` also assumed exactly three axes. A truncated or oversized runtime vector could therefore enter SAT/contact math and yield undefined projections, false classifications, or an exception too late in the pipeline.
 
 **Candidate:** require exact 3-element finite coordinate/half-size/axis vectors and exactly three box axes before SAT or containment. This preserves valid geometric contact semantics and prevents malformed spatial facts from being presented as real evidence. Regression authored for truncated center, oversized half-sizes, missing axis, and truncated axis. **NOT_EXECUTED**; no native or visual validation.
+
+## Harness² iteration K — finite SAT projections and rotated boundary regression (2026-11-10)
+
+**Source defect:** even after vector arity and finite-entry validation, individually finite OBB half-sizes can overflow the sum of SAT projected radii. The contact classifier previously allowed an infinite/NaN overlap into the decisive-axis calculation, risking a false contact verdict.
+
+**Candidate:** fail closed on nonfinite SAT projected overlap/center distance, matching the existing containment guard. Authored a finite-but-overflowing OBB negative regression and a 45-degree rotated corner-to-face boundary triplet (touching, separated, intersecting). These are source-level invariants only. **Tests NOT_EXECUTED; no local/native or visual evidence.**

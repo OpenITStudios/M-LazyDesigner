@@ -131,6 +131,34 @@ describe("oriented box contact", () => {
     }
   });
 
+  test("rejects finite OBB inputs whose SAT projection overflows", () => {
+    const huge = box([0, 0, 0], IDENTITY_AXES, [1e308, 1, 1]);
+    expect(() => analyzeOrientedBoxContact(huge, huge))
+      .toThrow("OBB contact projection exceeded finite bounds.");
+    expect(() => analyzeOrientedBoxContainment(huge, huge))
+      .toThrow("OBB containment projection exceeded finite bounds.");
+  });
+
+  test("rotated corner-to-face contact stays distinct from gap and penetration", () => {
+    const c = Math.SQRT1_2;
+    const rotated: [Vec3, Vec3, Vec3] = [
+      [c, c, 0], [-c, c, 0], [0, 0, 1],
+    ];
+    const distance = 1 + Math.SQRT2;
+    const touching = analyzeOrientedBoxContact(
+      box([0, 0, 0]), box([distance, 0, 0], rotated), 1e-8
+    );
+    expect(touching.classification).toBe("touching");
+    const separated = analyzeOrientedBoxContact(
+      box([0, 0, 0]), box([distance + 0.01, 0, 0], rotated), 1e-8
+    );
+    expect(separated.classification).toBe("separate");
+    const penetrating = analyzeOrientedBoxContact(
+      box([0, 0, 0]), box([distance - 0.01, 0, 0], rotated), 1e-8
+    );
+    expect(penetrating.classification).toBe("intersecting");
+  });
+
   test("rejects malformed axes, half sizes, and tolerance before analysis", () => {
     expect(() =>
       analyzeOrientedBoxContact(
