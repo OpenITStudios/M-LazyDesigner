@@ -435,11 +435,13 @@
         aria-expanded={showTools && !diagnosticRail}
         aria-controls={showTools ? 'ld-unified-inspector' : undefined}
         onclick={toggleDiagnosticPanel}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Diagnostic</span></button>
+      <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
         aria-pressed={layout.focusMode}
         title={layout.focusMode ? 'Restore side panels' : 'Maximize Blockbench working area'}
         onclick={toggleFocusMode}><EditorChromeIcon name="focus"/><span class="dock-label">Focus</span></button>
+      <span class="toolbar-separator" aria-hidden="true"></span>
       {#if !status?.blockbench.running}
         <button type="button" class="launch-editor" disabled={actionBusy || fixture || statusProbeFailures >= 2}
           onclick={() => void launchBlockbench()}>Open Blockbench</button>
@@ -463,6 +465,7 @@
             onclick={restoreNativeWindow}>Detach Blockbench</button>
         {/if}
       {/if}
+      <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="support-button"
         title={nativePlacement === 'DETACHED' ? 'Support and settings' : 'Restore original Blockbench window before opening Support'}
         aria-label="Open Support" disabled={navigationPending}
@@ -835,6 +838,7 @@
   .editor-leading,.editor-controls {display:flex;align-items:center;gap:4px;min-width:0}
   .editor-leading {flex:1 1 auto;overflow:hidden}
   .editor-controls {flex:none;justify-content:flex-end}
+  .toolbar-separator{display:block;flex:none;width:1px;height:19px;margin:0 3px;background:var(--ed-border)}
   .editor-brand-mark {
     display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:2px;
     background:var(--ed-select);color:var(--ed-accent);font-size:16px;font-weight:700;
@@ -1220,6 +1224,7 @@
       scrollbar-width:thin;scrollbar-color:var(--color-button) transparent;
     }
     .editor-controls button{flex:none}
+    .toolbar-separator{margin:0 2px}
     .editor-controls button:focus-visible{outline-offset:-2px}
   }
   @media(max-width:919px){
@@ -1246,6 +1251,7 @@
     .workspace-return{width:27px;min-height:27px;padding:3px}
     .editor-controls{width:auto;flex:1 1 0;justify-content:flex-start;flex-wrap:nowrap;gap:3px}
     .editor-controls button{min-height:27px;padding:3px 6px}
+    .toolbar-separator{margin:0 1px;height:17px}
     .editor-controls .launch-editor,.editor-controls .open-model{font-size:11px}
   }
 </style>
