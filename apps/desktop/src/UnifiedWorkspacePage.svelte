@@ -1023,19 +1023,19 @@
   .subtitle {font-size:10px;color:var(--ed-muted-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .unsaved {color:#e9bb6d;font-size:10px;margin-left:5px}
   .model-opening {font-size:10px;color:var(--ed-accent);font-weight:600}
-  .workspace-return,.editor-controls button {
+  .editor-controls button {
     display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;
     min-height:27px;padding:3px 6px;border:1px solid transparent;border-radius:2px;
     color:var(--ed-muted);background:transparent;font-size:12px;font-weight:650;
     cursor:pointer;white-space:nowrap;
   }
-  .workspace-return:hover,.editor-controls button:hover:not(:disabled){
+  .editor-controls button:hover:not(:disabled){
     color:var(--ed-text);background:var(--ed-raised);
   }
   .editor-context h1{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap}
   .editor-project-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550;color:var(--ed-muted)}
   .editor-title-divider{flex:none;color:var(--ed-muted-soft)}
-  .workspace-return,.dock-toggle{line-height:1}
+  .dock-toggle{line-height:1}
   .editor-controls .dock-toggle.chosen{
     background:var(--ed-select);color:var(--ed-text);border-bottom:1px solid var(--ed-accent);
   }
@@ -1408,9 +1408,8 @@
      native viewport or the document. Focused buttons remain keyboard-reachable. */
   @media(max-width:1030px){
     .editor-header{min-height:38px;padding:2px 6px;gap:5px;flex-wrap:nowrap}
-    .editor-leading{flex:0 1 205px;min-width:120px;gap:5px}
+    .editor-leading{flex:0 1 280px;min-width:185px;gap:5px}
     .editor-brand{font-size:12px}
-    .workspace-label{display:none}
     .editor-context{min-width:0}
     .editor-controls{
       flex:1 1 0;min-width:0;width:auto;justify-content:flex-start;
@@ -1437,13 +1436,12 @@
   }
   @media(max-width:600px){
     .editor-header{min-height:38px;padding:2px 5px;gap:4px;flex-wrap:nowrap}
-    .editor-leading{width:auto;flex:0 1 112px;min-width:92px;gap:3px}
+    .editor-leading{width:auto;flex:0 1 210px;min-width:150px;gap:3px}
     .editor-brand,.header-divider{display:none}
     .editor-brand-mark{width:20px;height:20px}
     .editor-context{min-width:0;padding-left:0}
     .editor-context h1{font-size:12px}
     .editor-context .subtitle{display:none}
-    .workspace-return{width:27px;min-height:27px;padding:3px}
     .editor-controls{width:auto;flex:1 1 0;justify-content:flex-start;flex-wrap:nowrap;gap:3px}
     .editor-controls button{min-height:27px;padding:3px 6px}
     .toolbar-separator{margin:0 1px;height:17px}
