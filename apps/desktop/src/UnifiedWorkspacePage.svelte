@@ -799,8 +799,10 @@
             <div class="status-overview-actions">
               <button type="button" disabled={actionBusy || fixture || loading}
                 onclick={() => void refresh()}><EditorChromeIcon name="refresh"/> Refresh</button>
-              <button type="button" class="text-action" disabled={navigationPending}
-                onclick={navigateSupport}>Fix issues</button>
+              {#if !loading && (statusProbeFailures >= 2 || readinessOutdated || !status?.readiness.ready || aiStatus?.needsRefresh)}
+                <button type="button" class="text-action" disabled={navigationPending}
+                  onclick={navigateSupport}>Help with issues</button>
+              {/if}
             </div>
             <details class="status-advanced">
               <summary>Details</summary>
