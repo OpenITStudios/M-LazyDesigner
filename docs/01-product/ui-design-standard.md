@@ -105,3 +105,16 @@ Explicit previews use **HTML_SOURCE_PREVIEW** pinned to a real `Local` commit, d
 ## 8. Change control
 
 Any change to sidebar information hierarchy, primary navigation, native-window safety, or the meaning of readiness requires an explicit product decision recorded in `docs/01-product/interface-ux.md`. Small visual fixes should update the existing tokens/components rather than create new competing systems.
+
+## Approved Blockbench-aligned polish — 2026-11-09
+
+The current approved direction is a **compact native-tool companion**, not a web dashboard. Preserve the actual Blockbench editor surface, one LazyDesigner sidebar, title-only app/project header, and approved LD monogram.
+
+- Projects and Status tabs: compact 36px rows; avoid oversized cards and thick separators.
+- Active Project: subtle raised surface, restrained 2px blue identity edge, no decorative shadow.
+- Recent Models: compact spacing, one low-contrast divider.
+- Active model: a subtle 2px selected indicator plus background contrast; selection must remain understandable without the accent alone.
+- Maintain existing 36px model/project rows, 32px context actions, keyboard focus, and tooltip behavior. Do not reduce touch targets merely to increase density.
+- Keep technical status details collapsed and do not present fixture status as live runtime truth.
+- Do not replace the native viewport with an illustrated dashboard, new quick-action grid, or a fake editor.
+- This is a source-level visual adjustment. Windows DPI, clipping, hover, keyboard and native alignment still require later actual verification.
