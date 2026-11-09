@@ -750,18 +750,21 @@
               <strong>{readinessLabel}</strong>
             </div>
             <p>{readinessDetail}</p>
-            <div class="diagnostic-facts" aria-label="Last observed Blockbench and plugin status">
-              <div><span>Blockbench</span><strong>{status
-                ? status.blockbench.running ? 'Detected' : 'Not running'
-                : 'Unverified'}</strong></div>
-              <div><span>Plugin</span><strong>{status
-                ? status.plugin_integrity === 'ready' ? 'Ready at last check'
-                  : status.plugin_integrity === 'missing' ? 'Missing'
-                  : status.plugin_integrity === 'modified' ? 'Modified'
-                  : status.plugin_integrity === 'invalid' ? 'Invalid'
-                  : 'Unverified'
-                : 'Unverified'}</strong></div>
-            </div>
+            <details class="panel-disclosure">
+              <summary>Component status</summary>
+              <div class="diagnostic-facts" aria-label="Last observed Blockbench and plugin status">
+                <div><span>Blockbench</span><strong>{status
+                  ? status.blockbench.running ? 'Detected' : 'Not running'
+                  : 'Unverified'}</strong></div>
+                <div><span>Plugin</span><strong>{status
+                  ? status.plugin_integrity === 'ready' ? 'Ready at last check'
+                    : status.plugin_integrity === 'missing' ? 'Missing'
+                    : status.plugin_integrity === 'modified' ? 'Modified'
+                    : status.plugin_integrity === 'invalid' ? 'Invalid'
+                    : 'Unverified'
+                  : 'Unverified'}</strong></div>
+              </div>
+            </details>
             {#if status?.diagnostic || status?.blockbench.diagnostic}
               <details class="panel-disclosure">
                 <summary>Diagnostic details</summary>
@@ -783,12 +786,14 @@
               <strong>{aiStatus?.label ?? 'Status unavailable'}</strong>
             </div>
             <p class="subtle-note">{aiStatus?.detail ?? 'Connection has not been verified.'}</p>
-            <h4>Observed data</h4>
-            <div class="diagnostic-facts" aria-label="Project statistics at last observation">
-              <div><span>Projects</span><strong>{observedProjectCount ?? '—'}</strong></div>
-              <div><span>Models</span><strong>{observedModelCount ?? '—'}</strong></div>
-            </div>
-            <p class="subtle-note">Project totals come from the last Desktop observation. Gateway statistics are available separately.</p>
+            <details class="panel-disclosure">
+              <summary>Observed project data</summary>
+              <div class="diagnostic-facts" aria-label="Project statistics at last observation">
+                <div><span>Projects</span><strong>{observedProjectCount ?? '—'}</strong></div>
+                <div><span>Models</span><strong>{observedModelCount ?? '—'}</strong></div>
+              </div>
+              <p class="subtle-note">Project totals come from the last Desktop observation. Gateway statistics are available separately.</p>
+            </details>
             <button type="button" class="text-action" disabled={navigationPending} onclick={navigateActivity}>View Gateway statistics</button>
           </section>
           {#if !fixture && nativePlacementDetail}
@@ -1172,8 +1177,10 @@
   .inspector.rail .rail-actions{padding-top:4px}
   .panel-disclosure{margin:5px 0 7px;border-bottom:1px solid var(--ed-border)}
   .panel-disclosure summary{
-    padding:5px 0;color:var(--ed-muted);font-size:11px;cursor:pointer;
+    padding:6px 2px;color:var(--ed-muted);font-size:11px;cursor:pointer;
   }
+  .panel-disclosure[open] summary{color:var(--ed-text)}
+  .panel-disclosure .diagnostic-facts{margin:3px 0 7px}
   .panel-disclosure summary:hover{color:var(--ed-text)}
   .panel-disclosure summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .panel-disclosure p{margin:5px 0 8px}
