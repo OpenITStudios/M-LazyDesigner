@@ -439,8 +439,6 @@
         <button type="button" class="launch-editor" disabled={actionBusy || fixture || statusProbeFailures >= 2}
           onclick={() => void launchBlockbench()}>Open Blockbench</button>
       {/if}
-      <button type="button" class="open-model" disabled={actionBusy || fixture}
-        onclick={() => void openModelSafely()}>Open Model…</button>
       {#if !fixture && nativePlacement === 'UNCERTAIN'}
         <button type="button" class="native-window-action"
           aria-label="Recover original Blockbench window"
@@ -515,13 +513,12 @@
           <div class="sidebar-content">
             <section id="ld-sidebar-projects" role="tabpanel" aria-labelledby="ld-sidebar-projects-tab"
               hidden={sidebarTab !== 'projects'} class="sidebar-page explorer">
-        <div class="pane-heading">
-          <h3 tabindex="-1" bind:this={explorerHeading}>Your projects</h3>
-          <div class="pane-actions">
-             <button type="button" title="Add existing project folder" aria-label="Add Project Folder"
-              disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-              onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
-          </div>
+        <div class="project-primary-action">
+          <button type="button" class="sidebar-open-model" disabled={actionBusy || fixture}
+            onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/> Open model…</button>
+          <button type="button" class="sidebar-add-folder" title="Add existing project folder"
+            aria-label="Add project folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+            onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
         </div>
         {#if statusProbeFailures >= 2}
           <div class="state-note" role="status">
@@ -1322,4 +1319,27 @@
   .sidebar-page .recent-group{margin-top:15px;padding-top:10px}
   .sidebar-footer{min-height:48px}
   @media(hover:none){.sidebar-page .project-actions-toggle{opacity:1}}
+
+  /* V3: one obvious model-opening action, readable navigation at 260-300px. */
+  .unified-sidebar{font-size:13px}
+  .sidebar-brand{font-size:14px}
+  .sidebar-tabs button{font-size:13px;font-weight:550}
+  .project-primary-action{display:flex;align-items:center;gap:7px;margin:4px 0 12px}
+  .project-primary-action button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;border-radius:6px;cursor:pointer}
+  .project-primary-action .sidebar-open-model{flex:1;justify-content:flex-start;padding:7px 11px;background:var(--color-button);color:var(--ed-text);font-size:13px;font-weight:650}
+  .project-primary-action .sidebar-add-folder{flex:none;width:36px;background:var(--ed-raised);color:var(--ed-text)}
+  .project-primary-action button:hover:not(:disabled){background:var(--ed-select)}
+  .project-primary-action button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
+  .sidebar-page .search-controls{margin-bottom:10px}
+  .sidebar-page.explorer input{font-size:13px;min-height:36px}
+  .sidebar-page .project-expand{font-size:13px;height:36px}
+  .sidebar-page .project-line{min-height:36px}
+  .sidebar-page .model-line{min-height:34px}
+  .sidebar-page .model-open{font-size:13px;height:34px}
+  .sidebar-page .recent-heading{font-size:13px;min-height:34px}
+  .sidebar-page .recent-model{font-size:13px}
+  .sidebar-page .project-resources summary{font-size:12px}
+  .sidebar-page .search-count{font-size:11px}
+  .sidebar-footer{font-size:12px}
+  .sidebar-page .project-inline-actions{top:36px}
 </style>
