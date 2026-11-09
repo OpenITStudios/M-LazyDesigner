@@ -1452,7 +1452,6 @@
   .sidebar-page .search-controls{margin:0 0 6px}
   .sidebar-page .explorer input,.sidebar-page.explorer input{min-height:32px;background:#1b1e23;border-color:#282c33;border-radius:5px}
   .sidebar-page .project-group{position:relative}
-  .sidebar-page .project-line{min-height:36px}
   .sidebar-page .project-expand{min-height:36px;font-weight:550}
   .sidebar-page .project-actions-toggle{opacity:.48}
   .sidebar-page .project-line:hover .project-actions-toggle,
@@ -1471,8 +1470,7 @@
   .sidebar-page .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
   .sidebar-page .project-inline-actions button:focus-visible,
   .sidebar-page .model-context-actions button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:-2px}
-  .sidebar-page .model-line{min-height:36px}
-  .sidebar-page .model-line.current{background:#2a2e39;border-radius:5px}
+  .sidebar-page .model-line.current{background:var(--ed-select);border-radius:5px}
   .sidebar-page .model-current-indicator{
     width:auto;margin-right:5px;color:#b7c5dc;font-size:10px;white-space:nowrap
   }
