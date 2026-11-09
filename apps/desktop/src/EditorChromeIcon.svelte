@@ -1,4 +1,5 @@
 <script lang="ts">
+  // DESIGN LOCK: docs/01-product/icon-svg-registry.md (approved icon family).
   // Official SVG contract: docs/01-product/ui-engineering-standard.md §B.
   // Original 24x24, 16px default, currentColor outline glyphs; decorative
   // only (parent button/link owns the accessible action label).
