@@ -1443,6 +1443,8 @@
     background:transparent;font-size:11px
   }
   .sidebar-page .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .project-inline-actions button:focus-visible,
+  .sidebar-page .model-context-actions button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:-2px}
   .sidebar-page .model-line{min-height:36px}
   .sidebar-page .model-line.current{background:#2a2e39;border-radius:5px}
   .sidebar-page .model-current-indicator{
@@ -1466,8 +1468,8 @@
   .sidebar-page.explorer input{font-size:13px;min-height:36px}
   .sidebar-page .project-expand{font-size:13px;height:36px}
   .sidebar-page .project-line{min-height:36px}
-  .sidebar-page .model-line{min-height:34px}
-  .sidebar-page .model-open{font-size:13px;height:34px}
+  .sidebar-page .model-line{min-height:36px}
+  .sidebar-page .model-open{font-size:13px;min-height:36px}
   .sidebar-page .recent-heading{font-size:13px;min-height:34px}
   .sidebar-page .recent-model{font-size:13px}
   .sidebar-page .project-resources summary{font-size:12px}
@@ -1477,7 +1479,9 @@
 
   /* Model-specific actions are contextual; never pretend unsupported rename/delete exists. */
   .sidebar-page .model-line{position:relative}
-  .sidebar-page .model-actions-toggle{display:grid;place-items:center;flex:none;width:26px;height:28px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);opacity:.55;cursor:pointer}
+  .sidebar-page .model-actions-toggle{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);opacity:.65;cursor:pointer}
+  .sidebar-page .model-actions-toggle:focus-visible,
+  .sidebar-page .project-actions-toggle:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px;opacity:1}
   .sidebar-page .model-line:hover .model-actions-toggle,.sidebar-page .model-line:focus-within .model-actions-toggle,.sidebar-page .model-actions-toggle[aria-expanded="true"]{opacity:1}
   .sidebar-page .model-context-actions{position:absolute;z-index:12;right:2px;top:31px;display:grid;gap:2px;min-width:145px;padding:5px;border:1px solid #373b44;border-radius:6px;background:#252830;box-shadow:0 9px 22px rgba(0,0,0,.4)}
   .sidebar-page .model-context-actions button{min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer}
