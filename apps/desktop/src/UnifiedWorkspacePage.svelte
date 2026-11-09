@@ -1,4 +1,5 @@
 <script lang="ts">
+  import brandLogoUrl from '../branding/lazydesigner-ld-master.svg?url';
   import NativeEditorStage from './NativeEditorStage.svelte';
   import { validateModelRenameStem } from './modelMutationPreflight';
   import EditorChromeIcon from './EditorChromeIcon.svelte';
@@ -531,7 +532,7 @@
     <div class="editor-leading">
       <div class="editor-context">
         <h1 tabindex="-1" title={'LazyDesigner — ' + (active?.project_name ?? 'No active project')}>
-          LazyDesigner <span class="editor-title-divider" aria-hidden="true">—</span>
+          <img class="ld-header-logo" src={brandLogoUrl} alt="" aria-hidden="true" width="20" height="20" /> LazyDesigner <span class="editor-title-divider" aria-hidden="true">—</span>
           <span class="editor-project-title">{active?.project_name ?? 'No active project'}</span>
         </h1>
         {#if navigationPending}
@@ -583,7 +584,7 @@
     
         {:else}
           <div class="sidebar-top">
-            <div class="sidebar-brand"><EditorChromeIcon name="model"/><strong>LazyDesigner</strong></div>
+            <div class="sidebar-brand"><img class="ld-brand-logo" src={brandLogoUrl} alt="" aria-hidden="true" width="24" height="24" /><strong>LazyDesigner</strong></div>
             <div class="editor-controls sidebar-utility-actions" role="group" aria-label="Editor actions and panels">
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
@@ -1473,6 +1474,9 @@
   .sidebar-top{flex:none;padding:0 12px}
   .sidebar-brand{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid var(--ed-border);color:var(--ed-text);font-size:14px}
   .sidebar-brand :global(svg){color:var(--ed-accent)}
+  .ld-brand-logo,.ld-header-logo{display:block;flex:none;object-fit:contain}
+  .ld-brand-logo{width:24px;height:24px}
+  .ld-header-logo{width:20px;height:20px}
   .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
   .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 12px}
   .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:40px;border:0;border-radius:6px;background:transparent;color:var(--ed-muted);font-size:13px;font-weight:550;cursor:pointer}
