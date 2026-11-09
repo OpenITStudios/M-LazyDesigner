@@ -1507,7 +1507,7 @@
   /* V2: quiet navigation, single right sidebar, contextual project commands. */
   .sidebar-page .pane-heading{height:30px;margin:6px -2px 7px}
   .sidebar-page .pane-heading h3{font-size:11px;color:var(--ed-muted-soft);font-weight:600}
-  .sidebar-page .search-controls{margin:0 0 6px}
+  .sidebar-page .search-controls{margin:0 0 10px}
   .sidebar-page .explorer input,.sidebar-page.explorer input{min-height:32px;background:#1b1e23;border-color:#282c33;border-radius:5px}
   .sidebar-page .project-group{position:relative}
   .sidebar-page .project-expand{height:36px;min-height:36px;font-size:13px;font-weight:550}
@@ -1571,9 +1571,9 @@
   .sidebar-page .project-section-heading .sidebar-add-folder{display:flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:5px 9px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;font-weight:550;cursor:pointer}
   .sidebar-page .project-section-heading .sidebar-add-folder:hover:not(:disabled){background:var(--ed-select);border-color:var(--ed-accent)}
   .sidebar-page .project-section-heading .sidebar-add-folder:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
-  .sidebar-page .project-primary-action{margin-bottom:12px}
+  .sidebar-page .project-primary-action{margin-bottom:16px}
 
-  .sidebar-page .add-existing-folder{display:flex;align-items:center;gap:7px;min-height:30px;margin:0 0 9px;padding:4px 7px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:12px;cursor:pointer}
+  .sidebar-page .add-existing-folder{display:flex;align-items:center;gap:8px;min-height:34px;margin:0 0 12px;padding:5px 8px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:12px;cursor:pointer}
   .sidebar-page .add-existing-folder:hover:not(:disabled){background:var(--ed-raised);color:var(--ed-text)}
   .sidebar-page .create-folder-form{display:grid;gap:8px;margin:0 0 12px;padding:10px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised)}
   .sidebar-page .create-folder-form label{font-size:12px;font-weight:600}
