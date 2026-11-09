@@ -1443,8 +1443,6 @@
   .sidebar-page .pane-heading h3{font-size:11px;font-weight:600;text-transform:none;letter-spacing:0}
   .sidebar-page .project-tree{border-top:0}
   .sidebar-page .search-count:not(.sr-only){padding:5px 5px}
-  .sidebar-page .project-expand{font-weight:550}
-  .sidebar-page .model-line.current{background:var(--ed-select)}
   .sidebar-page .inspector-section{border:0;padding:10px 0}
   .sidebar-footer{flex:none;display:flex;align-items:center;gap:9px;min-height:48px;margin:0 12px;padding:8px 2px;border:0;border-top:1px solid var(--ed-border);background:transparent;color:var(--ed-muted);font-size:12px;text-align:left;cursor:pointer}
   .sidebar-footer>span:nth-child(2){flex:1}
@@ -1501,7 +1499,6 @@
   .sidebar-page.explorer input{font-size:13px;min-height:36px}
   .sidebar-page .project-expand{font-size:13px;height:36px}
   .sidebar-page .project-line{min-height:36px}
-  .sidebar-page .model-line{min-height:36px}
   .sidebar-page .model-open{font-size:13px;min-height:36px}
   .sidebar-page .recent-heading{font-size:13px;min-height:34px}
   .sidebar-page .recent-model{font-size:13px}
@@ -1510,7 +1507,7 @@
   .sidebar-page .project-inline-actions{top:36px}
 
   /* Model-specific actions are contextual; never pretend unsupported rename/delete exists. */
-  .sidebar-page .model-line{position:relative}
+  .sidebar-page .model-line{position:relative;min-height:36px}
   .sidebar-page .model-actions-toggle{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);opacity:.65;cursor:pointer}
   .sidebar-page .model-actions-toggle:focus-visible,
   .sidebar-page .project-actions-toggle:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px;opacity:1}
