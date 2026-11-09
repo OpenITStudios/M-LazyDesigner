@@ -30,8 +30,9 @@ export function editorLayoutBand(width: number): EditorLayoutBand {
 }
 
 export function defaultEditorPanels(band: EditorLayoutBand) {
-  const expanded = band === 'wide' || band === 'standard';
-  return { projectsExpanded: false, diagnosticExpanded: expanded };
+  // Only one companion dock remains. Keep it open whenever the 320px native
+  // workspace minimum fits; the compact band uses its shortcut rail.
+  return { projectsExpanded: false, diagnosticExpanded: band !== 'compact' };
 }
 
 export function editorDockWidth(dock: EditorDock, proposed: number): number {
