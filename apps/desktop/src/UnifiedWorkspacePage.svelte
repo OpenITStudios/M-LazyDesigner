@@ -693,7 +693,7 @@
         <div class="project-section-heading">
           <h3>Project folders</h3>
           <button type="button" class="sidebar-add-folder" title="Create a new empty project folder"
-            disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+            disabled={actionBusy || fixture || !status || statusProbeFailures >= 2 || readinessOutdated}
             onclick={() => { if (creatingFolder) closeNewFolderForm(); else { creatingFolder = true; folderNameError = ''; void tick().then(() => editorRoot.querySelector<HTMLInputElement>('#ld-new-folder-name')?.focus()); } }}><EditorChromeIcon name="add"/> New folder</button>
         </div>
         {#if creatingFolder}
@@ -723,7 +723,7 @@
             </div>
           </form>
         {/if}
-        <button type="button" class="add-existing-folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+        <button type="button" class="add-existing-folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2 || readinessOutdated}
           onclick={() => void registerFolder()}><EditorChromeIcon name="folder"/> Add existing folder…</button>
         {#if navigation && navigation.projects.length > 0}
           <label class="search-label sr-only" for="ld-unified-model-search">Find a project or model</label>
@@ -783,7 +783,10 @@
                     <button type="button" class="pin-project"
                       aria-label={(project.pinned ? 'Unpin project ' : 'Pin project ') + project.name}
                       aria-pressed={project.pinned}
-                      disabled={actionBusy || fixture || statusProbeFailures >= 2}
+                      disabled={actionBusy || fixture || statusProbeFailures >= 2 || readinessOutdated}
+                      title={statusProbeFailures >= 2 || readinessOutdated
+                        ? 'Refresh status before changing project shortcuts'
+                        : project.pinned ? 'Unpin project shortcut' : 'Pin project shortcut'}
                       onclick={() => void togglePinnedProject(project)}>
                       {project.pinned ? '★ Unpin' : '☆ Pin'}
                     </button>
