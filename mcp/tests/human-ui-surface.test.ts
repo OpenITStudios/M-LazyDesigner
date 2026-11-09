@@ -505,6 +505,40 @@ describe("human-facing Blockbench UI", () => {
     expect(fixture).not.toContain('search.press("Enter")'); // Preserve native safety in browser QA.
   });
 
+  test("one primary Workspace model task survives current, continue, missing and empty states", async () => {
+    const { createDevFixtureStatus, devFixtureFromLocation } = await import("../../apps/desktop/src/desktopFixtures");
+    const { continueTarget } = await import("../../apps/desktop/src/desktopPresentation");
+    const current = createDevFixtureStatus("ready").project_navigation;
+    const resume = createDevFixtureStatus("ready-continue").project_navigation;
+    const empty = createDevFixtureStatus("ready-no-active").project_navigation;
+    expect(current.active?.model_name).toBe("Modern Chair");
+    expect(continueTarget(current)).toBeNull();
+    expect(resume.active).toBeNull();
+    expect(continueTarget(resume)?.model.name).toBe("Modern Chair");
+    expect(empty.active).toBeNull();
+    expect(continueTarget(empty)).toBeNull();
+    const missingProject = structuredClone(resume);
+    missingProject.projects[0].available = false;
+    expect(continueTarget(missingProject)).toBeNull();
+    const missingModel = structuredClone(resume);
+    missingModel.projects[0].models[0].exists = false;
+    expect(continueTarget(missingModel)).toBeNull();
+    expect(devFixtureFromLocation(true, "?fixture=ready-continue")).toBe("ready-continue");
+    const [workspace, navigator, capture] = await Promise.all([
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    expect(workspace).toContain("resumableModel = continueTarget(status.project_navigation)");
+    expect(workspace).toContain("{#if !status.project_navigation.active && !resumableModel}");
+    expect(navigator).toContain("Continue model ${target.model.name} in Blockbench");
+    expect(navigator).toContain('class="primary-button small-button continue-action"');
+    expect(navigator).toContain('class="secondary-button small-button" onclick={() => onOpenModel()}');
+    expect(capture).toContain('("ready-continue", "workspace")');
+    expect(capture).toContain("def inspect_model_task_priority(page, fixture, view):");
+    expect(capture).toContain('entry["modelTaskPriorityChecks"]');
+  });
+
   test("first-run Workspace makes model opening primary and AI setup an explicit optional action", async () => {
     const [workspace, navigator] = await Promise.all([
       source("../apps/desktop/src/WorkspacePage.svelte"),
@@ -828,6 +862,10 @@ describe("human-facing Blockbench UI", () => {
     expect(noActive.product_state).toBe("ready");
     expect(noActive.project_navigation.active).toBeNull();
     expect(noActive.project_navigation.continue_model_id).toBeNull();
+    const resumable = createDevFixtureStatus("ready-continue");
+    expect(resumable.project_navigation.active).toBeNull();
+    expect(resumable.project_navigation.continue_model_id).toBe("model-fixture");
+    expect(resumable.project_navigation.projects[0].models.every(model => !model.active)).toBe(true);
     expect(noActive.project_navigation.projects).toHaveLength(1);
     expect(noActive.project_navigation.projects[0].models.every(model => !model.active)).toBe(true);
     expect(createDevFixtureStatus("status-unverified").product_state).toBe("ready");
@@ -838,6 +876,7 @@ describe("human-facing Blockbench UI", () => {
     expect(devFixtureFromLocation(false, "?fixture=ready")).toBeNull();
     expect(devFixtureFromLocation(true, "?fixture=ready")).toBe("ready");
     expect(devFixtureFromLocation(true, "?fixture=ready-no-active")).toBe("ready-no-active");
+    expect(devFixtureFromLocation(true, "?fixture=ready-continue")).toBe("ready-continue");
     expect(devFixtureFromLocation(true, "?fixture=status-unverified")).toBe("status-unverified");
 
     const [app, support, analytics] = await Promise.all([
@@ -887,7 +926,7 @@ describe("human-facing Blockbench UI", () => {
     expect(workspace).toContain("canFocusCurrentEditor={statusProbeFailures < 2}");
     expect(workspace).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
     expect(workspace).toContain("busy={busyAction !== null}");
-    expect(workspace).toContain("{#if !status.project_navigation.active}");
+    expect(workspace).toContain("{#if !status.project_navigation.active && !resumableModel}");
     expect(workspace).toContain("Open Blockbench</button>");
     expect(workspace).toContain('onclick={() => openModel()} disabled={busyAction !== null}');
     expect(app).toContain("async function openModel(id?: string) {\n    if (devFixture || busyAction) return;");

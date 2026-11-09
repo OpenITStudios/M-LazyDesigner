@@ -117,7 +117,12 @@
             <div class="project-meta">{target.project.name}</div>
           </div>
           <div class="project-actions">
-            <button class="primary-button small-button" aria-label={openingModelId === target.model.id ? `Opening model ${target.model.name}` : `Continue model ${target.model.name}`} aria-busy={openingModelId === target.model.id} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>{openingModelId === target.model.id ? 'Opening…' : 'Continue'}</button>
+            <button class="primary-button small-button continue-action"
+              aria-label={openingModelId === target.model.id ? `Opening model ${target.model.name}` : `Continue model ${target.model.name} in Blockbench`}
+              aria-busy={openingModelId === target.model.id}
+              onclick={() => onOpenModel(target.model.id)}
+              disabled={busy || !canOpenModel}>{openingModelId === target.model.id ? 'Opening…' : `Continue ${target.model.name}`}</button>
+            <button class="secondary-button small-button" onclick={() => onOpenModel()} disabled={!canBrowseModel}>Open Model…</button>
           </div>
         </div>
       </div>
@@ -266,6 +271,7 @@
   .project-actions,.model-actions{display:flex;align-items:center;gap:6px}
   .primary-button,.secondary-button{min-height:32px;padding:6px 11px;border-radius:6px;font-size:var(--font-sm);font-weight:700;cursor:pointer}
   .primary-button{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink)}
+  .continue-action{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:center}
   .secondary-button{border:1px solid var(--border);background:var(--surface-2);color:var(--text-soft)}
   .small-button{min-height:32px;padding:4px 9px;font-size:var(--font-sm)}
   .quiet-button,.show-more-button{border:0;background:transparent;color:var(--muted);font-size:var(--font-sm);font-weight:650;cursor:pointer}

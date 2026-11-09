@@ -3,11 +3,11 @@ import type { SystemStatus, AnalyticsOverview } from './desktopTypes';
 /** Fixed browser-only comparison clock; never represents the real machine clock. */
 export const FIXTURE_NOW_MS = 1_730_000_000_000;
 
-export type DevFixture = 'ready' | 'ready-no-active' | 'ready-aged' | 'many-projects' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
+export type DevFixture = 'ready' | 'ready-no-active' | 'ready-continue' | 'ready-aged' | 'many-projects' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
 
 export function applyDevFixture(base: SystemStatus, fixture: DevFixture): SystemStatus {
   const next = structuredClone(base);
-  const ready = ['ready', 'ready-no-active', 'ready-aged', 'many-projects', 'status-unverified'].includes(fixture);
+  const ready = ['ready', 'ready-no-active', 'ready-continue', 'ready-aged', 'many-projects', 'status-unverified'].includes(fixture);
   const runtimeOnline = ready || ['client-wait', 'repair-blocked'].includes(fixture);
   const gatewayActive = ready || fixture === 'repair-blocked';
 
@@ -74,7 +74,7 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
     continue_model_id: fixture === 'fresh-install' || fixture === 'ready-no-active' ? null : 'model-fixture',
     recent_model_ids: fixture === 'fresh-install' ? [] : ['model-fixture-2'],
     preferences_issue: null,
-    active: fixture === 'fresh-install' || fixture === 'ready-no-active' ? null : {
+    active: fixture === 'fresh-install' || fixture === 'ready-no-active' || fixture === 'ready-continue' ? null : {
       project_id: 'project-fixture',
       project_name: 'Furniture',
       model_id: 'model-fixture',
@@ -101,7 +101,7 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
     }],
   };
 
-  if (fixture === 'ready-no-active') {
+  if (fixture === 'ready-no-active' || fixture === 'ready-continue') {
     const project = next.project_navigation.projects[0];
     if (project) {
       project.active = false;
@@ -237,7 +237,7 @@ export function createDevAnalyticsFixture(): AnalyticsOverview {
 export function devFixtureFromLocation(development: boolean, search: string): DevFixture | null {
   if (!development) return null;
   const value = new URLSearchParams(search).get('fixture');
-  const allowed: DevFixture[] = ['ready','ready-no-active','ready-aged','many-projects','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
+  const allowed: DevFixture[] = ['ready','ready-no-active','ready-continue','ready-aged','many-projects','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
   return allowed.includes(value as DevFixture) ? value as DevFixture : null;
 }
 

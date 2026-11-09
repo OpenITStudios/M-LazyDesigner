@@ -25,6 +25,7 @@ SCENARIOS = (
     ("ready-aged", "support"),
     ("many-projects", "workspace"),
     ("ready-no-active", "workspace"),
+    ("ready-continue", "workspace"),
     ("status-unverified", "workspace"),
     ("status-unverified", "support"),
     ("ready", "support"),
@@ -116,6 +117,10 @@ def inspect_action_states(page, fixture, view):
         ("ready-no-active", "workspace"): {
             "Open Model…": True,
             "Open Blockbench": True,
+        },
+        ("ready-continue", "workspace"): {
+            "Continue model Modern Chair in Blockbench": True,
+            "Open Model…": True,
         },
         ("ready", "support"): {
             "Refresh": True,
@@ -218,6 +223,44 @@ def inspect_support_disclosures(page, fixture, view):
         if advanced.locator(".disclosure-state .when-open").count() != 1 or not advanced.locator(".disclosure-state .when-open").is_visible():
             issues.append("Expanded recovery should say Hide, not Show")
         # No click on Restore, Repair or Recover; this is a visual-only fixture.
+    return issues
+
+
+def inspect_model_task_priority(page, fixture, view):
+    """Inspect model task semantics without invoking a native file action."""
+    if view != "workspace" or fixture not in {
+        "fresh-install", "ready", "ready-no-active", "ready-continue", "many-projects"
+    }:
+        return []
+    issues = []
+    resume = page.get_by_role("heading", name="Continue working", exact=True)
+    current = page.get_by_role("heading", name="Current Model", exact=True)
+    picker = page.get_by_role("heading", name="Open a model", exact=True)
+    expected = {
+        "fresh-install": (0, 0, 1), "ready": (0, 1, 0),
+        "ready-no-active": (0, 0, 1), "ready-continue": (1, 0, 0),
+        "many-projects": (0, 0, 1),
+    }[fixture]
+    observed = (resume.count(), current.count(), picker.count())
+    if observed != expected:
+        issues.append(f"Model task mismatch: expected {expected}, observed {observed}")
+    if fixture == "ready-continue":
+        button = page.get_by_role("button", name="Continue model Modern Chair in Blockbench", exact=True)
+        if button.count() != 1 or not button.is_enabled():
+            issues.append("Missing valid model-specific Continue action")
+        elif "primary-button" not in (button.get_attribute("class") or ""):
+            issues.append("Continue should be primary")
+        browse = page.get_by_role("button", name="Open Model…", exact=True)
+        if browse.count() != 1 or "secondary-button" not in (browse.get_attribute("class") or ""):
+            issues.append("Continue must retain one secondary direct model picker")
+    elif fixture == "ready":
+        button = page.get_by_role("button", name="Go to Blockbench for Modern Chair", exact=True)
+        if button.count() != 1 or "primary-button" not in (button.get_attribute("class") or ""):
+            issues.append("Current model should provide primary Blockbench action")
+    else:
+        button = page.get_by_role("button", name="Open Model…", exact=True)
+        if button.count() != 1 or "primary-button" not in (button.get_attribute("class") or ""):
+            issues.append("No current/continue model should offer primary direct picker")
     return issues
 
 
@@ -986,6 +1029,13 @@ def main():
                         if fixture == "status-unverified" and view == "workspace":
                             entry["staleFileNavigationChecks"] = {"checked": 9, "issues": stale_action_issues}
                         for issue in stale_action_issues:
+                            failures.append(name + ": " + issue)
+                        task_priority_issues = inspect_model_task_priority(page, fixture, view)
+                        if view == "workspace" and fixture in {
+                            "fresh-install", "ready", "ready-no-active", "ready-continue", "many-projects"
+                        }:
+                            entry["modelTaskPriorityChecks"] = {"issues": task_priority_issues}
+                        for issue in task_priority_issues:
                             failures.append(name + ": " + issue)
                         first_run_issues = inspect_first_run(page, fixture, view)
                         if fixture == "fresh-install" and view == "workspace":

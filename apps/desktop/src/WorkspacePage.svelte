@@ -1,6 +1,6 @@
 <script lang="ts">
   import ProjectNavigator from './ProjectNavigator.svelte';
-  import { productMode, productHeadline, productGuidance, aiStatusPresentation, progressLabel, type ManagedAction } from './desktopPresentation';
+  import { productMode, productHeadline, productGuidance, aiStatusPresentation, progressLabel, continueTarget, type ManagedAction } from './desktopPresentation';
   import type { SystemStatus, DesktopBusyAction, ManagedUpdateCheck } from './desktopTypes';
   import type { ProjectAction } from './projectNavigationTypes';
 
@@ -39,6 +39,9 @@
   export let navigate: (page: 'Support') => void;
 
   $: aiStatus = aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs);
+  // The current model, a valid continuation, or direct file browsing owns
+  // the primary model task. AI setup remains optional to opening .bbmodel.
+  $: resumableModel = continueTarget(status.project_navigation);
 </script>
 
 {#snippet projectNavigator(current: SystemStatus)}
@@ -77,7 +80,7 @@
     </section>
   {/if}
 
-  {#if !status.project_navigation.active}
+  {#if !status.project_navigation.active && !resumableModel}
   <section class="content-section">
     <div class="section-heading">
       <div><h2>Open a model</h2><p>Open an existing .bbmodel file in Blockbench. You can edit models even when AI is not connected.</p></div>

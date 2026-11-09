@@ -485,6 +485,9 @@ export function recentModelTargets(state: ProjectNavigation): ProjectModelTarget
 export function continueTarget(state: ProjectNavigation): ProjectModelTarget | null {
   if (state.active || !state.continue_model_id) return null;
   for (const project of state.projects) {
+    // Missing project folders are not valid resume shortcuts: retain the
+    // direct file picker rather than offering a stale primary Continue action.
+    if (!project.available) continue;
     const model = project.models.find(candidate => candidate.id === state.continue_model_id && candidate.exists);
     if (model) return { project, model };
   }
