@@ -300,16 +300,24 @@
       : editorDockWidth(dock, current + (event.key === 'ArrowRight' ? step : -step) * (dock === 'projects' ? 1 : -1));
     changeLayout(dock === 'projects' ? { projectsWidth: width } : { toolsWidth: width });
   }
+  function dismissContextMenus(event: PointerEvent) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!target.closest('.project-actions-toggle, .project-inline-actions')) projectActionsId = null;
+    if (!target.closest('.model-actions-toggle, .model-context-actions')) modelActionsId = null;
+  }
   onMount(() => {
     const resizeObserver = new ResizeObserver(syncWidthBand);
     resizeObserver.observe(editorRoot);
     syncWidthBand();
+    editorRoot.addEventListener('pointerdown', dismissContextMenus);
     window.addEventListener('pointermove', moveDockResize);
     window.addEventListener('pointerup', stopDockResize);
     window.addEventListener('pointercancel', stopDockResize);
     return () => {
       resizeObserver.disconnect();
       drag = null;
+      editorRoot.removeEventListener('pointerdown', dismissContextMenus);
       window.removeEventListener('pointermove', moveDockResize);
       window.removeEventListener('pointerup', stopDockResize);
       window.removeEventListener('pointercancel', stopDockResize);
@@ -555,7 +563,7 @@
             {#if recentExpanded}
               {#each recentTargets as target (target.model.id)}
                 <button class="recent-model" type="button" disabled={actionBusy || fixture}
-                  title={target.model.name}
+                  title={target.model.exists ? target.model.name : 'Model file is missing'}
                   aria-label={'Open recent model ' + target.model.name + ' from ' + target.project.name}
                   onclick={() => void openModelSafely(target.model.id)}>
                   <span>{target.model.name}</span><small>{target.project.name}</small>
@@ -654,7 +662,7 @@
                           <span class="model-current-indicator" title="Current model at last observation">Active</span>
                         {/if}
                         {#if !model.exists}
-                          <span class="model-state warning" title="File unavailable">Missing</span>
+                          <span class="model-state warning" title="Model file is missing. Open the project folder to locate or restore it.">Missing</span>
                         {:else if model.dirty}
                           <span class="model-state warning" title="Modified at last observation" aria-label="Modified at last observation">●</span>
                         {/if}
