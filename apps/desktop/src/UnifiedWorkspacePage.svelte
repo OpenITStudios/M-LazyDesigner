@@ -126,6 +126,16 @@
   function toggleProjectActions(id: string) {
     projectActionsId = projectActionsId === id ? null : id;
   }
+  function closeProjectActions(event: KeyboardEvent, id: string) {
+    if (event.key !== 'Escape' || projectActionsId !== id) return;
+    event.preventDefault();
+    projectActionsId = null;
+    void tick().then(() => {
+      const toggle = Array.from(editorRoot.querySelectorAll<HTMLButtonElement>('.project-actions-toggle'))
+        .find(button => button.dataset.projectId === id);
+      toggle?.focus();
+    });
+  }
   function onDiagnosticTabKeydown(
     event: KeyboardEvent,
     current: 'diagnostic' | 'activity',
@@ -561,14 +571,18 @@
                     <span class="project-name" title={project.name}>{project.name}</span>
                   </button>
                   <button type="button" class="project-actions-toggle"
+                    data-project-id={project.id}
                     aria-label={'Show actions for project ' + project.name}
                     title={'Project actions for ' + project.name}
                     aria-expanded={projectActionsId === project.id}
-                    onclick={() => toggleProjectActions(project.id)}><EditorChromeIcon name="more-horizontal"/></button>
+                    aria-controls={projectActionsId === project.id ? 'ld-project-actions' : undefined}
+                    onclick={() => toggleProjectActions(project.id)}
+                    onkeydown={(event) => closeProjectActions(event, project.id)}><EditorChromeIcon name="more-horizontal"/></button>
                 </div>
                 {#if projectActionsId === project.id}
-                  <div class="project-inline-actions" role="group"
-                    aria-label={'Actions for project ' + project.name}>
+                  <div id="ld-project-actions" class="project-inline-actions" role="group"
+                    aria-label={'Actions for project ' + project.name}
+                    onkeydown={(event) => closeProjectActions(event, project.id)}> 
                     <button type="button" class="pin-project"
                       aria-label={(project.pinned ? 'Unpin project ' : 'Pin project ') + project.name}
                       aria-pressed={project.pinned}
