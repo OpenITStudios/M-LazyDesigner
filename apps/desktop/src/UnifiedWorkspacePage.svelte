@@ -34,7 +34,6 @@
   export let refresh: () => Promise<void>;
   export let navigateSupport: () => void;
   export let navigateActivity: () => void;
-  export let navigateWorkspace: () => void;
 
   type NativePlacementState = 'PRESENTED' | 'DETACHED' | 'DEFERRED' | 'UNAVAILABLE' | 'UNCERTAIN';
   let nativeStage: { detach: () => Promise<boolean>; present: () => Promise<void> } | undefined;
