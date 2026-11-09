@@ -965,7 +965,7 @@
     padding:6px 0;border-bottom:1px solid var(--ed-border);font-size:11px;
   }
   .diagnostic-facts span{color:var(--ed-muted)}
-  .diagnostic-facts strong{color:var(--ed-text);text-align:right;font-weight:650;overflow-wrap:anywhere}
+  .diagnostic-facts strong{color:var(--ed-text);text-align:right;font-weight:600;overflow-wrap:anywhere}
   .diagnostic-tabs button:hover:not(.selected){color:var(--ed-text)}
   .diagnostic-tabs button:focus-visible {
     outline:2px solid var(--ed-accent);outline-offset:-2px;
@@ -1000,7 +1000,7 @@
   .search-count{font-size:10px;color:var(--ed-muted-soft);padding:4px 5px 5px}
   .search-count.sr-only{padding:0}
   .project-tree {display:grid;gap:0;min-width:0;border-top:1px solid var(--ed-border-soft);padding-top:3px}
-  .project-group {min-width:0} .project-group + .project-group{border-top:1px solid var(--ed-border-soft)}
+  .project-group {min-width:0} /* Blockbench Outliner uses contiguous rows; no divider between sibling folders. */
   .project-line {display:flex;align-items:center;gap:1px;min-height:30px} .project-line:focus-within{background:var(--ed-raised)}
   .project-expand {
     display:flex;align-items:center;gap:6px;flex:1;min-width:0;
@@ -1024,8 +1024,12 @@
      are expanded as normal layout content, never over the native cutout. */
   .project-actions-toggle {
     display:grid;place-items:center;flex:none;width:25px;height:30px;
-    border:0;border-radius:3px;background:transparent;color:var(--ed-muted);cursor:pointer;
+    border:0;border-radius:2px;background:transparent;color:var(--ed-muted);cursor:pointer;
+    opacity:.65;
   }
+  .project-line:hover .project-actions-toggle,
+  .project-line:focus-within .project-actions-toggle,
+  .project-actions-toggle[aria-expanded="true"] {opacity:1}
   .project-actions-toggle:hover,
   .project-actions-toggle[aria-expanded="true"]{background:var(--ed-raised);color:var(--ed-text)}
   .project-inline-actions{
@@ -1033,8 +1037,8 @@
     margin:0 2px 6px 19px;padding:4px 0 5px;border-bottom:1px solid var(--ed-border);
   }
   .project-inline-actions button{
-    min-height:30px;padding:4px 7px;border:1px solid var(--ed-border);
-    border-radius:3px;background:var(--ed-raised);color:var(--ed-text);
+    min-height:28px;padding:4px 7px;border:1px solid var(--ed-border);
+    border-radius:2px;background:var(--ed-raised);color:var(--ed-text);
     font-size:11px;cursor:pointer;
   }
   .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
@@ -1130,9 +1134,9 @@
   }
   .recent-group{border-top:1px solid var(--ed-border-soft);margin-top:9px;padding-top:5px}
   .recent-heading{
-    display:flex;align-items:center;gap:7px;width:100%;min-height:30px;padding:5px;
-    border:0;border-radius:4px;background:transparent;color:var(--ed-muted);
-    font-size:11px;font-weight:700;text-align:left;cursor:pointer;
+    display:flex;align-items:center;gap:6px;width:100%;min-height:28px;padding:4px 5px;
+    border:0;border-radius:2px;background:transparent;color:var(--ed-muted);
+    font-size:11px;font-weight:600;text-align:left;cursor:pointer;
   }
   .recent-heading:hover{background:var(--ed-raised);color:var(--ed-text)}
   .recent-count{margin-left:auto;color:var(--ed-muted-soft);font-size:10px}
@@ -1162,7 +1166,7 @@
   .model-detail strong{font-size:12px;font-weight:650;overflow-wrap:anywhere}
   .model-detail span{font-size:11px;color:var(--ed-muted)}
   .inspector.rail .rail-actions{padding-top:4px}
-  .panel-disclosure{margin:6px 0 8px;border-bottom:1px solid var(--ed-border)}
+  .panel-disclosure{margin:5px 0 7px;border-bottom:1px solid var(--ed-border)}
   .panel-disclosure summary{
     padding:5px 0;color:var(--ed-muted);font-size:11px;cursor:pointer;
   }
@@ -1179,8 +1183,8 @@
   .connection-status i.verified{background:#6bc493}
   .connection-status i.stale{background:#e1b65f}
   .inspector-section button,.state-note button {
-    min-height:30px;margin-top:7px;padding:5px 9px;border:1px solid var(--ed-border);
-    border-radius:5px;background:var(--ed-raised);color:var(--ed-text);font-size:11px;font-weight:650;cursor:pointer;
+    min-height:28px;margin-top:6px;padding:4px 8px;border:1px solid var(--ed-border);
+    border-radius:2px;background:var(--color-button);color:var(--ed-text);font-size:11px;font-weight:600;cursor:pointer;
   }
   .inspector-section button.text-action{background:transparent;border:0;color:var(--ed-accent);padding:5px 4px}
   .inspector-footnote {font-size:11px;color:var(--ed-muted-soft);line-height:1.5}
