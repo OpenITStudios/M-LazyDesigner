@@ -135,11 +135,17 @@
   }
   function toggleProjectActions(id: string) {
     modelActionsId = null;
-    projectActionsId = projectActionsId === id ? null : id;
+    const opening = projectActionsId !== id;
+    projectActionsId = opening ? id : null;
+    if (opening) void tick().then(() =>
+      editorRoot.querySelector<HTMLElement>('.project-inline-actions button:not(:disabled)')?.focus());
   }
   function toggleModelActions(id: string) {
     projectActionsId = null;
-    modelActionsId = modelActionsId === id ? null : id;
+    const opening = modelActionsId !== id;
+    modelActionsId = opening ? id : null;
+    if (opening) void tick().then(() =>
+      editorRoot.querySelector<HTMLElement>('.model-context-actions button:not(:disabled)')?.focus());
   }
   function closeModelActions(event: KeyboardEvent, id: string) {
     if (event.key !== 'Escape' || modelActionsId !== id) return;
@@ -155,6 +161,7 @@
   function closeProjectActions(event: KeyboardEvent, id: string) {
     if (event.key !== 'Escape' || projectActionsId !== id) return;
     event.preventDefault();
+    event.stopPropagation();
     projectActionsId = null;
     void tick().then(() => {
       const toggle = Array.from(editorRoot.querySelectorAll<HTMLButtonElement>('.project-actions-toggle'))
@@ -310,14 +317,14 @@
     const resizeObserver = new ResizeObserver(syncWidthBand);
     resizeObserver.observe(editorRoot);
     syncWidthBand();
-    editorRoot.addEventListener('pointerdown', dismissContextMenus);
+    document.addEventListener('pointerdown', dismissContextMenus);
     window.addEventListener('pointermove', moveDockResize);
     window.addEventListener('pointerup', stopDockResize);
     window.addEventListener('pointercancel', stopDockResize);
     return () => {
       resizeObserver.disconnect();
       drag = null;
-      editorRoot.removeEventListener('pointerdown', dismissContextMenus);
+      document.removeEventListener('pointerdown', dismissContextMenus);
       window.removeEventListener('pointermove', moveDockResize);
       window.removeEventListener('pointerup', stopDockResize);
       window.removeEventListener('pointercancel', stopDockResize);
