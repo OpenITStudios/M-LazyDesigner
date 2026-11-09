@@ -541,35 +541,19 @@
         {/if}
       </div>
     </div>
-    <div class="editor-controls" role="group" aria-label="Editor actions and panels">
-      <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
-        aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
-        aria-pressed={layout.focusMode}
-        title={layout.focusMode ? 'Restore side panels' : 'Maximize Blockbench working area'}
-        onclick={toggleFocusMode}><EditorChromeIcon name="focus"/></button>
-      {#if !status?.blockbench.running}
-        <button type="button" class="launch-editor" disabled={actionBusy || fixture || statusProbeFailures >= 2}
-          onclick={() => void launchBlockbench()}>Open Blockbench</button>
-      {/if}
-      {#if !fixture && nativePlacement === 'UNCERTAIN'}
-        <button type="button" class="native-window-action"
-          aria-label="Recover original Blockbench window"
-          title="Window placement is unverified; restore the original Blockbench window"
-          disabled={actionBusy}
-          onclick={restoreNativeWindow}>Restore window</button>
-      {/if}
-      <span class="toolbar-separator" aria-hidden="true"></span>
-      <button type="button" class="support-button"
-        title={nativePlacement === 'DETACHED' ? 'Support and settings' : 'Restore original Blockbench window before opening Support'}
-        aria-label="Open Support" disabled={navigationPending}
-        onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
-    </div>
+
   </header>
 
   {#if localNotice}
     <div class="inline-error" role="alert"><span>{localNotice}</span><button type="button" onclick={() => localNotice = ''} aria-label="Dismiss workspace notice">×</button></div>
   {/if}
 
+  {#if layout.focusMode}
+    <button type="button" class="focus-exit-overlay" aria-label="Exit Focus Editor"
+      title="Restore LazyDesigner sidebar" onclick={toggleFocusMode}>
+      <EditorChromeIcon name="focus"/> Exit focus
+    </button>
+  {/if}
   <div class="unified-body" class:with-projects={showProjects} class:with-inspector={showTools}
     class:rail={explorerRail} class:tools-rail={diagnosticRail}
     style={`--explorer-width: ${layout.projectsWidth}px; --tools-width: ${layout.toolsWidth}px;`}>
@@ -600,6 +584,29 @@
         {:else}
           <div class="sidebar-top">
             <div class="sidebar-brand"><EditorChromeIcon name="model"/><strong>LazyDesigner</strong></div>
+            <div class="editor-controls sidebar-utility-actions" role="group" aria-label="Editor actions and panels">
+      <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
+        aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
+        aria-pressed={layout.focusMode}
+        title={layout.focusMode ? 'Restore side panels' : 'Maximize Blockbench working area'}
+        onclick={toggleFocusMode}><EditorChromeIcon name="focus"/></button>
+      {#if !status?.blockbench.running}
+        <button type="button" class="launch-editor" disabled={actionBusy || fixture || statusProbeFailures >= 2}
+          onclick={() => void launchBlockbench()}>Open Blockbench</button>
+      {/if}
+      {#if !fixture && nativePlacement === 'UNCERTAIN'}
+        <button type="button" class="native-window-action"
+          aria-label="Recover original Blockbench window"
+          title="Window placement is unverified; restore the original Blockbench window"
+          disabled={actionBusy}
+          onclick={restoreNativeWindow}>Restore window</button>
+      {/if}
+      <span class="toolbar-separator" aria-hidden="true"></span>
+      <button type="button" class="support-button"
+        title={nativePlacement === 'DETACHED' ? 'Support and settings' : 'Restore original Blockbench window before opening Support'}
+        aria-label="Open Support" disabled={navigationPending}
+        onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
+    </div>
             <div class="sidebar-tabs" role="tablist" aria-label="LazyDesigner sections">
               <button type="button" role="tab" id="ld-sidebar-projects-tab"
                 aria-selected={sidebarTab === 'projects'} aria-controls="ld-sidebar-projects"
@@ -1002,6 +1009,10 @@
     overflow:hidden; background:var(--ed-bg); color:var(--ed-text);
     font-family:"Segoe UI",Arial,system-ui,sans-serif;
   }
+  /* Title-bar-style identity only; utility actions live in the sidebar. */
+  .sidebar-utility-actions{display:flex;align-items:center;justify-content:flex-start;gap:5px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--ed-border)}
+  .focus-exit-overlay{position:absolute;top:44px;right:12px;z-index:10;display:flex;align-items:center;gap:6px;min-height:32px;padding:6px 10px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-panel);color:var(--ed-text);cursor:pointer}
+  .focus-exit-overlay:hover{background:var(--ed-select)}
   .editor-header {
     flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px;
     min-height:34px; padding:2px 7px; border-bottom:1px solid var(--ed-border);
