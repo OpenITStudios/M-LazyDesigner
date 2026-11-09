@@ -1078,6 +1078,14 @@ export function analyzeAxisAlignedSurfaceEvidence(
   }
   const unsupportedTransformCount = options.unsupportedTransformCount ?? 0;
   const unsupportedMeshCount = options.unsupportedMeshCount ?? 0;
+  // Caller-reported omissions are part of evidence completeness. Negative,
+  // fractional or nonfinite counts cannot certify a clean spatial scan.
+  if (!Number.isSafeInteger(unsupportedTransformCount) ||
+      unsupportedTransformCount < 0 ||
+      !Number.isSafeInteger(unsupportedMeshCount) ||
+      unsupportedMeshCount < 0) {
+    throw new Error("Axis-aligned surface unsupported counts must be nonnegative safe integers.");
+  }
   const complete = invalid.length === 0 && rotated.length === 0 &&
     unsupportedTransformCount === 0 && unsupportedMeshCount === 0 &&
     unknownParentCubeCount === 0 && unverifiedCrossOwnerPairCount === 0 &&

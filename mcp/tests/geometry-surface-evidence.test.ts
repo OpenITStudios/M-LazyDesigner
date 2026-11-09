@@ -89,6 +89,24 @@ test("plane-like diagnostic preserves parent identity and invalid-line rejection
   expect(invalid.checked_pair_count).toBe(0);
 });
 
+test("surface completeness rejects invalid caller-reported unsupported counts", () => {
+  const cubes = [
+    { ...cube("a", [0, 0, 0], [2, 2, 2]), parent_id: "root" },
+    { ...cube("b", [2, 0, 0], [4, 2, 2]), parent_id: "root" },
+  ];
+  const clean = analyzeAxisAlignedSurfaceEvidence(cubes);
+  expect(clean.state).toBe("clean");
+  expect(clean.checked_pair_count).toBe(1);
+  expect(analyzeAxisAlignedSurfaceEvidence(cubes,
+    { unsupportedMeshCount: 1 }).state).toBe("partial");
+  for (const count of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(() => analyzeAxisAlignedSurfaceEvidence(cubes,
+      { unsupportedTransformCount: count })).toThrow(/unsupported counts/);
+    expect(() => analyzeAxisAlignedSurfaceEvidence(cubes,
+      { unsupportedMeshCount: count })).toThrow(/unsupported counts/);
+  }
+});
+
 test("positive volume overlap is evidence but not automatically a texture blocker", () => {
   const result = analyzeAxisAlignedSurfaceEvidence([
     cube("outer", [0, 0, 0], [6, 6, 6]),

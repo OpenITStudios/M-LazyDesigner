@@ -122,3 +122,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source defect:** even after vector arity and finite-entry validation, individually finite OBB half-sizes can overflow the sum of SAT projected radii. The contact classifier previously allowed an infinite/NaN overlap into the decisive-axis calculation, risking a false contact verdict.
 
 **Candidate:** fail closed on nonfinite SAT projected overlap/center distance, matching the existing containment guard. Authored a finite-but-overflowing OBB negative regression and a 45-degree rotated corner-to-face boundary triplet (touching, separated, intersecting). These are source-level invariants only. **Tests NOT_EXECUTED; no local/native or visual evidence.**
+
+## Harness² iteration L — spatial evidence completeness accounting (2026-11-10)
+
+**Source defect:** the same-parent surface scan used caller-provided unsupported transform/mesh counts to decide whether a scan was complete, but accepted negative, fractional or nonfinite values. Such malformed metadata can invalidate confidence in a clean contact/overlap report even when cube geometry itself is valid.
+
+**Candidate:** validate both unsupported counts as nonnegative safe integers before returning any surface verdict. Preserve existing policy that positive-volume overlaps are review evidence, not automatic z-fighting or deletion. Regression authored for clean adjacent Cubes, partial omitted-mesh evidence, and invalid metadata. **NOT_EXECUTED; no local/native test or visual acceptance.**
