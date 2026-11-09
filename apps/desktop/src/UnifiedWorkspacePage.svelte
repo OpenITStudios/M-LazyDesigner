@@ -1438,8 +1438,9 @@
   .sidebar-page .project-actions-toggle[aria-expanded="true"]{opacity:1}
   .sidebar-page .project-inline-actions{
     position:absolute;z-index:8;right:4px;top:32px;display:grid;gap:2px;
-    min-width:128px;margin:0;padding:5px;border:1px solid #373b44;
-    border-radius:6px;background:#252830;box-shadow:0 9px 22px rgba(0,0,0,.4);
+    min-width:128px;max-width:calc(100% - 8px);max-height:min(280px, 55vh);overflow-y:auto;
+    margin:0;padding:5px;border:1px solid var(--ed-border);
+    border-radius:6px;background:var(--ed-raised);box-shadow:0 9px 22px rgba(0,0,0,.4);
   }
   .sidebar-page .project-inline-actions button{
     min-height:30px;padding:6px 9px;text-align:left;border:0;border-radius:3px;
@@ -1486,7 +1487,7 @@
   .sidebar-page .model-actions-toggle:focus-visible,
   .sidebar-page .project-actions-toggle:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px;opacity:1}
   .sidebar-page .model-line:hover .model-actions-toggle,.sidebar-page .model-line:focus-within .model-actions-toggle,.sidebar-page .model-actions-toggle[aria-expanded="true"]{opacity:1}
-  .sidebar-page .model-context-actions{position:absolute;z-index:12;right:2px;top:31px;display:grid;gap:2px;min-width:145px;padding:5px;border:1px solid #373b44;border-radius:6px;background:#252830;box-shadow:0 9px 22px rgba(0,0,0,.4)}
+  .sidebar-page .model-context-actions{position:absolute;z-index:12;right:2px;top:31px;display:grid;gap:2px;min-width:145px;max-width:calc(100% - 4px);max-height:min(280px, 55vh);overflow-y:auto;padding:5px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);box-shadow:0 9px 22px rgba(0,0,0,.4)}
   .sidebar-page .model-context-actions button{min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-page .model-context-actions button:hover:not(:disabled){background:var(--ed-select)}
   .sidebar-page .recent-group{margin:3px 0 15px;padding:0 0 12px;border-top:0;border-bottom:1px solid var(--ed-border)}
