@@ -32,6 +32,12 @@ check(editor.includes('class="status-indicator"'), 'System/AI status indicators 
 check(editor.includes('class="tree-caret recent-caret"'), 'Recent Models disclosure alignment missing');
 check(editor.includes('Help & settings'), 'Help & settings label missing');
 check(editor.includes('readinessOutdated'), 'Stale-readiness guard missing');
+check(editor.includes('blockbenchConfirmedStopped = Boolean(status && !status.blockbench.running'), 'Missing fresh observed-stopped admission for native recovery');
+check(editor.includes('blockbenchObservationUnknown'), 'Unverified Blockbench state must be distinguished from stopped state');
+check(editor.includes('class="native-recovery-layer"'), 'Closed-Blockbench center recovery UI missing');
+check(editor.includes('onclick={() => void launchBlockbench()}'), 'Native recovery must use existing Blockbench launch action');
+check(editor.includes("return afterDetach(openBlockbenchEditor);"), 'Native launch must preserve detach-before-action contract');
+check(editor.includes('Refresh status'), 'Recovery must expose a status refresh action');
 check(editor.includes('@container ld-sidebar'), 'Width-aware sidebar rule missing');
 check(!editor.includes('class="workspace-return"'), 'Removed Workspace header button reintroduced');
 check(nativeStage.includes("action: 'detach', viewport: null"), 'Native stage must request explicit Rust detach');
