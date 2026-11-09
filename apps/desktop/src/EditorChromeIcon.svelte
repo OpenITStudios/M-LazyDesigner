@@ -7,7 +7,7 @@
   export let name:
     | 'projects' | 'diagnostic' | 'focus' | 'workspace' | 'support'
     | 'model' | 'add' | 'chevron-left' | 'chevron-right'
-    | 'folder' | 'folder-open' | 'activity' | 'search' | 'more-horizontal';
+    | 'folder' | 'folder-open' | 'activity' | 'search' | 'more-horizontal' | 'refresh';
 </script>
 
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -39,6 +39,9 @@
     <path d="M3 12h4l3-7 4 14 3-7h4"/>
   {:else if name === 'search'}
     <circle cx="10.8" cy="10.8" r="6.7"/><path d="m16 16 4.5 4.5"/>
+  {:else if name === 'refresh'}
+    <path d="M20 11a8 8 0 0 0-14.4-4.8L3 9m0-6v6h6"/>
+    <path d="M4 13a8 8 0 0 0 14.4 4.8L21 15m0 6v-6h-6"/>
   {:else if name === 'more-horizontal'}
     <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/>
     <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>
