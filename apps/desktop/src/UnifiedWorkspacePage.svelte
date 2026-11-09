@@ -947,7 +947,9 @@
             </section>
           </div>
           <button type="button" class="sidebar-footer"
-            aria-label={'Open Status: ' + readinessLabel}
+            aria-label={'Open Status: ' + readinessLabel + (status?.observed_at_unix_ms
+              ? '. Last checked: ' + new Date(status.observed_at_unix_ms).toLocaleString()
+              : '. Last check time unavailable')}
             title={status?.observed_at_unix_ms
               ? 'Last checked: ' + new Date(status.observed_at_unix_ms).toLocaleString()
               : 'Status check time unavailable'}
@@ -1573,7 +1575,7 @@
   .sidebar-status .status-overview-actions button:disabled,
   .sidebar-status .status-advanced button:disabled{opacity:.55;cursor:not-allowed}
   .sidebar-status .status-advanced{border-top:1px solid var(--ed-border);padding:12px 0}
-  .sidebar-status .status-advanced summary{cursor:pointer;color:var(--ed-muted);font-size:12px}
+  .sidebar-status .status-advanced summary{cursor:pointer;color:var(--ed-muted);font-size:12px;min-height:32px;display:list-item;align-content:center}
   .sidebar-status .status-advanced[open] summary{margin-bottom:12px;color:var(--ed-text)}
   .sidebar-status .status-advanced .diagnostic-facts{margin:8px 0}
   .sidebar-status .status-overview button:focus-visible,.sidebar-status .status-advanced summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:2px}
