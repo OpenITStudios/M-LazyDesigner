@@ -92,3 +92,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source defect:** `reviewStoredAdvancedGeometrySource` regenerated an unconstrained expected Recipe, then compared it to a saved Recipe whose valid source-owned ANCHOR constraints had moved placements. This could falsely classify a valid saved shape as `SOURCE_RECIPE_MISMATCH` and block a subsequent bounded revision.
 
 **Candidate:** replay only explicit constraints and symmetry within the exact reconstructed source-owned instance cohort before the existing compiled-placement comparison. Cross-cohort or unresolved endpoints still fail closed; no guessed attachment, image proof or native authorization. **Regression authored, NOT_EXECUTED**.
+
+## Harness² iteration G — dependency-ordered symmetry provenance (2026-11-09)
+
+**Source defect:** the persisted-source reviewer accepted only primitive pattern IDs as symmetry sources, even though the canonical Recipe symmetry compiler explicitly permits later relations to mirror previously emitted targets. A valid chained mirror could thus be rejected as `SOURCE_RECIPE_MISMATCH`.
+
+**Candidate:** replay source-owned symmetry identity in canonical declaration order, allowing each target to become a source for subsequent relations; reject forward references, reused targets and foreign sources. Preserve the compiler as sole geometry authority and exact placement comparison. **Regression authored, NOT_EXECUTED**. No visual or native proof.

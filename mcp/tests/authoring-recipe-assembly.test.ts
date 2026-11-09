@@ -341,6 +341,34 @@ describe("Structure-first initial Recipe batch using declared form reasons", () 
       .toBe("SOURCE_RECIPE_MISMATCH");
   });
 
+  test("source-owned chained symmetry remains verifiable in compiler dependency order", () => {
+    const seed = blank();
+    seed.symmetry = [
+      {
+        id: "mirror-primary",
+        source_instance_id: "shape:cuboid:z-body:0",
+        target_instance_id: "body:mirror-1",
+        plane: { axis: "X", position: 8 },
+        uv_policy: "UNIQUE", texture_policy: "MIRROR", rig_policy: "INDEPENDENT",
+      },
+      {
+        id: "mirror-secondary",
+        source_instance_id: "body:mirror-1",
+        target_instance_id: "body:mirror-2",
+        plane: { axis: "X", position: 16 },
+        uv_policy: "UNIQUE", texture_policy: "MIRROR", rig_policy: "INDEPENDENT",
+      },
+    ];
+    const planned = buildAdvancedGeometryRecipeCandidate(seed, [body]);
+    expect(compileAuthoringRecipe(planned.next_recipe).placements).toHaveLength(3);
+    expect(reviewStoredAdvancedGeometrySource(planned.next_recipe).state)
+      .toBe("AVAILABLE_MATCHED_SOURCE");
+    const broken = structuredClone(planned.next_recipe);
+    broken.symmetry!.reverse();
+    expect(reviewStoredAdvancedGeometrySource(broken).state)
+      .toBe("SOURCE_RECIPE_MISMATCH");
+  });
+
   test("unresolvable initial batch anchor still fails at canonical final compilation", () => {
     const seed = blank();
     seed.constraints = [{

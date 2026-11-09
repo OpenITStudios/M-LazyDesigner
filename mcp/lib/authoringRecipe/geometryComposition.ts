@@ -202,10 +202,19 @@ export function reviewStoredAdvancedGeometrySource(recipe: AuthoringRecipe): {
     const scopedSymmetry = recipe.symmetry ?? [];
     if (scopedConstraints.some(row =>
       !sourceInstanceIds.has(row.source_instance_id) ||
-      !sourceInstanceIds.has(row.target_instance_id)) ||
-      scopedSymmetry.some(row =>
-        !sourceInstanceIds.has(row.source_instance_id))) {
+      !sourceInstanceIds.has(row.target_instance_id))) {
       return empty("SOURCE_RECIPE_MISMATCH");
+    }
+    // Canonical symmetry emits targets in relation order; a later mirror may
+    // depend on an earlier mirror. Validate that exact dependency order,
+    // rather than assuming every source must be a primitive pattern instance.
+    const generatedIds = new Set(sourceInstanceIds);
+    for (const relation of scopedSymmetry) {
+      if (!generatedIds.has(relation.source_instance_id) ||
+          generatedIds.has(relation.target_instance_id)) {
+        return empty("SOURCE_RECIPE_MISMATCH");
+      }
+      generatedIds.add(relation.target_instance_id);
     }
     expected.constraints = structuredClone(scopedConstraints);
     expected.symmetry = structuredClone(scopedSymmetry);
