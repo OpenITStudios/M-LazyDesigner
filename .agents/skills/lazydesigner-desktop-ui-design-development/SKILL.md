@@ -31,6 +31,9 @@ The actual stack is Svelte 5 + Vite 8 + CSS semantic tokens (with Tailwind CSS 4
 
 ## UI design rules
 
+**MANDATORY design standard:** Read `docs/01-product/ui-design-standard.md` before any Desktop UI source change or source-grounded preview. The standard owns the approved one-right-sidebar hierarchy, visual tokens, component behavior, accessibility, and source-only release evidence. `docs/01-product/interface-ux.md` retains product semantics. When a legacy skill example conflicts with the adopted one-sidebar structure, the adopted product/UI contract wins; never reintroduce a second dock just to match an old preview example.
+
+
 Align the default Desktop companion theme to the pinned upstream Blockbench v5.2.1 `themes/dark.bbtheme` values and 40px panel tabs, but do not claim synchronization with a customized theme in the separately running native process. Use `ALIGN` when an existing visual language is present; `ESTABLISH` only when genuinely absent or specifically authorized. Work from task hierarchy and legitimate UI states before decoration. Keep original Desktop visual patterns, tokens, accessible focus/contrast, reduced motion, meaningful responsive composition and truthful disabled/error/pending states. Do not introduce speculative gradients, glass effects, generic AI dashboards, animations without purpose, a new UI framework or cloned components. For third-party inspiration distinguish OBSERVED, INFERRED and ADOPTED.
 
 ## Source-first ChatGPT HTML preview
@@ -39,7 +42,7 @@ Read [the UI Preview Protocol](references/ui-preview-protocol.md) after explicit
 
 1. **PIN** selected `Local` HEAD and actual target UI source, imported components, CSS, tokens and relevant typed fixture.
 2. **TRANSLATE** source Svelte markup and CSS into standalone HTML/CSS without redesign, fabricated controls, speculative content, or generated images. Use `HTML_SOURCE_PREVIEW` as the single preview tier.
-3. **DEFAULT** Unified Editor ready, 1920×1080; retain left Project Explorer and right Diagnostic/Activity docks. Keep native Blockbench center empty; never synthesize the native editor.
+3. **DEFAULT** Unified Editor ready, 1920×1080; use the approved **single right sidebar** with Projects and Status tabs, Active Project above Recent Models, and the native Blockbench center empty. Never reintroduce an old left Project Explorer dock or synthesize the native editor.
 4. **DELIVER** the HTML preview directly in ChatGPT when supported, or as a standalone HTML file. Identify branch, SHA, page, fixture, viewport, source coverage and any approximations.
 5. **BOUNDARY** this is visual review only. No local Svelte render, Windows capture, Codex, PC test, native operations or dependency installation for preview. Do not delete production application code or existing runtime/test infrastructure. Do not claim pixel identity or functional acceptance without evidence.
 
