@@ -575,14 +575,13 @@
                     aria-label={'Show actions for project ' + project.name}
                     title={'Project actions for ' + project.name}
                     aria-expanded={projectActionsId === project.id}
-                    aria-controls={projectActionsId === project.id ? 'ld-project-actions' : undefined}
-                    onclick={() => toggleProjectActions(project.id)}
-                    onkeydown={(event) => closeProjectActions(event, project.id)}><EditorChromeIcon name="more-horizontal"/></button>
+                    aria-controls={projectActionsId === project.id ? 'ld-project-actions-' + project.id : undefined}
+                    onclick={() => toggleProjectActions(project.id)}><EditorChromeIcon name="more-horizontal"/></button>
                 </div>
                 {#if projectActionsId === project.id}
-                  <div id="ld-project-actions" class="project-inline-actions" role="group"
+                  <div id={'ld-project-actions-' + project.id} class="project-inline-actions" role="group"
                     aria-label={'Actions for project ' + project.name}
-                    onkeydown={(event) => closeProjectActions(event, project.id)}> 
+                    onkeydown={(event) => closeProjectActions(event, project.id)}>
                     <button type="button" class="pin-project"
                       aria-label={(project.pinned ? 'Unpin project ' : 'Pin project ') + project.name}
                       aria-pressed={project.pinned}
