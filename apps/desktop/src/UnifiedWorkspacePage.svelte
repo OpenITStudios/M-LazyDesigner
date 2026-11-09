@@ -26,6 +26,7 @@
   export let layout: EditorLayoutState;
   export let openModel: (id?: string) => Promise<void>;
   export let addProjectFolder: () => Promise<void>;
+  export let createProjectFolder: (name: string) => Promise<void>;
   export let runProjectAction: (action: ProjectAction, id: string) => Promise<void>;
   export let focusCurrentEditor: () => Promise<void>;
   export let openBlockbenchEditor: () => Promise<void>;
@@ -51,6 +52,8 @@
   let projectActionsId: string | null = null;
   let modelActionsId: string | null = null;
   let recentExpanded = true;
+  let creatingFolder = false;
+  let newFolderName = '';
   let executing = false;
   let localNotice = '';
   let searchInput: HTMLInputElement | undefined;
@@ -579,10 +582,32 @@
 
         <div class="project-section-heading">
           <h3>Project folders</h3>
-          <button type="button" class="sidebar-add-folder" title="Register an existing folder as a project"
-            aria-label="Add existing project folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-            onclick={() => void registerFolder()}><EditorChromeIcon name="add"/> Add folder</button>
+          <button type="button" class="sidebar-add-folder" title="Create a new empty project folder"
+            disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+            onclick={() => creatingFolder = !creatingFolder}><EditorChromeIcon name="add"/> New folder</button>
         </div>
+        {#if creatingFolder}
+          <form class="create-folder-form" onsubmit={(event) => {
+            event.preventDefault();
+            const name = newFolderName;
+            if (!name.trim() || actionBusy || fixture) return;
+            creatingFolder = false;
+            newFolderName = '';
+            void afterDetach(() => createProjectFolder(name));
+          }}>
+            <label for="ld-new-folder-name">Project folder name</label>
+            <input id="ld-new-folder-name" type="text" maxlength="120"
+              placeholder="e.g. Furniture Pack" bind:value={newFolderName} required
+              onkeydown={(event) => { if (event.key === 'Escape') { creatingFolder = false; newFolderName = ''; } }}/>
+            <p>Choose the parent location next. This creates a folder only, not a model.</p>
+            <div class="create-folder-actions">
+              <button type="button" onclick={() => { creatingFolder = false; newFolderName = ''; }}>Cancel</button>
+              <button type="submit" disabled={!newFolderName.trim() || actionBusy}>Choose location…</button>
+            </div>
+          </form>
+        {/if}
+        <button type="button" class="add-existing-folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+          onclick={() => void registerFolder()}><EditorChromeIcon name="folder"/> Add existing folder…</button>
         {#if navigation && navigation.projects.length > 0}
           <label class="search-label sr-only" for="ld-unified-model-search">Find a project or model</label>
           <div class="search-controls">
@@ -1411,4 +1436,14 @@
   .sidebar-page .project-section-heading .sidebar-add-folder:hover:not(:disabled){background:var(--ed-select)}
   .sidebar-page .project-section-heading .sidebar-add-folder:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .project-primary-action{margin-bottom:12px}
+
+  .sidebar-page .add-existing-folder{display:flex;align-items:center;gap:7px;min-height:30px;margin:0 0 9px;padding:4px 7px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:12px;cursor:pointer}
+  .sidebar-page .add-existing-folder:hover:not(:disabled){background:var(--ed-raised);color:var(--ed-text)}
+  .sidebar-page .create-folder-form{display:grid;gap:8px;margin:0 0 12px;padding:10px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised)}
+  .sidebar-page .create-folder-form label{font-size:12px;font-weight:600}
+  .sidebar-page .create-folder-form input{min-width:0;width:100%;min-height:34px;padding:7px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-bg);color:var(--ed-text);font-size:13px}
+  .sidebar-page .create-folder-form p{margin:0;color:var(--ed-muted);font-size:11px;line-height:1.4}
+  .sidebar-page .create-folder-actions{display:flex;justify-content:flex-end;gap:6px}
+  .sidebar-page .create-folder-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-bg);color:var(--ed-text);font-size:12px;cursor:pointer}
+  .sidebar-page .create-folder-actions button[type=submit]{background:var(--ed-select)}
 </style>
