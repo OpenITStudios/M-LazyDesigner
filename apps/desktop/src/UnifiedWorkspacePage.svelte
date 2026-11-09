@@ -1457,7 +1457,7 @@
   .sidebar-page .search-controls{margin:0 0 6px}
   .sidebar-page .explorer input,.sidebar-page.explorer input{min-height:32px;background:#1b1e23;border-color:#282c33;border-radius:5px}
   .sidebar-page .project-group{position:relative}
-  .sidebar-page .project-expand{min-height:36px;font-weight:550}
+  .sidebar-page .project-expand{height:36px;min-height:36px;font-size:13px;font-weight:550}
   .sidebar-page .project-actions-toggle{opacity:.48}
   .sidebar-page .project-line:hover .project-actions-toggle,
   .sidebar-page .project-line:focus-within .project-actions-toggle,
@@ -1469,10 +1469,11 @@
     border-radius:6px;background:var(--ed-raised);box-shadow:0 9px 22px rgba(0,0,0,.4);
   }
   .sidebar-page .project-inline-actions button{
-    min-height:30px;padding:6px 9px;text-align:left;border:0;border-radius:3px;
-    background:transparent;font-size:11px
+    min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;
+    background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer
   }
   .sidebar-page .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .project-inline-actions button:disabled{opacity:.55;cursor:not-allowed}
   .sidebar-page .project-inline-actions button:focus-visible,
   .sidebar-page .model-context-actions button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:-2px}
   .sidebar-page .model-line.current{background:var(--ed-select);border-radius:5px}
@@ -1490,7 +1491,6 @@
   .project-primary-action button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .search-controls{margin-bottom:10px}
   .sidebar-page.explorer input{font-size:13px;min-height:36px}
-  .sidebar-page .project-expand{font-size:13px;height:36px}
   .sidebar-page .project-line{min-height:36px}
   .sidebar-page .model-open{font-size:13px;min-height:36px}
   .sidebar-page .recent-heading{font-size:13px;min-height:34px}
@@ -1507,6 +1507,7 @@
   .sidebar-page .model-context-actions{position:absolute;z-index:12;right:2px;top:31px;display:grid;gap:2px;min-width:145px;max-width:calc(100% - 4px);max-height:min(280px, 55vh);overflow-y:auto;padding:5px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);box-shadow:0 9px 22px rgba(0,0,0,.4)}
   .sidebar-page .model-context-actions button{min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-page .model-context-actions button:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .model-context-actions button:disabled{opacity:.55;cursor:not-allowed}
   .sidebar-page .recent-group{margin:3px 0 15px;padding:0 0 12px;border-top:0;border-bottom:1px solid var(--ed-border)}
   .sidebar-page .recent-heading{font-weight:650}
   @media(hover:none){.sidebar-page .model-actions-toggle{opacity:1}}
