@@ -49,7 +49,8 @@
   let expandedProjectIds = new Set<string>();
   let collapsedProjectIds = new Set<string>();
   let projectActionsId: string | null = null;
-  let recentExpanded = false;
+  let modelActionsId: string | null = null;
+  let recentExpanded = true;
   let executing = false;
   let localNotice = '';
   let searchInput: HTMLInputElement | undefined;
@@ -527,6 +528,27 @@
           </div>
         {/if}
 
+        {#if !search.trim() && recentTargets.length > 0}
+          <div class="recent-group">
+            <button type="button" class="recent-heading" aria-expanded={recentExpanded}
+              onclick={() => recentExpanded = !recentExpanded}>
+              <span class="tree-caret" class:expanded={recentExpanded}
+                aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
+              Recent Models <span class="recent-count">{recentTargets.length}</span>
+            </button>
+            {#if recentExpanded}
+              {#each recentTargets as target (target.model.id)}
+                <button class="recent-model" type="button" disabled={actionBusy || fixture}
+                  title={target.model.name}
+                  aria-label={'Open recent model ' + target.model.name + ' from ' + target.project.name}
+                  onclick={() => void openModelSafely(target.model.id)}>
+                  <span>{target.model.name}</span><small>{target.project.name}</small>
+                </button>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+
         {#if navigation && navigation.projects.length > 0}
           <label class="search-label sr-only" for="ld-unified-model-search">Find a project or model</label>
           <div class="search-controls">
@@ -622,10 +644,24 @@
                         {/if}
                       {/if}
                       {#if model.exists}
-                        <button type="button" class="reveal-model" disabled={actionBusy || fixture}
-                          title={'Show ' + model.name + ' in Explorer'}
-                          aria-label={'Show model ' + model.name + ' in Explorer'}
-                          onclick={() => void showModelFile(model.id)}><EditorChromeIcon name="folder-open"/></button>
+                        <button type="button" class="model-actions-toggle"
+                          title={'Actions for ' + model.name}
+                          aria-label={'Actions for model ' + model.name}
+                          aria-expanded={modelActionsId === model.id}
+                          aria-controls={modelActionsId === model.id ? 'ld-model-actions-' + model.id : undefined}
+                          onclick={() => modelActionsId = modelActionsId === model.id ? null : model.id}>
+                          <EditorChromeIcon name="more-horizontal"/>
+                        </button>
+                        {#if modelActionsId === model.id}
+                          <div id={'ld-model-actions-' + model.id} class="model-context-actions" role="group"
+                            aria-label={'Actions for model ' + model.name}
+                            onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); modelActionsId = null; } }}>
+                            <button type="button" disabled={actionBusy || fixture}
+                              onclick={() => { modelActionsId = null; void chooseModel(model); }}>Open model</button>
+                            <button type="button" disabled={actionBusy || fixture}
+                              onclick={() => { modelActionsId = null; void showModelFile(model.id); }}>Show in Explorer</button>
+                          </div>
+                        {/if}
                       {/if}
                     </div>
                   {/each}
@@ -663,26 +699,6 @@
           </div>
         {/if}
 
-        {#if !search.trim() && recentTargets.length > 0}
-          <div class="recent-group">
-            <button type="button" class="recent-heading" aria-expanded={recentExpanded}
-              onclick={() => recentExpanded = !recentExpanded}>
-              <span class="tree-caret" class:expanded={recentExpanded}
-                aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
-              Recent Models <span class="recent-count">{recentTargets.length}</span>
-            </button>
-            {#if recentExpanded}
-              {#each recentTargets as target (target.model.id)}
-                <button class="recent-model" type="button" disabled={actionBusy || fixture}
-                  title={target.model.name}
-                  aria-label={'Open recent model ' + target.model.name + ' from ' + target.project.name}
-                  onclick={() => void openModelSafely(target.model.id)}>
-                  <span>{target.model.name}</span><small>{target.project.name}</small>
-                </button>
-              {/each}
-            {/if}
-          </div>
-        {/if}
         {/if}
 
             </section>
@@ -1341,4 +1357,15 @@
   .sidebar-page .search-count{font-size:11px}
   .sidebar-footer{font-size:12px}
   .sidebar-page .project-inline-actions{top:36px}
+
+  /* Model-specific actions are contextual; never pretend unsupported rename/delete exists. */
+  .sidebar-page .model-line{position:relative}
+  .sidebar-page .model-actions-toggle{display:grid;place-items:center;flex:none;width:26px;height:28px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);opacity:.55;cursor:pointer}
+  .sidebar-page .model-line:hover .model-actions-toggle,.sidebar-page .model-line:focus-within .model-actions-toggle,.sidebar-page .model-actions-toggle[aria-expanded="true"]{opacity:1}
+  .sidebar-page .model-context-actions{position:absolute;z-index:12;right:2px;top:31px;display:grid;gap:2px;min-width:145px;padding:5px;border:1px solid #373b44;border-radius:6px;background:#252830;box-shadow:0 9px 22px rgba(0,0,0,.4)}
+  .sidebar-page .model-context-actions button{min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer}
+  .sidebar-page .model-context-actions button:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .recent-group{margin:3px 0 15px;padding:0 0 12px;border-top:0;border-bottom:1px solid var(--ed-border)}
+  .sidebar-page .recent-heading{font-weight:650}
+  @media(hover:none){.sidebar-page .model-actions-toggle{opacity:1}}
 </style>
