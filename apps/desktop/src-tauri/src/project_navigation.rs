@@ -1069,7 +1069,7 @@ pub(crate) fn action(action: &str, id: &str, profile_id: Option<&str>) -> Result
 fn validated_model_rename_stem(raw: &str) -> Result<&str, String> {
     if raw.is_empty() || raw.chars().count() > 120 || raw.trim() != raw
         || raw.ends_with('.') || raw.ends_with(' ')
-        || raw.chars().any(|c| c.is_control() || "<>:\\"/\\|?*".contains(c))
+        || raw.chars().any(|c| c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'))
         || raw == "." || raw == ".." || raw.to_ascii_lowercase().ends_with(".bbmodel")
     {
         return Err("Invalid model name. Enter a filename without the .bbmodel extension.".to_string());
