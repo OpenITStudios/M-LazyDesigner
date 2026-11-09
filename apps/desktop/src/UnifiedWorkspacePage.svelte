@@ -134,7 +134,23 @@
     element?.focus();
   }
   function toggleProjectActions(id: string) {
+    modelActionsId = null;
     projectActionsId = projectActionsId === id ? null : id;
+  }
+  function toggleModelActions(id: string) {
+    projectActionsId = null;
+    modelActionsId = modelActionsId === id ? null : id;
+  }
+  function closeModelActions(event: KeyboardEvent, id: string) {
+    if (event.key !== 'Escape' || modelActionsId !== id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    modelActionsId = null;
+    void tick().then(() => {
+      const toggle = Array.from(editorRoot.querySelectorAll<HTMLButtonElement>('.model-actions-toggle'))
+        .find(button => button.dataset.modelId === id);
+      toggle?.focus();
+    });
   }
   function closeProjectActions(event: KeyboardEvent, id: string) {
     if (event.key !== 'Escape' || projectActionsId !== id) return;
@@ -496,7 +512,7 @@
                 aria-selected={sidebarTab === 'projects'} aria-controls="ld-sidebar-projects"
                 tabindex={sidebarTab === 'projects' ? 0 : -1}
                 class:selected={sidebarTab === 'projects'}
-                onclick={() => sidebarTab = 'projects'}
+                onclick={() => { sidebarTab = 'projects'; modelActionsId = null; projectActionsId = null; }}
                 onkeydown={(event) => onSidebarTabKeydown(event, 'projects')}>
                 <EditorChromeIcon name="projects"/> Projects
               </button>
@@ -504,7 +520,7 @@
                 aria-selected={sidebarTab === 'status'} aria-controls="ld-sidebar-status"
                 tabindex={sidebarTab === 'status' ? 0 : -1}
                 class:selected={sidebarTab === 'status'}
-                onclick={() => sidebarTab = 'status'}
+                onclick={() => { sidebarTab = 'status'; modelActionsId = null; projectActionsId = null; }}
                 onkeydown={(event) => onSidebarTabKeydown(event, 'status')}>
                 <EditorChromeIcon name="activity"/> Status
               </button>
@@ -645,19 +661,20 @@
                       {/if}
                       {#if model.exists}
                         <button type="button" class="model-actions-toggle"
+                          data-model-id={model.id}
                           title={'Actions for ' + model.name}
                           aria-label={'Actions for model ' + model.name}
                           aria-expanded={modelActionsId === model.id}
                           aria-controls={modelActionsId === model.id ? 'ld-model-actions-' + model.id : undefined}
-                          onclick={() => modelActionsId = modelActionsId === model.id ? null : model.id}>
+                          onclick={() => toggleModelActions(model.id)}>
                           <EditorChromeIcon name="more-horizontal"/>
                         </button>
                         {#if modelActionsId === model.id}
                           <div id={'ld-model-actions-' + model.id} class="model-context-actions" role="group"
                             aria-label={'Actions for model ' + model.name}
-                            onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); modelActionsId = null; } }}>
+                            onkeydown={(event) => closeModelActions(event, model.id)}>
                             <button type="button" disabled={actionBusy || fixture}
-                              onclick={() => { modelActionsId = null; void chooseModel(model); }}>Open model</button>
+                              onclick={() => { modelActionsId = null; void chooseModel(model); }}>{model.active ? 'Focus model' : 'Open model'}</button>
                             <button type="button" disabled={actionBusy || fixture}
                               onclick={() => { modelActionsId = null; void showModelFile(model.id); }}>Show in Explorer</button>
                           </div>
