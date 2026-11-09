@@ -682,9 +682,9 @@
           <div class="recent-group">
             <button type="button" class="recent-heading" aria-expanded={recentExpanded}
               onclick={() => recentExpanded = !recentExpanded}>
-              <span class="tree-caret" class:expanded={recentExpanded}
+              <span class="tree-caret recent-caret" class:expanded={recentExpanded}
                 aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
-              Recent Models <span class="recent-count">{recentTargets.length}</span>
+              <span class="recent-title">Recent Models</span><span class="recent-count">{recentTargets.length}</span>
             </button>
             {#if recentExpanded}
               {#each recentTargets as target (target.model.id)}
@@ -974,7 +974,6 @@
             <span class="connection-status"><i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
               class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i></span>
             <span>{readinessLabel === 'Ready at last check' ? 'Ready' : readinessLabel}</span>
-            <EditorChromeIcon name="diagnostic"/>
           </button>
         {/if}
       </aside>
@@ -1498,7 +1497,7 @@
   .sidebar-page .search-count:not(.sr-only){padding:5px 5px}
   .sidebar-page .inspector-section{border:0;padding:10px 0}
   .sidebar-footer{flex:none;display:flex;align-items:center;gap:9px;min-height:48px;margin:0 12px;padding:8px 2px;border:0;border-top:1px solid var(--ed-border);background:transparent;color:var(--ed-muted);font-size:12px;text-align:left;cursor:pointer}
-  .sidebar-footer>span:nth-child(2){flex:1}
+  .sidebar-footer>span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sidebar-footer:hover{color:var(--ed-text);background:var(--ed-raised)}
   .sidebar-footer .connection-status{gap:0}
   .sidebar-footer .connection-status i{display:block}
@@ -1562,7 +1561,11 @@
   .sidebar-page .model-context-actions button:hover:not(:disabled){background:var(--ed-select)}
   .sidebar-page .model-context-actions button:disabled{opacity:.55;cursor:not-allowed}
   .sidebar-page .recent-group{margin:8px 0 18px;padding:4px 0 14px;border-top:0;border-bottom:1px solid var(--ed-border-soft)}
-  .sidebar-page .recent-heading{font-weight:650}
+  .sidebar-page .recent-heading{font-weight:650;display:flex;align-items:center;gap:8px;line-height:1.25}
+  .sidebar-page .recent-heading .recent-caret{display:grid;place-items:center;align-self:center;width:16px;height:20px;margin:0;line-height:0}
+  .sidebar-page .recent-heading .recent-caret :global(svg){display:block;width:14px;height:14px}
+  .sidebar-page .recent-heading .recent-title{min-width:0;flex:1;text-align:left}
+  .sidebar-page .recent-heading .recent-count{flex:none;margin-left:auto;line-height:1.25}
   @media(hover:none){.sidebar-page .model-actions-toggle{opacity:1}}
 
   /* Projects are folders, not model generators. Keep folder management with the tree. */
