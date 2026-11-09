@@ -582,10 +582,10 @@
         <div class="native-recovery-layer" role="region" aria-label="Blockbench availability">
           <div class="native-recovery-content">
             <span class="native-recovery-symbol" aria-hidden="true"><EditorChromeIcon name="model"/></span>
-            <h2>{blockbenchConfirmedStopped ? 'Blockbench is closed' : 'Checking Blockbench'}</h2>
+            <h2>{blockbenchConfirmedStopped ? 'Blockbench is closed' : 'Blockbench status unavailable'}</h2>
             <p>{blockbenchConfirmedStopped
-              ? 'Reopen the original Blockbench application to continue working on your models.'
-              : 'The latest Blockbench state is not verified. Refresh before attempting to reopen the editor.'}</p>
+              ? 'Open Blockbench to continue editing your models.'
+              : 'Refresh to check whether Blockbench is running.'}</p>
             <div class="native-recovery-actions">
               {#if blockbenchConfirmedStopped}
                 <button type="button" class="native-recovery-primary" disabled={actionBusy || fixture}
