@@ -1,89 +1,22 @@
-# ChatGPT UI Preview Protocol — LazyDesigner
+# ChatGPT HTML UI Preview Protocol — LazyDesigner
 
-Operating procedure for `lazydesigner-desktop-ui-design-development`. Not a new autonomous agent, plugin, ChatGPT host feature or alternate app. User intent, root `AGENTS.md`, `GITHUB_RULES.md` and current source prevail.
+This procedure governs ChatGPT visual preview only. Production Svelte, Tauri, Blockbench and existing test infrastructure are outside its scope and remain unchanged.
 
-## Non-negotiable phase and image rules
+## Single supported preview method
 
-**No AI image generation at any stage of LazyDesigner UI/UX work.** Never invoke `image_gen` or another generative-image tool for screenshots, UI images, wireframes, screenshot editing, alternate styling, Before/After comparisons or mockups. A user-supplied screenshot is evidence only.
+**HTML_SOURCE_PREVIEW** is the sole visual preview method in ChatGPT. Reconstruct the actual selected page using production Svelte markup and CSS, imported components, design tokens and a documented typed fixture. No F2 browser-component or F3 Windows-capture workflow is required, requested or offered for preview. Do not use generative-image tools or fabricate screenshots, controls, data, or native Blockbench content.
 
-**PLAN/DISCUSS is text-only** and cannot silently trigger a preview, HTML rendering, visual reconstruction or source mutation. UI feedback on a prior preview is discussion, not a new preview request. **PREVIEW needs an explicit visual request**. Preview may use F1 source-grounded HTML/CSS in ChatGPT when F2/F3 is unavailable. F1 is a labeled approximate visual review artifact, not an application screenshot or native/functional verification. Do not substitute generated pictures or invented GUI controls. If source-grounded HTML cannot be presented, report F0 / NO PREVIEW RENDERED.
+PLAN/DISCUSS remains text-only. Explicit PREVIEW intent authorizes HTML/CSS output, not production redesign or runtime execution. The output is an accurate-as-source-permits visual representation, **not** a claim of pixel-perfect equivalence or native/functional verification.
 
-## Fidelity and authority
+## Required source and delivery
 
-| Tier | Evidence | Permitted conclusion |
-| --- | --- | --- |
-| `F0_SOURCE` | Reviewed pinned GitHub source only | Named UI components, handlers and CSS exist; NO PREVIEW RENDERED |
-| `F1_SOURCE_HTML` | HTML/CSS reconstructed from pinned Svelte markup, actual tokens and typed fixture data; no generated images | Approximate visual preview for discussion only; not an exact browser screenshot, native UI or interaction proof |
-| `F2_BROWSER_COMPONENT` | Pinned production `App.svelte` rendered by existing Vite in Chromium, synthetic deterministic state, iframe viewport, screenshot and QA receipt | Actual Svelte/Tailwind/CSS browser layout for that fixture; **not** native Windows, Blockbench content or live connection |
-| `F3_TARGET_WINDOWS` | Actual installed Tauri/Blockbench screenshot with exact revision and tested state | Inspected native visual state only; does not prove unrelated AI/runtime actions |
+1. Pin the exact user-selected `Local` SHA and read the minimal production source closure: `apps/desktop/src/App.svelte`, selected page and imported UI components, `apps/desktop/src/styles.css`, `apps/desktop/src/tokens.css`, and applicable `desktopFixtures.ts` state.
+2. Preserve visible UI structure, hierarchy, typography, spacing, colors, control labels and conditional state. Translate Svelte-only syntax into static HTML/CSS, selecting one deterministic fixture. No speculative features or generic dashboards.
+3. Default to Unified Editor ready at 1920×1080 unless user specifies a page or size. Preserve both docks; leave the native Blockbench center empty. Never insert a fake editor, placeholder illustration, image or native screenshot.
+4. Deliver the preview directly in ChatGPT if supported; otherwise provide a standalone HTML file. Include `HTML_SOURCE_PREVIEW`, repository, branch, SHA, page, fixture, viewport and any known visual/behavioral approximations. HTML controls are not evidence of actual runtime actions.
+5. Keep the preview read-only and self-contained: no Tauri calls, Gateway/MCP calls, native placement, filesystem mutation, updater, external requests, dependency installation or private data. Never modify production UI simply to create a preview.
+6. Review source coverage, visible layout containment, text/label fidelity, source-derived CSS and native-area emptiness. Record unverified details as such. Do not claim a test or browser screenshot was executed unless separately and actually performed outside this preview workflow.
 
-Do not infer F2 from the mere presence of a renderer script. Do not infer F3 from an F2 screenshot. A genuine screenshot from the app is not a generatively produced image.
+## Scope protection
 
-## Routes and defaults
-
-- "Preview current UI" → latest pinned `Local`, Unified Editor ready, **1920×1080** (both side docks visible), one screenshot.
-- Named Workspace/Support/Analytics or another fixture → same production `App.svelte` page with the minimal typed scenario.
-- "Responsive" → 1280×760, 1600×940 and 1920×1080 with no rewritten page markup.
-- "Before / after" → two named SHAs, identical fixture, browser, settings and viewport; do not invent prior pictures.
-- "Full audit" → expand pages only when explicitly requested; normal fast path remains narrow.
-- Missing checkout/browser/dependencies → prefer F1 source-grounded HTML directly in ChatGPT using GitHub source; if that is not possible → F0, NO PREVIEW RENDERED.
-
-## Canonical F1 source-grounded HTML workflow
-
-1. Pin the user-selected `Local` HEAD and read the smallest actual production source closure: `App.svelte`, selected page/component, `styles.css`, `tokens.css`, and relevant typed fixture. No design improvisation or generic AI dashboard.
-2. Translate visible Svelte HTML structure and CSS into a standalone HTML/CSS preview, retaining actual navigation, hierarchy, labels, tokens, and the selected fixture state. Document omitted conditional states and approximated behavior; do not claim pixel equivalence without a same-viewport F2 comparison.
-3. Default to Unified Editor ready at 1920×1080 unless the user names another view. Preserve both side docks; native Blockbench center stays blank, not simulated or replaced with a picture. Never invoke Tauri, file operations, Gateway, network calls, or installation from the preview.
-4. Present the HTML artifact directly in ChatGPT when supported, otherwise supply the generated standalone HTML file for viewing. Clearly label `F1_SOURCE_HTML`, source SHA, page, scenario, viewport, synthetic data, and unverified interactions. HTML preview does not require a local test, Codex, native Windows, or CI.
-5. F1 review can inform user-directed UI changes, but is not F2/F3 validation. Do not alter production UI merely to make a preview; no generated image fallback.
-
-## Canonical F2 source and isolation
-
-The existing app entry is `apps/desktop/index.html` → `src/main.ts` → `src/App.svelte`. Development-only query values `?fixture=<typed fixture>&view=<page>` are already interpreted by production `App.svelte` and `src/desktopFixtures.ts`. Its guarded fixture path returns before Tauri status polling, native commands, installer checks, project/asset file mutation and native Blockbench embedding. `NativeEditorStage.svelte` explicitly guards native placement/listen/detach on `fixture`. Review these guards whenever imported source changes.
-
-The **separate** `apps/desktop/scripts/ui-preview/index.html` mounts only the small preview toolbar and an iframe whose `src` points at the *real application entry*, not a copied set of Svelte components. The iframe is actual viewport size; resizing a wrapper `div` without changing the iframe layout viewport is invalid. Use only fixed, typed scenario-to-fixture mappings; no arbitrary user text becomes a query argument. The iframe is read-only/inert; selectors outside it change only approved deterministic scenarios/viewports. The toolbar and outer synthetic label are **not** included in the source screenshot.
-
-The same-origin `allow-scripts allow-same-origin` iframe is viewport isolation, **not a security boundary**. F2 safety instead depends on the production fixture guards, no Tauri host, no native operations, and the browser's denied outbound HTTP/WebSocket routes. If those invariants cannot be established, fail closed; never remove the guards to make a screenshot succeed. The middle of the actual application must remain an **empty native-window reservation** in F2: no placeholder, simulated editor, canvas, fake Blockbench toolbar, status footer or image. The original Blockbench window is supplied only by the guarded native Windows composition in F3. Never synthesize, embed a screenshot into, or claim native content for that region.
-
-## Explicit LOCAL_CODE interface (not a user-PC instruction)
-
-```sh
-# From apps/desktop, only when authorized exact Local checkout + toolchain already exist
-npm run preview:plan
-npm run preview:typecheck
-npm run preview:quick
-npm run preview:quick -- --scenario editor-many-projects --viewport compact
-npm run preview:render -- --expected-sha <exact-40-character-Local-SHA>
-npm run preview:render -- --execute --expected-sha <exact-40-character-Local-SHA> --scenario editor-ready --viewport large
-```
-
-`preview:plan` is a non-rendering preflight; `preview:quick` is the explicit real render fast path. `--current-local` and `--expected-sha` cannot be combined, neither command checks out/fetches/updates Git. Render requires a clean exact-source `Local` checkout and already-installed Vite, Playwright and Chromium. The renderer launches no updater, app installer, CI or native Tauri. It never installs dependencies or downloads a browser; unavailable tools remain NOT_EXECUTED. Existing temporary browser evidence is not automatically accessible in ChatGPT.
-
-## Render QA minimum
-
-1. Confirm `Local` HEAD is the requested full SHA; verify preview dependency files clean before and after capture.
-2. Serve existing Vite on **127.0.0.1** and render the real `App.svelte` in an iframe. Deny remote HTTP/WebSocket, service workers and downloads. Use `en-GB`, `Asia/Jakarta`, fixed fixture clock, dark scheme, reduced motion and `deviceScaleFactor=1`.
-3. Inspect actual `.desktop-shell[data-qa-fixture]`, page-specific production landmarks, computed styling and horizontal overflow. Check frame `innerWidth/innerHeight` equals canvas dimensions; check visible important controls remain in viewport (not merely parent bounds). Unified Editor validates the real topbar, Project Explorer and Diagnostic as two permanently mounted side docks (full-width or shortcut rail), checks the pinned Blockbench Default Dark token fallback, exactly two accessible Diagnostic/Activity tabs when expanded, and confirms the **native center is blank with no host controls, markup or images**. The Activity data counts must come from the existing Desktop fixture, not invented Gateway metrics. Support and Workspace validate their real page headings and body.
-4. Verify native host unavailable and synthetic-only badge present. No browser errors, outside network requests or source changes after screenshot.
-5. Screenshot only `[data-preview-canvas]` (real iframe render), compute SHA-256, write one ephemeral `receipt.json` outside repository. Any failed QA yields nonzero exit and a FAIL receipt, not a PASS picture.
-
-Priority: P0 = false source/fixture/native truth, external/private leakage, unsupported fabricated preview, hidden critical action. P1 = clipped UI, overflow, missing state, wrong responsive layout. P2 = subtle contrast/spacing details. Static tests and text reviews never establish visual PASS.
-
-## Ephemeral result identity
-
-```yaml
-repository: OpenITStudios/M-LazyDesigner
-ref: Local
-sha: <exact source SHA>
-page: editor
-scenario: editor-ready
-viewport: 1920x1080
-fidelity: F0_SOURCE | F1_SOURCE_HTML | F2_BROWSER_COMPONENT | F3_TARGET_WINDOWS
-rendered: NOT_EXECUTED | VERIFIED
-synthetic: true
-source_coverage: [App.svelte, UnifiedWorkspacePage.svelte, NativeEditorStage.svelte, desktopFixtures.ts, styles.css, tokens.css]
-native_windows: NOT_EXECUTED
-native_blockbench_content: NOT_EXECUTED
-limitations: <precise unavailable evidence>
-```
-
-Keep synthetic fixture data out of user workspaces. A hash attests screenshot bytes only, not trustworthy installed-native behavior. Source updates invalidate receipts by SHA and dependency closure. This protocol does not authorize local/Codex/native work while the current repository hold remains active.
+This change removes F2/F3 **from the ChatGPT preview policy**, not the real application or its existing scripts, tests, release gates or native verification responsibilities. No local test or Codex handoff is a prerequisite for HTML preview. Do not introduce another preview tier, image generation fallback, or unsolicited UI redesign.
