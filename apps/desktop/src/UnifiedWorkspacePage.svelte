@@ -1426,9 +1426,9 @@
     grid-template-columns:minmax(0,1fr) 6px var(--tools-width,260px);
   }
   .unified-body.tools-rail.with-inspector{grid-template-columns:minmax(0,1fr) 44px}
-  .unified-sidebar{display:flex;flex-direction:column;overflow:hidden;padding:0;border-left:1px solid var(--ed-border);background:var(--color-back)}
+  .unified-sidebar{display:flex;flex-direction:column;overflow:hidden;padding:0;border-left:1px solid var(--ed-border);background:#15171b;font-size:13px}
   .sidebar-top{flex:none;padding:0 12px}
-  .sidebar-brand{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid var(--ed-border);color:var(--ed-text);font-size:13px}
+  .sidebar-brand{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid var(--ed-border);color:var(--ed-text);font-size:14px}
   .sidebar-brand :global(svg){color:var(--ed-accent)}
   .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
   .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 12px}
@@ -1452,7 +1452,6 @@
   .unified-sidebar.rail{padding:5px 3px}
 
   /* V2: quiet navigation, single right sidebar, contextual project commands. */
-  .unified-sidebar{background:#15171b}
   .sidebar-page .pane-heading{height:30px;margin:6px -2px 7px}
   .sidebar-page .pane-heading h3{font-size:11px;color:var(--ed-muted-soft);font-weight:600}
   .sidebar-page .search-controls{margin:0 0 6px}
@@ -1464,7 +1463,7 @@
   .sidebar-page .project-line:focus-within .project-actions-toggle,
   .sidebar-page .project-actions-toggle[aria-expanded="true"]{opacity:1}
   .sidebar-page .project-inline-actions{
-    position:absolute;z-index:8;right:4px;top:32px;display:grid;gap:2px;
+    position:absolute;z-index:8;right:4px;top:36px;display:grid;gap:2px;
     min-width:128px;max-width:calc(100% - 8px);max-height:min(280px, 55vh);overflow-y:auto;
     margin:0;padding:5px;border:1px solid var(--ed-border);
     border-radius:6px;background:var(--ed-raised);box-shadow:0 9px 22px rgba(0,0,0,.4);
@@ -1483,8 +1482,6 @@
   @media(hover:none){.sidebar-page .project-actions-toggle{opacity:1}}
 
   /* V3: one obvious model-opening action, readable navigation at 260-300px. */
-  .unified-sidebar{font-size:13px}
-  .sidebar-brand{font-size:14px}
   .project-primary-action{display:flex;align-items:center;gap:7px;margin:4px 0 12px}
   .project-primary-action button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;border-radius:6px;cursor:pointer}
   .project-primary-action .sidebar-open-model{flex:1;justify-content:flex-start;padding:7px 11px;background:var(--color-button);color:var(--ed-text);font-size:13px;font-weight:650}
@@ -1500,7 +1497,6 @@
   .sidebar-page .recent-model{font-size:13px}
   .sidebar-page .project-resources summary{font-size:12px}
   .sidebar-page .search-count{font-size:11px}
-  .sidebar-page .project-inline-actions{top:36px}
 
   /* Model-specific actions are contextual; never pretend unsupported rename/delete exists. */
   .sidebar-page .model-line{position:relative;min-height:36px}
