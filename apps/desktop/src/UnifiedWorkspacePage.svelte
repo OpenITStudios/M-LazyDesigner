@@ -153,6 +153,7 @@
       const menuRect = menu.getBoundingClientRect();
       const viewRect = viewport.getBoundingClientRect();
       if (menuRect.bottom > viewRect.bottom - 8 && menuRect.top - menuRect.height - 36 >= viewRect.top + 8) {
+        menu.style.setProperty('--context-menu-height', menuRect.height + 'px');
         menu.classList.add('open-up');
       }
     });
@@ -1567,6 +1568,6 @@
   .sidebar-page .active-project-focus:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .active-project-empty{font-size:12px;color:var(--ed-muted);line-height:1.4}
   .sidebar-status .status-overview-value:focus-visible{outline:2px solid var(--ed-accent);outline-offset:3px;border-radius:3px}
-  .sidebar-page .project-inline-actions.open-up,
+  .sidebar-page .project-inline-actions.open-up{top:calc(-1 * var(--context-menu-height) - 4px)}
   .sidebar-page .model-context-actions.open-up{top:auto;bottom:calc(100% + 4px)}
 </style>
