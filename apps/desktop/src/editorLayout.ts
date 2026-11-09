@@ -7,7 +7,7 @@ export type EditorDock = 'projects' | 'tools';
 export type EditorLayoutState = {
   band: EditorLayoutBand | null;
   projectsExpanded: boolean;
-  assistantExpanded: boolean;
+  diagnosticExpanded: boolean;
   focusMode: boolean;
   projectsWidth: number;
   toolsWidth: number;
@@ -16,7 +16,7 @@ export type EditorLayoutState = {
 export const INITIAL_EDITOR_LAYOUT: EditorLayoutState = {
   band: null,
   projectsExpanded: true,
-  assistantExpanded: true,
+  diagnosticExpanded: true,
   focusMode: false,
   projectsWidth: 220,
   toolsWidth: 240,
@@ -31,7 +31,7 @@ export function editorLayoutBand(width: number): EditorLayoutBand {
 
 export function defaultEditorPanels(band: EditorLayoutBand) {
   const expanded = band === 'wide' || band === 'standard';
-  return { projectsExpanded: expanded, assistantExpanded: expanded };
+  return { projectsExpanded: expanded, diagnosticExpanded: expanded };
 }
 
 export function editorDockWidth(dock: EditorDock, proposed: number): number {

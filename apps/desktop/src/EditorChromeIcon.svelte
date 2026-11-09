@@ -2,7 +2,7 @@
   // Lightweight Svelte-native UI glyphs. No external icon font, screenshot,
   // generated image, canvas or duplicated Blockbench editing surface.
   export let name:
-    | 'projects' | 'assistant' | 'focus' | 'workspace' | 'support'
+    | 'projects' | 'diagnostic' | 'focus' | 'workspace' | 'support'
     | 'model' | 'add' | 'chevron-left' | 'chevron-right'
     | 'folder' | 'activity';
 </script>
@@ -12,8 +12,8 @@
   stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">
   {#if name === 'projects'}
     <path d="M3 5h7l2 2h9v12H3z"/><path d="M3 9h18"/>
-  {:else if name === 'assistant'}
-    <path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5Z"/>
+  {:else if name === 'diagnostic'}
+    <circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5M8 10.5h5M10.5 8v5"/>
   {:else if name === 'focus'}
     <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/>
   {:else if name === 'workspace'}

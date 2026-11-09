@@ -65,14 +65,14 @@ describe("Unified Editor P1 source-owned workspace", () => {
       "No project folders added yet.",
       'aria-label="Modified at last observation"',
       "projectsExpanded: true",
-      "assistantExpanded: false",
+      "diagnosticExpanded: false",
       "projectActionsId = projectActionsId === id ? null : id;",
       "projectActionsId === project.id",
       "'Show actions for project ' + project.name",
       "'Actions for project ' + project.name",
       "class=\"project-inline-actions\"",
       "Browse projects in Workspace",
-      "Open LazyDesigner Support",
+      "Open Diagnostic Support",
       "aria-label=\"Clear project search\"",
     ]) expect(unified).toContain(term);
     expect(unified).not.toContain("window.confirm");
@@ -81,38 +81,38 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).not.toContain("fetch(");
   });
 
-  test("LazyDesigner companion names real functions without invented AI chat or QA results", async () => {
+  test("Diagnostic has only readiness/issues and Activity has connection/observed statistics", async () => {
     const [unified, app] = await Promise.all([
       source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
       source("../apps/desktop/src/App.svelte"),
     ]);
-    expect(unified).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
-    expect(unified).toContain('aria-label="LazyDesigner companion"');
-    expect(unified).toContain('aria-label="Toggle LazyDesigner companion"');
-    expect(unified).toContain('role="tablist" aria-label="LazyDesigner sections"');
-    for (const id of ["assistant", "review", "activity"]) {
+    expect(unified).toContain('aria-label="Diagnostic"');
+    expect(unified).toContain('aria-label="Toggle Diagnostic panel"');
+    expect(unified).toContain('role="tablist" aria-label="Diagnostic sections"');
+    for (const id of ["diagnostic", "activity"]) {
       expect(unified).toContain('data-companion-tab="' + id + '"');
-      expect(unified).toContain('aria-selected={companionTab === \''
-        + id + '\'}');
+      expect(unified).toContain("aria-selected={diagnosticTab === '" + id + "'}");
+      expect(unified).toContain("hidden={diagnosticTab !== '" + id + "'}");
     }
-    expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section assistant-section"');
-    expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section review-section"');
+    expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section diagnostic-section"');
     expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section activity-section"');
-    expect(unified).toContain('aria-labelledby="ld-tab-assistant"');
-    expect(unified).toContain('aria-labelledby="ld-tab-review"');
+    expect(unified).toContain('aria-labelledby="ld-tab-diagnostic"');
     expect(unified).toContain('aria-labelledby="ld-tab-activity"');
-    expect(unified).toContain("hidden={companionTab !== 'assistant'}");
-    expect(unified).toContain("hidden={companionTab !== 'review'}");
-    expect(unified).toContain("hidden={companionTab !== 'activity'}");
-    for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
-      expect(unified).toContain("event.key === '" + key + "'");
-    }
-    expect(unified).toContain("Review findings are not synchronized to this panel");
-    expect(unified).toContain("Model-edit history is not available here");
-    expect(unified).toContain("Model requests run through your connected AI client");
-    expect(unified).toContain("onclick={navigateActivity}>View technical activity");
+    expect(unified).toContain("status.readiness.ready");
+    expect(unified).toContain("status?.readiness.summary");
+    expect(unified).toContain("status.plugin_integrity");
+    expect(unified).toContain("status?.diagnostic");
+    expect(unified).toContain("status?.blockbench.diagnostic");
+    expect(unified).toContain("observedProjectCount");
+    expect(unified).toContain("observedModelCount");
+    expect(unified).toContain("project.model_count");
+    expect(unified).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
+    expect(unified).toContain("onclick={navigateActivity}>View Gateway statistics");
     expect(app).toContain("navigateActivity={() => navigate('Analytics')}");
-    expect(unified).not.toContain('aria-label="Model Tools"');
+    expect(unified).not.toContain('id="ld-tab-assistant"');
+    expect(unified).not.toContain('id="ld-tab-review"');
+    expect(unified).not.toContain(">Model Review</h4>");
+    expect(unified).not.toContain(">Assistant</button>");
     expect(unified).not.toContain("QA passed");
     expect(unified).not.toContain("ChatGPT API");
     expect(unified).not.toContain('class="tool-row"');
@@ -126,7 +126,7 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("class:with-projects={showProjects}");
     expect(unified).toContain("class:with-inspector={showTools}");
     expect(unified).toContain("class:rail={explorerRail}");
-    expect(unified).toContain("class:tools-rail={assistantRail}");
+    expect(unified).toContain("class:tools-rail={diagnosticRail}");
     expect(unified).toContain("showProjects = !layout.focusMode");
     expect(unified).toContain("showTools = !layout.focusMode");
     expect(unified).toContain("editorLayoutBand(width)");
@@ -134,7 +134,7 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("canExpandEditorDock(editorWidth, 'projects'");
     expect(unified).toContain("canExpandEditorDock(editorWidth, 'tools'");
     expect(unified).toContain("if (opening && !canExpandProjects) return;");
-    expect(unified).toContain("if (opening && !canExpandAssistant) return;");
+    expect(unified).toContain("if (opening && !canExpandDiagnostic) return;");
     expect(unified).toContain("editorDockWidth(drag.dock");
     expect(unified).toContain("import { onMount, tick } from 'svelte'");
     expect(unified).toContain("await tick();");
@@ -142,15 +142,15 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("element instanceof HTMLButtonElement && element.disabled");
     expect(unified).toContain("editorRoot?.querySelector<HTMLButtonElement>(fallback)?.focus();");
     expect(unified).toContain("void focusAfterLayout(() => explorerToggle)");
-    expect(unified).toContain("void focusAfterLayout(() => companionToggle)");
+    expect(unified).toContain("void focusAfterLayout(() => diagnosticToggle)");
     expect(unified).toContain("bind:this={explorerToggle}");
-    expect(unified).toContain("bind:this={companionToggle}");
+    expect(unified).toContain("bind:this={diagnosticToggle}");
     expect(unified).toContain("project-inline-actions");
     expect(unified).not.toContain("position:fixed");
     expect(unified).toContain("toggleFocusMode");
     expect(unified).toContain("role=\"separator\" tabindex=\"0\"");
     expect(unified).toContain("Resize Project Explorer");
-    expect(unified).toContain("Resize LazyDesigner companion");
+    expect(unified).toContain("Resize Diagnostic panel");
     expect(unified).toContain("aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}");
     expect(unified).toContain("grid-template-columns:var(--explorer-width,220px)");
     expect(unified).toContain('class="model-current-indicator"');
@@ -166,12 +166,12 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("--color-back: #181b1f");
     expect(unified).toContain("--color-accent: #3e90ff");
     expect(unified).toContain('aria-label="Project Explorer"');
-    expect(unified).toContain('aria-label="LazyDesigner companion"');
+    expect(unified).toContain('aria-label="Diagnostic"');
     expect(unified).toContain('aria-label="Blockbench native editor area"');
     expect(unified).toContain('aria-expanded={showProjects && !explorerRail}');
-    expect(unified).toContain('aria-expanded={showTools && !assistantRail}');
+    expect(unified).toContain('aria-expanded={showTools && !diagnosticRail}');
     expect(unified).toContain('aria-label="Toggle Project Explorer"');
-    expect(unified).toContain('aria-label="Toggle LazyDesigner companion"');
+    expect(unified).toContain('aria-label="Toggle Diagnostic panel"');
     expect(app).toContain("let editorLayout: EditorLayoutState = { ...INITIAL_EDITOR_LAYOUT }");
     expect(app).toContain("bind:layout={editorLayout}");
     expect(unified).not.toContain("position:fixed");
@@ -188,10 +188,10 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(editorLayoutBand(1600)).toBe("standard");
     expect(editorLayoutBand(1280)).toBe("rail");
     expect(editorLayoutBand(780)).toBe("compact");
-    expect(defaultEditorPanels("wide")).toEqual({ projectsExpanded: true, assistantExpanded: true });
-    expect(defaultEditorPanels("standard")).toEqual({ projectsExpanded: true, assistantExpanded: true });
-    expect(defaultEditorPanels("rail")).toEqual({ projectsExpanded: false, assistantExpanded: false });
-    expect(defaultEditorPanels("compact")).toEqual({ projectsExpanded: false, assistantExpanded: false });
+    expect(defaultEditorPanels("wide")).toEqual({ projectsExpanded: true, diagnosticExpanded: true });
+    expect(defaultEditorPanels("standard")).toEqual({ projectsExpanded: true, diagnosticExpanded: true });
+    expect(defaultEditorPanels("rail")).toEqual({ projectsExpanded: false, diagnosticExpanded: false });
+    expect(defaultEditorPanels("compact")).toEqual({ projectsExpanded: false, diagnosticExpanded: false });
     expect(INITIAL_EDITOR_LAYOUT.projectsWidth).toBe(220);
     expect(MIN_NATIVE_EXPANSION_WIDTH).toBe(320);
     expect(canExpandEditorDock(390, "projects", 220, 44)).toBe(false);
@@ -226,12 +226,14 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Focus Mode must restore both side docks");
     expect(script).toContain("Expanded Project Explorer cannot return to icon rail");
     expect(script).toContain("Collapsing Project Explorer loses keyboard focus");
-    expect(script).toContain("Collapsing LazyDesigner companion loses keyboard focus");
+    expect(script).toContain("Collapsing Diagnostic panel loses keyboard focus");
     expect(script).toContain("Project actions overlap the reserved native editor");
     expect(script).toContain("Narrow Project Explorer must offer safe Workspace navigation");
-    expect(script).toContain("Narrow LazyDesigner rail must provide Support fallback");
-    expect(script).toContain("Companion tabs lack arrow-key navigation");
-    expect(script).toContain("Companion tab strip does not match Blockbench's 40px panel bar");
+    expect(script).toContain("Narrow Diagnostic rail must provide Support fallback");
+    expect(script).toContain("Diagnostic tabs lack arrow-key navigation");
+    expect(script).toContain("Diagnostic must have exactly Diagnostic and Activity tabs");
+    expect(script).toContain("Activity must show observed project statistics");
+    expect(script).toContain("Diagnostic tabs must retain Blockbench's 40px bar");
     expect(stage).toContain("disabled={busy || fixture}");
   });
   test("Svelte host icon controls are real components, not generated screenshots", async () => {
@@ -244,7 +246,7 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(icons).toContain('aria-hidden="true"');
     expect(unified).toContain("import EditorChromeIcon from './EditorChromeIcon.svelte'");
     expect(unified).toContain('<EditorChromeIcon name="projects"/>');
-    expect(unified).toContain('<EditorChromeIcon name="assistant"/>');
+    expect(unified).toContain('<EditorChromeIcon name="diagnostic"/>');
     expect(stage).toContain('data-native-editor-reservation="true"');
     expect(stage).not.toContain('class="native-placeholder"');
     expect(icons).not.toContain("image_gen");

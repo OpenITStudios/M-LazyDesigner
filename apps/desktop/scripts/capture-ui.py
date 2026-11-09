@@ -535,24 +535,24 @@ def inspect_unified_editor(page, fixture, view):
         issues.append("fixture must never be able to place a native Blockbench window")
 
     project_toggle = page.get_by_role("button", name="Toggle Project Explorer", exact=True)
-    assistant_toggle = page.get_by_role("button", name="Toggle LazyDesigner companion", exact=True)
-    if project_toggle.count() != 1 or assistant_toggle.count() != 1:
-        return issues + ["Project Explorer and LazyDesigner companion toggles must both be available"]
+    diagnostic_toggle = page.get_by_role("button", name="Toggle Diagnostic panel", exact=True)
+    if project_toggle.count() != 1 or diagnostic_toggle.count() != 1:
+        return issues + ["Project Explorer and Diagnostic panel toggles must both be available"]
 
     width = page.viewport_size["width"]
     explorer = page.get_by_role("complementary", name="Project Explorer")
-    assistant = page.get_by_role("complementary", name="LazyDesigner companion")
+    diagnostic = page.get_by_role("complementary", name="Diagnostic panel")
     should_rail = width < 1320
     # This assertion mirrors the pure bounded Editor layout, not native proof.
     project_expansion_allowed = width - 220 - (44 if width < 920 else 48) - 6 >= 320
-    assistant_expansion_allowed = width - 240 - (44 if width < 920 else 48) - 6 >= 320
-    if explorer.count() != 1 or assistant.count() != 1:
+    diagnostic_expansion_allowed = width - 240 - (44 if width < 920 else 48) - 6 >= 320
+    if explorer.count() != 1 or diagnostic.count() != 1:
         issues.append("both companion side docks must remain mounted at every normal viewport")
         return issues
     if (explorer.locator(".rail-actions").count() == 1) != should_rail:
         issues.append("Project Explorer rail default does not match viewport width")
-    if (assistant.locator(".rail-actions").count() == 1) != should_rail:
-        issues.append("LazyDesigner companion rail default does not match viewport width")
+    if (diagnostic.locator(".rail-actions").count() == 1) != should_rail:
+        issues.append("Diagnostic panel rail default does not match viewport width")
 
     # Expand the actual Svelte Explorer only to exercise source-owned search.
     explorer_expanded_for_check = False
@@ -633,79 +633,92 @@ def inspect_unified_editor(page, fixture, view):
             issues.append("Collapsing Project Explorer loses keyboard focus")
 
     # The right side is a real navigation companion, not a fabricated QA output.
-    assistant_expanded_for_check = not should_rail
-    if should_rail and assistant_expansion_allowed:
-        expand = page.get_by_role("button", name="Expand LazyDesigner companion", exact=True)
+    diagnostic_expanded_for_check = not should_rail
+    if should_rail and diagnostic_expansion_allowed:
+        expand = page.get_by_role("button", name="Expand Diagnostic panel", exact=True)
         if expand.count() == 1:
             expand.click()
-            assistant_expanded_for_check = True
+            diagnostic_expanded_for_check = True
         else:
-            issues.append("LazyDesigner rail has no expand action")
+            issues.append("Diagnostic rail has no expand action")
     elif should_rail:
-        if page.get_by_role("button", name="Open LazyDesigner Support", exact=True).count() != 1:
-            issues.append("Narrow LazyDesigner rail must provide Support fallback")
-        if assistant_toggle.is_enabled():
-            issues.append("LazyDesigner must not expand into the minimum native viewport")
-    if assistant_expanded_for_check:
-        tabs = assistant.get_by_role("tablist", name="LazyDesigner sections")
-        if tabs.count() != 1 or tabs.get_by_role("tab").count() != 3:
-            issues.append("LazyDesigner must have the three native-style companion tabs")
+        if page.get_by_role("button", name="Open Diagnostic Support", exact=True).count() != 1:
+            issues.append("Narrow Diagnostic rail must provide Support fallback")
+        if diagnostic_toggle.is_enabled():
+            issues.append("Diagnostic must not expand into the minimum native viewport")
+    if diagnostic_expanded_for_check:
+        tabs = diagnostic.get_by_role("tablist", name="Diagnostic sections")
+        if tabs.count() != 1 or tabs.get_by_role("tab").count() != 2:
+            issues.append("Diagnostic must have exactly Diagnostic and Activity tabs")
         else:
-            assistant_tab = tabs.get_by_role("tab", name="Assistant", exact=True)
-            review_tab = tabs.get_by_role("tab", name="Review", exact=True)
+            diagnostic_tab = tabs.get_by_role("tab", name="Diagnostic", exact=True)
             activity_tab = tabs.get_by_role("tab", name="Activity", exact=True)
-            if assistant_tab.get_attribute("aria-selected") != "true":
-                issues.append("Assistant must be the default selected companion tab")
-            if assistant.get_by_role("tabpanel", name="Assistant").count() != 1:
-                issues.append("Selected Assistant content is missing")
-            review_tab.click()
-            if (review_tab.get_attribute("aria-selected") != "true"
-                    or assistant.get_by_role("heading", name="Model Review").count() != 1):
-                issues.append("Model Review tab does not display its real content")
+            if diagnostic_tab.get_attribute("aria-selected") != "true":
+                issues.append("Diagnostic must be the default tab")
+            if diagnostic.get_by_role("tabpanel", name="Diagnostic").count() != 1:
+                issues.append("Diagnostic readiness panel is missing")
+            if diagnostic.get_by_role("heading", name="Readiness").count() != 1:
+                issues.append("Diagnostic must show readiness")
+            if diagnostic.get_by_text("Blockbench", exact=True).count() != 1:
+                issues.append("Diagnostic must show Blockbench state")
             activity_tab.click()
             if (activity_tab.get_attribute("aria-selected") != "true"
-                    or assistant.get_by_role("button", name="View technical activity").count() != 1):
-                issues.append("Activity tab must link to real technical analytics")
+                    or diagnostic.get_by_role("tabpanel", name="Activity").count() != 1):
+                issues.append("Activity tab does not open")
+            if diagnostic.get_by_role("button", name="View Gateway statistics").count() != 1:
+                issues.append("Activity must link to real Gateway statistics")
+            if diagnostic.get_by_text("Projects", exact=True).count() != 1:
+                issues.append("Activity must show observed project statistics")
+            if diagnostic.get_by_text("Models", exact=True).count() != 1:
+                issues.append("Activity must show observed model statistics")
+            if fixture == "ready":
+                values = diagnostic.locator(
+                    '[aria-label="Project statistics at last observation"] strong'
+                ).all_text_contents()
+                if values != ["1", "2"]:
+                    issues.append("Ready fixture must show one project and two models, not invented Gateway metrics")
             activity_tab.press("Home")
-            if assistant_tab.get_attribute("aria-selected") != "true":
-                issues.append("Companion tabs lack Home keyboard navigation")
-            assistant_tab.press("ArrowRight")
-            if review_tab.get_attribute("aria-selected") != "true":
-                issues.append("Companion tabs lack arrow-key navigation")
-            review_tab.press("End")
+            if diagnostic_tab.get_attribute("aria-selected") != "true":
+                issues.append("Diagnostic tabs lack Home keyboard navigation")
+            diagnostic_tab.press("ArrowRight")
             if activity_tab.get_attribute("aria-selected") != "true":
-                issues.append("Companion tabs lack End keyboard navigation")
-            assistant_tab.click()
+                issues.append("Diagnostic tabs lack arrow-key navigation")
+            activity_tab.press("End")
+            if activity_tab.get_attribute("aria-selected") != "true":
+                issues.append("Diagnostic tabs lack End keyboard navigation")
+            activity_tab.press("ArrowLeft")
+            if diagnostic_tab.get_attribute("aria-selected") != "true":
+                issues.append("Diagnostic tabs lack left-arrow keyboard navigation")
             tab_height = tabs.bounding_box()
             if tab_height and abs(tab_height["height"] - 40) > 1:
-                issues.append("Companion tab strip does not match Blockbench's 40px panel bar")
-        if assistant.locator(".tool-row").count():
+                issues.append("Diagnostic tabs must retain Blockbench's 40px bar")
+        if diagnostic.locator(".tool-row").count():
             issues.append("Do not present static tool-name rows as usable QA functions")
         if should_rail:
             reservation = page.locator('[data-native-editor-reservation="true"]')
             if reservation.count() == 1 and reservation.bounding_box()["width"] < 320:
                 issues.append("Expanded LazyDesigner squeezes native window below 320px")
-        assistant_toggle.click()
-        if assistant.count() != 1 or assistant.locator(".rail-actions").count() != 1:
-            issues.append("Collapsing LazyDesigner must retain its shortcut rail")
+        diagnostic_toggle.click()
+        if diagnostic.count() != 1 or diagnostic.locator(".rail-actions").count() != 1:
+            issues.append("Collapsing Diagnostic must retain its shortcut rail")
         focused = page.evaluate(
             "() => document.activeElement?.getAttribute('aria-label')"
         )
-        if focused != "Toggle LazyDesigner companion":
-            issues.append("Collapsing LazyDesigner companion loses keyboard focus")
-        assistant_toggle.click()
-        if assistant.count() != 1 or assistant.locator(".rail-actions").count() != (1 if should_rail else 0):
-            issues.append("LazyDesigner rail/full state cannot be restored")
+        if focused != "Toggle Diagnostic panel":
+            issues.append("Collapsing Diagnostic panel loses keyboard focus")
+        diagnostic_toggle.click()
+        if diagnostic.count() != 1 or diagnostic.locator(".rail-actions").count() != (1 if should_rail else 0):
+            issues.append("Diagnostic rail/full state cannot be restored")
         if should_rail:
             # Restore the default rail after testing a full-size companion panel.
-            page.get_by_role("button", name="Collapse LazyDesigner companion to icons", exact=True).click()
+            page.get_by_role("button", name="Collapse Diagnostic panel to icons", exact=True).click()
 
     focus = page.get_by_role("button", name="Focus Editor", exact=True)
     if focus.count() != 1:
         issues.append("Focus Editor action is unavailable")
     else:
         focus.click()
-        if explorer.count() or assistant.count():
+        if explorer.count() or diagnostic.count():
             issues.append("Only explicit Focus Editor may hide both side docks")
         if native_area.count() != 1:
             issues.append("Focus Editor must preserve the real native reservation")
@@ -714,7 +727,7 @@ def inspect_unified_editor(page, fixture, view):
             exit_focus.click()
         else:
             issues.append("Focus Editor has no restore action")
-    if explorer.count() != 1 or assistant.count() != 1:
+    if explorer.count() != 1 or diagnostic.count() != 1:
         issues.append("Focus Mode must restore both side docks")
     return issues
 

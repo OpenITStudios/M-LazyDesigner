@@ -24,7 +24,7 @@ The primary user outcome is **continue asset work**. Connection and installation
 
 ## Unified Editor — Blockbench-native companion layout
 
-The Editor has one real Blockbench native-window reservation between **two permanently present LazyDesigner side docks**: **Project Explorer** (left) and **LazyDesigner — Assistant & Review** (right). Both are mounted during ordinary editing, even on narrow windows. Only the explicitly selected **Focus Editor** action hides both. This is not a WebView clone or substitute Blockbench workspace. The middle DOM reservation is completely empty; the original Blockbench Windows window alone provides its viewport, menus, Outliner, UV, Paint, Animation, Undo and Save when native placement succeeds.
+The Editor has one real Blockbench native-window reservation between **two permanently present LazyDesigner side docks**: **Project Explorer** (left) and **Diagnostic** (right). Both are mounted during ordinary editing, even on narrow windows. Only the explicitly selected **Focus Editor** action hides both. This is not a WebView clone or substitute Blockbench workspace. The middle DOM reservation is completely empty; the original Blockbench Windows window alone provides its viewport, menus, Outliner, UV, Paint, Animation, Undo and Save when native placement succeeds.
 
 ### Blockbench visual authority
 
@@ -35,24 +35,25 @@ These tokens are a **default-theme fallback**, **not proof of an automatic read 
 
 | Editor width | Left companion | Center, native Blockbench | Right companion |
 | --- | --- | --- | --- |
-| 1810px or wider | Project Explorer full, default 220px | Remaining space (about 1448px at 1920px) | LazyDesigner full, default 240px |
-| 1320–1809px | Project Explorer full | Remaining space (about 1128px at 1600px) | LazyDesigner full |
-| 920–1319px | Project Explorer shortcut rail (48px) | Dominant remaining space | LazyDesigner shortcut rail (48px) |
+| 1810px or wider | Project Explorer full, default 220px | Remaining space (about 1448px at 1920px) | Diagnostic full, default 240px |
+| 1320–1809px | Project Explorer full | Remaining space (about 1128px at 1600px) | Diagnostic full |
+| 920–1319px | Project Explorer shortcut rail (48px) | Dominant remaining space | Diagnostic shortcut rail (48px) |
 | Under 920px | Left rail (~44px) | Dominant remaining space | Right rail (~44px) |
 
-On narrower windows the user may explicitly expand one side while its counterpart remains present as a rail, never disappearing or overlaying Blockbench. Expansion is admitted only when the reserved native center retains at least **320 CSS px**; if insufficient, the Project Explorer rail offers a clearly labeled route to Workspace and the LazyDesigner rail offers Support/technical activity instead of making Blockbench unusably narrow. Both rails retain discoverable, keyboard-operable controls. The side widths are bounded to 160–260px for Project Explorer and 220–300px for LazyDesigner, resized with in-flow pointer/keyboard dividers. User changes and explicit Focus Editor are session-only layout preferences; navigating to Support/Workspace and back preserves them where the width band is unchanged. Changing responsive bands selects rail/full defaults, not removal of a side.
+On narrower windows the user may explicitly expand one side while its counterpart remains present as a rail, never disappearing or overlaying Blockbench. Expansion is admitted only when the reserved native center retains at least **320 CSS px**; if insufficient, the Project Explorer rail offers a clearly labeled route to Workspace and the Diagnostic rail offers Support/technical activity instead of making Blockbench unusably narrow. Both rails retain discoverable, keyboard-operable controls. The side widths are bounded to 160–260px for Project Explorer and 220–300px for Diagnostic, resized with in-flow pointer/keyboard dividers. User changes and explicit Focus Editor are session-only layout preferences; navigating to Support/Workspace and back preserves them where the width band is unchanged. Changing responsive bands selects rail/full defaults, not removal of a side.
 
 ### Left: Project Explorer
 
 A searchable native-style project/model tree with explicit search clear and project-match count; show the currently observed model with a highlight and independent Modified/Missing markers, never fabricated live save state. Each project has one compact actions disclosure with Pin/Unpin and Open Folder in the normal document flow, preserving project-name width and avoiding any popup over the native cutout. When opening or collapsing a dock, keyboard focus returns to an available search/heading/toolbar control instead of being lost on removed content. A project exposes safe opaque-ID folder navigation for Models/References/Textures/Exports, Pin/Unpin, Reveal/Open in Explorer, and a compact Recent Models section. Keep destructive operations in their guarded Workspace flow, not a one-click side-row action. Empty states point to Add Project Folder or Open Model. Native file pickers and model navigation retain the original window Detach/Restore safety gate. Project Explorer never duplicates Blockbench's Cube Outliner.
 
-### Right: LazyDesigner — Assistant & Review
+### Right: Diagnostic
 
-The right dock is **not** named `AI & QA` or `Model Tools`, because the desktop has neither an in-panel AI chat/command executor nor synchronized cross-process QA results. It uses one **Blockbench-style tab strip** (Assistant, Review, Activity): one panel is shown at a time instead of stacking three long dashboard sections. Selected state is explicit; Arrow Left/Right and Home/End navigate tabs. All tabpanel targets stay present but hidden when inactive for stable accessibility semantics. It contains three truthfully scoped functions:
+The permanent right dock is simply **Diagnostic** with only two Blockbench-style tabs: **Diagnostic** and **Activity**. There is no Assistant chat, Model Review, duplicated modelling functionality, fabricated QA result, or new background service.
 
-- **Assistant:** display verified/aged connection state from the existing Desktop status projection, refresh the observation, and open Support for connection setup. Authoring prompts and AI operations still belong to an external AI client through the existing Gateway; the panel never suggests it can execute an in-app prompt.
-- **Model Review:** display the last-observed model identity and an honest description that Geometry checks, Latest Edit review and Particle Studio are **in the existing Blockbench plugin**. With a verified running editor, offer the existing **Go to Blockbench** focus action. Do not display invented issue counts, PASS, texture/animation controls or buttons that claim to run a QA check.
-- **Activity:** the existing `Analytics` page is a **read-only Gateway technical-activity** destination reachable by `View technical activity`. That is **not** a model-edit history and must not be described as such. No synchronized AI task progress timeline is implied.
+- **Diagnostic:** show the existing Rust-owned readiness summary and status at last observation, Blockbench running state, plugin integrity, and genuine diagnostic messages only when present. Keep optional technical details behind one native disclosure. Refresh uses the existing Desktop status action; troubleshooting opens Support. When status observation fails repeatedly, report verification needed rather than claiming the machine is ready.
+- **Activity:** show the existing observed AI/Gateway connection status and a minimal **last-observed project/model count** from Desktop project-navigation data. Explicitly label these as project inventory, not as live AI-operation statistics. The **View Gateway statistics** action opens the existing read-only Analytics page, which owns actual Gateway metrics; do not fake or duplicate them in the dock.
+
+Both tabs use the existing 40px native-style panel header and keyboard Arrow Left/Right/Home/End navigation. The two tabpanels stay structurally available but only the selected panel is visible. On narrow viewports the right dock becomes an icon rail with access to Diagnostic/Support and technical statistics; it must never disappear automatically or obstruct the original native Blockbench window.
 
 The host header stays a restrained ~32px utility strip, not a copy of Blockbench's own 28px menu bar or 30px toolbars. It retains Workspace, model context, panel rail/full toggles, Focus Editor, Open Model, guarded native Place/Detach and Support. The Blockbench native reservation never contains any LazyDesigner header, footer, label, screenshot, simulated icon or generated model.
 

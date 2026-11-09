@@ -86,7 +86,8 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("both_side_docks_present");
     expect(script).toContain("active_model_name_readable_default");
     expect(script).toContain("dock_responsive_rails");
-    expect(script).toContain("assistant_review_activity_truthful");
+    expect(script).toContain("diagnostic_activity_truthful");
+    expect(script).toContain("diagnosticPanelCount === 2");
     expect(script).toContain("blockbench_tab_strip_geometry");
     expect(script).toContain("blockbench_selected_tab_colors");
     expect(script).toContain("blockbench_outliner_row_density");

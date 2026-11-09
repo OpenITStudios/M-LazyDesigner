@@ -40,7 +40,7 @@
   let editorWidth = 0;
   let drag: { dock: EditorDock; pointerId: number; x: number; width: number } | null = null;
   let search = '';
-  let companionTab: 'assistant' | 'review' | 'activity' = 'assistant';
+  let diagnosticTab: 'diagnostic' | 'activity' = 'diagnostic';
   let showAll = false;
   let expandedProjectId: string | null = null;
   let projectActionsId: string | null = null;
@@ -49,9 +49,9 @@
   let localNotice = '';
   let searchInput: HTMLInputElement | undefined;
   let explorerToggle: HTMLButtonElement | undefined;
-  let companionToggle: HTMLButtonElement | undefined;
+  let diagnosticToggle: HTMLButtonElement | undefined;
   let explorerHeading: HTMLHeadingElement | undefined;
-  let companionHeading: HTMLHeadingElement | undefined;
+  let diagnosticHeading: HTMLHeadingElement | undefined;
 
   $: navigation = status?.project_navigation ?? null;
   $: active = navigation?.active ?? null;
@@ -60,16 +60,32 @@
   $: recentTargets = navigation ? recentModelTargets(navigation).slice(0, 3) : [];
   $: continuing = navigation ? continueTarget(navigation) : null;
   $: aiStatus = status ? aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs) : null;
+  // Read-only projection of the existing Rust-owned status and model inventory.
+  $: readinessLabel = statusProbeFailures >= 2 ? 'Verification required'
+    : loading ? 'Checking readiness…'
+    : !status ? 'Status unavailable'
+    : status.readiness.ready ? 'Ready at last check'
+    : status.readiness.state === 'ready-to-start' ? 'Ready to start'
+    : status.readiness.state === 'setup-required' ? 'Setup required'
+    : status.readiness.state === 'needs-connection' ? 'Connection needed'
+    : 'Attention required';
+  $: readinessDetail = statusProbeFailures >= 2
+    ? 'The last status could not be verified. Refresh to check readiness.'
+    : status?.readiness.summary ?? 'No verified readiness details available.';
+  $: observedProjectCount = status?.project_navigation.projects.length ?? null;
+  $: observedModelCount = status?.project_navigation.projects.reduce(
+    (sum, project) => sum + project.model_count, 0,
+  ) ?? null;
   $: actionBusy = Boolean(busyAction) || executing;
   // Both sides are always present in ordinary editor mode. Only Focus Editor
   // hides them. Narrow widths collapse content to reachable shortcut rails.
   $: showProjects = !layout.focusMode;
   $: showTools = !layout.focusMode;
   $: explorerRail = showProjects && !layout.projectsExpanded;
-  $: assistantRail = showTools && !layout.assistantExpanded;
+  $: diagnosticRail = showTools && !layout.diagnosticExpanded;
   $: otherRailWidth = layout.band === 'compact' ? 44 : 48;
   $: canExpandProjects = canExpandEditorDock(editorWidth, 'projects', layout.projectsWidth, otherRailWidth);
-  $: canExpandAssistant = canExpandEditorDock(editorWidth, 'tools', layout.toolsWidth, otherRailWidth);
+  $: canExpandDiagnostic = canExpandEditorDock(editorWidth, 'tools', layout.toolsWidth, otherRailWidth);
 
   function expanded(project: ProjectNavigationProject): boolean {
     return expandedProjectId === project.id
@@ -98,11 +114,11 @@
   function toggleProjectActions(id: string) {
     projectActionsId = projectActionsId === id ? null : id;
   }
-  function onCompanionTabKeydown(
+  function onDiagnosticTabKeydown(
     event: KeyboardEvent,
-    current: 'assistant' | 'review' | 'activity',
+    current: 'diagnostic' | 'activity',
   ) {
-    const tabs = ['assistant', 'review', 'activity'] as const;
+    const tabs = ['diagnostic', 'activity'] as const;
     const index = tabs.indexOf(current);
     const next = event.key === 'ArrowRight' ? tabs[(index + 1) % tabs.length]
       : event.key === 'ArrowLeft' ? tabs[(index + tabs.length - 1) % tabs.length]
@@ -110,7 +126,7 @@
       : event.key === 'End' ? tabs[tabs.length - 1] : null;
     if (!next) return;
     event.preventDefault();
-    companionTab = next;
+    diagnosticTab = next;
     void tick().then(() => {
       editorRoot.querySelector<HTMLButtonElement>(
         '[data-companion-tab="' + next + '"]',
@@ -124,7 +140,7 @@
       focusMode: false,
       projectsExpanded: opening,
       ...(opening && (layout.band === 'rail' || layout.band === 'compact')
-        ? { assistantExpanded: false } : {}),
+        ? { diagnosticExpanded: false } : {}),
     });
     void focusAfterLayout(() => opening
       ? searchInput ?? explorerHeading ?? explorerToggle
@@ -136,7 +152,7 @@
       focusMode: false,
       projectsExpanded: true,
       ...(layout.band === 'rail' || layout.band === 'compact'
-        ? { assistantExpanded: false } : {}),
+        ? { diagnosticExpanded: false } : {}),
     });
     void focusAfterLayout(() => searchInput ?? explorerHeading ?? explorerToggle);
   }
@@ -144,30 +160,30 @@
     changeLayout({ projectsExpanded: false });
     void focusAfterLayout(() => explorerToggle);
   }
-  function toggleToolsPanel() {
-    const opening = layout.focusMode || !layout.assistantExpanded;
-    if (opening && !canExpandAssistant) return;
+  function toggleDiagnosticPanel() {
+    const opening = layout.focusMode || !layout.diagnosticExpanded;
+    if (opening && !canExpandDiagnostic) return;
     changeLayout({
       focusMode: false,
-      assistantExpanded: opening,
+      diagnosticExpanded: opening,
       ...(opening && (layout.band === 'rail' || layout.band === 'compact')
         ? { projectsExpanded: false } : {}),
     });
-    void focusAfterLayout(() => opening ? companionHeading ?? companionToggle : companionToggle);
+    void focusAfterLayout(() => opening ? diagnosticHeading ?? diagnosticToggle : diagnosticToggle);
   }
-  function expandAssistant() {
-    if (!canExpandAssistant) return;
+  function expandDiagnostic() {
+    if (!canExpandDiagnostic) return;
     changeLayout({
       focusMode: false,
-      assistantExpanded: true,
+      diagnosticExpanded: true,
       ...(layout.band === 'rail' || layout.band === 'compact'
         ? { projectsExpanded: false } : {}),
     });
-    void focusAfterLayout(() => companionHeading ?? companionToggle);
+    void focusAfterLayout(() => diagnosticHeading ?? diagnosticToggle);
   }
-  function collapseAssistant() {
-    changeLayout({ assistantExpanded: false });
-    void focusAfterLayout(() => companionToggle);
+  function collapseDiagnostic() {
+    changeLayout({ diagnosticExpanded: false });
+    void focusAfterLayout(() => diagnosticToggle);
   }
   function toggleFocusMode() {
     changeLayout({ focusMode: !layout.focusMode });
@@ -184,30 +200,30 @@
       const focused = document.activeElement;
       const focusedExplorer = !next.projectsExpanded && focused instanceof Element
         && Boolean(focused.closest('#ld-unified-explorer'));
-      const focusedAssistant = !next.assistantExpanded && focused instanceof Element
+      const focusedAssistant = !next.diagnosticExpanded && focused instanceof Element
         && Boolean(focused.closest('#ld-unified-inspector'));
       changeLayout({ band, ...next });
       if (focusedExplorer) void focusAfterLayout(() => explorerToggle);
-      else if (focusedAssistant) void focusAfterLayout(() => companionToggle);
+      else if (focusedAssistant) void focusAfterLayout(() => diagnosticToggle);
       return;
     }
     const rail = band === 'compact' ? 44 : 48;
     const collapseProjects = layout.projectsExpanded
       && !canExpandEditorDock(width, 'projects', layout.projectsWidth, rail);
-    const collapseAssistant = layout.assistantExpanded
+    const collapseDiagnostic = layout.diagnosticExpanded
       && !canExpandEditorDock(width, 'tools', layout.toolsWidth, rail);
-    if (!collapseProjects && !collapseAssistant) return;
+    if (!collapseProjects && !collapseDiagnostic) return;
     const focused = document.activeElement;
     const focusedExplorer = collapseProjects && focused instanceof Element
       && Boolean(focused.closest('#ld-unified-explorer'));
-    const focusedAssistant = collapseAssistant && focused instanceof Element
+    const focusedAssistant = collapseDiagnostic && focused instanceof Element
       && Boolean(focused.closest('#ld-unified-inspector'));
     changeLayout({
       ...(collapseProjects ? { projectsExpanded: false } : {}),
-      ...(collapseAssistant ? { assistantExpanded: false } : {}),
+      ...(collapseDiagnostic ? { diagnosticExpanded: false } : {}),
     });
     if (focusedExplorer) void focusAfterLayout(() => explorerToggle);
-    else if (focusedAssistant) void focusAfterLayout(() => companionToggle);
+    else if (focusedAssistant) void focusAfterLayout(() => diagnosticToggle);
   }
   function startDockResize(event: PointerEvent, dock: EditorDock) {
     if (event.button !== 0 || layout.focusMode || !editorRoot) return;
@@ -386,13 +402,13 @@
         aria-expanded={showProjects && !explorerRail}
         aria-controls={showProjects ? 'ld-unified-explorer' : undefined}
         onclick={toggleProjectsPanel}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
-      <button type="button" bind:this={companionToggle} class="dock-toggle" class:chosen={showTools && !assistantRail}
-        aria-label="Toggle LazyDesigner companion"
-        title={canExpandAssistant ? 'Expand or collapse LazyDesigner companion' : 'Use Support to inspect the connection at this width'}
-        disabled={assistantRail && !canExpandAssistant}
-        aria-expanded={showTools && !assistantRail}
+      <button type="button" bind:this={diagnosticToggle} class="dock-toggle" class:chosen={showTools && !diagnosticRail}
+        aria-label="Toggle Diagnostic panel"
+        title={canExpandDiagnostic ? 'Expand or collapse Diagnostic panel' : 'Use Support to inspect the connection at this width'}
+        disabled={diagnosticRail && !canExpandDiagnostic}
+        aria-expanded={showTools && !diagnosticRail}
         aria-controls={showTools ? 'ld-unified-inspector' : undefined}
-        onclick={toggleToolsPanel}><EditorChromeIcon name="assistant"/><span class="dock-label">Assistant</span></button>
+        onclick={toggleDiagnosticPanel}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Diagnostic</span></button>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
         aria-pressed={layout.focusMode}
@@ -431,7 +447,7 @@
   {/if}
 
   <div class="unified-body" class:with-projects={showProjects} class:with-inspector={showTools}
-    class:rail={explorerRail} class:tools-rail={assistantRail}
+    class:rail={explorerRail} class:tools-rail={diagnosticRail}
     style={`--explorer-width: ${layout.projectsWidth}px; --tools-width: ${layout.toolsWidth}px;`}>
     {#if showProjects}
       <aside id="ld-unified-explorer" class="explorer dock-panel" class:rail={explorerRail} aria-label="Project Explorer">
@@ -635,28 +651,28 @@
     </section>
 
     {#if showTools}
-      {#if !assistantRail}
+      {#if !diagnosticRail}
         <div class="dock-resizer" role="separator" tabindex="0"
-          aria-label="Resize LazyDesigner companion" aria-orientation="vertical"
+          aria-label="Resize Diagnostic panel" aria-orientation="vertical"
           aria-valuemin={220} aria-valuemax={300} aria-valuenow={layout.toolsWidth}
-          title="Drag or use arrow keys to resize LazyDesigner companion"
+          title="Drag or use arrow keys to resize Diagnostic panel"
           onpointerdown={(event) => startDockResize(event, 'tools')}
           onkeydown={(event) => resizeDockWithKeyboard(event, 'tools')}></div>
       {/if}
-      <aside id="ld-unified-inspector" class="inspector dock-panel" class:rail={assistantRail}
-        aria-label="LazyDesigner companion">
-        {#if assistantRail}
-          <div class="rail-actions" role="group" aria-label="LazyDesigner companion shortcuts">
-            {#if canExpandAssistant}
-              <button type="button" title="Expand LazyDesigner Assistant and Review"
-                aria-label="Expand LazyDesigner companion"
-                onclick={expandAssistant}><EditorChromeIcon name="assistant"/></button>
+      <aside id="ld-unified-inspector" class="inspector dock-panel" class:rail={diagnosticRail}
+        aria-label="Diagnostic">
+        {#if diagnosticRail}
+          <div class="rail-actions" role="group" aria-label="Diagnostic shortcuts">
+            {#if canExpandDiagnostic}
+              <button type="button" title="Expand Diagnostic"
+                aria-label="Expand Diagnostic panel"
+                onclick={expandDiagnostic}><EditorChromeIcon name="diagnostic"/></button>
             {:else}
               <button type="button" title="Open connection Support without shrinking Blockbench"
-                aria-label="Open LazyDesigner Support"
-                onclick={navigateSupport}><EditorChromeIcon name="assistant"/></button>
+                aria-label="Open Diagnostic Support"
+                onclick={navigateSupport}><EditorChromeIcon name="diagnostic"/></button>
             {/if}
-            {#if canExpandAssistant}
+            {#if canExpandDiagnostic}
               <button type="button" title="Connection and Support" aria-label="Open connection Support"
                 onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
             {/if}
@@ -665,83 +681,81 @@
           </div>
         {:else}
           <div class="pane-heading">
-            <h3 tabindex="-1" bind:this={companionHeading}>LazyDesigner</h3>
+            <h3 tabindex="-1" bind:this={diagnosticHeading}>Diagnostic</h3>
             <div class="pane-actions">
               <button type="button" class="collapse-dock" title="Collapse to right rail"
-                aria-label="Collapse LazyDesigner companion to icons"
-                onclick={collapseAssistant}><EditorChromeIcon name="chevron-right"/></button>
+                aria-label="Collapse Diagnostic panel to icons"
+                onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
             </div>
           </div>
-          <div class="companion-tabs" role="tablist" aria-label="LazyDesigner sections">
-            <button type="button" role="tab" id="ld-tab-assistant"
-              data-companion-tab="assistant"
-              class:selected={companionTab === 'assistant'}
-              aria-selected={companionTab === 'assistant'}
-              aria-controls="ld-inspector-assistant"
-              tabindex={companionTab === 'assistant' ? 0 : -1}
-              onclick={() => companionTab = 'assistant'}
-              onkeydown={(event) => onCompanionTabKeydown(event, 'assistant')}>Assistant</button>
-            <button type="button" role="tab" id="ld-tab-review"
-              data-companion-tab="review"
-              class:selected={companionTab === 'review'}
-              aria-selected={companionTab === 'review'}
-              aria-controls="ld-inspector-checks"
-              tabindex={companionTab === 'review' ? 0 : -1}
-              onclick={() => companionTab = 'review'}
-              onkeydown={(event) => onCompanionTabKeydown(event, 'review')}>Review</button>
+          <div class="diagnostic-tabs" role="tablist" aria-label="Diagnostic sections">
+            <button type="button" role="tab" id="ld-tab-diagnostic"
+              data-companion-tab="diagnostic"
+              class:selected={diagnosticTab === 'diagnostic'}
+              aria-selected={diagnosticTab === 'diagnostic'}
+              aria-controls="ld-inspector-diagnostic"
+              tabindex={diagnosticTab === 'diagnostic' ? 0 : -1}
+              onclick={() => diagnosticTab = 'diagnostic'}
+              onkeydown={(event) => onDiagnosticTabKeydown(event, 'diagnostic')}>Diagnostic</button>
             <button type="button" role="tab" id="ld-tab-activity"
               data-companion-tab="activity"
-              class:selected={companionTab === 'activity'}
-              aria-selected={companionTab === 'activity'}
+              class:selected={diagnosticTab === 'activity'}
+              aria-selected={diagnosticTab === 'activity'}
               aria-controls="ld-inspector-activity"
-              tabindex={companionTab === 'activity' ? 0 : -1}
-              onclick={() => companionTab = 'activity'}
-              onkeydown={(event) => onCompanionTabKeydown(event, 'activity')}>Activity</button>
+              tabindex={diagnosticTab === 'activity' ? 0 : -1}
+              onclick={() => diagnosticTab = 'activity'}
+              onkeydown={(event) => onDiagnosticTabKeydown(event, 'activity')}>Activity</button>
           </div>
-          <section role="tabpanel" tabindex="0" class="inspector-section assistant-section"
-            id="ld-inspector-assistant" aria-labelledby="ld-tab-assistant"
-            hidden={companionTab !== 'assistant'}>
-            <h4>AI Connection</h4>
+          <section role="tabpanel" tabindex="0" class="inspector-section diagnostic-section"
+            id="ld-inspector-diagnostic" aria-labelledby="ld-tab-diagnostic"
+            hidden={diagnosticTab !== 'diagnostic'}>
+            <h4>Readiness</h4>
             <div class="connection-status" role="status">
-              <i class:verified={Boolean(aiStatus?.recentlyVerified)}
-                class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
-              <strong>{aiStatus?.label ?? 'AI status unverified'}</strong>
+              <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading)}
+                class:stale={statusProbeFailures >= 2} aria-hidden="true"></i>
+              <strong>{readinessLabel}</strong>
             </div>
-            <p>Model requests run through your connected AI client.</p>
-            <details class="panel-disclosure">
-              <summary>Connection details</summary>
-              <p class="subtle-note">{aiStatus?.detail ?? 'Connection status has not been verified.'}</p>
-            </details>
+            <p>{readinessDetail}</p>
+            <div class="diagnostic-facts" aria-label="Latest diagnostic observation">
+              <div><span>Blockbench</span><strong>{status
+                ? status.blockbench.running ? 'Detected' : 'Not running'
+                : 'Unverified'}</strong></div>
+              <div><span>Plugin</span><strong>{status
+                ? status.plugin_integrity === 'ready' ? 'Ready at last check'
+                  : status.plugin_integrity === 'missing' ? 'Missing'
+                  : status.plugin_integrity === 'modified' ? 'Modified'
+                  : status.plugin_integrity === 'invalid' ? 'Invalid'
+                  : 'Unverified'
+                : 'Unverified'}</strong></div>
+            </div>
+            {#if status?.diagnostic || status?.blockbench.diagnostic}
+              <details class="panel-disclosure">
+                <summary>Diagnostic details</summary>
+                {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
+                {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
+              </details>
+            {/if}
             <button type="button" disabled={actionBusy || fixture || loading}
-              onclick={() => void refresh()}>{aiStatus?.needsRefresh ? 'Refresh AI status' : 'Check AI status'}</button>
-            <button type="button" class="text-action" onclick={navigateSupport}>Connection &amp; setup</button>
-          </section>
-          <section role="tabpanel" tabindex="0" class="inspector-section review-section"
-            id="ld-inspector-checks" aria-labelledby="ld-tab-review"
-            hidden={companionTab !== 'review'}>
-            <h4>Model Review</h4>
-            {#if active}
-              <div class="model-detail"><strong>{active.model_name}</strong>
-                <span>{active.project_name ?? 'Unregistered project'} · {active.dirty ? 'Modified at last observation' : active.saved ? 'Saved at last observation' : 'Not saved'}</span>
-              </div>
-            {:else}
-              <p>{continuing ? 'Recently used: ' + continuing.model.name : 'No active model has been verified.'}</p>
-            {/if}
-            <p>Use <strong>Geometry Checks</strong> or <strong>Review Latest Edit</strong> in the Blockbench plugin.</p>
-            <p class="subtle-note">Review findings are not synchronized to this panel.</p>
-            {#if status?.blockbench.running}
-              <button type="button" disabled={actionBusy || fixture || statusProbeFailures >= 2}
-                onclick={() => void focusCurrentEditor()}>Go to Blockbench</button>
-            {:else}
-              <p class="subtle-note">Open Blockbench to use Geometry checks or Particle Studio.</p>
-            {/if}
+              onclick={() => void refresh()}>Refresh status</button>
+            <button type="button" class="text-action" onclick={navigateSupport}>Troubleshooting</button>
           </section>
           <section role="tabpanel" tabindex="0" class="inspector-section activity-section"
             id="ld-inspector-activity" aria-labelledby="ld-tab-activity"
-            hidden={companionTab !== 'activity'}>
-            <h4>Technical Activity</h4>
-            <p>View read-only Gateway metrics. Model-edit history is not available here.</p>
-            <button type="button" class="text-action" onclick={navigateActivity}>View technical activity</button>
+            hidden={diagnosticTab !== 'activity'}>
+            <h4>Connection</h4>
+            <div class="connection-status" role="status">
+              <i class:verified={Boolean(aiStatus?.recentlyVerified)}
+                class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
+              <strong>{aiStatus?.label ?? 'Status unavailable'}</strong>
+            </div>
+            <p class="subtle-note">{aiStatus?.detail ?? 'Connection has not been verified.'}</p>
+            <h4>Observed data</h4>
+            <div class="diagnostic-facts" aria-label="Project statistics at last observation">
+              <div><span>Projects</span><strong>{observedProjectCount ?? '—'}</strong></div>
+              <div><span>Models</span><strong>{observedModelCount ?? '—'}</strong></div>
+            </div>
+            <p class="subtle-note">Project totals come from the last Desktop observation. Gateway statistics are available separately.</p>
+            <button type="button" class="text-action" onclick={navigateActivity}>View Gateway statistics</button>
           </section>
           {#if !fixture && nativePlacementDetail}
             <div class="inspector-footnote" role="status">Blockbench window: {nativePlacementDetail}</div>
@@ -894,23 +908,30 @@
   }
   /* Blockbench v5.2.1 uses a 40px panel tab bar and a selected tab
      that blends into --color-ui; this is the same visual construction. */
-  .companion-tabs {
+  .diagnostic-tabs {
     display:flex;align-items:stretch;height:40px;
     margin:0 -9px 9px;padding:3px 4px 0;gap:1px;
     background:var(--color-back);border-bottom:1px solid var(--ed-border);
   }
-  .companion-tabs button {
+  .diagnostic-tabs button {
     flex:1 1 0;min-width:0;height:36px;margin:0;padding:0 4px;
     border:0;border-radius:5px 5px 0 0;
     background:transparent;color:var(--ed-muted-soft);
     font-size:12px;font-weight:650;letter-spacing:-.01em;
     text-transform:uppercase;white-space:nowrap;cursor:pointer;
   }
-  .companion-tabs button.selected {
+  .diagnostic-tabs button.selected {
     background:var(--color-ui);color:var(--ed-text);
   }
-  .companion-tabs button:hover:not(.selected){color:var(--ed-text)}
-  .companion-tabs button:focus-visible {
+  .diagnostic-facts{display:grid;margin:10px 0;border-top:1px solid var(--ed-border)}
+  .diagnostic-facts>div{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:9px;
+    padding:8px 0;border-bottom:1px solid var(--ed-border);font-size:11px;
+  }
+  .diagnostic-facts span{color:var(--ed-muted)}
+  .diagnostic-facts strong{color:var(--ed-text);text-align:right;font-weight:650;overflow-wrap:anywhere}
+  .diagnostic-tabs button:hover:not(.selected){color:var(--ed-text)}
+  .diagnostic-tabs button:focus-visible {
     outline:2px solid var(--ed-accent);outline-offset:-2px;
   }
   .inspector-section[role="tabpanel"]:focus-visible {
