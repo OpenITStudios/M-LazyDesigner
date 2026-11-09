@@ -137,3 +137,12 @@ Every interactive control has: accessible name, visible affordance, action desti
 - **Resolved in source:** the Status details link to AI Activity is disabled in fixture mode, avoiding a preview-only action that suggests real navigation; disabled styling is explicit.
 - **Observed navigation safety:** `App.svelte` records the Analytics origin and its Back action returns to that origin. Leaving Editor is gated on the native detach receipt; source inspection is not native proof.
 - **Still open:** actual Refresh/Analytics click behavior, keyboard and screen-reader checks, fixture appearance, production Unified Editor gating, and native restore acceptance. Do not close these based on source inspection alone.
+
+## M. Final sidebar source review — 2026-11-09
+
+**Pinned evidence:** `Local` commit `48484d8c32f19ad27a59dfcf83c2f8f758c5c77a`. Source inspection only.
+
+- **Icon registry cross-check:** all 13 statically referenced `EditorChromeIcon` names in `UnifiedWorkspacePage.svelte` are implemented in the SVG registry. The registry also retains `chevron-left` and `folder-open` for other potential consumers; do not delete them merely because this page does not use them. This check does not validate conditional/dynamic names in other pages.
+- **Status keyboard accessibility:** footer now exposes the observed timestamp to screen-reader users and Details has a larger target. These are authored source changes, not measured runtime accessibility.
+- **Current remaining acceptance blockers:** native composition and restore, production-only Unified Editor route, viewport clipping under real window resizing, screen-reader/zoom checks, and executable tests. Source cleanup is not proof that these pass.
+- **Preview readiness:** a source-grounded HTML review can be prepared **when explicitly requested**, with the native Blockbench center empty and fixture limitations stated. It must not be presented as an executable/native app.
