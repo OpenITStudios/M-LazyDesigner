@@ -558,6 +558,21 @@
           </div>
         {/if}
 
+        {#if !search.trim() && active}
+          <section class="active-project-summary" aria-label="Active project at last observation">
+            <div class="active-project-heading">Active project</div>
+            <div class="active-project-name" title={active.project_name ?? 'Project not identified'}>
+              <EditorChromeIcon name="folder"/>
+              <strong>{active.project_name ?? 'Unassigned project'}</strong>
+            </div>
+            <div class="active-project-model" title={active.model_name}>
+              <EditorChromeIcon name="model"/>
+              <span>{active.model_name}</span>
+              {#if active.dirty}<span class="active-project-unsaved" title="Unsaved at last observation">●</span>{/if}
+            </div>
+          </section>
+        {/if}
+
         {#if !search.trim() && recentTargets.length > 0}
           <div class="recent-group">
             <button type="button" class="recent-heading" aria-expanded={recentExpanded}
@@ -773,10 +788,10 @@
             <h3>Status</h3>
             <div class="status-overview-row">
               <span class="status-overview-label">System</span>
-              <span class="status-overview-value">
+              <span class="status-overview-value" title={status?.observed_at_unix_ms ? `Last checked: ${new Date(status.observed_at_unix_ms).toLocaleString()}` : 'Last check time unavailable'}>
                 <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
                   class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
-                {readinessLabel === 'Ready at last check' ? 'Ready · Last checked' : readinessLabel}
+                {readinessLabel === 'Ready at last check' ? 'Ready' : readinessLabel}
               </span>
             </div>
             <div class="status-overview-row">
@@ -822,7 +837,8 @@
               {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
               {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
               <button type="button" class="text-action" disabled={navigationPending}
-                onclick={navigateActivity}>View AI activity</button>
+                title="Open the AI activity and Gateway statistics page"
+                onclick={navigateActivity}>Open AI activity page</button>
             </details>
           </section>
 
@@ -1464,4 +1480,13 @@
   .sidebar-status .status-overview button:focus-visible,.sidebar-status .status-advanced summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:2px}
   .sidebar-page .create-folder-form .folder-name-error{color:#e5a0a0;font-size:12px}
   .sidebar-page .create-folder-form input[aria-invalid="true"]{border-color:#b46b6b}
+
+  /* Active project is the first contextual item, not another model picker. */
+  .sidebar-page .active-project-summary{margin:2px 0 15px;padding:11px;border:1px solid #303640;border-radius:7px;background:#20242b}
+  .sidebar-page .active-project-heading{margin-bottom:9px;color:var(--ed-muted);font-size:11px;font-weight:650}
+  .sidebar-page .active-project-name,.sidebar-page .active-project-model{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
+  .sidebar-page .active-project-name strong,.sidebar-page .active-project-model span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sidebar-page .active-project-name :global(svg){color:var(--ed-accent)}
+  .sidebar-page .active-project-model{margin-top:7px;padding-left:7px;color:var(--ed-muted)}
+  .sidebar-page .active-project-unsaved{color:#e9bb6d}
 </style>
