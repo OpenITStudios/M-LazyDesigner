@@ -6,14 +6,14 @@ Operating procedure for `lazydesigner-desktop-ui-design-development`. Not a new 
 
 **No AI image generation at any stage of LazyDesigner UI/UX work.** Never invoke `image_gen` or another generative-image tool for screenshots, UI images, wireframes, screenshot editing, alternate styling, Before/After comparisons or mockups. A user-supplied screenshot is evidence only.
 
-**PLAN/DISCUSS is text-only** and cannot silently trigger a preview, HTML rendering, visual reconstruction or source mutation. UI feedback on a prior preview is discussion, not a new preview request. **PREVIEW needs an explicit visual request**. Preview is only a verified F2 application render or real F3 native capture. If not available, supply F0 source findings and state NO PREVIEW RENDERED. Unlike the source TranslateIT reference, **F1 reconstruction is deliberately unavailable as a LazyDesigner preview** under the user's stricter real-app-only rule. Do not substitute generated pictures or invented GUI controls after a failure.
+**PLAN/DISCUSS is text-only** and cannot silently trigger a preview, HTML rendering, visual reconstruction or source mutation. UI feedback on a prior preview is discussion, not a new preview request. **PREVIEW needs an explicit visual request**. Preview may use F1 source-grounded HTML/CSS in ChatGPT when F2/F3 is unavailable. F1 is a labeled approximate visual review artifact, not an application screenshot or native/functional verification. Do not substitute generated pictures or invented GUI controls. If source-grounded HTML cannot be presented, report F0 / NO PREVIEW RENDERED.
 
 ## Fidelity and authority
 
 | Tier | Evidence | Permitted conclusion |
 | --- | --- | --- |
 | `F0_SOURCE` | Reviewed pinned GitHub source only | Named UI components, handlers and CSS exist; NO PREVIEW RENDERED |
-| `F1_RECONSTRUCTED` | Cloned/reimagined HTML/image | **Prohibited as LazyDesigner UI preview** |
+| `F1_SOURCE_HTML` | HTML/CSS reconstructed from pinned Svelte markup, actual tokens and typed fixture data; no generated images | Approximate visual preview for discussion only; not an exact browser screenshot, native UI or interaction proof |
 | `F2_BROWSER_COMPONENT` | Pinned production `App.svelte` rendered by existing Vite in Chromium, synthetic deterministic state, iframe viewport, screenshot and QA receipt | Actual Svelte/Tailwind/CSS browser layout for that fixture; **not** native Windows, Blockbench content or live connection |
 | `F3_TARGET_WINDOWS` | Actual installed Tauri/Blockbench screenshot with exact revision and tested state | Inspected native visual state only; does not prove unrelated AI/runtime actions |
 
@@ -26,7 +26,15 @@ Do not infer F2 from the mere presence of a renderer script. Do not infer F3 fro
 - "Responsive" → 1280×760, 1600×940 and 1920×1080 with no rewritten page markup.
 - "Before / after" → two named SHAs, identical fixture, browser, settings and viewport; do not invent prior pictures.
 - "Full audit" → expand pages only when explicitly requested; normal fast path remains narrow.
-- Missing exact checkout, browser, dependencies or native permissions → F0, NO PREVIEW RENDERED.
+- Missing checkout/browser/dependencies → prefer F1 source-grounded HTML directly in ChatGPT using GitHub source; if that is not possible → F0, NO PREVIEW RENDERED.
+
+## Canonical F1 source-grounded HTML workflow
+
+1. Pin the user-selected `Local` HEAD and read the smallest actual production source closure: `App.svelte`, selected page/component, `styles.css`, `tokens.css`, and relevant typed fixture. No design improvisation or generic AI dashboard.
+2. Translate visible Svelte HTML structure and CSS into a standalone HTML/CSS preview, retaining actual navigation, hierarchy, labels, tokens, and the selected fixture state. Document omitted conditional states and approximated behavior; do not claim pixel equivalence without a same-viewport F2 comparison.
+3. Default to Unified Editor ready at 1920×1080 unless the user names another view. Preserve both side docks; native Blockbench center stays blank, not simulated or replaced with a picture. Never invoke Tauri, file operations, Gateway, network calls, or installation from the preview.
+4. Present the HTML artifact directly in ChatGPT when supported, otherwise supply the generated standalone HTML file for viewing. Clearly label `F1_SOURCE_HTML`, source SHA, page, scenario, viewport, synthetic data, and unverified interactions. HTML preview does not require a local test, Codex, native Windows, or CI.
+5. F1 review can inform user-directed UI changes, but is not F2/F3 validation. Do not alter production UI merely to make a preview; no generated image fallback.
 
 ## Canonical F2 source and isolation
 
@@ -69,7 +77,7 @@ sha: <exact source SHA>
 page: editor
 scenario: editor-ready
 viewport: 1920x1080
-fidelity: F0_SOURCE | F2_BROWSER_COMPONENT | F3_TARGET_WINDOWS
+fidelity: F0_SOURCE | F1_SOURCE_HTML | F2_BROWSER_COMPONENT | F3_TARGET_WINDOWS
 rendered: NOT_EXECUTED | VERIFIED
 synthetic: true
 source_coverage: [App.svelte, UnifiedWorkspacePage.svelte, NativeEditorStage.svelte, desktopFixtures.ts, styles.css, tokens.css]
