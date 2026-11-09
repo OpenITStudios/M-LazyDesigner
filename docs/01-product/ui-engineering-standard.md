@@ -176,3 +176,19 @@ Every interactive control has: accessible name, visible affordance, action desti
 - At 260px and 300px: retain baseline typography, tree rows, selected-model indicator and context-menu action sizes.
 - **Future visual acceptance matrix:** 220/240/260/300px; ready/stale/error states; long project/model names; project menu near bottom edge; keyboard-only navigation; 100/125/150% Windows DPI; light/forced-colors as applicable.
 - **Evidence:** source-only responsive rules authored. No browser screenshot, computed layout, native Windows check or pixel-level assertion was performed.
+
+## Q. Deep UI/UX control placement audit — 2026-11-09
+
+**Observed user feedback:** the two small Focus/Support icons appeared misplaced, visually detached and Support's purpose was unclear.
+
+**P1 — corrected in source:** `UnifiedWorkspacePage.svelte` places the Focus toggle and a labeled `Help & settings` action in one bounded sidebar utility row. The redundant separator was removed. Support's tooltip now describes the actual Support page scope: diagnostics, connection recovery and settings. The full icon registry, app/project title, and native viewport reservation remain unchanged.
+
+**P1 — corrected in source:** `.unified-workspace` is now the positioning ancestor of the exceptional Exit Focus control, preventing an unbounded absolute-position reference. It is not a native editor replacement.
+
+**Behavioral truth:** Help & settings uses the existing `navigateSupport` callback. The parent `App.svelte` must await a Rust-confirmed native Detach before changing routes. No new support workflow, modal, or fake troubleshooting success was introduced.
+
+**P1 — remaining visual acceptance:** check 220/240/260/300px dock widths, Help label truncation, 16px icon optical centering, disabled/focus/hover, 100/125/150% Windows scaling, long names, and the Focus exit position. Verify keyboard focus restoration after collapsing panels.
+
+**P0 — release boundary:** Unified Editor remains dev-gated. Native placement/recovery and Windows packaging are not yet validated. HTML preview and generated branding mockups are not evidence of live Blockbench rendering.
+
+**Source audit verdict:** placement and labeling improved; native/pixel alignment **UNVERIFIED**. Do not describe this as a completed end-to-end UI audit until actual visual and interaction evidence exists.
