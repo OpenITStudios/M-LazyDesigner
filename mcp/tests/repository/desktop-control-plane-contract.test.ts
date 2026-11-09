@@ -1080,12 +1080,12 @@ describe("Desktop Workspace and Support feedback integrity", () => {
     const support = await source("../apps/desktop/src/SupportPage.svelte");
     expect(ui).toContain("<SupportPage");
     expect(support).toContain('<main class="page-content settings-content">');
-    expect(support).toContain("{#if aiStatus.needsRefresh}");
+    expect(support).toContain("{:else if status && aiStatus?.needsRefresh}");
     expect(support).toContain('id="support-stale-status-description">{aiStatus.detail}');
     const presentation = await source("../apps/desktop/src/desktopPresentation.ts");
     expect(presentation).toContain("These are the last known connection details.");
     expect(support).toContain('onclick={refresh}');
-    expect(support).toContain("{:else if productMode(status) !== 'ready'}");
+    expect(support).toContain("{:else if status && productMode(status) !== 'ready'}");
     const copy = ui.slice(ui.indexOf("async function copyNavigationPath("), ui.indexOf("async function connectBlockbench()"));
     expect(copy).not.toContain("statusProbeFailures >= 2");
     expect(copy).toContain("project_navigation_path");

@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Support navigation and missing-status recovery — 2026-11-09
+
+- **SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** Support now renders through the existing `SupportPage.svelte` even when `SystemStatus` is null, rather than falling into the generic unavailable Workspace fallback. It shows a truthful unavailable observation, classified error, one Refresh status action, independently callable Export diagnostics and Desktop version. Installed state, plugin/build readiness and all status-dependent native selection/migration/repair actions remain unavailable until a full observation succeeds.
+- **Ownership/proof:** `App.svelte` retains page routing/error authority; `SupportPage.svelte` owns the null-status view. Existing development-only browser fixture adds `status-unavailable` for Workspace/Support and exercises safe navigation without Tauri/native commands. Bun/source QA and real-browser/F2 capture authored but NOT_EXECUTED; Windows/Blockbench F3 remains UNVERIFIED.
+- **Scope:** Follow-up UX recovery change only, user-authorized `Local`; no new Support clone, Gateway, native Blockbench changes, auto-retry, CI activation, installer or release.
+ 
 ## Workspace model task hierarchy — 2026-11-09
 
 - **SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** The existing Desktop Workspace now shows one primary model task: current model → Go to Blockbench, valid continuation → Continue [model name] plus secondary Open Model…, otherwise direct Open Model… remains primary. Unavailable project/model files cannot become a continuation CTA. Optional AI setup and native file browsing remain independent.

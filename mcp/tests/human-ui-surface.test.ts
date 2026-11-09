@@ -140,7 +140,7 @@ describe("human-facing Blockbench UI", () => {
     expect(notice).toBeGreaterThan(header);
     expect(notice).toBeLessThan(content);
     expect(app).not.toContain("position:fixed;z-index:220");
-    expect(app).toContain("$: attentionError = page === 'Support' && status ? '' : error;");
+    expect(app).toContain("$: attentionError = page === 'Support' ? '' : error;");
     expect(app).toContain("page !== 'Overview'");
     expect(app).toContain("clearActionToast();\n    const notice = desktopErrorNotice(cause);");
     expect(app).toContain("role={attentionError ? 'alert' : 'status'}");
@@ -306,6 +306,32 @@ describe("human-facing Blockbench UI", () => {
     expect(readinessFailureNotice(failure("BLOCKBENCH_EXITED"), "connect").recovery.action).toBeNull();
   });
 
+  test("Support remains available after a completely failed Desktop status observation", async () => {
+    const [app, support, fixtures, capture] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/SupportPage.svelte"),
+      source("../apps/desktop/src/desktopFixtures.ts"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    expect(app).toContain("{:else if !status && page !== 'Support'}");
+    expect(app).toContain("{:else if page === 'Overview' && status}");
+    expect(app).toContain("$: attentionError = page === 'Support' ? '' : error;");
+    expect(app).toContain("if (devFixture === 'status-unavailable')");
+    expect(app).toContain("reportError(new Error('Status request timed out. Refresh to retry.'))");
+    expect(support).toContain("export let status: SystemStatus | null;");
+    expect(support).toContain("{#if !status}");
+    expect(support).toContain('id="support-unavailable-description"');
+    expect(support).toContain("disabled={!status || busyAction !== null || statusProbeFailures >= 2}");
+    expect(support).toContain("{#if status?.manager_available}");
+    expect(support).toContain("System observation</span>");
+    expect(support).toContain("LazyDesigner Desktop version");
+    expect(support).toContain("onclick={exportDiagnostics}");
+    expect(fixtures).toContain("throw new Error('No SystemStatus exists in the unavailable-status fixture");
+    expect(capture).toContain('("status-unavailable", "support")');
+    expect(capture).toContain("def inspect_unavailable_support(page, fixture, view):");
+    expect(capture).toContain('entry["unavailableSupportChecks"]');
+  });
+
   test("recovery controls are safe, contextual and visible without exposing raw paths", async () => {
     const [app, support, fixture, presentation] = await Promise.all([
       source("../apps/desktop/src/App.svelte"),
@@ -326,7 +352,7 @@ describe("human-facing Blockbench UI", () => {
     expect(notice).not.toContain("performInstall(");
     expect(support).toContain("Still to verify: {errorRecovery.confirmationNeeded}");
     expect(support).toContain("{errorRecovery.nextStep}");
-    expect(support).toContain("errorRecovery.action === 'refresh-status' && !aiStatus.needsRefresh");
+    expect(support).toContain("status && errorRecovery.action === 'refresh-status' && !aiStatus?.needsRefresh");
     expect(support).toContain("<code>{errorDetail}</code>");
     expect(presentation).toContain("type DesktopRecoveryAction");
     expect(fixture).toContain('"delete-uncertain"');

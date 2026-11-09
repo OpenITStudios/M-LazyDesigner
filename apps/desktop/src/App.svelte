@@ -83,7 +83,7 @@
   let deleteReview: ProjectDeletePreview | null = null;
   // Support already presents the full classified error in its own section.
   // Keep one non-blocking announcement elsewhere; do not cover model controls.
-  $: attentionError = page === 'Support' && status ? '' : error;
+  $: attentionError = page === 'Support' ? '' : error;
 
 
   let operations: DesktopOperationRecord[] = [];
@@ -211,9 +211,15 @@
     errorRecovery = null;
     // Development-only visual fixtures render without Tauri, Runtime, or filesystem access.
     if (devFixture) {
-      status = createDevFixtureStatus(devFixture);
+      // This fixture intentionally has NO SystemStatus. It never calls Tauri.
+      if (devFixture === 'status-unavailable') {
+        status = null;
+        reportError(new Error('Status request timed out. Refresh to retry.'));
+      } else {
+        status = createDevFixtureStatus(devFixture);
+        lastFullStatusRefreshSucceeded = true;
+      }
       statusPresentationNowMs = FIXTURE_NOW_MS;
-      lastFullStatusRefreshSucceeded = true;
       loading = false;
       return;
     }
@@ -869,7 +875,7 @@
           navigateActivity={() => navigate('Analytics')}
         />
 
-      {:else if !status}
+      {:else if !status && page !== 'Support'}
         <main class="page-content">
           <section class="message-state">
             <div class="message-icon danger">!</div>
@@ -882,7 +888,7 @@
           </section>
         </main>
 
-      {:else if page === 'Overview'}
+      {:else if page === 'Overview' && status}
         <WorkspacePage
           {status} {loading} {busyAction} {openingModelId} {statusPresentationNowMs} {progressStage} {statusProbeFailures}
           {pluginApprovalNeeded} {migrationConflict} {migrationConflictKind} {setupStaged}

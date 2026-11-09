@@ -3,7 +3,7 @@
   import { compatibilityLabel, productMode, productHeadline, productMessage, aiStatusPresentation, type ManagedAction, type DesktopErrorRecovery } from './desktopPresentation';
   import type { SystemStatus, DesktopBusyAction, DesktopOperationRecord } from './desktopTypes';
 
-  export let status: SystemStatus;
+  export let status: SystemStatus | null;
   export let loading: boolean;
   export let busyAction: DesktopBusyAction | null;
   export let statusPresentationNowMs: number;
@@ -24,24 +24,33 @@
   export let migrateLegacySetup: () => Promise<void>;
   export let openAnalytics: () => void;
 
-  $: aiStatus = aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs);
+  $: aiStatus = status ? aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs) : null;
 </script>
 
 <main class="page-content settings-content">
-  {#if aiStatus.needsRefresh}
+  {#if !status}
+    <section class="support-banner" role="status">
+      <span class="support-banner-dot" aria-hidden="true"></span>
+      <div>
+        <strong>Desktop status unavailable</strong>
+        <span id="support-unavailable-description">The latest Desktop state could not be read. Blockbench, plugins, and AI connection have not been verified. Refresh status or export diagnostics; installation changes remain unavailable.</span>
+      </div>
+      <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh status</button>
+    </section>
+  {:else if status && aiStatus?.needsRefresh}
     <section class="support-banner" role="status">
       <span class="support-banner-dot" aria-hidden="true"></span>
       <div><strong>{aiStatus.headline}</strong><span id="support-stale-status-description">{aiStatus.detail}</span></div>
       <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
     </section>
-  {:else if productMode(status) !== 'ready'}
+  {:else if status && productMode(status) !== 'ready'}
     <div class="support-banner">
       <span class="support-banner-dot"></span>
       <div><strong>{productHeadline(status)}</strong><span>{productMessage(status)}</span></div>
     </div>
   {/if}
 
-  {#if migrationConflict}
+  {#if status && migrationConflict}
     <section class="settings-section">
       <h2>Review previous {migrationConflictKind === 'plugin' ? 'plugin' : 'AI client'}</h2>
       <p>Migration backs up the previous client entry and plugin in the installation journal, preserves other client settings, and waits for active sessions to finish before switching components.</p>
@@ -63,7 +72,7 @@
           <strong>Next step</strong>
           <p>{errorRecovery.nextStep}</p>
           <small>Still to verify: {errorRecovery.confirmationNeeded}</small>
-          {#if errorRecovery.action === 'refresh-status' && !aiStatus.needsRefresh}
+          {#if status && errorRecovery.action === 'refresh-status' && !aiStatus?.needsRefresh}
             <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh status</button>
           {/if}
         </div>
@@ -80,9 +89,9 @@
     <h2>Troubleshooting</h2>
     <div class="settings-row">
       <div><strong>Blockbench installation</strong><span>Choose the real installed Blockbench.exe if it moved or multiple installations were detected. Self-extracting *_portable.exe launchers are not supported yet. Close Blockbench before changing this. Your project files and managed plugin stay untouched.</span></div>
-      <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={busyAction !== null || statusProbeFailures >= 2} aria-describedby={statusProbeFailures >= 2 ? 'support-stale-status-description' : undefined}>{busyAction === 'choose-editor' ? 'Selecting…' : 'Choose Blockbench…'}</button>
+      <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={!status || busyAction !== null || statusProbeFailures >= 2} aria-describedby={!status ? 'support-unavailable-description' : statusProbeFailures >= 2 ? 'support-stale-status-description' : undefined}>{busyAction === 'choose-editor' ? 'Selecting…' : 'Choose Blockbench…'}</button>
     </div>
-    {#if status.manager_available}
+    {#if status?.manager_available}
       <div class="settings-row">
         <div><strong>Installed Blockbench plugin</strong><span>Show the managed plugin file only when reviewing setup or trust.</span></div>
         <button class="secondary-button" onclick={showPluginFile} disabled={busyAction !== null || statusProbeFailures >= 2} aria-describedby={statusProbeFailures >= 2 ? 'support-stale-status-description' : undefined}>Show plugin file</button>
@@ -93,14 +102,14 @@
       <button class="secondary-button" onclick={exportDiagnostics} disabled={busyAction !== null}>{busyAction === 'export-diagnostics' ? 'Exporting…' : 'Export diagnostics'}</button>
     </div>
 
-    {#if status.blockbench.compatibility?.status === 'unsupported' || status.blockbench.compatibility?.status === 'invalid'}
+    {#if status && (status.blockbench.compatibility?.status === 'unsupported' || status.blockbench.compatibility?.status === 'invalid')}
       <div class="settings-row compact"><div><strong>Blockbench support</strong><span>{compatibilityLabel(status.blockbench.compatibility?.status)}</span></div></div>
     {/if}
-    {#if status.manager_available && status.managed?.tls_ready === false}
+    {#if status && status.manager_available && status.managed?.tls_ready === false}
       <div class="settings-row compact"><div><strong>Local security</strong><span>Needs setup</span></div></div>
     {/if}
 
-    {#if status.manager_available}
+    {#if status?.manager_available}
       <details class="advanced-recovery">
         <summary><span><strong>Advanced recovery</strong><small>Use only if normal setup or updates cannot finish.</small></span><span class="disclosure-state"><span class="when-closed">Show</span><span class="when-open">Hide</span></span></summary>
         <div class="recovery-list">
@@ -115,21 +124,27 @@
   <section class="settings-section">
     <div class="settings-heading">
       <h2>About</h2>
-      {#if !aiStatus.needsRefresh && !(error && errorRecovery?.action === 'refresh-status')}
+      {#if status && aiStatus && !aiStatus.needsRefresh && !(error && errorRecovery?.action === 'refresh-status')}
         <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
       {/if}
     </div>
     <div class="definition-rows">
-      <div class="definition-row"><span>AI status</span><strong class:status-warning={statusProbeFailures >= 2}>{aiStatus.label}</strong></div>
+      {#if status && aiStatus}
+        <div class="definition-row"><span>AI status</span><strong class:status-warning={statusProbeFailures >= 2}>{aiStatus.label}</strong></div>
+      {:else}
+        <div class="definition-row"><span>System observation</span><strong class="status-warning">Unavailable</strong></div>
+      {/if}
       <div class="definition-row"><span>LazyDesigner Desktop version</span><strong>{desktopVersion}</strong></div>
-      {#if status.desktop_build}<div class="definition-row"><span>Desktop build</span><code>{status.desktop_build.source_sha.slice(0,12)}</code></div>{/if}
-      <div class="definition-row"><span>Blockbench version</span><strong>{status.blockbench.version ?? 'Unavailable'}</strong></div>
-      {#if status.managed?.installed?.source_sha}<div class="definition-row"><span>Managed build</span><code>{status.managed.installed.source_sha.slice(0,12)}</code></div>{/if}
-      {#if status.plugin_integrity !== 'ready'}<div class="definition-row"><span>Blockbench plugin</span><strong class="status-warning">{status.plugin_integrity === 'missing' ? 'Missing' : status.plugin_integrity === 'modified' ? 'Modified' : 'Needs attention'}</strong></div>{/if}
+      {#if status}
+        {#if status.desktop_build}<div class="definition-row"><span>Desktop build</span><code>{status.desktop_build.source_sha.slice(0,12)}</code></div>{/if}
+        <div class="definition-row"><span>Blockbench version</span><strong>{status.blockbench.version ?? 'Unavailable'}</strong></div>
+        {#if status.managed?.installed?.source_sha}<div class="definition-row"><span>Managed build</span><code>{status.managed.installed.source_sha.slice(0,12)}</code></div>{/if}
+        {#if status.plugin_integrity !== 'ready'}<div class="definition-row"><span>Blockbench plugin</span><strong class="status-warning">{status.plugin_integrity === 'missing' ? 'Missing' : status.plugin_integrity === 'modified' ? 'Modified' : 'Needs attention'}</strong></div>{/if}
+      {/if}
     </div>
   </section>
 
-  {#if status.managed?.installed}
+  {#if status?.managed?.installed}
     <section class="settings-section">
       <h2>Installation alignment</h2>
       <p>{status.managed.alignment?.state === 'aligned' ? 'Managed package, plugin and AI client configuration match. Connection readiness is checked separately.' : 'The installed components have not been verified as a matching set. Review the details before preparing the AI connection.'}</p>

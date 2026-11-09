@@ -3,7 +3,7 @@ import type { SystemStatus, AnalyticsOverview } from './desktopTypes';
 /** Fixed browser-only comparison clock; never represents the real machine clock. */
 export const FIXTURE_NOW_MS = 1_730_000_000_000;
 
-export type DevFixture = 'ready' | 'ready-no-active' | 'ready-continue' | 'ready-aged' | 'many-projects' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
+export type DevFixture = 'ready' | 'ready-no-active' | 'ready-continue' | 'ready-aged' | 'many-projects' | 'status-unverified' | 'status-unavailable' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
 
 export function applyDevFixture(base: SystemStatus, fixture: DevFixture): SystemStatus {
   const next = structuredClone(base);
@@ -155,6 +155,9 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
 
 /** Browser-only baseline. Never treated as an authoritative machine observation. */
 export function createDevFixtureStatus(fixture: DevFixture): SystemStatus {
+  if (fixture === 'status-unavailable') {
+    throw new Error('No SystemStatus exists in the unavailable-status fixture; render it through App.');
+  }
   const baseline: SystemStatus = {
     schema: 1,
     product_state: 'welcome',
@@ -237,7 +240,7 @@ export function createDevAnalyticsFixture(): AnalyticsOverview {
 export function devFixtureFromLocation(development: boolean, search: string): DevFixture | null {
   if (!development) return null;
   const value = new URLSearchParams(search).get('fixture');
-  const allowed: DevFixture[] = ['ready','ready-no-active','ready-continue','ready-aged','many-projects','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
+  const allowed: DevFixture[] = ['ready','ready-no-active','ready-continue','ready-aged','many-projects','status-unverified','status-unavailable','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
   return allowed.includes(value as DevFixture) ? value as DevFixture : null;
 }
 

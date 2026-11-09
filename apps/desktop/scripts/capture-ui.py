@@ -28,6 +28,8 @@ SCENARIOS = (
     ("ready-continue", "workspace"),
     ("status-unverified", "workspace"),
     ("status-unverified", "support"),
+    ("status-unavailable", "workspace"),
+    ("status-unavailable", "support"),
     ("ready", "support"),
     ("ready", "analytics"),
     ("approval-required", "workspace"),
@@ -139,6 +141,15 @@ def inspect_action_states(page, fixture, view):
         ("status-unverified", "support"): {
             "Choose Blockbench…": False,
             "Refresh": True,
+            "Export diagnostics": True,
+        },
+        ("status-unavailable", "workspace"): {
+            "Try again": True,
+            "Open Model…": True,
+        },
+        ("status-unavailable", "support"): {
+            "Refresh status": True,
+            "Choose Blockbench…": False,
             "Export diagnostics": True,
         },
     }.get((fixture, view), {})
@@ -261,6 +272,41 @@ def inspect_model_task_priority(page, fixture, view):
         button = page.get_by_role("button", name="Open Model…", exact=True)
         if button.count() != 1 or "primary-button" not in (button.get_attribute("class") or ""):
             issues.append("No current/continue model should offer primary direct picker")
+    return issues
+
+
+def inspect_unavailable_support(page, fixture, view):
+    """No machine snapshot: Support remains navigable and read-only recovery works."""
+    if (fixture, view) != ("status-unavailable", "support"):
+        return []
+    issues = []
+    if page.get_by_text("Desktop status unavailable", exact=True).count() != 1:
+        issues.append("Unavailable Support needs one explicit status banner")
+    if page.locator("#support-unavailable-description").count() != 1:
+        issues.append("Disabled machine actions need a nearby uncertainty explanation")
+    if page.get_by_role("heading", name="Troubleshooting", exact=True).count() != 1:
+        issues.append("Troubleshooting must remain visible without Desktop status")
+    if page.get_by_role("heading", name="About", exact=True).count() != 1:
+        issues.append("Desktop version should remain available even without machine state")
+    if page.get_by_text("System observation", exact=True).count() != 1:
+        issues.append("Unknown Desktop state must not become a fake AI status")
+    if page.locator(".operation-attention").count() != 0:
+        issues.append("Support must not duplicate the same classified error in the global banner")
+    choose = page.get_by_role("button", name="Choose Blockbench…", exact=True)
+    if choose.count() != 1 or choose.is_enabled():
+        issues.append("Installation selection must be blocked until status is verified")
+    elif choose.get_attribute("aria-describedby") != "support-unavailable-description":
+        issues.append("Blocked installation selection needs a labelled explanation")
+    for action in ("Restore", "Repair", "Recover", "Back up and migrate previous setup"):
+        if page.get_by_role("button", name=action, exact=True).count() != 0:
+            issues.append("Native maintenance action exposed without a status snapshot: " + action)
+    # Navigation is read-only. Do not click Refresh, Export, file pickers or maintenance.
+    page.get_by_role("button", name="Workspace", exact=True).click()
+    if page.get_by_role("heading", name="LazyDesigner is unavailable", exact=True).count() != 1:
+        issues.append("Workspace must explain missing state after safe navigation")
+    page.get_by_role("button", name="Support", exact=True).click()
+    if page.get_by_text("Desktop status unavailable", exact=True).count() != 1:
+        issues.append("Returning to Support lost its recovery controls")
     return issues
 
 
@@ -1036,6 +1082,11 @@ def main():
                         }:
                             entry["modelTaskPriorityChecks"] = {"issues": task_priority_issues}
                         for issue in task_priority_issues:
+                            failures.append(name + ": " + issue)
+                        unavailable_support_issues = inspect_unavailable_support(page, fixture, view)
+                        if (fixture, view) == ("status-unavailable", "support"):
+                            entry["unavailableSupportChecks"] = {"issues": unavailable_support_issues}
+                        for issue in unavailable_support_issues:
                             failures.append(name + ": " + issue)
                         first_run_issues = inspect_first_run(page, fixture, view)
                         if fixture == "fresh-install" and view == "workspace":
