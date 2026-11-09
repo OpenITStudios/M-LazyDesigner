@@ -429,20 +429,6 @@
       </div>
     </div>
     <div class="editor-controls" role="group" aria-label="Editor actions and panels">
-      <button type="button" bind:this={explorerToggle} class="dock-toggle" class:chosen={showProjects && !explorerRail}
-        aria-label="Show Projects"
-        title={canExpandProjects ? 'Expand or collapse Project Explorer' : 'Browse projects through Workspace at this width'}
-        disabled={explorerRail && !canExpandProjects}
-        aria-expanded={showProjects && !explorerRail}
-        aria-controls={showProjects ? 'ld-unified-explorer' : undefined}
-        onclick={() => { sidebarTab = 'projects'; if (diagnosticRail) expandDiagnostic(); }}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
-      <button type="button" bind:this={diagnosticToggle} class="dock-toggle" class:chosen={showTools && !diagnosticRail}
-        aria-label="Show Status"
-        title={canExpandDiagnostic ? 'Expand or collapse Inspector panel' : 'Use Support to inspect the connection at this width'}
-        disabled={diagnosticRail && !canExpandDiagnostic}
-        aria-expanded={showTools && !diagnosticRail}
-        aria-controls={showTools ? 'ld-unified-inspector' : undefined}
-        onclick={() => { sidebarTab = 'status'; if (diagnosticRail) expandDiagnostic(); }}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Status</span></button>
       <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
@@ -530,7 +516,7 @@
             <section id="ld-sidebar-projects" role="tabpanel" aria-labelledby="ld-sidebar-projects-tab"
               hidden={sidebarTab !== 'projects'} class="sidebar-page explorer">
         <div class="pane-heading">
-          <h3 tabindex="-1" bind:this={explorerHeading}>Projects</h3>
+          <h3 tabindex="-1" bind:this={explorerHeading}>Your projects</h3>
           <div class="pane-actions">
              <button type="button" title="Add existing project folder" aria-label="Add Project Folder"
               disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
@@ -550,7 +536,7 @@
           <div class="search-controls">
             <span class="search-icon" aria-hidden="true"><EditorChromeIcon name="search"/></span>
             <input id="ld-unified-model-search" bind:this={searchInput} type="search"
-              placeholder="Find model or project…" bind:value={search} onkeydown={searchKeydown}
+              placeholder="Search models…" bind:value={search} onkeydown={searchKeydown}
               aria-describedby="ld-unified-search-count ld-unified-search-help"/>
             {#if search.trim()}
               <button type="button" aria-label="Clear project search" title="Clear search" onclick={clearSearch}>×</button>
@@ -587,10 +573,7 @@
                       aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
                     <span class="project-icon" aria-hidden="true"><EditorChromeIcon name="folder"/></span>
                     <span class="project-name" title={project.name}>{project.name}</span>
-                    {#if active?.project_id === project.id}
-                      <span class="project-active-indicator" aria-hidden="true" title="Contains current model">●</span>
-                    {/if}
-                  </button>
+                   </button>
                   <button type="button" class="project-actions-toggle"
                     data-project-id={project.id}
                     aria-label={'Show actions for project ' + project.name}
@@ -634,8 +617,7 @@
                         <span class="model-state" role="status">Opening…</span>
                       {:else}
                         {#if model.active}
-                          <span class="model-current-indicator" title="Current model at last observation"
-                            aria-hidden="true">●</span>
+                          <span class="model-current-indicator" title="Current model at last observation">Active</span>
                         {/if}
                         {#if !model.exists}
                           <span class="model-state warning" title="File unavailable">Missing</span>
@@ -1304,4 +1286,40 @@
   .sidebar-footer .connection-status{gap:0}
   .sidebar-footer .connection-status i{display:block}
   .unified-sidebar.rail{padding:5px 3px}
+
+  /* V2: quiet navigation, single right sidebar, contextual project commands. */
+  .unified-sidebar{background:#15171b}
+  .sidebar-brand{height:48px;font-size:13px}
+  .sidebar-tabs{margin:14px 0 12px;gap:8px}
+  .sidebar-tabs button{height:40px;border-radius:6px}
+  .sidebar-tabs button.selected{background:#24262c}
+  .sidebar-page .pane-heading{height:30px;margin:6px -2px 7px}
+  .sidebar-page .pane-heading h3{font-size:11px;color:var(--ed-muted-soft);font-weight:600}
+  .sidebar-page .search-controls{margin:0 0 6px}
+  .sidebar-page .explorer input,.sidebar-page.explorer input{min-height:32px;background:#1b1e23;border-color:#282c33;border-radius:5px}
+  .sidebar-page .project-group{position:relative}
+  .sidebar-page .project-line{min-height:32px}
+  .sidebar-page .project-expand{height:32px;font-weight:550}
+  .sidebar-page .project-actions-toggle{opacity:0}
+  .sidebar-page .project-line:hover .project-actions-toggle,
+  .sidebar-page .project-line:focus-within .project-actions-toggle,
+  .sidebar-page .project-actions-toggle[aria-expanded="true"]{opacity:1}
+  .sidebar-page .project-inline-actions{
+    position:absolute;z-index:8;right:4px;top:32px;display:grid;gap:2px;
+    min-width:128px;margin:0;padding:5px;border:1px solid #373b44;
+    border-radius:6px;background:#252830;box-shadow:0 9px 22px rgba(0,0,0,.4);
+  }
+  .sidebar-page .project-inline-actions button{
+    min-height:30px;padding:6px 9px;text-align:left;border:0;border-radius:3px;
+    background:transparent;font-size:11px
+  }
+  .sidebar-page .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .model-line{min-height:30px}
+  .sidebar-page .model-line.current{background:#2a2e39;border-radius:5px}
+  .sidebar-page .model-current-indicator{
+    width:auto;margin-right:5px;color:#b7c5dc;font-size:10px;white-space:nowrap
+  }
+  .sidebar-page .recent-group{margin-top:15px;padding-top:10px}
+  .sidebar-footer{min-height:48px}
+  @media(hover:none){.sidebar-page .project-actions-toggle{opacity:1}}
 </style>
