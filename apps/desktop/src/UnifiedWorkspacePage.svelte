@@ -462,6 +462,13 @@
     if (statusProbeFailures >= 2 || !status) return Promise.resolve();
     return afterDetach(addProjectFolder);
   }
+  function closeNewFolderForm() {
+    if (creatingFolderPending) return;
+    creatingFolder = false;
+    newFolderName = '';
+    folderNameError = '';
+    void tick().then(() => editorRoot.querySelector<HTMLButtonElement>('.sidebar-add-folder')?.focus());
+  }
   async function submitNewFolder(name: string) {
     if (creatingFolderPending || fixture || actionBusy || !status || statusProbeFailures >= 2) return;
     creatingFolderPending = true;
@@ -687,7 +694,7 @@
           <h3>Project folders</h3>
           <button type="button" class="sidebar-add-folder" title="Create a new empty project folder"
             disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-            onclick={() => { creatingFolder = !creatingFolder; folderNameError = ''; }}><EditorChromeIcon name="add"/> New folder</button>
+            onclick={() => { if (creatingFolder) closeNewFolderForm(); else { creatingFolder = true; folderNameError = ''; void tick().then(() => editorRoot.querySelector<HTMLInputElement>('#ld-new-folder-name')?.focus()); } }}><EditorChromeIcon name="add"/> New folder</button>
         </div>
         {#if creatingFolder}
           <form class="create-folder-form" onsubmit={(event) => {
@@ -704,13 +711,14 @@
             <input id="ld-new-folder-name" type="text" maxlength="120"
               placeholder="e.g. Furniture Pack" bind:value={newFolderName} required
               aria-invalid={Boolean(folderNameError)}
+              aria-describedby={folderNameError ? 'ld-new-folder-error ld-new-folder-help' : 'ld-new-folder-help'}
               oninput={() => folderNameError = ''}
               disabled={creatingFolderPending}
-              onkeydown={(event) => { if (event.key === 'Escape' && !creatingFolderPending) { creatingFolder = false; newFolderName = ''; folderNameError = ''; } }}/>
-            {#if folderNameError}<p class="folder-name-error" role="alert">{folderNameError}</p>{/if}
-            <p>Choose the parent location next. This creates a folder only, not a model.</p>
+              onkeydown={(event) => { if (event.key === 'Escape' && !creatingFolderPending) { event.preventDefault(); closeNewFolderForm(); } }}/>
+            {#if folderNameError}<p id="ld-new-folder-error" class="folder-name-error" role="alert">{folderNameError}</p>{/if}
+            <p id="ld-new-folder-help">Choose the parent location next. This creates a folder only, not a model.</p>
             <div class="create-folder-actions">
-              <button type="button" disabled={creatingFolderPending} onclick={() => { creatingFolder = false; newFolderName = ''; folderNameError = ''; }}>Cancel</button>
+              <button type="button" disabled={creatingFolderPending} onclick={closeNewFolderForm}>Cancel</button>
               <button type="submit" disabled={!newFolderName.trim() || actionBusy || fixture || creatingFolderPending}>{creatingFolderPending ? 'Creating…' : 'Choose location…'}</button>
             </div>
           </form>
