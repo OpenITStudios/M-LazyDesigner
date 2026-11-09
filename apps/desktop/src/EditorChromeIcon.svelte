@@ -1,6 +1,9 @@
 <script lang="ts">
-  // Lightweight Svelte-native UI glyphs. No external icon font, screenshot,
-  // generated image, canvas or duplicated Blockbench editing surface.
+  // Official SVG contract: docs/01-product/ui-engineering-standard.md §B.
+  // Original 24x24, 16px default, currentColor outline glyphs; decorative
+  // only (parent button/link owns the accessible action label).
+  // No external icon font, screenshot, generated image, canvas, or duplicated
+  // Blockbench editing surface.
   export let name:
     | 'projects' | 'diagnostic' | 'focus' | 'workspace' | 'support'
     | 'model' | 'add' | 'chevron-left' | 'chevron-right'
