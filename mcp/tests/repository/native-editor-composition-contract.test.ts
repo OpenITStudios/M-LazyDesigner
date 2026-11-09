@@ -61,6 +61,28 @@ describe("Native Blockbench composition P0 owner and recovery contract", () => {
     expect(native).not.toContain("TerminateProcess(");
   });
 
+  test("pins the admitted Blockbench HWND and requires Rust detach even after a Svelte remount", async () => {
+    const [native, stage, unified, app] = await Promise.all([
+      source("../apps/desktop/src-tauri/src/blockbench_surface.rs"),
+      source("../apps/desktop/src/NativeEditorStage.svelte"),
+      source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+    ]);
+    expect(native).toContain("fn discover_manager() -> Result<usize, String>");
+    expect(native).toContain("let manager = discover_manager()?;");
+    expect(native).not.toContain("let manager = discover()?.0;");
+    expect(native).toContain("manager_thread: u32");
+    expect(native).toContain("manager_class: String");
+    expect(native).toContain("existing.verify_manager()?;");
+    expect(native).toContain("lease.verify_manager()?;");
+    expect(stage).not.toContain("(!presented && !uncertain)");
+    expect(stage).toContain("if (fixture) return true;");
+    expect(unified).toContain("if (!nativeStage) {");
+    expect(unified).not.toContain("nativeStage ? nativeStage.detach() : true");
+    expect(app).toContain("if (!nativeEditorStage) {");
+    expect(app).toContain("if (restored) finishNavigate(next)");
+  });
+
   test("coalesces native location changes and preserves an unverified failure", async () => {
     const [main, stage, app] = await Promise.all([
       source("../apps/desktop/src-tauri/src/main.rs"),

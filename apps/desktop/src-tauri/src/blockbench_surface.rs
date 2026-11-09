@@ -196,10 +196,8 @@ mod platform {
     }
 
     fn apply_aperture(lease: &mut Lease, target: Placement) -> Result<(), String> {
+        lease.verify_manager()?;
         let manager = lease.manager as Hwnd;
-        if unsafe { IsWindow(manager) } == 0 || pid_and_thread(manager).0 != std::process::id() {
-            return Err("LazyDesigner native window identity changed.".into());
-        }
         assert_owned_region(manager, lease.aperture)?;
         let updated = aperture_rect(window_rect(manager)?, target)?;
         let mut region = region_for(updated)?;
@@ -212,10 +210,8 @@ mod platform {
     }
 
     fn clear_aperture(lease: &mut Lease) -> Result<(), String> {
+        lease.verify_manager()?;
         let manager = lease.manager as Hwnd;
-        if unsafe { IsWindow(manager) } == 0 || pid_and_thread(manager).0 != std::process::id() {
-            return Err("LazyDesigner native window is unavailable for aperture restoration.".into());
-        }
         assert_owned_region(manager, lease.aperture)?;
         if lease.aperture.is_some() {
             if unsafe { SetWindowRgn(manager, ptr::null_mut(), 1) } == 0 {
@@ -291,6 +287,19 @@ mod platform {
             _ => Err(format!("Ambiguous {label} windows; no window was moved.")),
         }
     }
+    // An already-admitted single Blockbench lease must not discover or
+    // switch to another editor merely because a second Blockbench window opens.
+    // Resolve only the Tauri manager for subsequent layout observations.
+    fn discover_manager() -> Result<usize, String> {
+        let mut windows = Windows {
+            allowed: HashSet::new(), manager: Vec::new(), editors: Vec::new(),
+        };
+        if unsafe { EnumWindows(Some(enumerate), &mut windows as *mut _ as isize) } == 0 {
+            return Err(win_error("LazyDesigner manager enumeration failed"));
+        }
+        unique(&windows.manager, "LazyDesigner")
+    }
+
     fn discover() -> Result<(usize, usize, u32), String> {
         let allowed = crate::blockbench::native_surface_processes()?;
         if allowed.is_empty() {
@@ -354,6 +363,8 @@ mod platform {
     }
     struct Lease {
         manager: usize,
+        manager_thread: u32,
+        manager_class: String,
         editor: usize,
         pid: u32,
         birth: u64,
@@ -364,6 +375,16 @@ mod platform {
         aperture: Option<Aperture>,
     }
     impl Lease {
+        fn verify_manager(&self) -> Result<(), String> {
+            let hwnd = self.manager as Hwnd;
+            if unsafe { IsWindow(hwnd) } == 0
+                || pid_and_thread(hwnd) != (std::process::id(), self.manager_thread)
+                || window_class(hwnd) != self.manager_class {
+                return Err("LazyDesigner host window identity changed; native aperture ownership is unverified.".into());
+            }
+            Ok(())
+        }
+
         fn verify(&self) -> Result<(), String> {
             let hwnd = self.editor as Hwnd;
             if unsafe { IsWindow(hwnd) } == 0
@@ -539,7 +560,8 @@ mod platform {
             "present" | "update" => {
                 let viewport = view.ok_or("Native editor viewport is required.")?;
                 if let Some(existing) = state.as_mut() {
-                    let manager = discover()?.0;
+                    let manager = discover_manager()?;
+                    existing.verify_manager()?;
                     if existing.manager != manager {
                         return Err("LazyDesigner window changed; detach before presenting again.".into());
                     }
@@ -579,16 +601,22 @@ mod platform {
                 let target = placement(manager, viewport)?;
                 let original = window_rect(editor as Hwnd)?;
                 let candidate = Lease {
-                    manager, editor, pid, birth: process_birth(pid)?,
+                    manager,
+                    manager_thread: pid_and_thread(manager as Hwnd).1,
+                    manager_class: window_class(manager as Hwnd),
+                    editor, pid, birth: process_birth(pid)?,
                     thread: pid_and_thread(editor as Hwnd).1,
                     class: window_class(editor as Hwnd),
                     original,
                     original_frame_style: unsafe { GetWindowLongPtrW(editor as Hwnd, GWL_STYLE) },
                     aperture: None,
                 };
-                if candidate.thread == 0 || candidate.class.is_empty() {
-                    return Err("Blockbench window identity was incomplete.".into());
+                if candidate.thread == 0 || candidate.class.is_empty()
+                    || candidate.manager_thread == 0 || candidate.manager_class.is_empty() {
+                    return Err("Native editor or host window identity was incomplete.".into());
                 }
+                candidate.verify_manager()?;
+                candidate.verify()?;
                 let mut candidate = candidate;
                 let placement_result = place(&candidate, target, true)
                     .and_then(|_| apply_aperture(&mut candidate, target))
@@ -617,6 +645,9 @@ mod platform {
             assert!(super::unique(&[], "Blockbench").is_err());
             assert_eq!(super::unique(&[15], "Blockbench"), Ok(15));
             assert!(super::unique(&[15, 16], "Blockbench").is_err());
+            // The manager can be resolved independently of later editor count.
+            assert_eq!(super::unique(&[4], "LazyDesigner"), Ok(4));
+            assert!(super::unique(&[4, 5], "LazyDesigner").is_err());
         }
     }
     #[cfg(test)]

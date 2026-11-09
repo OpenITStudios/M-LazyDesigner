@@ -98,7 +98,13 @@
   // A composed native editor must be restored BEFORE showing another
   // application page, not merely after Svelte has removed its aperture.
   function navigate(next: Page) {
-    if (page === 'Editor' && next !== 'Editor' && nativeEditorStage) {
+    if (page === 'Editor' && next !== 'Editor') {
+      // A missing Svelte ref is NOT proof the Rust-owned native window lease
+      // ended. Never remove the native aperture without a Detach receipt.
+      if (!nativeEditorStage) {
+        reportError(new Error('Native Blockbench recovery control is unavailable; navigation was stopped.'));
+        return;
+      }
       void nativeEditorStage.detach().then(restored => {
         if (restored) finishNavigate(next);
       }).catch(reportError);

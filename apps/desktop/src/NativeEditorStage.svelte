@@ -102,7 +102,10 @@
 
   // Parent navigation awaits restoration before hiding the Editor page.
   export async function detach(): Promise<boolean> {
-    if (fixture || (!presented && !uncertain)) return true;
+    // Rust is authoritative: Svelte may have remounted and forgotten an
+    // existing native lease. An idempotent backend Detach is always required
+    // before leaving the Editor or opening a native file picker.
+    if (fixture) return true;
     if (busy) {
       problem = 'A native operation is still finishing. Use Detach again when it completes.';
       return false;

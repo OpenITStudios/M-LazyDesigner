@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Native Blockbench P0 — lease authority and recovery gate (2026-11-09)
+
+- **SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** The admitted Blockbench HWND is now pinned across subsequent UI layout observations; later windows do not force rediscovery/switching of the original editor. The Tauri manager alone is re-resolved and checked against its captured HWND/thread/class before any cutout mutation. New placement also verifies both fingerprints before mutation.
+- **Recovery gate:** All non-fixture Svelte Detach requests call the Rust owner even if local Svelte state says idle (a remount can lose that state). A missing nested native stage or parent Editor reference now blocks navigating away or starting native file actions rather than assuming restoration succeeded. No new IPC service, process launcher, test execution, CI, UI redesign or release.
+- **Proof ceiling:** Exact GitHub source review only. Rust/Svelte/Bun tests authored, not executed; Windows native launch/interaction, dialog, recovery after a crashed host and release validation remain UNVERIFIED. An external recovery helper is still absent; implement only with its own exact-identity and crash-window safeguards.
+
 ## Native Blockbench P0 — single-window Emulator alignment (2026-11-09)
 
 - **CURRENT PRIORITY / SOURCE_AUTHORED:** Stop further UI/UX polish until native Blockbench placement works. Adapt only the verified-HWND, frameless presentation, center hit-test, bounded z-order and independent exact frame/geometry/aperture recovery concepts from `M-Minecraft-Emulator/Local` at `f24a1aad133ad80eb15d779545805769eca492f4`. One original Blockbench window; no multi-instance, DWM preview tiles, parking, Minecraft process controller, input virtualization or custom editor.

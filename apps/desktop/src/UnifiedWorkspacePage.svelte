@@ -315,7 +315,12 @@
     void nativeStage.detach();
   }
   export async function detach(): Promise<boolean> {
-    return nativeStage ? nativeStage.detach() : true;
+    if (fixture) return true;
+    if (!nativeStage) {
+      localNotice = 'Native Blockbench recovery control is unavailable. Navigation is blocked to protect the original window.';
+      return false;
+    }
+    return nativeStage.detach();
   }
 
   // Native file pickers and Explorer must not appear behind a clipped window.
