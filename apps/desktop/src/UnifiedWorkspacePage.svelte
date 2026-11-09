@@ -221,9 +221,7 @@
     editorWidth = width;
     const band = editorLayoutBand(width);
     if (band !== layout.band) {
-      // Keep both sides present; crossing a responsive band chooses rail/full
-      // defaults, never removal of a companion. Moving into a rail also needs
-      // to restore focus from controls that are about to unmount.
+      // A single right dock owns both Projects and Status.
       const next = defaultEditorPanels(band);
       const focused = document.activeElement;
       const focusedExplorer = !next.projectsExpanded && focused instanceof Element
@@ -236,10 +234,9 @@
       return;
     }
     const rail = band === 'compact' ? 44 : 48;
-    const collapseProjects = layout.projectsExpanded
-      && !canExpandEditorDock(width, 'projects', layout.projectsWidth, rail);
+    const collapseProjects = false;
     const collapseDiagnostic = layout.diagnosticExpanded
-      && !canExpandEditorDock(width, 'tools', layout.toolsWidth, rail);
+      && !canExpandEditorDock(width, 'tools', layout.toolsWidth, 0);
     if (!collapseProjects && !collapseDiagnostic) return;
     const focused = document.activeElement;
     const focusedExplorer = collapseProjects && focused instanceof Element
@@ -535,10 +532,7 @@
         <div class="pane-heading">
           <h3 tabindex="-1" bind:this={explorerHeading}>Projects</h3>
           <div class="pane-actions">
-            <button type="button" aria-label="Collapse Project Explorer to icons"
-              title="Collapse Project Explorer to icons"
-              onclick={collapseExplorer}><EditorChromeIcon name="chevron-left"/></button>
-            <button type="button" title="Add existing project folder" aria-label="Add Project Folder"
+             <button type="button" title="Add existing project folder" aria-label="Add Project Folder"
               disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
               onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
           </div>
