@@ -149,6 +149,14 @@
         if (mounted) unlistenLayout = unlisten;
         else unlisten();
       }).catch(() => { /* Native events are advisory, never a new admission route. */ });
+      // One initial placement attempt after the host has laid out the native
+      // aperture. Never retry automatically after a deferred/uncertain result.
+      requestAnimationFrame(() => {
+        if (!mounted || presented || uncertain || busy) return;
+        const rect = aperture.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1) return;
+        void present();
+      });
     }
     return () => {
       mounted = false;
