@@ -145,8 +145,10 @@
   // Place menus within the visible sidebar instead of clipping the last rows.
   function fitContextMenu(id: string, kind: 'project' | 'model') {
     void tick().then(() => {
+      // An earlier open may have been superseded by another menu or tab.
+      if ((kind === 'project' ? projectActionsId : modelActionsId) !== id) return;
       const menu = editorRoot.ownerDocument.getElementById('ld-' + kind + '-actions-' + id);
-      if (!menu || !menu.isConnected) return;
+      if (!menu || !menu.isConnected || !editorRoot.contains(menu)) return;
       const viewport = menu.closest('.sidebar-content');
       if (!(viewport instanceof HTMLElement)) return;
       menu.classList.remove('open-up');
@@ -354,7 +356,16 @@
   }
   function dismissContextMenus(event: PointerEvent) {
     const target = event.target;
-    if (!(target instanceof Element)) return;
+    if (!(target instanceof Element)) {
+      projectActionsId = null;
+      modelActionsId = null;
+      return;
+    }
+    if (!editorRoot.contains(target)) {
+      projectActionsId = null;
+      modelActionsId = null;
+      return;
+    }
     if (!target.closest('.project-actions-toggle, .project-inline-actions')) projectActionsId = null;
     if (!target.closest('.model-actions-toggle, .model-context-actions')) modelActionsId = null;
   }
