@@ -135,8 +135,8 @@
     const element = target();
     if (element instanceof HTMLButtonElement && element.disabled) {
       // A narrow-window rail cannot expand without squeezing Blockbench.
-      // Send keyboard focus to the still-operable Workspace/Support route.
-      const fallback = element === explorerToggle ? '.workspace-return' : '.support-button';
+      // Send keyboard focus to the still-operable Support route.
+      const fallback = '.support-button';
       editorRoot?.querySelector<HTMLButtonElement>(fallback)?.focus();
       return;
     }
@@ -530,13 +530,11 @@
 <main class="unified-workspace" bind:this={editorRoot} aria-label="LazyDesigner unified editor workspace">
   <header class="editor-header" aria-label="LazyDesigner editor controls" aria-busy={navigationPending}>
     <div class="editor-leading">
-      <button class="workspace-return" type="button" aria-label="Return to Workspace"
-        title={nativePlacement === 'DETACHED' ? 'Workspace' : 'Restore original Blockbench window before opening Workspace'}
-        disabled={navigationPending} onclick={navigateWorkspace}>
-        <EditorChromeIcon name="workspace"/><span class="workspace-label">Workspace</span>
-      </button>
       <div class="editor-context">
-        <h1 tabindex="-1">Editor</h1>
+        <h1 tabindex="-1" title={active?.project_name ?? 'No active project'}>
+          LazyDesigner <span class="editor-title-divider" aria-hidden="true">—</span>
+          <span class="editor-project-title">{active?.project_name ?? 'No active project'}</span>
+        </h1>
         {#if navigationPending}
           <span class="subtitle" role="status">Restoring Blockbench window…</span>
         {:else if openingModelId}
@@ -1034,7 +1032,9 @@
   .workspace-return:hover,.editor-controls button:hover:not(:disabled){
     color:var(--ed-text);background:var(--ed-raised);
   }
-  .workspace-return {margin-right:2px}
+  .editor-context h1{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap}
+  .editor-project-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550;color:var(--ed-muted)}
+  .editor-title-divider{flex:none;color:var(--ed-muted-soft)}
   .workspace-return,.dock-toggle{line-height:1}
   .editor-controls .dock-toggle.chosen{
     background:var(--ed-select);color:var(--ed-text);border-bottom:1px solid var(--ed-accent);
