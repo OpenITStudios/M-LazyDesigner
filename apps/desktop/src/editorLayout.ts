@@ -19,7 +19,7 @@ export const INITIAL_EDITOR_LAYOUT: EditorLayoutState = {
   diagnosticExpanded: true,
   focusMode: false,
   projectsWidth: 220,
-  toolsWidth: 240,
+  toolsWidth: 260,
 };
 
 export function editorLayoutBand(width: number): EditorLayoutBand {
@@ -31,7 +31,7 @@ export function editorLayoutBand(width: number): EditorLayoutBand {
 
 export function defaultEditorPanels(band: EditorLayoutBand) {
   const expanded = band === 'wide' || band === 'standard';
-  return { projectsExpanded: expanded, diagnosticExpanded: expanded };
+  return { projectsExpanded: false, diagnosticExpanded: expanded };
 }
 
 export function editorDockWidth(dock: EditorDock, proposed: number): number {
