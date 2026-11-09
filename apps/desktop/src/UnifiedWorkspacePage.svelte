@@ -500,7 +500,7 @@
   function chooseModel(model: ProjectNavigationModel) {
     // Model IDs are revalidated by Rust. Never fake activation in the UI.
     if (model.active) {
-      if (fixture || actionBusy || statusProbeFailures >= 2) return Promise.resolve();
+      if (fixture || actionBusy || statusProbeFailures >= 2 || readinessOutdated) return Promise.resolve();
       return focusCurrentEditor();
     }
     return openModelSafely(model.id);
@@ -649,7 +649,7 @@
               <EditorChromeIcon name="folder"/>
               <strong>{active.project_name ?? 'Unassigned project'}</strong>
             </div>
-            {#if activeModelTarget?.exists && statusProbeFailures < 2}
+            {#if activeModelTarget?.exists && statusProbeFailures < 2 && !readinessOutdated}
               <button type="button" class="active-project-model active-project-focus"
                 title={'Focus ' + active.model_name + ' in Blockbench'}
                 disabled={actionBusy || fixture}
@@ -815,7 +815,7 @@
                         aria-label={(model.active ? 'Focus current model ' : 'Open model ') + model.name}
                         aria-current={model.active ? 'true' : undefined}
                         aria-busy={openingModelId === model.id}
-                        disabled={!model.exists || actionBusy || fixture || (model.active && statusProbeFailures >= 2)}
+                        disabled={!model.exists || actionBusy || fixture || (model.active && (statusProbeFailures >= 2 || readinessOutdated))}
                         onclick={() => void chooseModel(model)}>
                         <span class="model-symbol" aria-hidden="true"><EditorChromeIcon name="model"/></span>
                         <span class="model-name">{model.name}</span>
@@ -847,8 +847,8 @@
                             aria-label={'Actions for model ' + model.name}
                             onkeydown={(event) => closeModelActions(event, model.id)}>
                             <button type="button"
-                              disabled={!model.exists || actionBusy || fixture || (model.active && statusProbeFailures >= 2)}
-                              title={model.active && statusProbeFailures >= 2
+                              disabled={!model.exists || actionBusy || fixture || (model.active && (statusProbeFailures >= 2 || readinessOutdated))}
+                              title={model.active && (statusProbeFailures >= 2 || readinessOutdated)
                                 ? 'Refresh status before focusing the current model'
                                 : model.active ? 'Focus current model in Blockbench' : 'Open model in Blockbench'}
                               onclick={() => { modelActionsId = null; void chooseModel(model); }}>{model.active ? 'Focus model' : 'Open model'}</button>
