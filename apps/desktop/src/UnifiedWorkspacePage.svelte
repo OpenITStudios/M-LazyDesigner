@@ -1431,8 +1431,8 @@
   .sidebar-brand{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid var(--ed-border);color:var(--ed-text);font-size:13px}
   .sidebar-brand :global(svg){color:var(--ed-accent)}
   .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
-  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 0 8px}
-  .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:36px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:12px;cursor:pointer}
+  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 12px}
+  .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:40px;border:0;border-radius:6px;background:transparent;color:var(--ed-muted);font-size:13px;font-weight:550;cursor:pointer}
   .sidebar-tabs button.selected{background:var(--ed-raised);color:var(--ed-text);font-weight:650}
   .sidebar-tabs button:hover:not(.selected){background:var(--ed-select);color:var(--ed-text)}
   .sidebar-content{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
@@ -1453,9 +1453,6 @@
 
   /* V2: quiet navigation, single right sidebar, contextual project commands. */
   .unified-sidebar{background:#15171b}
-  .sidebar-tabs{margin:14px 0 12px;gap:8px}
-  .sidebar-tabs button{height:40px;border-radius:6px}
-  .sidebar-tabs button.selected{background:#24262c}
   .sidebar-page .pane-heading{height:30px;margin:6px -2px 7px}
   .sidebar-page .pane-heading h3{font-size:11px;color:var(--ed-muted-soft);font-weight:600}
   .sidebar-page .search-controls{margin:0 0 6px}
@@ -1488,7 +1485,6 @@
   /* V3: one obvious model-opening action, readable navigation at 260-300px. */
   .unified-sidebar{font-size:13px}
   .sidebar-brand{font-size:14px}
-  .sidebar-tabs button{font-size:13px;font-weight:550}
   .project-primary-action{display:flex;align-items:center;gap:7px;margin:4px 0 12px}
   .project-primary-action button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;border-radius:6px;cursor:pointer}
   .project-primary-action .sidebar-open-model{flex:1;justify-content:flex-start;padding:7px 11px;background:var(--color-button);color:var(--ed-text);font-size:13px;font-weight:650}
