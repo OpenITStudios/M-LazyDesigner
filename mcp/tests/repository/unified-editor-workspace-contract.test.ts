@@ -72,6 +72,8 @@ describe("Unified Editor P1 source-owned workspace", () => {
       '<EditorChromeIcon name="folder"/>',
       '<EditorChromeIcon name="search"/>',
       '<EditorChromeIcon name="more-horizontal"/>',
+      '<EditorChromeIcon name="folder-open"/>',
+      'class:has-reveal={model.exists}',
       "matching project",
       'class="tree-caret"',
       "projectsExpanded: true",
@@ -89,6 +91,19 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).not.toContain("Delete Project");
     expect(unified).not.toContain("model_path");
     expect(unified).not.toContain("fetch(");
+    expect(unified).toContain(".model-line.current {background:var(--ed-select);border-radius:2px}");
+    expect(unified).not.toContain("background:var(--ed-select);border-left:2px solid var(--ed-accent)");
+    expect(unified).toContain(".model-line.has-reveal:hover .reveal-model");
+    expect(unified).toContain(".model-line.has-reveal:focus-within .reveal-model");
+    expect(unified).toContain("@media(hover:none)");
+    expect(unified).toContain("@media(prefers-reduced-motion:reduce)");
+    expect(unified).toContain(".model-line.has-reveal:hover .reveal-model:disabled");
+    expect(unified).toContain(".model-line.has-reveal .reveal-model:disabled");
+    expect(unified).toContain("opacity:.52;pointer-events:none;cursor:default;");
+    expect(unified).toContain("position:absolute;top:0;right:1px;");
+    expect(unified).toContain("opacity:0;pointer-events:none;cursor:pointer;");
+    expect(unified).toContain("onclick={() => void showModelFile(model.id)}");
+    expect(unified).not.toContain('onclick={() => void showModelFile(model.id)}><EditorChromeIcon name="more-horizontal"/>');
   });
 
   test("Diagnostic has only readiness/issues and Activity has connection/observed statistics", async () => {
@@ -270,6 +285,11 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Project rows need the same folder icon system");
     expect(script).toContain("Filtered projects must stay visibly expanded without a misleading toggle");
     expect(script).toContain("Cleared search must hide the redundant project-count row");
+    expect(script).toContain("Model file action needs a truthful folder-open icon and label");
+    expect(script).toContain("Idle model file action must leave space for its model name");
+    expect(script).toContain("Disabled fixture model action must become visible but stay non-interactive on hover");
+    expect(script).toContain("Selected model must use Blockbench fill without an accent stripe");
+    expect(script).toContain("Synthetic fixture must not enable model file-reveal actions");
     expect(script).toContain('("ready-aged", "editor")');
     expect(script).toContain('("status-unverified", "editor")');
     expect(script).toContain("Diagnostic tabs lack arrow-key navigation");
@@ -296,6 +316,8 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain('<EditorChromeIcon name="search"/>');
     expect(unified).toContain('<EditorChromeIcon name="folder"/>');
     expect(unified).toContain('<EditorChromeIcon name="more-horizontal"/>');
+    expect(unified).toContain('<EditorChromeIcon name="folder-open"/>');
+    expect(icons).toContain("name === 'folder-open'");
     expect(icons).toContain("name === 'search'");
     expect(icons).toContain("name === 'more-horizontal'");
     expect(stage).toContain('data-native-editor-reservation="true"');

@@ -322,6 +322,24 @@ async function main() {
             ?.getBoundingClientRect().height ?? 0,
           modelRowHeight: explorer?.querySelector('.model-line')
             ?.getBoundingClientRect().height ?? 0,
+          modelSelectionMatchesBlockbench: (() => {
+            const active = explorer?.querySelector('.model-line.current');
+            return !active || (getComputedStyle(active).backgroundColor === "rgb(59, 62, 73)"
+              && getComputedStyle(active).borderLeftWidth === "0px");
+          })(),
+          modelRevealIsDirectContextAction: (() => {
+            const row = explorer?.querySelector('.model-line.has-reveal');
+            if (!row) return true; // Empty editor and unexpanded project are valid fixtures.
+            const reveal = row.querySelector('button.reveal-model');
+            return Boolean(reveal
+              && reveal.getAttribute('aria-label')?.startsWith('Show model ')
+              && reveal.getAttribute('aria-label')?.endsWith(' in Explorer')
+              && reveal.querySelector('svg')
+              && getComputedStyle(reveal).position === 'absolute'
+              && getComputedStyle(reveal).opacity === '0'
+              && getComputedStyle(reveal).pointerEvents === 'none'
+              && getComputedStyle(row).paddingRight === "0px");
+          })(),
           nativeBackground: center ? getComputedStyle(center).backgroundColor : null,
           theme: {
             ui: getComputedStyle(element.closest('.desktop-shell')?.querySelector('.unified-workspace') ?? element)
@@ -341,6 +359,10 @@ async function main() {
         ? sidePanels.explorerSearchCompact : true;
       checks.explorer_icons_consistent = dims.width >= 1320
         ? sidePanels.explorerTreeIconConsistency : true;
+      checks.blockbench_selected_model_row = dims.width < 1320
+        || sidePanels.modelSelectionMatchesBlockbench;
+      checks.model_reveal_context_action = dims.width < 1320
+        || sidePanels.modelRevealIsDirectContextAction;
       checks.active_model_name_readable_default = dims.width < 1320 || await frame
         .locator('#ld-unified-explorer')
         .evaluate(explorer => {

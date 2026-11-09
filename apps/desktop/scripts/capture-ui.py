@@ -625,6 +625,49 @@ def inspect_unified_editor(page, fixture, view):
             )
             if not readable:
                 issues.append("The active model's name is clipped in the default Project Explorer")
+    if fixture == "ready" and (not should_rail or explorer_expanded_for_check):
+        # The right-hand model icon is an actual Reveal in Explorer action,
+        # never an ellipsis that incorrectly suggests a context menu.
+        selected = explorer.locator(".model-line.current.has-reveal")
+        reveal = selected.locator("button.reveal-model")
+        if selected.count() != 1 or reveal.count() != 1:
+            issues.append("Selected model must expose its real file-reveal action")
+        else:
+            if (reveal.get_attribute("aria-label") != "Show model Modern Chair in Explorer"
+                    or reveal.locator("svg").count() != 1):
+                issues.append("Model file action needs a truthful folder-open icon and label")
+            if reveal.is_enabled():
+                issues.append("Synthetic fixture must not enable model file-reveal actions")
+            rest = selected.evaluate("""node => {
+              const action = node.querySelector('button.reveal-model');
+              const model = node.querySelector('.model-name');
+              return {
+                selectedBg: getComputedStyle(node).backgroundColor,
+                selectedBorder: getComputedStyle(node).borderLeftWidth,
+                opacity: getComputedStyle(action).opacity,
+                position: getComputedStyle(action).position,
+                rightPadding: getComputedStyle(node).paddingRight,
+                nameClipped: !!model && model.scrollWidth > model.clientWidth + 1
+              };
+            }""")
+            if (rest["selectedBg"] != "rgb(59, 62, 73)"
+                    or rest["selectedBorder"] != "0px"):
+                issues.append("Selected model must use Blockbench fill without an accent stripe")
+            if (rest["opacity"] != "0" or rest["position"] != "absolute"
+                    or rest["rightPadding"] != "0px"):
+                issues.append("Idle model file action must leave space for its model name")
+            if width >= 1320 and rest["nameClipped"]:
+                issues.append("Current model name is clipped in the default Explorer")
+            selected.hover()
+            revealed = selected.evaluate("""node => {
+              const action = node.querySelector('button.reveal-model');
+              return getComputedStyle(action).opacity === '0.52'
+                && getComputedStyle(action).pointerEvents === 'none'
+                && parseFloat(getComputedStyle(node).paddingRight) >= 28;
+            }""")
+            if not revealed:
+                issues.append("Disabled fixture model action must become visible but stay non-interactive on hover")
+            page.mouse.move(0, 0)
     if fixture in {"ready", "many-projects"} and (not should_rail or explorer_expanded_for_check):
         search = page.locator("#ld-unified-model-search")
         if search.count() != 1:

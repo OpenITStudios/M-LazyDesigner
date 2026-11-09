@@ -565,7 +565,7 @@
                   <p class="row-hint">Folder unavailable; shortcut preserved.</p>
                 {:else if expanded(project) || search.trim()}
                   {#each visibleProjectModels(project, search) as model (model.id)}
-                    <div class:current={model.active} class="model-line">
+                    <div class:current={model.active} class:has-reveal={model.exists} class="model-line">
                       <button type="button" class="model-open" title={model.name}
                         aria-label={(model.active ? 'Focus current model ' : 'Open model ') + model.name}
                         aria-current={model.active ? 'true' : undefined}
@@ -592,7 +592,7 @@
                         <button type="button" class="reveal-model" disabled={actionBusy || fixture}
                           title={'Show ' + model.name + ' in Explorer'}
                           aria-label={'Show model ' + model.name + ' in Explorer'}
-                          onclick={() => void showModelFile(model.id)}><EditorChromeIcon name="more-horizontal"/></button>
+                          onclick={() => void showModelFile(model.id)}><EditorChromeIcon name="folder-open"/></button>
                       {/if}
                     </div>
                   {/each}
@@ -1004,11 +1004,11 @@
   .project-name,.model-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* One compact action affordance preserves project-name width; its commands
      are expanded as normal layout content, never over the native cutout. */
-  .project-actions-toggle,.reveal-model {
+  .project-actions-toggle {
     display:grid;place-items:center;flex:none;width:26px;height:28px;
     border:0;border-radius:3px;background:transparent;color:var(--ed-muted);cursor:pointer;
   }
-  .project-actions-toggle:hover,.reveal-model:hover,
+  .project-actions-toggle:hover,
   .project-actions-toggle[aria-expanded="true"]{background:var(--ed-raised);color:var(--ed-text)}
   .project-inline-actions{
     display:flex;align-items:center;flex-wrap:wrap;gap:5px;
@@ -1022,10 +1022,47 @@
   .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
   .project-inline-actions button:disabled{cursor:default}
   .project-inline-actions .pin-project[aria-pressed="true"]{color:#dfbc7c}
-  .model-line {display:flex;align-items:center;gap:2px;min-width:0;padding-left:13px;min-height:28px}
-  .model-line.current {
-    background:var(--ed-select);border-left:2px solid var(--ed-accent);
-    border-radius:2px;padding-left:11px;
+  .model-line {
+    position:relative;display:flex;align-items:center;gap:2px;
+    min-width:0;padding-left:13px;min-height:28px;
+  }
+  /* Match Blockbench's Outliner: selection fill, no additional left stripe.
+     The current-model dot remains independently visible and labelled. */
+  .model-line.current {background:var(--ed-select);border-radius:2px}
+  /* Reveal is a direct file action, never a fake ellipsis menu. It occupies
+     the row edge only when needed, preserving model-name width at rest. */
+  .model-line .reveal-model {
+    display:grid;place-items:center;position:absolute;top:0;right:1px;
+    width:26px;height:28px;padding:0;
+    border:0;border-radius:3px;background:transparent;color:var(--ed-muted);
+    opacity:0;pointer-events:none;cursor:pointer;
+    transition:opacity 80ms linear;
+  }
+  .model-line.has-reveal:hover,
+  .model-line.has-reveal:focus-within {padding-right:28px}
+  .model-line.has-reveal:hover .reveal-model,
+  .model-line.has-reveal:focus-within .reveal-model {
+    opacity:1;pointer-events:auto;
+  }
+  .model-line.has-reveal:hover .reveal-model:disabled,
+  .model-line.has-reveal:focus-within .reveal-model:disabled {
+    opacity:.52;pointer-events:none;cursor:default;
+  }
+  .model-line .reveal-model:hover:not(:disabled),
+  .model-line .reveal-model:focus-visible {
+    background:var(--ed-raised);color:var(--ed-text);
+  }
+  /* No hover on touch: keep the same file action discoverable and in flow
+     without relying on a pointer or an invisible keyboard focus target. */
+  @media(hover:none) {
+    .model-line.has-reveal {padding-right:28px}
+    .model-line.has-reveal .reveal-model {opacity:1;pointer-events:auto}
+    .model-line.has-reveal .reveal-model:disabled {
+      opacity:.52;pointer-events:none;cursor:default;
+    }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    .model-line .reveal-model {transition:none}
   }
   .model-open {
     display:flex;align-items:center;gap:6px;flex:1;min-width:0;border:0;border-radius:3px;

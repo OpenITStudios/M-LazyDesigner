@@ -85,6 +85,8 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("side_docks_have_accessible_names");
     expect(script).toContain("both_side_docks_present");
     expect(script).toContain("active_model_name_readable_default");
+    expect(script).toContain("blockbench_selected_model_row");
+    expect(script).toContain("model_reveal_context_action");
     expect(script).toContain("explorer_search_compact_when_unfiltered");
     expect(script).toContain("explorer_icons_consistent");
     expect(script).toContain("dock_responsive_rails");

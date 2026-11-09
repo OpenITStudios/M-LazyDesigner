@@ -4,7 +4,7 @@
   export let name:
     | 'projects' | 'diagnostic' | 'focus' | 'workspace' | 'support'
     | 'model' | 'add' | 'chevron-left' | 'chevron-right'
-    | 'folder' | 'activity' | 'search' | 'more-horizontal';
+    | 'folder' | 'folder-open' | 'activity' | 'search' | 'more-horizontal';
 </script>
 
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -30,6 +30,8 @@
     <path d="m9 18 6-6-6-6"/>
   {:else if name === 'folder'}
     <path d="M3 7V5h7l2 2h9v12H3z"/>
+  {:else if name === 'folder-open'}
+    <path d="M3 7V5h7l2 2h9v3"/><path d="M3 10h18l-2 9H5z"/>
   {:else if name === 'activity'}
     <path d="M3 12h4l3-7 4 14 3-7h4"/>
   {:else if name === 'search'}
