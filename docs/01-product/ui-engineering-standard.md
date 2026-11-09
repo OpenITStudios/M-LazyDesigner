@@ -156,3 +156,13 @@ Every interactive control has: accessible name, visible affordance, action desti
 - **Source gap found and corrected:** the main model row disabled focusing an active model when two or more status probes failed, but the same action in its context menu did not expose the same disabled state. The context action now uses the row's eligibility condition and an explanatory tooltip.
 - **Generalized rule:** when the same action appears in a row, context menu, toolbar or shortcut, all entry points must share the same eligibility and truthful disabled reason. The Rust operation remains authoritative; UI parity is an additional guard, not a security boundary.
 - **Unverified:** actual keyboard/pointer interactions and Windows native state are still `NOT_EXECUTED`.
+
+## O. Production Unified Editor gate — 2026-11-09
+
+**Context:** REMOTE_GITHUB; no native or executable tests run.
+
+- `App.svelte` mounts `UnifiedWorkspacePage` only when `page === 'Editor' && import.meta.env.DEV`. The approved UI and HTML preview do not mean the production shell contains the new Editor.
+- **Source hardening:** `navigate('Editor')` now returns early in production instead of allowing an unavailable Editor route to fall through to another page.
+- **Native boundary inspected:** `NativeEditorStage.svelte` uses Rust `native_editor_surface` receipts for present/update/detach. Detach requires an explicit `DETACHED` receipt; failure marks placement `UNCERTAIN` and blocks the caller's navigation. The source also has an initial placement attempt and resize-driven updates.
+- **Release blockers remain:** actual Windows native composition, detach/restore under rapid navigation, focus/keyboard ownership, resize/DPI and taskbar recovery, error-path behavior, executable tests, and an explicit product decision to expose the Editor in production. Do not remove `import.meta.env.DEV` until these gates have evidence.
+- **Current verdict:** design approved, source improvements authored, **production Unified Editor NOT ENABLED / NATIVE UNVERIFIED / PACKAGE NOT READY**.
