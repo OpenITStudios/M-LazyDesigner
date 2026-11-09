@@ -680,6 +680,29 @@ pub(crate) fn add_project_folder() -> Result<ProjectNavigationActionResult, Stri
     Ok(ProjectNavigationActionResult { status: register_project_folder_at(&path, &folder)? })
 }
 
+/// Creates only a project directory. Never creates a model or asset file.
+pub(crate) fn create_project_folder(name: &str) -> Result<ProjectNavigationActionResult, String> {
+    let name = validated_model_rename_stem(name)?;
+    let Some(parent) = FileDialog::new().pick_folder() else {
+        return Ok(ProjectNavigationActionResult { status: "CANCELLED" });
+    };
+    plain_project_folder(&parent)?;
+    let parent = fs::canonicalize(&parent)
+        .map_err(|_| "Selected parent folder is unavailable.".to_string())?;
+    plain_project_folder(&parent)?;
+    let target = parent.join(name);
+    // create_dir is non-overwriting; no mkdir -p and no implicit asset files.
+    fs::create_dir(&target).map_err(|error| {
+        format!("Could not create project folder (nothing was registered): {error}")
+    })?;
+    let prefs_path = project_navigation_preferences_path()
+        .ok_or_else(|| "Project folder created, but LOCALAPPDATA is unavailable; folder was not registered.".to_string())?;
+    match register_project_folder_at(&prefs_path, &target) {
+        Ok(status) => Ok(ProjectNavigationActionResult { status }),
+        Err(error) => Err(format!("Project folder was created at {}, but could not be added to Projects: {error}", target.display())),
+    }
+}
+
 fn project_root_for_model(path: &Path) -> Option<PathBuf> {
     if !is_bbmodel_path(path) {
         return None;
