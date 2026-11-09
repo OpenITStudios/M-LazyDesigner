@@ -83,6 +83,33 @@ describe("Native Blockbench composition P0 owner and recovery contract", () => {
     expect(app).toContain("if (restored) finishNavigate(next)");
   });
 
+  test("uses one authenticated debug-only recovery child before native window mutation", async () => {
+    const [native, main] = await Promise.all([
+      source("../apps/desktop/src-tauri/src/blockbench_surface.rs"),
+      source("../apps/desktop/src-tauri/src/main.rs"),
+    ]);
+    expect(native).toContain("pub fn maybe_run_recovery_helper() -> bool");
+    expect(native).toContain("pub(super) fn run_recovery_helper()");
+    expect(native).toContain("let checkpoint = RecoveryCheckpoint::from_lease(lease)?;");
+    expect(native).toContain("native_parent_pid()? != self.parent_pid");
+    expect(native).toContain("process_birth(self.parent_pid)? != self.parent_birth");
+    expect(native).toContain("process_image_path(self.parent_pid)?");
+    expect(native).toContain("lease.verify_editor_identity()?;");
+    expect(native).toContain('output.write_all(b"READY\\n")');
+    expect(native).toContain('input.write_all(b"DISARM\\n")');
+    expect(native).toContain("restore_window(&checkpoint.lease())?;");
+    expect(native).toContain("candidate.guard = Some(RecoveryGuard::start(&candidate)?);");
+    expect(native).toContain("guard.disarm_after_restoration()?;");
+    expect(native).toContain("fn original_editor_exited(lease: &Lease)");
+    expect(native).toContain("WaitForSingleObject(handle, 0)");
+    expect(native).toContain("fn helper_checkpoint_rejects_cross_process_or_unversioned_requests()");
+    expect(native).not.toContain("TerminateProcess(");
+    expect(native).not.toContain("SetParent(");
+    expect(native).not.toContain("SendInput(");
+    expect(main.indexOf("blockbench_surface::maybe_run_recovery_helper()"))
+      .toBeLessThan(main.indexOf("desktop_instance::acquire()"));
+  });
+
   test("coalesces native location changes and preserves an unverified failure", async () => {
     const [main, stage, app] = await Promise.all([
       source("../apps/desktop/src-tauri/src/main.rs"),

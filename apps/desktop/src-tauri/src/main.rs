@@ -268,6 +268,12 @@ async fn export_analytics() -> Result<analytics::AnalyticsExportResult, DesktopE
 }
 
 fn main() {
+    // Internal Windows debug-only recovery child must run before the single
+    // Desktop instance mutex and before Tauri/WebView startup. A source-only
+    // helper is not Windows acceptance or a release feature.
+    if blockbench_surface::maybe_run_recovery_helper() {
+        return;
+    }
     let _instance_guard = match desktop_instance::acquire()
         .expect("LazyDesigner Desktop instance ownership failed")
     {

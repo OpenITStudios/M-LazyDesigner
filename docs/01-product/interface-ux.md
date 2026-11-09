@@ -50,11 +50,18 @@ save/Undo, DPI or crash behavior.
 Detach attempts independent window/frame restoration and aperture removal
 even if the other fails, with forced manager/WebView child invalidation.
 Unknown recovery retains its original lease; it never promotes a new HWND,
-restarts an action automatically, or terminates Blockbench. The current
-in-process lease offers best-effort clean-exit recovery, not the Emulator's
-separate crash-surviving recovery helper. F3 Windows/native acceptance is
-required before enabling release. Until then all executable/native behavior
-remains UNVERIFIED; GitHub source checks are not a runtime PASS.
+restarts an action automatically, or terminates Blockbench. The single-window development source now also includes a separate,
+same-executable recovery helper with bounded parent-image/process-birth/HWND
+validation and a READY checkpoint **before** first native mutation. A clean
+Detach disarms the helper after verified frame/geometry/aperture recovery;
+an unexpected parent-pipe EOF asks the helper to restore only that original
+Blockbench HWND. A missing old HWND is considered retired only if the exact
+original process lifetime is verified exited; a live process with a replaced
+HWND stays unverified. This is source-level crash recovery design, **not
+proof that the helper launches, survives a crash or restores Windows state**.
+F3 Windows/native acceptance is required before enabling release. Until
+then all executable/native behavior remains UNVERIFIED; GitHub source
+checks are not a runtime PASS.
 
 ### Blockbench visual authority
 

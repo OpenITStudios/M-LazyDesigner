@@ -917,7 +917,16 @@ change native taskbar/extended styles, reparent, inject input, or assert that
 the editor is interactive under all focus conditions. The single original
 Blockbench HWND temporarily drops its outer frame flags for in-flow
 presentation; the lease restores those exact flags and original geometry
-independently of the manager-region cutout.
+independently of the manager-region cutout. Before the first mutation,
+the Windows development build starts one authenticated, same-executable
+recovery child holding only this exact Blockbench HWND's original frame
+and bounds. The helper remains armed over the original stdin pipe and,
+if the Desktop manager disappears, attempts to restore the same original
+window; successful normal Detach disarms and retires the helper first.
+A retired original process is accepted only after checking its exact PID
+creation lifetime and termination, not merely a missing HWND. No
+Minecraft multi-session controller, thumbnail worker, input injector,
+persistent recovery file, extra installer or Blockbench termination is added.
 
 Gate: `cfg(all(windows, debug_assertions))` on Rust actions and
 `import.meta.env.DEV` in Svelte navigation. All other builds
@@ -939,8 +948,9 @@ confirms that the native window is the mouse hit target at viewport center,
 using the existing lease identity, bounded topmost pulse only if covered,
 and explicit user-only foreground activation. Detach invalidates the
 manager/WebView child drawing even if the region was already cleared.
-The release app remains unmodified, and none of this proves Windows
-build, keyboard input, plugin save/undo, dialogs or crash recovery.
+The release app remains unmodified. The recovery helper is **source-authored
+only**: no Windows build, IPC handoff, helper crash/EOF restoration,
+keyboard input, plugin Save/Undo, dialogs or native acceptance is claimed.
 
 
 ## Unified Editor — Blockbench-native companion (development-only)

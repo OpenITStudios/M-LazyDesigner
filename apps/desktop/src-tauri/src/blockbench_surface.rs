@@ -38,7 +38,15 @@ fn receipt(status: &'static str, note: &'static str) -> EditorSurfaceReceipt {
 #[cfg(all(windows, debug_assertions))]
 mod platform {
     use super::{receipt, EditorSurfaceReceipt, EditorViewport};
-    use std::{collections::HashSet, ffi::c_void, io, ptr, sync::{Mutex, OnceLock}};
+    use std::{
+        collections::HashSet, ffi::c_void,
+        io::{self, BufRead, Read, Write},
+        process::{Child, ChildStdin, Command, Stdio},
+        ptr,
+        sync::{mpsc, Mutex, OnceLock},
+        time::{Duration, Instant},
+    };
+    use serde::{Deserialize, Serialize};
 
     type Hwnd = *mut c_void;
     type Handle = *mut c_void;
@@ -52,6 +60,13 @@ mod platform {
     const FRAME_FLAGS: isize = WS_CAPTION | WS_THICKFRAME | WS_MAXIMIZE;
     const WS_EX_TOPMOST: isize = 0x00000008;
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const SYNCHRONIZE: u32 = 0x00100000;
+    const ERROR_INVALID_PARAMETER: u32 = 87;
+    const WAIT_OBJECT_0: u32 = 0;
+    const WAIT_TIMEOUT: u32 = 258;
+    const TH32CS_SNAPPROCESS: u32 = 0x00000002;
+    const HELPER_ROLE: &str = "--lazydesigner-blockbench-recovery";
+    const HELPER_TIMEOUT: Duration = Duration::from_secs(3);
     const SWP_NOACTIVATE: u32 = 0x0010;
     const SWP_NOZORDER: u32 = 0x0004;
     const SWP_SHOWWINDOW: u32 = 0x0040;
@@ -68,8 +83,16 @@ mod platform {
     const RGN_ERROR: i32 = 0;
 
     #[repr(C)]
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
     struct Rect { left: i32, top: i32, right: i32, bottom: i32 }
+
+    #[repr(C)]
+    struct ProcessEntry {
+        dw_size: u32, cnt_usage: u32, process_id: u32,
+        default_heap_id: usize, module_id: u32, threads: u32,
+        parent_process_id: u32, base_priority: i32, flags: u32,
+        executable_name: [u16; 260],
+    }
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
     struct Point { x: i32, y: i32 }
@@ -114,6 +137,11 @@ mod platform {
         fn CloseHandle(process: Handle) -> i32;
         fn SetLastError(code: u32);
         fn GetLastError() -> u32;
+        fn WaitForSingleObject(handle: Handle, timeout_ms: u32) -> u32;
+        fn QueryFullProcessImageNameW(process: Handle, flags: u32, path: *mut u16, size: *mut u32) -> i32;
+        fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> Handle;
+        fn Process32FirstW(snapshot: Handle, entry: *mut ProcessEntry) -> i32;
+        fn Process32NextW(snapshot: Handle, entry: *mut ProcessEntry) -> i32;
     }
 
     #[link(name = "gdi32")]
@@ -248,6 +276,44 @@ mod platform {
         let size = unsafe { GetClassNameW(hwnd, buffer.as_mut_ptr(), buffer.len() as i32) };
         String::from_utf16_lossy(&buffer[..size.max(0) as usize])
     }
+    fn native_parent_pid() -> Result<u32, String> {
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot.is_null() || snapshot == (-1isize) as Handle {
+                return Err(win_error("Native recovery parent inventory unavailable"));
+            }
+            let mut entry: ProcessEntry = std::mem::zeroed();
+            entry.dw_size = std::mem::size_of::<ProcessEntry>() as u32;
+            let mut found = None;
+            let mut active = Process32FirstW(snapshot, &mut entry);
+            while active != 0 {
+                if entry.process_id == std::process::id() {
+                    found = Some(entry.parent_process_id);
+                    break;
+                }
+                active = Process32NextW(snapshot, &mut entry);
+            }
+            let _ = CloseHandle(snapshot);
+            found.filter(|pid| *pid != 0)
+                .ok_or_else(|| "Native recovery parent identity was not found.".into())
+        }
+    }
+
+    fn process_image_path(pid: u32) -> Result<std::path::PathBuf, String> {
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if handle.is_null() { return Err(win_error("Native recovery parent process unavailable")); }
+            let mut size = 32768u32;
+            let mut buffer = vec![0u16; size as usize];
+            let ok = QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut size);
+            let _ = CloseHandle(handle);
+            if ok == 0 || size == 0 {
+                return Err(win_error("Native recovery parent executable unavailable"));
+            }
+            Ok(std::path::PathBuf::from(String::from_utf16_lossy(&buffer[..size as usize])))
+        }
+    }
+
     fn process_birth(pid: u32) -> Result<u64, String> {
         unsafe {
             let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
@@ -362,6 +428,7 @@ mod platform {
         Ok(())
     }
     struct Lease {
+        guard: Option<RecoveryGuard>,
         manager: usize,
         manager_thread: u32,
         manager_class: String,
@@ -375,6 +442,21 @@ mod platform {
         aperture: Option<Aperture>,
     }
     impl Lease {
+        // Exact HWND/thread/class/process lifetime is enough for recovery;
+        // dynamic installation discovery must not block restoring an already
+        // admitted window after its desktop manager has crashed.
+        fn verify_editor_identity(&self) -> Result<(), String> {
+            let hwnd = self.editor as Hwnd;
+            if unsafe { IsWindow(hwnd) } == 0
+                || unsafe { GetWindow(hwnd, GW_OWNER) } != ptr::null_mut()
+                || pid_and_thread(hwnd) != (self.pid, self.thread)
+                || window_class(hwnd) != self.class
+                || process_birth(self.pid)? != self.birth {
+                return Err("The original Blockbench HWND identity was replaced or disappeared.".into());
+            }
+            Ok(())
+        }
+
         fn verify_manager(&self) -> Result<(), String> {
             let hwnd = self.manager as Hwnd;
             if unsafe { IsWindow(hwnd) } == 0
@@ -386,18 +468,266 @@ mod platform {
         }
 
         fn verify(&self) -> Result<(), String> {
-            let hwnd = self.editor as Hwnd;
-            if unsafe { IsWindow(hwnd) } == 0
-                || unsafe { GetWindow(hwnd, GW_OWNER) } != ptr::null_mut()
-                || !crate::blockbench::native_surface_processes()?.contains(&self.pid)
-                || pid_and_thread(hwnd) != (self.pid, self.thread)
-                || window_class(hwnd) != self.class
-                || process_birth(self.pid)? != self.birth {
-                return Err("The original Blockbench process/window identity changed; window placement was not retried.".into());
+            self.verify_editor_identity()?;
+            if !crate::blockbench::native_surface_processes()?.contains(&self.pid) {
+                return Err("Original Blockbench executable is no longer verified; placement was refused.".into());
             }
             Ok(())
         }
     }
+    // The recovery helper is the SAME signed/debug executable, but a separate
+    // Windows process. It never launches, closes, or edits Blockbench.
+    // Exactly one authenticated original HWND checkpoint is allowed.
+    #[derive(Serialize, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RecoveryCheckpoint {
+        schema: u32,
+        parent_pid: u32,
+        parent_birth: u64,
+        manager: usize,
+        manager_thread: u32,
+        manager_class: String,
+        editor: usize,
+        pid: u32,
+        birth: u64,
+        thread: u32,
+        class: String,
+        original: Rect,
+        original_frame_style: isize,
+    }
+    impl RecoveryCheckpoint {
+        fn from_lease(lease: &Lease) -> Result<Self, String> {
+            lease.verify_manager()?;
+            lease.verify()?;
+            if window_rect(lease.editor as Hwnd)? != lease.original {
+                return Err("Blockbench moved before its native recovery checkpoint was captured.".into());
+            }
+            if unsafe { GetWindowLongPtrW(lease.editor as Hwnd, GWL_STYLE) } & FRAME_FLAGS
+                != lease.original_frame_style & FRAME_FLAGS {
+                return Err("Blockbench frame changed before native recovery admission.".into());
+            }
+            Ok(Self {
+                schema: 1, parent_pid: std::process::id(),
+                parent_birth: process_birth(std::process::id())?,
+                manager: lease.manager, manager_thread: lease.manager_thread,
+                manager_class: lease.manager_class.clone(),
+                editor: lease.editor, pid: lease.pid, birth: lease.birth,
+                thread: lease.thread, class: lease.class.clone(),
+                original: lease.original, original_frame_style: lease.original_frame_style,
+            })
+        }
+        fn lease(&self) -> Lease {
+            Lease {
+                guard: None,
+                manager: self.manager, manager_thread: self.manager_thread,
+                manager_class: self.manager_class.clone(),
+                editor: self.editor, pid: self.pid, birth: self.birth,
+                thread: self.thread, class: self.class.clone(),
+                original: self.original, original_frame_style: self.original_frame_style,
+                aperture: None,
+            }
+        }
+        fn validate_parent_and_original_window(&self) -> Result<(), String> {
+            if self.schema != 1 || self.parent_pid == 0 || self.parent_pid == self.pid
+                || self.manager_thread == 0 || self.thread == 0
+                || self.manager_class.is_empty() || self.class.is_empty()
+                || self.manager_class.len() > 300 || self.class.len() > 300 {
+                return Err("Invalid native recovery checkpoint identity.".into());
+            }
+            if native_parent_pid()? != self.parent_pid
+                || process_birth(self.parent_pid)? != self.parent_birth
+                || pid_and_thread(self.manager as Hwnd) != (self.parent_pid, self.manager_thread)
+                || window_class(self.manager as Hwnd) != self.manager_class
+                || window_text(self.manager as Hwnd) != "LazyDesigner" {
+                return Err("Native recovery helper was not started by the verified LazyDesigner manager.".into());
+            }
+            let actual_exe = process_image_path(self.parent_pid)?.canonicalize()
+                .map_err(|error| format!("Native recovery parent image inaccessible: {error}"))?;
+            let own_exe = std::env::current_exe()
+                .and_then(|path| path.canonicalize())
+                .map_err(|error| format!("Native recovery helper image inaccessible: {error}"))?;
+            if !actual_exe.to_string_lossy().eq_ignore_ascii_case(&own_exe.to_string_lossy()) {
+                return Err("Native recovery helper parent executable differs from its own image.".into());
+            }
+            // Parent authenticated the installed Blockbench executable before
+            // handing off this checkpoint. The helper must use the immutable
+            // HWND/process birth fingerprint, not repeat optional Desktop
+            // installation discovery while the UI waits for READY.
+            let lease = self.lease();
+            lease.verify_editor_identity()?;
+            if window_rect(lease.editor as Hwnd)? != self.original
+                || unsafe { GetWindowLongPtrW(lease.editor as Hwnd, GWL_STYLE) } & FRAME_FLAGS
+                    != self.original_frame_style & FRAME_FLAGS {
+                return Err("Native Blockbench checkpoint no longer matches the original window.".into());
+            }
+            Ok(())
+        }
+    }
+
+    // Frame restore when the original Blockbench exited needs proof of that
+    // EXACT lifetime, not a missing HWND or an unsuccessful PID query.
+    fn original_editor_exited(lease: &Lease) -> Result<bool, String> {
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, 0, lease.pid);
+            if handle.is_null() {
+                if GetLastError() == ERROR_INVALID_PARAMETER { return Ok(true); }
+                return Err(win_error("Original Blockbench process exit could not be verified"));
+            }
+            let mut a = FileTime::default();
+            let mut b = FileTime::default();
+            let mut c = FileTime::default();
+            let mut d = FileTime::default();
+            let identity = GetProcessTimes(handle, &mut a, &mut b, &mut c, &mut d);
+            let wait = if identity != 0 { WaitForSingleObject(handle, 0) } else { u32::MAX };
+            let _ = CloseHandle(handle);
+            if identity == 0 {
+                return Err(win_error("Original Blockbench process birth could not be checked"));
+            }
+            let current = (u64::from(a.high) << 32) | u64::from(a.low);
+            if current != lease.birth { return Ok(true); }
+            match wait {
+                WAIT_OBJECT_0 => Ok(true),
+                WAIT_TIMEOUT => Ok(false),
+                _ => Err("Original Blockbench exit wait status was not verified.".into()),
+            }
+        }
+    }
+
+    fn bounded_helper_line(input: &mut impl BufRead) -> Result<Option<String>, String> {
+        let mut bytes = Vec::new();
+        let length = input.take(8193).read_until(b'\n', &mut bytes)
+            .map_err(|error| format!("Native recovery IPC read: {error}"))?;
+        if length == 0 { return Ok(None); }
+        if length > 8192 || bytes.last() != Some(&b'\n') {
+            return Err("Native recovery IPC command is truncated or oversized.".into());
+        }
+        String::from_utf8(bytes).map(Some)
+            .map_err(|_| "Native recovery IPC requires UTF-8.".into())
+    }
+
+    pub(super) fn run_recovery_helper() {
+        let stdin = io::stdin();
+        let mut input = stdin.lock();
+        let result = (|| -> Result<(), String> {
+            let first = bounded_helper_line(&mut input)?
+                .ok_or("Native recovery helper did not receive a checkpoint.")?;
+            let checkpoint: RecoveryCheckpoint = serde_json::from_str(&first)
+                .map_err(|_| "Native recovery checkpoint JSON was invalid.")?;
+            checkpoint.validate_parent_and_original_window()?;
+            let stdout = io::stdout();
+            let mut output = stdout.lock();
+            output.write_all(b"READY\n")
+                .map_err(|error| format!("Native recovery admission pipe failed: {error}"))?;
+            output.flush().map_err(|error| format!("Native recovery READY flush failed: {error}"))?;
+            // A clean DISARM follows verified parent-side frame + region
+            // restoration. Unexpected EOF means parent crash; recover only
+            // the original pinned Blockbench frame and bounds, not the host.
+            if !matches!(bounded_helper_line(&mut input), Ok(Some(ref line)) if line == "DISARM\n") {
+                restore_window(&checkpoint.lease())?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            // Parent reads only the first bounded admission reply. Post-READY
+            // failures cannot be presented as success or launch new surfaces.
+            let _ = writeln!(io::stdout(), "ERROR: {}", error.chars().take(250).collect::<String>());
+        }
+    }
+
+    struct RecoveryGuard {
+        child: Child,
+        input: Option<ChildStdin>,
+    }
+    impl RecoveryGuard {
+        fn start(lease: &Lease) -> Result<Self, String> {
+            let checkpoint = RecoveryCheckpoint::from_lease(lease)?;
+            let executable = std::env::current_exe()
+                .map_err(|error| format!("Native recovery helper executable unavailable: {error}"))?;
+            let mut child = Command::new(executable).arg(HELPER_ROLE)
+                .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
+                .spawn().map_err(|error| format!("Native recovery helper could not start: {error}"))?;
+            let input = child.stdin.take();
+            let stdout = child.stdout.take();
+            if input.is_none() || stdout.is_none() {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("Native recovery helper pipes were not admitted.".into());
+            }
+            let mut guard = Self { child, input };
+            let json = serde_json::to_string(&checkpoint)
+                .map_err(|error| format!("Native recovery checkpoint encode failed: {error}"))?;
+            if let Err(error) = guard.input.as_mut().unwrap()
+                .write_all(format!("{json}\n").as_bytes())
+                .and_then(|_| guard.input.as_mut().unwrap().flush()) {
+                let _ = guard.child.kill();
+                let _ = guard.child.wait();
+                return Err(format!("Native recovery handoff failed: {error}"));
+            }
+            let mut reader = io::BufReader::new(stdout.unwrap());
+            let (sender, receiver) = mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let mut response = String::new();
+                let result = reader.read_line(&mut response)
+                    .map_err(|error| format!("Native recovery helper acknowledgement failed: {error}"))
+                    .and_then(|bytes| {
+                        if bytes == 0 || bytes > 512 {
+                            Err("Native recovery helper acknowledgement was unavailable.".into())
+                        } else if response == "READY\n" { Ok(()) }
+                        else { Err(format!("Native recovery helper admission: {}", response.trim())) }
+                    });
+                let _ = sender.send(result);
+            });
+            let admitted = receiver.recv_timeout(HELPER_TIMEOUT)
+                .map_err(|_| "Native recovery helper admission timed out.".to_string())
+                .and_then(|result| result);
+            if let Err(error) = admitted {
+                let _ = guard.child.kill();
+                let _ = guard.child.wait();
+                return Err(error);
+            }
+            if let Err(error) = guard.confirm_alive() {
+                let _ = guard.child.kill();
+                let _ = guard.child.wait();
+                return Err(error);
+            }
+            Ok(guard)
+        }
+        fn confirm_alive(&mut self) -> Result<(), String> {
+            if self.child.try_wait()
+                .map_err(|error| format!("Native recovery helper state unavailable: {error}"))?
+                .is_some() {
+                return Err("Native recovery helper exited; Blockbench presentation is not protected.".into());
+            }
+            Ok(())
+        }
+        fn disarm_after_restoration(&mut self) -> Result<(), String> {
+            if self.child.try_wait().map_err(|error| error.to_string())?.is_some() {
+                return Ok(());
+            }
+            if let Some(mut input) = self.input.take() {
+                input.write_all(b"DISARM\n")
+                    .map_err(|error| format!("Native recovery DISARM write failed: {error}"))?;
+                input.flush()
+                    .map_err(|error| format!("Native recovery DISARM flush failed: {error}"))?;
+            }
+            // Closing the pipe is safe only after original frame/rect and
+            // host aperture were already verified restored.
+            let deadline = Instant::now() + HELPER_TIMEOUT;
+            loop {
+                if self.child.try_wait().map_err(|error| error.to_string())?.is_some() {
+                    return Ok(());
+                }
+                if Instant::now() >= deadline {
+                    // Only our own helper may be killed. The user's original
+                    // Blockbench process must never be terminated here.
+                    let _ = self.child.kill();
+                    return Err("Native recovery helper did not finish after Detach; retry recovery before another Place.".into());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
     static ACTIVE: OnceLock<Mutex<Option<Lease>>> = OnceLock::new();
     fn lease() -> &'static Mutex<Option<Lease>> { ACTIVE.get_or_init(|| Mutex::new(None)) }
 
@@ -456,7 +786,13 @@ mod platform {
     // Restore original frame flags while leaving Blockbench-owned modal flags
     // untouched. Always attempt original bounds even if frame restoration fails.
     fn restore_window(lease: &Lease) -> Result<(), String> {
-        lease.verify()?;
+        if let Err(window_error) = lease.verify_editor_identity() {
+            return match original_editor_exited(lease) {
+                Ok(true) => Ok(()), // Original process lifetime has ended; no HWND to mutate.
+                Ok(false) => Err(format!("Original Blockbench is still alive but its HWND changed: {window_error}")),
+                Err(exit_error) => Err(format!("{window_error}; original process exit remains unverified: {exit_error}")),
+            };
+        }
         let hwnd = lease.editor as Hwnd;
         let current = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
         let restored = restored_frame_style(current, lease.original_frame_style);
@@ -473,7 +809,7 @@ mod platform {
         } else { None };
         if let Some(error) = frame_error { return Err(error); }
         if let Some(error) = position_error { return Err(error); }
-        lease.verify()?;
+        lease.verify_editor_identity()?;
         verify_rect(hwnd, Placement {
             x: r.left, y: r.top, width: r.right-r.left, height: r.bottom-r.top,
         })?;
@@ -537,7 +873,15 @@ mod platform {
         let region_error = clear_aperture(lease).err();
         let window_error = restore_window(lease).err();
         match (region_error, window_error) {
-            (None, None) => Ok(()),
+            (None, None) => {
+                // Recovery helper must be fully stopped before a new lease
+                // may be admitted, even if the OS already restored geometry.
+                if let Some(guard) = lease.guard.as_mut() {
+                    guard.disarm_after_restoration()?;
+                    lease.guard = None;
+                }
+                Ok(())
+            },
             (Some(region), None) =>
                 Err(format!("Blockbench window restored but app aperture is unverified: {region}")),
             (None, Some(window)) =>
@@ -562,6 +906,9 @@ mod platform {
                 if let Some(existing) = state.as_mut() {
                     let manager = discover_manager()?;
                     existing.verify_manager()?;
+                    existing.guard.as_mut()
+                        .ok_or("Native recovery helper checkpoint missing; detach before editing.")?
+                        .confirm_alive()?;
                     if existing.manager != manager {
                         return Err("LazyDesigner window changed; detach before presenting again.".into());
                     }
@@ -601,6 +948,7 @@ mod platform {
                 let target = placement(manager, viewport)?;
                 let original = window_rect(editor as Hwnd)?;
                 let candidate = Lease {
+                    guard: None,
                     manager,
                     manager_thread: pid_and_thread(manager as Hwnd).1,
                     manager_class: window_class(manager as Hwnd),
@@ -618,9 +966,16 @@ mod platform {
                 candidate.verify_manager()?;
                 candidate.verify()?;
                 let mut candidate = candidate;
+                // Helper READY is required BEFORE the first native style,
+                // geometry or manager cutout mutation; the original saved
+                // window survives even if the Desktop manager exits.
+                candidate.guard = Some(RecoveryGuard::start(&candidate)?);
                 let placement_result = place(&candidate, target, true)
                     .and_then(|_| apply_aperture(&mut candidate, target))
-                    .and_then(|_| confirm_native_hit(&candidate, target, true));
+                    .and_then(|_| confirm_native_hit(&candidate, target, true))
+                    .and_then(|_| candidate.guard.as_mut()
+                        .ok_or("Native recovery helper was not retained.".to_string())?
+                        .confirm_alive());
                 if let Err(failure) = placement_result {
                     // The window and region can change independently. Attempt
                     // both restorations and retain any uncertain checkpoint.
@@ -650,6 +1005,42 @@ mod platform {
             assert!(super::unique(&[4, 5], "LazyDesigner").is_err());
         }
     }
+    #[cfg(test)]
+    mod recovery_identity_tests {
+        use super::*;
+        #[test]
+        fn original_editor_retirement_requires_exact_process_birth() {
+            // Synthetic missing PID is not a valid recovery target, and a
+            // previously selected HWND is never inferred from a new PID.
+            let lease = Lease {
+                guard: None, manager: 1, manager_thread: 2, manager_class: "Manager".into(),
+                editor: 3, pid: 0, birth: 0, thread: 4,
+                class: "Blockbench".into(), original: Rect::default(),
+                original_frame_style: 0, aperture: None,
+            };
+            assert!(lease.verify_editor_identity().is_err());
+            let mut lifetime = lease;
+            lifetime.pid = std::process::id();
+            lifetime.birth = process_birth(std::process::id()).unwrap();
+            assert!(!original_editor_exited(&lifetime).unwrap());
+            lifetime.birth = 1;
+            assert!(original_editor_exited(&lifetime).unwrap());
+        }
+        #[test]
+        fn helper_checkpoint_rejects_cross_process_or_unversioned_requests() {
+            let mut cp = RecoveryCheckpoint {
+                schema: 0, parent_pid: 10, parent_birth: 2,
+                manager: 1, manager_thread: 20, manager_class: "LazyDesigner".into(),
+                editor: 3, pid: 11, birth: 4, thread: 30, class: "Blockbench".into(),
+                original: Rect::default(), original_frame_style: 0,
+            };
+            assert!(cp.validate_parent_and_original_window().is_err());
+            cp.schema = 1;
+            cp.pid = cp.parent_pid;
+            assert!(cp.validate_parent_and_original_window().is_err());
+        }
+    }
+
     #[cfg(test)]
     mod frame_tests {
         use super::*;
@@ -718,6 +1109,18 @@ mod platform {
     }
     pub(super) fn release_if_manager_minimized() {}
     pub(super) fn restore_on_exit() {}
+}
+
+// The helper is an internal debug-only child role of the same executable.
+ // It must be consumed before Tauri instance admission or its own mutex would
+ // prevent the crash recovery process from starting.
+pub fn maybe_run_recovery_helper() -> bool {
+    if std::env::args().nth(1).as_deref() != Some("--lazydesigner-blockbench-recovery") {
+        return false;
+    }
+    #[cfg(all(windows, debug_assertions))]
+    platform::run_recovery_helper();
+    true
 }
 
 pub fn command(action: &str, viewport: Option<EditorViewport>) -> Result<EditorSurfaceReceipt, String> {
