@@ -208,6 +208,8 @@ async function main() {
     };
     if (editor) {
       checks.unified_editor_header = await frame.locator("header.editor-header").isVisible();
+      checks.ai_connection_not_duplicated_in_header =
+        await frame.locator("header.editor-header .ai-indicator").count() === 0;
       checks.empty_native_window_reservation = await frame
         .locator('.native-editor-aperture[data-native-editor-reservation="true"]')
         .evaluate((element) => element.childElementCount === 0
@@ -282,6 +284,8 @@ async function main() {
       const shouldRail = dims.width < 1320;
       checks.dock_responsive_rails = sidePanels.explorerRail === shouldRail
         && sidePanels.diagnosticRail === shouldRail;
+      checks.diagnostic_status_readable = shouldRail
+        || await frame.locator('#ld-inspector-diagnostic .connection-status strong').count() === 1;
       checks.diagnostic_activity_truthful = shouldRail
         || (sidePanels.diagnosticTabs.map(tab => tab.name).join(",") === "diagnostic,activity"
           && sidePanels.diagnosticTabs.filter(tab => tab.selected).length === 1

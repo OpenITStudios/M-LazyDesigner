@@ -7,7 +7,8 @@
   } from './editorLayout';
   import { onMount, tick } from 'svelte';
   import {
-    aiStatusPresentation, continueTarget, recentModelTargets,
+    FULL_STATUS_RECENT_MS, aiStatusPresentation, continueTarget,
+    fullStatusObservationAgeMs, recentModelTargets,
     uniqueModelSearchTarget, visibleProjectModels, visibleProjects,
   } from './desktopPresentation';
   import type { SystemStatus, DesktopBusyAction } from './desktopTypes';
@@ -60,10 +61,18 @@
   $: recentTargets = navigation ? recentModelTargets(navigation).slice(0, 3) : [];
   $: continuing = navigation ? continueTarget(navigation) : null;
   $: aiStatus = status ? aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs) : null;
-  // Read-only projection of the existing Rust-owned status and model inventory.
+  // Read-only projection of the existing Rust-owned status. Use the same
+  // presentation recency boundary as AI status; an aged snapshot is not an
+  // active readiness result and cannot become one through CSS badges.
+  $: readinessObservationAge = status
+    ? fullStatusObservationAgeMs(status.observed_at_unix_ms, statusPresentationNowMs)
+    : null;
+  $: readinessOutdated = Boolean(status
+    && (readinessObservationAge === null || readinessObservationAge > FULL_STATUS_RECENT_MS));
   $: readinessLabel = statusProbeFailures >= 2 ? 'Verification required'
     : loading ? 'Checking readiness…'
     : !status ? 'Status unavailable'
+    : readinessOutdated ? 'Check out of date'
     : status.readiness.ready ? 'Ready at last check'
     : status.readiness.state === 'ready-to-start' ? 'Ready to start'
     : status.readiness.state === 'setup-required' ? 'Setup required'
@@ -71,7 +80,10 @@
     : 'Attention required';
   $: readinessDetail = statusProbeFailures >= 2
     ? 'The last status could not be verified. Refresh to check readiness.'
-    : status?.readiness.summary ?? 'No verified readiness details available.';
+    : loading ? 'Checking the current system status.'
+    : readinessOutdated
+      ? 'Refresh to verify readiness. Last observed: ' + (status?.readiness.summary ?? 'Status unavailable.')
+      : status?.readiness.summary ?? 'No verified readiness details available.';
   $: observedProjectCount = status?.project_navigation.projects.length ?? null;
   $: observedModelCount = status?.project_navigation.projects.reduce(
     (sum, project) => sum + project.model_count, 0,
@@ -389,12 +401,6 @@
       </div>
     </div>
     <div class="editor-controls" role="group" aria-label="Editor actions and panels">
-      <span class="ai-indicator" role="status"
-        title={aiStatus?.detail ?? 'AI connection has not been verified'}>
-        <i class:verified={Boolean(aiStatus?.recentlyVerified)}
-          class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
-        <span class="ai-label">{aiStatus?.label ?? 'AI unverified'}</span>
-      </span>
       <button type="button" bind:this={explorerToggle} class="dock-toggle" class:chosen={showProjects && !explorerRail}
         aria-label="Toggle Project Explorer"
         title={canExpandProjects ? 'Expand or collapse Project Explorer' : 'Browse projects through Workspace at this width'}
@@ -672,10 +678,6 @@
                 aria-label="Open Diagnostic Support"
                 onclick={navigateSupport}><EditorChromeIcon name="diagnostic"/></button>
             {/if}
-            {#if canExpandDiagnostic}
-              <button type="button" title="Connection and Support" aria-label="Open connection Support"
-                onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
-            {/if}
             <button type="button" title="Technical activity" aria-label="Open technical activity"
               onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
           </div>
@@ -711,12 +713,12 @@
             hidden={diagnosticTab !== 'diagnostic'}>
             <h4>Readiness</h4>
             <div class="connection-status" role="status">
-              <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading)}
-                class:stale={statusProbeFailures >= 2} aria-hidden="true"></i>
+              <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
+                class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
               <strong>{readinessLabel}</strong>
             </div>
             <p>{readinessDetail}</p>
-            <div class="diagnostic-facts" aria-label="Latest diagnostic observation">
+            <div class="diagnostic-facts" aria-label="Last observed Blockbench and plugin status">
               <div><span>Blockbench</span><strong>{status
                 ? status.blockbench.running ? 'Detected' : 'Not running'
                 : 'Unverified'}</strong></div>
@@ -842,14 +844,6 @@
     border-color:var(--ed-border);background:var(--ed-raised);color:var(--ed-text);
   }
   .editor-controls .support-button {width:33px;padding:5px;font-size:17px}
-  .ai-indicator {
-    display:flex;align-items:center;gap:6px;min-width:0;max-width:165px;
-    margin-right:3px;padding:5px 6px;color:var(--ed-muted);font-size:11px;
-  }
-  .ai-indicator i{height:7px;width:7px;border-radius:100%;background:#8c99aa;flex:none}
-  .ai-indicator i.verified{background:#6bc493}
-  .ai-indicator i.stale{background:#e1b65f}
-  .ai-label {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .editor-header button:focus-visible,.dock-panel button:focus-visible,.dock-panel input:focus-visible {
     outline:2px solid var(--ed-accent);outline-offset:1px;
   }
@@ -1082,7 +1076,11 @@
   .panel-disclosure summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .panel-disclosure p{margin:5px 0 8px}
 
-  .connection-status{display:flex;align-items:center;gap:7px;color:var(--ed-text);font-size:12px}
+  .connection-status{
+    display:flex;align-items:center;gap:7px;min-width:0;
+    color:var(--ed-text);font-size:12px;
+  }
+  .connection-status strong{min-width:0;overflow-wrap:anywhere}
   .connection-status i{height:7px;width:7px;border-radius:100%;background:#8f9bad;flex:none}
   .connection-status i.verified{background:#6bc493}
   .connection-status i.stale{background:#e1b65f}
@@ -1106,7 +1104,6 @@
   .inline-error button{border:0;background:transparent;color:inherit;font-size:18px;cursor:pointer}
   button:disabled{opacity:.52;cursor:default}
   @media(max-width:1319px) {
-    .ai-label{max-width:100px}
     .dock-label{display:none}
   }
   @media(max-width:1030px){
@@ -1114,7 +1111,6 @@
     .editor-brand{font-size:12px}
     .workspace-label{display:none}
     .editor-context{min-width:48px}
-    .ai-indicator{max-width:105px}
   }
   @media(max-width:919px){
     /* The companions remain on BOTH sides; do not stack over native Blockbench. */
@@ -1128,8 +1124,6 @@
       grid-template-columns:44px minmax(0,1fr) 44px;
     }
     .rail-actions button{width:34px}
-    .ai-label{display:none}
-    .ai-indicator{margin:0;padding:5px}
   }
   @media(max-width:600px){
     .editor-header{min-height:55px;flex-wrap:wrap;padding:6px 9px;gap:3px}

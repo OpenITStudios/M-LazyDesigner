@@ -19,6 +19,8 @@ SCENARIOS = (
     ("ready", "editor"),
     ("many-projects", "editor"),
     ("fresh-install", "editor"),
+    ("ready-aged", "editor"),
+    ("status-unverified", "editor"),
     ("ready-aged", "workspace"),
     ("ready-aged", "support"),
     ("many-projects", "workspace"),
@@ -522,6 +524,8 @@ def inspect_unified_editor(page, fixture, view):
         issues.append("the unified Editor must have exactly one app header")
     if workspace.locator(".editor-header h1").count() != 1:
         issues.append("the editor heading must identify the last-observed model")
+    if workspace.locator(".editor-header .ai-indicator").count():
+        issues.append("AI connection must not be duplicated in the top toolbar")
 
     native_area = page.get_by_role("region", name="Blockbench native editor area")
     if native_area.count() != 1:
@@ -659,6 +663,15 @@ def inspect_unified_editor(page, fixture, view):
                 issues.append("Diagnostic readiness panel is missing")
             if diagnostic.get_by_role("heading", name="Readiness").count() != 1:
                 issues.append("Diagnostic must show readiness")
+            if fixture == "ready-aged":
+                if diagnostic.get_by_text("Check out of date", exact=True).count() != 1:
+                    issues.append("Aged status must not appear as verified ready")
+            elif fixture == "status-unverified":
+                if diagnostic.get_by_text("Verification required", exact=True).count() != 1:
+                    issues.append("Repeated probe failures must not appear as verified ready")
+            elif fixture == "ready":
+                if diagnostic.get_by_text("Ready at last check", exact=True).count() != 1:
+                    issues.append("Recent ready status must remain readable in Diagnostic")
             if diagnostic.get_by_text("Blockbench", exact=True).count() != 1:
                 issues.append("Diagnostic must show Blockbench state")
             activity_tab.click()
@@ -694,6 +707,8 @@ def inspect_unified_editor(page, fixture, view):
                 issues.append("Diagnostic tabs must retain Blockbench's 40px bar")
         if diagnostic.locator(".tool-row").count():
             issues.append("Do not present static tool-name rows as usable QA functions")
+        if diagnostic.locator(".ai-indicator").count():
+            issues.append("Connection status belongs only to Activity, not duplicated chrome")
         if should_rail:
             reservation = page.locator('[data-native-editor-reservation="true"]')
             if reservation.count() == 1 and reservation.bounding_box()["width"] < 320:

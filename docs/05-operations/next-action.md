@@ -5,15 +5,15 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 ## Blockbench-aligned Editor UI — 2026-11-09
 
 - **SOURCE_AUTHORED:** The development-only Unified Editor retains its default-dark Blockbench-aligned layout, full Project Explorer left, permanently present **Diagnostic** right and an entirely empty native Blockbench center. The user-selected right panel is now only **Diagnostic / Activity**, removing previous Assistant/Model Review tabs and static feature lists.
-- **Diagnostic:** existing Rust-owned readiness summary, plugin integrity, Blockbench detection, and real diagnostic text; unknown/stale states are not treated as ready. Refresh and Troubleshooting reuse existing Desktop actions.
-- **Activity:** last-observed AI connection status and local project/model counts, correctly distinguished from real Gateway statistics. The existing Analytics route is the only gateway-statistics destination. No new IPC, diagnostics engine, model renderer, or fake QA results.
+- **Diagnostic:** existing Rust-owned readiness summary, plugin integrity, Blockbench detection and real diagnostic text. The presentation now uses the existing full-status recency boundary (30 seconds) and treats aged or invalid timestamps as unverified, never green/ready. Probe failures retain their separate verification-required state. Refresh and Troubleshooting reuse existing Desktop actions.
+- **Activity:** the only Editor home for last-observed AI connection status (removed redundant toolbar AI badge), alongside local project/model counts correctly distinguished from real Gateway statistics. The existing Analytics route is the only gateway-statistics destination. No new IPC, diagnostics engine, model renderer, or fake QA results.
 - **Proof:** GitHub source review and regression source authored only. Svelte/Bun executable tests, F2 application Chromium capture, native Windows/Tauri/Blockbench integration (F3) remain **NOT_EXECUTED / UNVERIFIED** under the current hold. No generated or reconstructed UI preview is produced.
 - **STOP:** Do not silently turn on CI/local testing, broaden into editor or AI infrastructure, replace the native Blockbench window, claim custom theme synchronization or promote the dev-only view to release.
 
 ## Unified Editor P1 — 2026-11-09
 
 - **Current owner:** `apps/desktop/src/UnifiedWorkspacePage.svelte`, `editorLayout.ts`, `EditorChromeIcon.svelte`; `App.svelte` retains navigation and Rust owns native-window composition and status. Both side docks remain mounted, narrowing to rails without obscuring Blockbench.
-- **Next proof when authorized:** A real source-app F2 capture must verify only two accessible tabs and truthful displayed status/project counts at wide and narrow sizes, plus the native blank reservation. F3 separately proves actual Blockbench input, focus, resize, and window recovery. Do not label source checks as visual PASS.
+- **Next proof when authorized:** A real source-app F2 capture must verify only two accessible tabs, no duplicated toolbar AI status, aged-versus-ready diagnostic states, truthful displayed project counts, and the two right-rail shortcuts at wide and narrow sizes, plus the native blank reservation. F3 separately proves actual Blockbench input, focus, resize, and window recovery. Do not label source checks as visual PASS.
 
 ## Native Blockbench composition P0 — 2026-11-08
 

@@ -87,6 +87,8 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("active_model_name_readable_default");
     expect(script).toContain("dock_responsive_rails");
     expect(script).toContain("diagnostic_activity_truthful");
+    expect(script).toContain("diagnostic_status_readable");
+    expect(script).toContain("ai_connection_not_duplicated_in_header");
     expect(script).toContain("diagnosticPanelCount === 2");
     expect(script).toContain("blockbench_tab_strip_geometry");
     expect(script).toContain("blockbench_selected_tab_colors");

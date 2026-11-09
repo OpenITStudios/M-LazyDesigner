@@ -100,6 +100,13 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain('aria-labelledby="ld-tab-activity"');
     expect(unified).toContain("status.readiness.ready");
     expect(unified).toContain("status?.readiness.summary");
+    expect(unified).toContain("fullStatusObservationAgeMs(status.observed_at_unix_ms, statusPresentationNowMs)");
+    expect(unified).toContain("readinessObservationAge > FULL_STATUS_RECENT_MS");
+    expect(unified).toContain("readinessOutdated ? 'Check out of date'");
+    expect(unified).toContain("statusProbeFailures >= 2 ? 'Verification required'");
+    expect(unified).toContain("!loading && !readinessOutdated");
+    expect(unified).toContain("Refresh to verify readiness. Last observed:");
+    expect(unified).not.toContain('class="ai-indicator"');
     expect(unified).toContain("status.plugin_integrity");
     expect(unified).toContain("status?.diagnostic");
     expect(unified).toContain("status?.blockbench.diagnostic");
@@ -230,6 +237,11 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Project actions overlap the reserved native editor");
     expect(script).toContain("Narrow Project Explorer must offer safe Workspace navigation");
     expect(script).toContain("Narrow Diagnostic rail must provide Support fallback");
+    expect(script).toContain("Aged status must not appear as verified ready");
+    expect(script).toContain("Repeated probe failures must not appear as verified ready");
+    expect(script).toContain("AI connection must not be duplicated in the top toolbar");
+    expect(script).toContain('("ready-aged", "editor")');
+    expect(script).toContain('("status-unverified", "editor")');
     expect(script).toContain("Diagnostic tabs lack arrow-key navigation");
     expect(script).toContain("Diagnostic must have exactly Diagnostic and Activity tabs");
     expect(script).toContain("Activity must show observed project statistics");
