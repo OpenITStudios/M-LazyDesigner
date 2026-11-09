@@ -44,7 +44,10 @@
   let search = '';
   let diagnosticTab: 'diagnostic' | 'activity' = 'diagnostic';
   let showAll = false;
-  let expandedProjectId: string | null = null;
+  // Independent project expansion mirrors Blockbench's multi-open Outliner.
+  // The active project opens by default until explicitly collapsed.
+  let expandedProjectIds = new Set<string>();
+  let collapsedProjectIds = new Set<string>();
   let projectActionsId: string | null = null;
   let recentExpanded = false;
   let executing = false;
@@ -100,11 +103,17 @@
   $: canExpandDiagnostic = canExpandEditorDock(editorWidth, 'tools', layout.toolsWidth, otherRailWidth);
 
   function expanded(project: ProjectNavigationProject): boolean {
-    return expandedProjectId === project.id
-      || (expandedProjectId === null && navigation?.active?.project_id === project.id);
+    return expandedProjectIds.has(project.id)
+      || (navigation?.active?.project_id === project.id && !collapsedProjectIds.has(project.id));
   }
   function toggleProject(project: ProjectNavigationProject) {
-    expandedProjectId = expanded(project) ? '' : project.id;
+    if (expanded(project)) {
+      expandedProjectIds = new Set([...expandedProjectIds].filter(id => id !== project.id));
+      collapsedProjectIds = new Set([...collapsedProjectIds, project.id]);
+    } else {
+      expandedProjectIds = new Set([...expandedProjectIds, project.id]);
+      collapsedProjectIds = new Set([...collapsedProjectIds].filter(id => id !== project.id));
+    }
   }
   function changeLayout(next: Partial<EditorLayoutState>) {
     layout = { ...layout, ...next };
