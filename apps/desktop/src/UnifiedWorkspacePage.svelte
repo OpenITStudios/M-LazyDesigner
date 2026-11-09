@@ -474,29 +474,18 @@
 <main class="unified-workspace" bind:this={editorRoot} aria-label="LazyDesigner unified editor workspace">
   <header class="editor-header" aria-label="LazyDesigner editor controls" aria-busy={navigationPending}>
     <div class="editor-leading">
-      <span class="editor-brand-mark" aria-hidden="true"><EditorChromeIcon name="model"/></span>
-      <span class="editor-brand">LazyDesigner</span>
-      <span class="header-divider" aria-hidden="true"></span>
       <button class="workspace-return" type="button" aria-label="Return to Workspace"
         title={nativePlacement === 'DETACHED' ? 'Workspace' : 'Restore original Blockbench window before opening Workspace'}
         disabled={navigationPending} onclick={navigateWorkspace}>
         <EditorChromeIcon name="workspace"/><span class="workspace-label">Workspace</span>
       </button>
       <div class="editor-context">
-        <h1 tabindex="-1" title={active?.model_name ?? continuing?.model.name ?? 'Blockbench workspace'}>
-          {active?.model_name ?? continuing?.model.name ?? 'Blockbench workspace'}
-          {#if active?.dirty}<span class="unsaved" title="Unsaved changes at last observation">●</span>{/if}
-        </h1>
-        <span class="subtitle" role={navigationPending ? 'status' : undefined}
-          title={navigationPending ? 'Restoring original Blockbench window before opening another page' : undefined}>
-          {#if navigationPending}
-            Restoring original Blockbench window before leaving Editor…
-          {:else}
-            {active?.project_name ?? continuing?.project.name ?? 'No active model'}
-            · {active ? 'Last observed' : 'Development preview'}
-          {/if}
-        </span>
-        {#if openingModelId}<span class="model-opening" role="status">Opening requested model…</span>{/if}
+        <h1 tabindex="-1">Editor</h1>
+        {#if navigationPending}
+          <span class="subtitle" role="status">Restoring Blockbench window…</span>
+        {:else if openingModelId}
+          <span class="subtitle" role="status">Opening model…</span>
+        {/if}
       </div>
     </div>
     <div class="editor-controls" role="group" aria-label="Editor actions and panels">
@@ -580,10 +569,6 @@
           <div class="sidebar-content">
             <section id="ld-sidebar-projects" role="tabpanel" aria-labelledby="ld-sidebar-projects-tab"
               hidden={sidebarTab !== 'projects'} class="sidebar-page explorer">
-        <div class="project-primary-action">
-          <button type="button" class="sidebar-open-model" disabled={actionBusy || fixture}
-            onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/> Open existing model…</button>
-        </div>
         {#if statusProbeFailures >= 2}
           <div class="state-note" role="status">
             <strong>Refresh required</strong>
@@ -617,6 +602,11 @@
             {/if}
           </section>
         {/if}
+
+        <div class="project-primary-action">
+          <button type="button" class="sidebar-open-model" disabled={actionBusy || fixture}
+            onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/> Open existing model…</button>
+        </div>
 
         {#if !search.trim() && recentTargets.length > 0}
           <div class="recent-group">
