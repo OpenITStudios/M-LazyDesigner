@@ -2,6 +2,10 @@
 
 **Owner:** durable product UX across Desktop and the native Blockbench plugin. **Authority:** the existing Desktop and Blockbench source owns implemented behavior; this document specifies intended human experience, not a second status/router or a claim of tested screenshots. **Scope:** Bedrock visual asset workflows.
 
+## Desktop visual consistency authority
+
+The adopted [LazyDesigner UI Design Standard](ui-design-standard.md) is mandatory for Desktop visual changes, previews and consistency reviews. It defines the current Unified Editor as **one right sidebar** with Projects/Status tabs, Active Project above Recent Models, and a native Blockbench center reservation. The existing human interface contract remains authoritative for user outcomes, safety and navigation semantics. Legacy two-dock examples are not a reason to restore a second sidebar.
+
 ## Product mental model
 
 A user should understand three distinct surfaces without learning Gateway terminology:
