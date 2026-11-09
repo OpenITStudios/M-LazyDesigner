@@ -997,16 +997,16 @@
   .search-hint{margin:0 4px 6px;color:var(--ed-muted-soft);font-size:10px;line-height:1.4}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .explorer input::placeholder{color:var(--ed-muted-soft)}
-  .search-count{font-size:10px;color:var(--ed-muted-soft);padding:5px 4px 6px}
+  .search-count{font-size:10px;color:var(--ed-muted-soft);padding:4px 5px 5px}
   .search-count.sr-only{padding:0}
-  .project-tree {display:grid;gap:2px}
-  .project-group {min-width:0}
-  .project-line {display:flex;align-items:center;gap:2px;min-height:28px}
+  .project-tree {display:grid;gap:0;min-width:0;border-top:1px solid var(--ed-border-soft);padding-top:3px}
+  .project-group {min-width:0} .project-group + .project-group{border-top:1px solid var(--ed-border-soft)}
+  .project-line {display:flex;align-items:center;gap:1px;min-height:30px} .project-line:focus-within{background:var(--ed-raised)}
   .project-expand {
-    display:flex;align-items:center;gap:7px;flex:1;min-width:0;
-    height:28px;padding:2px 5px;line-height:1.2;
+    display:flex;align-items:center;gap:6px;flex:1;min-width:0;
+    height:30px;padding:2px 5px;line-height:1.2;
     border:0;background:transparent;color:var(--ed-text);text-align:left;
-    font-size:12px;font-weight:650;border-radius:4px;cursor:pointer;
+    font-size:12px;font-weight:600;border-radius:2px;cursor:pointer;
   }
   .project-expand:hover:not(:disabled),.model-open:hover:not(:disabled),.recent-model:hover:not(:disabled){
     background:var(--ed-raised);color:var(--ed-text);
@@ -1023,14 +1023,14 @@
   /* One compact action affordance preserves project-name width; its commands
      are expanded as normal layout content, never over the native cutout. */
   .project-actions-toggle {
-    display:grid;place-items:center;flex:none;width:26px;height:28px;
+    display:grid;place-items:center;flex:none;width:25px;height:30px;
     border:0;border-radius:3px;background:transparent;color:var(--ed-muted);cursor:pointer;
   }
   .project-actions-toggle:hover,
   .project-actions-toggle[aria-expanded="true"]{background:var(--ed-raised);color:var(--ed-text)}
   .project-inline-actions{
     display:flex;align-items:center;flex-wrap:wrap;gap:5px;
-    margin:0 2px 6px 17px;padding:4px 0 5px;border-bottom:1px solid var(--ed-border);
+    margin:0 2px 6px 19px;padding:4px 0 5px;border-bottom:1px solid var(--ed-border);
   }
   .project-inline-actions button{
     min-height:30px;padding:4px 7px;border:1px solid var(--ed-border);
@@ -1042,11 +1042,11 @@
   .project-inline-actions .pin-project[aria-pressed="true"]{color:#dfbc7c}
   .model-line {
     position:relative;display:flex;align-items:center;gap:2px;
-    min-width:0;padding-left:13px;min-height:28px;
+    min-width:0;padding-left:20px;min-height:28px;
   }
   /* Match Blockbench's Outliner: selection fill, no additional left stripe.
      The current-model dot remains independently visible and labelled. */
-  .model-line.current {background:var(--ed-select);border-radius:2px}
+  .model-line.current {background:var(--ed-select);border-radius:2px} .model-line:not(.current):hover{background:var(--ed-raised)}
   /* Reveal is a direct file action, never a fake ellipsis menu. It occupies
      the row edge only when needed, preserving model-name width at rest. */
   .model-line .reveal-model {
@@ -1128,7 +1128,7 @@
     width:100%;border:0;border-top:1px solid var(--ed-border-soft);background:transparent;
     color:var(--ed-muted);font-size:12px;text-align:left;padding:9px 5px;cursor:pointer;
   }
-  .recent-group{border-top:1px solid var(--ed-border-soft);margin-top:14px;padding-top:12px}
+  .recent-group{border-top:1px solid var(--ed-border-soft);margin-top:9px;padding-top:5px}
   .recent-heading{
     display:flex;align-items:center;gap:7px;width:100%;min-height:30px;padding:5px;
     border:0;border-radius:4px;background:transparent;color:var(--ed-muted);
