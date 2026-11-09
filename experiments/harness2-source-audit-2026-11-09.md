@@ -110,3 +110,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source defect:** the source-only Assembly Review checked ANCHOR endpoints but not duplicate/empty IDs, missing/duplicated axes or unsupported axis labels. The canonical Recipe constraint solver rejects these declarations, so review could otherwise label a structurally impossible plan merely `DECLARED_RELATIONS_UNVERIFIED`.
 
 **Candidate:** reject invalid ANCHOR declaration structure in the existing review owner with `ANCHOR_DECLARATION_INVALID` for affected feature IDs. Preserve canonical compiler as the final authority; do not infer source geometry or native parenting. Negative cases: zero axes, duplicate axes, unsupported axis and duplicate constraint ID. **Tests authored, NOT_EXECUTED; native/visual UNVERIFIED.**
+
+## Harness² iteration J — OBB vector arity fail-closed (2026-11-10)
+
+**Observed source defect:** `requireFiniteVec3` checked finiteness of *present* entries but not the required length; `normalizeBox` also assumed exactly three axes. A truncated or oversized runtime vector could therefore enter SAT/contact math and yield undefined projections, false classifications, or an exception too late in the pipeline.
+
+**Candidate:** require exact 3-element finite coordinate/half-size/axis vectors and exactly three box axes before SAT or containment. This preserves valid geometric contact semantics and prevents malformed spatial facts from being presented as real evidence. Regression authored for truncated center, oversized half-sizes, missing axis, and truncated axis. **NOT_EXECUTED**; no native or visual validation.

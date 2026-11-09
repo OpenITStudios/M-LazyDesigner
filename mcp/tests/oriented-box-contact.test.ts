@@ -117,6 +117,20 @@ describe("oriented box contact", () => {
       .toThrow("tolerance");
   });
 
+  test("rejects truncated or oversized OBB vectors rather than inventing spatial contact", () => {
+    const valid = box([0, 0, 0]);
+    const malformed = [
+      { ...valid, center: [0, 0] as unknown as Vec3 },
+      { ...valid, halfSizes: [1, 1, 1, 1] as unknown as Vec3 },
+      { ...valid, axes: [[1, 0, 0], [0, 1, 0]] as unknown as [Vec3, Vec3, Vec3] },
+      { ...valid, axes: [[1, 0], [0, 1, 0], [0, 0, 1]] as unknown as [Vec3, Vec3, Vec3] },
+    ];
+    for (const invalid of malformed) {
+      expect(() => analyzeOrientedBoxContact(invalid, valid)).toThrow();
+      expect(() => analyzeOrientedBoxContainment(valid, invalid)).toThrow();
+    }
+  });
+
   test("rejects malformed axes, half sizes, and tolerance before analysis", () => {
     expect(() =>
       analyzeOrientedBoxContact(

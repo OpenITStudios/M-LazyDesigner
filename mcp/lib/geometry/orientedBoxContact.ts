@@ -62,7 +62,8 @@ function magnitude(vector: Vec3): number {
 }
 
 function requireFiniteVec3(value: Vec3, context: string): Vec3 {
-  if (value.some((entry) => !Number.isFinite(entry))) {
+  if (!Array.isArray(value) || value.length !== 3 ||
+      value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))) {
     throw new Error(`${context} must contain three finite values.`);
   }
   return [...value] as Vec3;
@@ -84,6 +85,9 @@ function normalizeBox(box: OrientedBox, context: string): OrientedBox {
     throw new Error(`${context} halfSizes must be greater than or equal to 0.`);
   }
 
+  if (!Array.isArray(box.axes) || box.axes.length !== 3) {
+    throw new Error(`${context} axes must contain exactly three vectors.`);
+  }
   const axes = box.axes.map((axis, index) =>
     normalizeAxis(axis, `${context} axis ${index}`)
   ) as [Vec3, Vec3, Vec3];
