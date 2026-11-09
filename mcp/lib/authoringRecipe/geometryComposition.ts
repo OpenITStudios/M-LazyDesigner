@@ -336,16 +336,15 @@ export function buildAdvancedGeometryRecipeCandidate(
     const pieces = buildGeometryShapePieces(feature);
     next.prototypes.push(...pieces.prototypes);
     next.patterns.push(...pieces.patterns);
-    const compiled = compileAuthoringRecipe(next);
-    const count = compiled.placements.filter(placement =>
-      pieces.patterns.some(pattern => placement.source_pattern_id === pattern.id)
-    ).length;
-    if (next.patterns.length <= before || count < 1 || count > MAX_FEATURE_CUBES) {
+    // Do not compile a partial initial batch: a valid ANCHOR or SYMMETRY
+    // may reference a later feature. The canonical compiler checks the
+    // complete candidate once all feature cohorts exist.
+    if (next.patterns.length <= before) {
       throw new Error("ADVANCED_GEOMETRY_FEATURE_SIZE_INVALID");
     }
     rows.push({
       feature_id: feature.id, kind: feature.kind,
-      native_cube_candidates: count,
+      native_cube_candidates: 0,
       rig_review_required: (feature.geometry_reasons ?? []).includes("MOTION"),
     });
   }
@@ -362,6 +361,19 @@ export function buildAdvancedGeometryRecipeCandidate(
     ...authoredShapeSources,
   ].sort((left, right) => left.id.localeCompare(right.id));
   const compiled = compileAuthoringRecipe(next);
+  // Count realized instances only after the complete dependency graph has
+  // compiled; the number can include legitimate compiler-owned symmetry.
+  for (const row of rows) {
+    if (row.kind === "curve") continue; // Curve builder owns its segment count.
+    const patternIds = new Set(next.patterns.filter(pattern =>
+      pattern.feature_id === row.feature_id).map(pattern => pattern.id));
+    const count = compiled.placements.filter(placement =>
+      patternIds.has(placement.source_pattern_id)).length;
+    if (count < 1 || count > MAX_FEATURE_CUBES) {
+      throw new Error("ADVANCED_GEOMETRY_FEATURE_SIZE_INVALID");
+    }
+    row.native_cube_candidates = count;
+  }
   // Compare only newly requested feature cohorts. Other authored Cubes
   // can legitimately have coincident coordinates under distinct Bones.
   // Native parent-aware placement guards retain final authority on apply.

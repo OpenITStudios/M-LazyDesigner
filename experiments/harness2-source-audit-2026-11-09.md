@@ -78,3 +78,11 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Observed discrepancy:** `solveRecipeConstraints` rejects self-anchors and directed ANCHOR cycles, but the source-only `reviewDeclaredRecipeAssembly` previously labelled their relations `DECLARED_RELATIONS_UNVERIFIED` with no structural diagnostic. That allows planning to present an impossible assembly as merely awaiting reference review.
 
 **Candidate:** construct bounded directed positional-dependency edges from already resolved Recipe instance IDs; mark `ANCHOR_DEPENDENCY_CYCLE` for every affected feature. Do not conflate these ANCHOR dependencies with native Bone parenting, and do not create a second solver. Negative cases cover a two-feature cycle and a self-anchor; existing acyclic baseline remains. **Tests authored, NOT_EXECUTED**; no native or visual PASS.
+
+## Harness² iteration E — complete-batch causal compilation (2026-11-09)
+
+**Source defect:** initial Geometry candidate construction compiled the Recipe after each individual feature. A valid predeclared ANCHOR from a detail to a primary body could fail before its target feature was emitted, despite a complete batch being compilable. This is a temporal planning/assembly bug, not an object-specific shape problem.
+
+**Candidate:** preserve primary-form-first ordering; defer the canonical Recipe compilation and per-feature realized-count validation until the full candidate has been constructed. Continue using the existing compiler as the sole authority; no dependency inference, native mutation or reference-content approval is introduced. A missing target must still fail at final compile.
+
+**Falsifiers authored:** primary/detail batch with a declared forward endpoint and a missing endpoint; assert original Recipe immutability and source-only status. **NOT_EXECUTED**. Curve construction retains its existing specialized path.

@@ -301,6 +301,41 @@ describe("Structure-first initial Recipe batch using declared form reasons", () 
     expect(features).toEqual(unchanged);
   });
 
+  test("initial primary-first batch compiles after later dependent anchor endpoints exist", () => {
+    const seed = blank();
+    seed.constraints = [{
+      kind: "ANCHOR", id: "detail-attaches-to-body",
+      source_instance_id: "shape:cuboid:a-detail:0",
+      target_instance_id: "shape:cuboid:z-body:0",
+      axes: ["X"],
+      source_anchor: ["MIN", "CENTER", "CENTER"],
+      target_anchor: ["MAX", "CENTER", "CENTER"],
+    }];
+    const original = structuredClone(seed);
+    const planned = buildAdvancedGeometryRecipeCandidate(seed, [detail, body]);
+    expect(planned.next_recipe.patterns.map(pattern => pattern.feature_id))
+      .toEqual(["z-body", "a-detail"]);
+    expect(planned.summary.shape_families.map(row => row.native_cube_candidates))
+      .toEqual([1, 1]);
+    expect(compileAuthoringRecipe(planned.next_recipe).placements).toHaveLength(2);
+    expect(planned.summary.native_mutation_executed).toBe(false);
+    expect(seed).toEqual(original);
+  });
+
+  test("unresolvable initial batch anchor still fails at canonical final compilation", () => {
+    const seed = blank();
+    seed.constraints = [{
+      kind: "ANCHOR", id: "missing-support",
+      source_instance_id: "shape:cuboid:a-detail:0",
+      target_instance_id: "absent:0",
+      axes: ["X"],
+      source_anchor: ["MIN", "CENTER", "CENTER"],
+      target_anchor: ["MAX", "CENTER", "CENTER"],
+    }];
+    expect(() => buildAdvancedGeometryRecipeCandidate(seed, [detail, body]))
+      .toThrow(/missing target instance/i);
+  });
+
   test("existing Recipe revisions keep their supplied feature order", () => {
     const seed = blank();
     seed.prototypes.push({ id: "owned-cube", name: "existing", size: [2, 2, 2] });
