@@ -1478,8 +1478,8 @@
   .ld-brand-logo{width:24px;height:24px}
   .ld-header-logo{width:20px;height:20px}
   .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
-  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 12px}
-  .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:40px;border:0;border-radius:6px;background:transparent;color:var(--ed-muted);font-size:13px;font-weight:550;cursor:pointer}
+  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:10px 0 10px}
+  .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:36px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:13px;font-weight:550;cursor:pointer}
   .sidebar-tabs button.selected{background:var(--ed-raised);color:var(--ed-text);font-weight:650;box-shadow:inset 0 -2px 0 var(--ed-accent)}
   .sidebar-tabs button:hover:not(.selected){background:var(--ed-select);color:var(--ed-text)}
   .sidebar-content{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
@@ -1523,7 +1523,7 @@
   .sidebar-page .project-inline-actions button:disabled{opacity:.55;cursor:not-allowed}
   .sidebar-page .project-inline-actions button:focus-visible,
   .sidebar-page .model-context-actions button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:-2px}
-  .sidebar-page .model-line.current{background:var(--ed-select);border-radius:5px}
+  .sidebar-page .model-line.current{background:var(--ed-select);border-radius:4px;box-shadow:inset 2px 0 0 var(--ed-accent)}
   .sidebar-page .model-current-indicator{
     width:auto;margin-right:5px;color:#b7c5dc;font-size:10px;white-space:nowrap
   }
@@ -1555,7 +1555,7 @@
   .sidebar-page .model-context-actions button{min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-page .model-context-actions button:hover:not(:disabled){background:var(--ed-select)}
   .sidebar-page .model-context-actions button:disabled{opacity:.55;cursor:not-allowed}
-  .sidebar-page .recent-group{margin:3px 0 15px;padding:0 0 12px;border-top:0;border-bottom:1px solid var(--ed-border)}
+  .sidebar-page .recent-group{margin:3px 0 12px;padding:0 0 9px;border-top:0;border-bottom:1px solid var(--ed-border-soft)}
   .sidebar-page .recent-heading{font-weight:650}
   @media(hover:none){.sidebar-page .model-actions-toggle{opacity:1}}
 
@@ -1605,7 +1605,7 @@
   .sidebar-page .create-folder-form input[aria-invalid="true"]{border-color:#b46b6b}
 
   /* Active project is the first contextual item, not another model picker. */
-  .sidebar-page .active-project-summary{margin:2px 0 15px;padding:12px;border:1px solid var(--ed-border-soft);border-left:2px solid var(--ed-accent);border-radius:7px;background:var(--ed-raised)}
+  .sidebar-page .active-project-summary{margin:2px 0 13px;padding:10px 11px;border:1px solid transparent;border-left:2px solid var(--ed-accent);border-radius:5px;background:var(--ed-raised)}
   .sidebar-page .active-project-heading{margin-bottom:9px;color:var(--ed-muted);font-size:11px;font-weight:650}
   .sidebar-page .active-project-name,.sidebar-page .active-project-model{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
   .sidebar-page .active-project-name strong,.sidebar-page .active-project-model span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
