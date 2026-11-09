@@ -31,3 +31,11 @@ The approved visual is a **rendered concept**, not yet a master vector or an exp
 **Pending:** vector tracing, size variants, source asset integration, licensing/attribution record for the original generated concept, and native validation.
 
 Do not silently redesign the approved monogram during routine UI cleanup.
+
+## UI integration update — 2026-11-09
+
+**Source integration:** `apps/desktop/src/App.svelte` now uses the canonical SVG for the main navigation brand. `apps/desktop/src/UnifiedWorkspacePage.svelte` uses the same SVG for the compact title identity and the sidebar brand. Both import `../branding/lazydesigner-ld-master.svg?url`; this does not create duplicate artwork or alter the generic action-icon registry.
+
+**Visual dimensions:** 26px navigation, 24px sidebar, 20px title identity. All use `object-fit: contain`, no CSS recoloring, and decorative empty alt/aria-hidden with the adjacent text providing the name.
+
+**Boundary:** source-only implementation; no native build or visual proof. The generated PNG/ICO review pack has **not** been installed into `src-tauri/icons` or the NSIS installer. Packaging remains pending validation. The logo presentation mockup is concept art, not a screenshot of the application or a specification for new UI controls.
