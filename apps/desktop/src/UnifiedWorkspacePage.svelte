@@ -773,21 +773,21 @@
             <section id="ld-sidebar-status" role="tabpanel" aria-labelledby="ld-sidebar-status-tab"
               hidden={sidebarTab !== 'status'} class="sidebar-page sidebar-status">
           <section class="status-overview" aria-label="System status">
-            <h3>System status</h3>
+            <h3>Status</h3>
             <div class="status-overview-row">
-              <span class="status-overview-label">System readiness</span>
+              <span class="status-overview-label">System</span>
               <span class="status-overview-value">
                 <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
                   class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
-                {readinessLabel}
+                {readinessLabel === 'Ready at last check' ? 'Ready · Last checked' : readinessLabel}
               </span>
             </div>
             <div class="status-overview-row">
-              <span class="status-overview-label">AI connection</span>
+              <span class="status-overview-label">AI</span>
               <span class="status-overview-value">
                 <i class:verified={Boolean(aiStatus?.recentlyVerified && !loading)}
                   class:stale={Boolean(aiStatus?.needsRefresh || loading)} aria-hidden="true"></i>
-                {loading ? 'Checking…' : aiStatus?.label ?? 'Not verified'}
+                {loading ? 'Checking…' : aiStatus?.label === 'Recently verified' ? 'Verified recently' : aiStatus?.label ?? 'Not verified'}
               </span>
             </div>
             {#if statusProbeFailures >= 2 || readinessOutdated || !status?.readiness.ready}
@@ -800,30 +800,30 @@
               <button type="button" disabled={actionBusy || fixture || loading}
                 onclick={() => void refresh()}><EditorChromeIcon name="refresh"/> Refresh</button>
               <button type="button" class="text-action" disabled={navigationPending}
-                onclick={navigateSupport}>Troubleshoot</button>
+                onclick={navigateSupport}>Fix issues</button>
             </div>
             <details class="status-advanced">
-              <summary>Technical details</summary>
-              <p class="subtle-note">Values below are from the latest Desktop observation, not live measurements.</p>
+              <summary>Details</summary>
+              <p class="subtle-note">Last checked. Not live data.</p>
               <div class="diagnostic-facts" aria-label="Last observed component status">
-                <div><span>Blockbench process</span><strong>{status
+                <div><span>Blockbench</span><strong>{status
                   ? status.blockbench.running ? 'Detected' : 'Not running'
                   : 'Unverified'}</strong></div>
-                <div><span>Plugin integrity</span><strong>{status
+                <div><span>Plugin</span><strong>{status
                   ? status.plugin_integrity === 'ready' ? 'Ready at last check'
                     : status.plugin_integrity === 'missing' ? 'Missing'
                     : status.plugin_integrity === 'modified' ? 'Modified'
                     : status.plugin_integrity === 'invalid' ? 'Invalid'
                     : 'Unverified'
                   : 'Unverified'}</strong></div>
-                <div><span>Projects observed</span><strong>{observedProjectCount ?? '—'}</strong></div>
-                <div><span>Models observed</span><strong>{observedModelCount ?? '—'}</strong></div>
+                <div><span>Projects</span><strong>{observedProjectCount ?? '—'}</strong></div>
+                <div><span>Models</span><strong>{observedModelCount ?? '—'}</strong></div>
               </div>
               <p class="subtle-note">AI: {aiStatus?.detail ?? 'Connection has not been verified.'}</p>
               {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
               {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
               <button type="button" class="text-action" disabled={navigationPending}
-                onclick={navigateActivity}>Gateway statistics</button>
+                onclick={navigateActivity}>View AI activity</button>
             </details>
           </section>
 
