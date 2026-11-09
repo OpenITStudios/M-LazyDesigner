@@ -127,6 +127,10 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("acceptDownloads: false");
     expect(script).toContain("exact_canvas_viewport");
     expect(script).toContain("visible_toolbar_controls_contained");
+    expect(script).toContain("compact_editor_header_single_row");
+    expect(script).toContain("compact_editor_actions_scrollable");
+    expect(script).toContain("reachableViaActionScroll");
+    expect(script).toContain("toolbarButtonContained");
     expect(script).toContain("no_horizontal_document_overflow");
     expect(script).toContain("source_unchanged_during_render");
     expect(script).toContain("screenshotSha256");

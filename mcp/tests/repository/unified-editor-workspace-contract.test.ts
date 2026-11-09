@@ -171,6 +171,13 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).not.toContain('title="Current at last observation">Current</span>');
     expect(unified).toContain("grid-template-columns:48px minmax(0,1fr) 48px");
     expect(unified).toContain("min-height:32px; padding:2px 8px");
+    expect(unified).toContain("overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;");
+    expect(unified).toContain("scrollbar-width:thin;scrollbar-color:var(--color-button) transparent;");
+    expect(unified).toContain(".editor-controls button:focus-visible{outline-offset:-2px}");
+    expect(unified).toContain(".editor-header{min-height:38px;padding:2px 5px;gap:4px;flex-wrap:nowrap}");
+    expect(unified).toContain(".editor-controls{width:auto;flex:1 1 0;justify-content:flex-start;flex-wrap:nowrap;gap:3px}");
+    expect(unified).not.toContain(".editor-leading{width:100%;flex:1 1 100%}");
+    expect(unified).not.toContain(".editor-header{min-height:55px;flex-wrap:wrap");
     expect(unified).toContain("height:28px;padding:2px 5px;line-height:1.2");
     expect(unified).toContain("height:28px;padding:2px 4px;line-height:1.2");
     expect(unified).not.toContain("grid-template-rows:140px minmax(220px,1fr)");
@@ -246,6 +253,9 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Aged status must not appear as verified ready");
     expect(script).toContain("Repeated probe failures must not appear as verified ready");
     expect(script).toContain("AI connection must not be duplicated in the top toolbar");
+    expect(script).toContain("Compact editor toolbar wraps instead of staying on one row");
+    expect(script).toContain("Compact editor actions cannot scroll when clipped");
+    expect(script).toContain("Last editor toolbar action is not reachable by horizontal scrolling");
     expect(script).toContain('("ready-aged", "editor")');
     expect(script).toContain('("status-unverified", "editor")');
     expect(script).toContain("Diagnostic tabs lack arrow-key navigation");

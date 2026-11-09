@@ -1122,11 +1122,23 @@
   @media(max-width:1319px) {
     .dock-label{display:none}
   }
+  /* Like Blockbench's compact tool rows, the host utility header remains a
+     single line. Extra actions scroll in their own bounded group, never the
+     native viewport or the document. Focused buttons remain keyboard-reachable. */
   @media(max-width:1030px){
-    .editor-header{padding:6px 9px;gap:6px}
+    .editor-header{min-height:38px;padding:2px 6px;gap:5px;flex-wrap:nowrap}
+    .editor-leading{flex:0 1 205px;min-width:120px;gap:5px}
     .editor-brand{font-size:12px}
     .workspace-label{display:none}
-    .editor-context{min-width:48px}
+    .editor-context{min-width:0}
+    .editor-controls{
+      flex:1 1 0;min-width:0;width:auto;justify-content:flex-start;
+      flex-wrap:nowrap;gap:4px;padding:1px 0;
+      overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;
+      scrollbar-width:thin;scrollbar-color:var(--color-button) transparent;
+    }
+    .editor-controls button{flex:none}
+    .editor-controls button:focus-visible{outline-offset:-2px}
   }
   @media(max-width:919px){
     /* The companions remain on BOTH sides; do not stack over native Blockbench. */
@@ -1142,17 +1154,16 @@
     .rail-actions button{width:34px}
   }
   @media(max-width:600px){
-    .editor-header{min-height:55px;flex-wrap:wrap;padding:6px 9px;gap:3px}
-    .editor-leading{width:100%;flex:1 1 100%}
-    .editor-controls{width:100%;justify-content:flex-end;flex-wrap:wrap;gap:3px}
-    .header-divider{margin:0 1px}
-    .editor-brand{display:none}
-    .editor-context{min-width:0}
+    .editor-header{min-height:38px;padding:2px 5px;gap:4px;flex-wrap:nowrap}
+    .editor-leading{width:auto;flex:0 1 112px;min-width:92px;gap:3px}
+    .editor-brand,.header-divider{display:none}
+    .editor-brand-mark{width:20px;height:20px}
+    .editor-context{min-width:0;padding-left:0}
     .editor-context h1{font-size:12px}
     .editor-context .subtitle{display:none}
-    .editor-controls button{min-height:29px;padding:4px 7px}
-    .editor-controls .launch-editor{font-size:11px}
-    .workspace-return{min-height:30px;padding:4px 6px}
-    .editor-controls .open-model{font-size:11px}
+    .workspace-return{width:27px;min-height:27px;padding:3px}
+    .editor-controls{width:auto;flex:1 1 0;justify-content:flex-start;flex-wrap:nowrap;gap:3px}
+    .editor-controls button{min-height:27px;padding:3px 6px}
+    .editor-controls .launch-editor,.editor-controls .open-model{font-size:11px}
   }
 </style>

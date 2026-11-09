@@ -176,8 +176,37 @@ async function main() {
       }) : [];
       const contained = el => {
         const box = el.getBoundingClientRect();
-        return box.width > 0 && box.height > 0 && box.left >= -1 && box.right <= innerWidth + 1 && box.top >= -1 && box.bottom <= innerHeight + 1;
+        return box.width > 0 && box.height > 0
+          && box.left >= -1 && box.right <= innerWidth + 1
+          && box.top >= -1 && box.bottom <= innerHeight + 1;
       };
+      // Clipped controls are acceptable ONLY when they are within a bounded,
+      // keyboard-scrollable toolbar. An arbitrary overflow is still an error.
+      const reachableViaActionScroll = el => {
+        const scroller = el.closest(".editor-controls");
+        if (!scroller || getComputedStyle(scroller).overflowX !== "auto" || !contained(scroller))
+          return false;
+        const outer = scroller.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const relativeLeft = rect.left - outer.left + scroller.scrollLeft;
+        const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+        const minScroll = Math.max(0, relativeLeft + rect.width - scroller.clientWidth);
+        return rect.width <= scroller.clientWidth + 1
+          && relativeLeft >= -1
+          && relativeLeft + rect.width <= scroller.scrollWidth + 1
+          && minScroll <= Math.min(maxScroll, relativeLeft) + 1;
+      };
+      const actionScroller = topbar?.querySelector(".editor-controls") ?? null;
+      const toolbarButtonContained = el => {
+        const scroller = el.closest(".editor-controls");
+        if (!scroller) return contained(el);
+        const outer = scroller.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const directlyVisible = contained(el)
+          && rect.left >= outer.left - 1 && rect.right <= outer.right + 1;
+        return directlyVisible || reachableViaActionScroll(el);
+      };
+      const headerRect = topbar?.getBoundingClientRect() ?? null;
       return {
         viewport,
         scrollWidth: document.documentElement.scrollWidth,
@@ -185,8 +214,15 @@ async function main() {
         cssApplied: Boolean(root && getComputedStyle(root).display === "grid" && getComputedStyle(body).fontFamily),
         rootRect: root ? { width: root.getBoundingClientRect().width, height: root.getBoundingClientRect().height } : null,
         toolbarContained: Boolean(topbar && contained(topbar)),
+        toolbarSingleRow: Boolean(headerRect && headerRect.height <= 48),
+        actionToolbarScrollEnabled: Boolean(actionScroller
+          && getComputedStyle(actionScroller).overflowX === "auto"
+          && contained(actionScroller)),
+        actionToolbarDocumentBounded: Boolean(actionScroller
+          && actionScroller.scrollWidth >= actionScroller.clientWidth),
         visibleToolbarButtons: visible.length,
-        toolbarButtonsContained: visible.length > 0 && visible.every(contained),
+        toolbarButtonsContained: visible.length > 0
+          && visible.every(toolbarButtonContained),
         syntheticFixture: root?.getAttribute("data-qa-fixture") ?? null,
       };
     });
@@ -208,6 +244,9 @@ async function main() {
     };
     if (editor) {
       checks.unified_editor_header = await frame.locator("header.editor-header").isVisible();
+      checks.compact_editor_header_single_row = dims.width > 1030 || state.toolbarSingleRow;
+      checks.compact_editor_actions_scrollable = dims.width > 1030
+        || (state.actionToolbarScrollEnabled && state.actionToolbarDocumentBounded);
       checks.ai_connection_not_duplicated_in_header =
         await frame.locator("header.editor-header .ai-indicator").count() === 0;
       checks.empty_native_window_reservation = await frame

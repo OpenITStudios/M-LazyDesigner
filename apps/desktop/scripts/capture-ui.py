@@ -527,6 +527,51 @@ def inspect_unified_editor(page, fixture, view):
     if workspace.locator(".editor-header .ai-indicator").count():
         issues.append("AI connection must not be duplicated in the top toolbar")
 
+    # Blockbench-like toolbar density at high zoom/narrow windows: never stack
+    # controls over the native window; allow one bounded keyboard-scrollable row.
+    if page.viewport_size["width"] <= 1030:
+        header_geometry = workspace.locator(".editor-header").evaluate("""(header) => {
+          const controls = header.querySelector('.editor-controls');
+          const leading = header.querySelector('.editor-leading');
+          const a = header.getBoundingClientRect();
+          const b = controls?.getBoundingClientRect();
+          const c = leading?.getBoundingClientRect();
+          return {
+            height: a.height,
+            nowrap: getComputedStyle(header).flexWrap === 'nowrap',
+            controlsOnSameRow: !!b && !!c && Math.abs(
+              (b.top + b.bottom) / 2 - (c.top + c.bottom) / 2
+            ) < 8,
+            controlsWithinHeader: !!b && b.left >= a.left - 1 && b.right <= a.right + 1,
+            scrollMode: controls ? getComputedStyle(controls).overflowX : '',
+            docWidth: document.documentElement.scrollWidth,
+            viewportWidth: innerWidth
+          };
+        }""")
+        if (header_geometry["height"] > 48 or not header_geometry["nowrap"]
+                or not header_geometry["controlsOnSameRow"]):
+            issues.append("Compact editor toolbar wraps instead of staying on one row")
+        if (not header_geometry["controlsWithinHeader"]
+                or header_geometry["docWidth"] > header_geometry["viewportWidth"] + 1):
+            issues.append("Compact toolbar causes horizontal document overflow")
+        if header_geometry["scrollMode"] != "auto":
+            issues.append("Compact editor actions cannot scroll when clipped")
+        actions = workspace.locator(".editor-header .editor-controls")
+        support_reachable = actions.evaluate("""node => {
+          const button = node.querySelector('button[aria-label="Open Support"]');
+          if (!button) return false;
+          const previousScroll = node.scrollLeft;
+          node.scrollLeft = node.scrollWidth - node.clientWidth;
+          const scroller = node.getBoundingClientRect();
+          const target = button.getBoundingClientRect();
+          const reachable = target.left >= scroller.left - 1
+            && target.right <= scroller.right + 1;
+          node.scrollLeft = previousScroll;
+          return reachable;
+        }""")
+        if not support_reachable:
+            issues.append("Last editor toolbar action is not reachable by horizontal scrolling")
+
     native_area = page.get_by_role("region", name="Blockbench native editor area")
     if native_area.count() != 1:
         issues.append("native editor area missing")
