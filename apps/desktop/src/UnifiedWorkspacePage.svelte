@@ -523,10 +523,7 @@
     
         {:else}
           <div class="sidebar-top">
-            <div class="sidebar-brand"><EditorChromeIcon name="model"/><strong>LazyDesigner</strong>
-              <button type="button" class="sidebar-collapse" aria-label="Collapse sidebar"
-                title="Collapse sidebar" onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
-            </div>
+            <div class="sidebar-brand"><EditorChromeIcon name="model"/><strong>LazyDesigner</strong></div>
             <div class="sidebar-tabs" role="tablist" aria-label="LazyDesigner sections">
               <button type="button" role="tab" id="ld-sidebar-projects-tab"
                 aria-selected={sidebarTab === 'projects'} aria-controls="ld-sidebar-projects"
