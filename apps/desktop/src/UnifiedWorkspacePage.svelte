@@ -1,5 +1,6 @@
 <script lang="ts">
   import NativeEditorStage from './NativeEditorStage.svelte';
+  import { validateModelRenameStem } from './modelMutationPreflight';
   import EditorChromeIcon from './EditorChromeIcon.svelte';
   import {
     canExpandEditorDock, defaultEditorPanels, editorDockWidth, editorLayoutBand,
@@ -54,6 +55,7 @@
   let recentExpanded = true;
   let creatingFolder = false;
   let newFolderName = '';
+  let folderNameError = '';
   let executing = false;
   let localNotice = '';
   let searchInput: HTMLInputElement | undefined;
@@ -584,25 +586,31 @@
           <h3>Project folders</h3>
           <button type="button" class="sidebar-add-folder" title="Create a new empty project folder"
             disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-            onclick={() => creatingFolder = !creatingFolder}><EditorChromeIcon name="add"/> New folder</button>
+            onclick={() => { creatingFolder = !creatingFolder; folderNameError = ''; }}><EditorChromeIcon name="add"/> New folder</button>
         </div>
         {#if creatingFolder}
           <form class="create-folder-form" onsubmit={(event) => {
             event.preventDefault();
             const name = newFolderName;
-            if (!name.trim() || actionBusy || fixture) return;
-            creatingFolder = false;
-            newFolderName = '';
+            if (actionBusy || fixture) return;
+            if (!validateModelRenameStem(name)) {
+              folderNameError = 'Enter a valid folder name without reserved Windows characters or trailing spaces.';
+              return;
+            }
+            folderNameError = '';
             void afterDetach(() => createProjectFolder(name));
           }}>
             <label for="ld-new-folder-name">Project folder name</label>
             <input id="ld-new-folder-name" type="text" maxlength="120"
               placeholder="e.g. Furniture Pack" bind:value={newFolderName} required
+              aria-invalid={Boolean(folderNameError)}
+              oninput={() => folderNameError = ''}
               onkeydown={(event) => { if (event.key === 'Escape') { creatingFolder = false; newFolderName = ''; } }}/>
+            {#if folderNameError}<p class="folder-name-error" role="alert">{folderNameError}</p>{/if}
             <p>Choose the parent location next. This creates a folder only, not a model.</p>
             <div class="create-folder-actions">
-              <button type="button" onclick={() => { creatingFolder = false; newFolderName = ''; }}>Cancel</button>
-              <button type="submit" disabled={!newFolderName.trim() || actionBusy}>Choose location…</button>
+              <button type="button" onclick={() => { creatingFolder = false; newFolderName = ''; folderNameError = ''; }}>Cancel</button>
+              <button type="submit" disabled={!newFolderName.trim() || actionBusy || fixture}>Choose location…</button>
             </div>
           </form>
         {/if}
@@ -1455,4 +1463,6 @@
   .sidebar-status .status-advanced[open] summary{margin-bottom:12px;color:var(--ed-text)}
   .sidebar-status .status-advanced .diagnostic-facts{margin:8px 0}
   .sidebar-status .status-overview button:focus-visible,.sidebar-status .status-advanced summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:2px}
+  .sidebar-page .create-folder-form .folder-name-error{color:#e5a0a0;font-size:12px}
+  .sidebar-page .create-folder-form input[aria-invalid="true"]{border-color:#b46b6b}
 </style>
