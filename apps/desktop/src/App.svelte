@@ -66,6 +66,7 @@
   const maintenanceOperations = createMaintenanceOperations(invoke);
   type Page = 'Overview' | 'Editor' | 'Analytics' | 'Support';
   let page: Page = 'Overview';
+  let analyticsReturnPage: 'Editor' | 'Support' | 'Overview' = 'Support';
   let nativeEditorStage: { detach: () => Promise<boolean> } | undefined;
   // At most one in-flight native Detach. Duplicate route requests must
   // never start parallel window restoration or unmount the Editor early.
@@ -126,6 +127,9 @@
     utilityMenuOpen = false;
     if (next === page) return;
     if (page === 'Overview' && workspaceMain) workspaceScrollTop = workspaceMain.scrollTop;
+    if (next === 'Analytics' && page !== 'Analytics') {
+      analyticsReturnPage = page === 'Editor' || page === 'Overview' ? page : 'Support';
+    }
     page = next;
     if (next === 'Analytics') void refreshAnalytics();
     void tick().then(() => {
@@ -896,7 +900,8 @@
         <AnalyticsPage data={analytics} loading={analyticsLoading}
           error={analyticsError} exporting={analyticsExporting}
           refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}
-          backToSupport={() => navigate('Support')}/>
+          goBack={() => navigate(analyticsReturnPage)}
+          backLabel={analyticsReturnPage === 'Editor' ? 'Back to Editor' : analyticsReturnPage === 'Overview' ? 'Back to Workspace' : 'Back to Support'}/>
       {:else if page === 'Editor' && import.meta.env.DEV}
         <UnifiedWorkspacePage bind:this={nativeEditorStage} bind:layout={editorLayout}
           {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
