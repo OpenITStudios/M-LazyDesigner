@@ -988,6 +988,17 @@ export function analyzeAxisAlignedSurfaceEvidence(
       pairBudget > GEOMETRY_AXIS_ALIGNED_PAIR_BUDGET) {
     throw new Error("Axis-aligned surface diagnostic tolerance or budget is invalid.");
   }
+  // A duplicate native UUID is not evidence of two distinct Cubes.
+  // Comparing an instance to itself could manufacture coplanar conflicts
+  // or volume intersections and send a valid asset to needless repair.
+  const identities = new Set<string>();
+  for (const cube of cubes) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim() ||
+        identities.has(cube.uuid)) {
+      throw new Error("Axis-aligned surface review requires unique nonempty Cube UUIDs.");
+    }
+    identities.add(cube.uuid);
+  }
   // Collect once: strict-volume reviewers retain cubeBounds() defaults,
   // while contact may inspect plane-like carriers without misclassifying them.
   const observed = cubes.map((cube) => ({

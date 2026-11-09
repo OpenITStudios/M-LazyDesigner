@@ -107,6 +107,20 @@ test("surface completeness rejects invalid caller-reported unsupported counts", 
   }
 });
 
+test("duplicate Cube UUID cannot manufacture a surface collision with itself", () => {
+  const shape = { ...cube("same", [0, 0, 0], [4, 4, 4]), parent_id: "root" };
+  expect(() => analyzeAxisAlignedSurfaceEvidence([shape, { ...shape }]))
+    .toThrow(/unique nonempty Cube UUIDs/);
+  expect(() => analyzeAxisAlignedSurfaceEvidence([
+    { ...shape, uuid: "" },
+  ])).toThrow(/unique nonempty Cube UUIDs/);
+  const distinct = analyzeAxisAlignedSurfaceEvidence([
+    shape, { ...shape, uuid: "other" },
+  ]);
+  expect(distinct.positive_volume_intersection_count).toBe(1);
+  expect(distinct.coplanar_overlap_count).toBeGreaterThan(0);
+});
+
 test("positive volume overlap is evidence but not automatically a texture blocker", () => {
   const result = analyzeAxisAlignedSurfaceEvidence([
     cube("outer", [0, 0, 0], [6, 6, 6]),

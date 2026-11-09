@@ -128,3 +128,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source defect:** the same-parent surface scan used caller-provided unsupported transform/mesh counts to decide whether a scan was complete, but accepted negative, fractional or nonfinite values. Such malformed metadata can invalidate confidence in a clean contact/overlap report even when cube geometry itself is valid.
 
 **Candidate:** validate both unsupported counts as nonnegative safe integers before returning any surface verdict. Preserve existing policy that positive-volume overlaps are review evidence, not automatic z-fighting or deletion. Regression authored for clean adjacent Cubes, partial omitted-mesh evidence, and invalid metadata. **NOT_EXECUTED; no local/native test or visual acceptance.**
+
+## Harness² iteration M — native identity before overlap classification (2026-11-10)
+
+**Source defect:** `analyzeAxisAlignedSurfaceEvidence` counted every input row as a separate Cube, even when two rows shared the same native UUID. Such duplicate input can manufacture a self-overlap and a spurious z-fighting blocker, violating the intended distinction between purposeful overlapping distinct Cubes and malformed duplicate observations. The world-OBB reviewer already requires unique UUIDs.
+
+**Candidate:** fail closed on missing/duplicate native Cube UUIDs before same-parent pair scans. Do not change the positive-volume-overlap policy: two distinct same-parent Cubes may intentionally intersect, and remain review evidence rather than automatic deletion. Negative/positive regression authored, **NOT_EXECUTED**; no local/native or visual proof.
