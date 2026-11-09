@@ -1423,8 +1423,8 @@
   .sidebar-page .search-controls{margin:0 0 6px}
   .sidebar-page .explorer input,.sidebar-page.explorer input{min-height:32px;background:#1b1e23;border-color:#282c33;border-radius:5px}
   .sidebar-page .project-group{position:relative}
-  .sidebar-page .project-line{min-height:32px}
-  .sidebar-page .project-expand{height:32px;font-weight:550}
+  .sidebar-page .project-line{min-height:36px}
+  .sidebar-page .project-expand{min-height:36px;font-weight:550}
   .sidebar-page .project-actions-toggle{opacity:.48}
   .sidebar-page .project-line:hover .project-actions-toggle,
   .sidebar-page .project-line:focus-within .project-actions-toggle,
@@ -1439,7 +1439,7 @@
     background:transparent;font-size:11px
   }
   .sidebar-page .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
-  .sidebar-page .model-line{min-height:30px}
+  .sidebar-page .model-line{min-height:36px}
   .sidebar-page .model-line.current{background:#2a2e39;border-radius:5px}
   .sidebar-page .model-current-indicator{
     width:auto;margin-right:5px;color:#b7c5dc;font-size:10px;white-space:nowrap
@@ -1522,7 +1522,7 @@
   .sidebar-page .create-folder-form input[aria-invalid="true"]{border-color:#b46b6b}
 
   /* Active project is the first contextual item, not another model picker. */
-  .sidebar-page .active-project-summary{margin:2px 0 15px;padding:11px;border:1px solid #303640;border-radius:7px;background:#20242b}
+  .sidebar-page .active-project-summary{margin:2px 0 15px;padding:12px;border:1px solid var(--ed-border-soft);border-radius:7px;background:var(--ed-raised)}
   .sidebar-page .active-project-heading{margin-bottom:9px;color:var(--ed-muted);font-size:11px;font-weight:650}
   .sidebar-page .active-project-name,.sidebar-page .active-project-model{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
   .sidebar-page .active-project-name strong,.sidebar-page .active-project-model span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
