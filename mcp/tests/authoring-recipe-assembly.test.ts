@@ -369,6 +369,31 @@ describe("Structure-first initial Recipe batch using declared form reasons", () 
       .toBe("SOURCE_RECIPE_MISMATCH");
   });
 
+  test("unrelated external anchor does not invalidate persisted source cohort", () => {
+    const planned = buildAdvancedGeometryRecipeCandidate(blank(), [body]);
+    const extended = structuredClone(planned.next_recipe);
+    extended.prototypes.push({ id: "external-proto", name: "external", size: [2, 2, 2] });
+    extended.patterns.push({
+      kind: "LINEAR", id: "external", prototype_id: "external-proto",
+      feature_id: "external-feature", count: 1, axis: "X", spacing: 0,
+    });
+    extended.constraints = [{
+      kind: "ANCHOR", id: "external-to-body",
+      source_instance_id: "external:0",
+      target_instance_id: "shape:cuboid:z-body:0",
+      axes: ["X"],
+      source_anchor: ["MIN", "CENTER", "CENTER"],
+      target_anchor: ["MAX", "CENTER", "CENTER"],
+    }];
+    expect(compileAuthoringRecipe(extended).placements).toHaveLength(2);
+    expect(reviewStoredAdvancedGeometrySource(extended).state)
+      .toBe("AVAILABLE_MATCHED_SOURCE");
+    extended.constraints[0]!.source_instance_id = "shape:cuboid:z-body:0";
+    extended.constraints[0]!.target_instance_id = "external:0";
+    expect(reviewStoredAdvancedGeometrySource(extended).state)
+      .toBe("SOURCE_RECIPE_MISMATCH");
+  });
+
   test("unresolvable initial batch anchor still fails at canonical final compilation", () => {
     const seed = blank();
     seed.constraints = [{

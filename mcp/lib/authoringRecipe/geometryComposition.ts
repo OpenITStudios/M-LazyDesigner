@@ -198,12 +198,25 @@ export function reviewStoredAdvancedGeometrySource(recipe: AuthoringRecipe): {
           (_, index) => pattern.id + ":" + index);
       })
     );
-    const scopedConstraints = recipe.constraints ?? [];
-    const scopedSymmetry = recipe.symmetry ?? [];
+    // Reconstruct only relationships that can affect this source cohort.
+    // An unrelated feature may depend on the cohort without changing it;
+    // a source-owned instance depending on an external target cannot be
+    // reconstructed safely and must remain a mismatch.
+    const scopedConstraints = (recipe.constraints ?? []).filter(row =>
+      sourceInstanceIds.has(row.source_instance_id));
     if (scopedConstraints.some(row =>
-      !sourceInstanceIds.has(row.source_instance_id) ||
       !sourceInstanceIds.has(row.target_instance_id))) {
       return empty("SOURCE_RECIPE_MISMATCH");
+    }
+    const scopedSymmetry: NonNullable<AuthoringRecipe["symmetry"]>[number][] = [];
+    const selectedMirrorIds = new Set(sourceInstanceIds);
+    for (const relation of recipe.symmetry ?? []) {
+      if (selectedMirrorIds.has(relation.source_instance_id)) {
+        scopedSymmetry.push(relation);
+        selectedMirrorIds.add(relation.target_instance_id);
+      } else if (selectedMirrorIds.has(relation.target_instance_id)) {
+        return empty("SOURCE_RECIPE_MISMATCH");
+      }
     }
     // Canonical symmetry emits targets in relation order; a later mirror may
     // depend on an earlier mirror. Validate that exact dependency order,

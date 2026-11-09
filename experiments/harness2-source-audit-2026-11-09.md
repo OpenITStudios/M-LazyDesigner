@@ -98,3 +98,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source defect:** the persisted-source reviewer accepted only primitive pattern IDs as symmetry sources, even though the canonical Recipe symmetry compiler explicitly permits later relations to mirror previously emitted targets. A valid chained mirror could thus be rejected as `SOURCE_RECIPE_MISMATCH`.
 
 **Candidate:** replay source-owned symmetry identity in canonical declaration order, allowing each target to become a source for subsequent relations; reject forward references, reused targets and foreign sources. Preserve the compiler as sole geometry authority and exact placement comparison. **Regression authored, NOT_EXECUTED**. No visual or native proof.
+
+## Harness² iteration H — external dependency isolation (2026-11-10)
+
+**Source regression identified by inspection:** the previous source-owned anchor replay rejected *all* constraints with an external endpoint, even if the external feature was merely dependent on the selected source cohort. That can falsely block valid persisted-source verification in multi-feature Recipes.
+
+**Correction:** replay only ANCHORs whose dependent/source instance belongs to the source-owned cohort; reject external targets of selected instances, but ignore external dependents that cannot move selected instances. Symmetry selection follows generated ownership in declaration order; preserve the canonical final compiled-placement equality check. This is a bounded source-only correction, not visual proof. **Regression authored, NOT_EXECUTED**.
