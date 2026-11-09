@@ -2,6 +2,10 @@
 
 **Status:** ADOPTED companion to [UI Design Standard](ui-design-standard.md). **Applies to:** Desktop Svelte/Tauri companion, source-grounded previews and future UI changes on `Local`. **Precedence:** product semantics and safety in [Human Interface Contract](interface-ux.md), visual hierarchy in UI Design Standard, then this engineering specification. Existing runtime is the implementation authority; deviations are tracked, not automatically declared fixed.
 
+## Cross-panel layout geometry — mandatory companion
+
+For any screen with adjoining sidebar/content panels, shared footer or action dock, or continuous dividing lines, apply the [Cross-Panel Layout and Alignment Contract](ui-layout-alignment-contract.md). It owns seam alignment, shared height/divider tokens, precise measured viewport acceptance and responsive alignment regression checks. It does **not** change the approved UI hierarchy, theme or SVG registry. Source-only adoption is not visual verification.
+
 ## A. Design system architecture
 
 - Prefer **semantic design tokens**, not one-off hex colors, per-element CSS overrides, copied inline SVG or independently invented spacing.
