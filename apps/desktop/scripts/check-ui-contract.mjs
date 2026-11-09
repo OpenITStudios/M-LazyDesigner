@@ -28,7 +28,7 @@ check(editor.includes('<NativeEditorStage'), 'Native Blockbench stage component 
 check(editor.includes('class="sidebar-tabs"'), 'Projects/Status tab navigation missing');
 check(editor.includes('class="sidebar-footer"'), 'Status footer missing');
 check(editor.includes('class="status-indicator"'), 'System/AI status indicators missing');
-check(editor.includes('class="recent-caret"'), 'Recent Models disclosure alignment missing');
+check(editor.includes('class="tree-caret recent-caret"'), 'Recent Models disclosure alignment missing');
 check(editor.includes('Help & settings'), 'Help & settings label missing');
 check(editor.includes('readinessOutdated'), 'Stale-readiness guard missing');
 check(editor.includes('@container ld-sidebar'), 'Width-aware sidebar rule missing');
