@@ -147,14 +147,14 @@
     const opening = projectActionsId !== id;
     projectActionsId = opening ? id : null;
     if (opening) void tick().then(() =>
-      editorRoot.querySelector<HTMLElement>('[id="ld-project-actions-' + id + '"] button:not(:disabled)')?.focus());
+      editorRoot.ownerDocument.getElementById('ld-project-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
   }
   function toggleModelActions(id: string) {
     projectActionsId = null;
     const opening = modelActionsId !== id;
     modelActionsId = opening ? id : null;
     if (opening) void tick().then(() =>
-      editorRoot.querySelector<HTMLElement>('[id="ld-model-actions-' + id + '"] button:not(:disabled)')?.focus());
+      editorRoot.ownerDocument.getElementById('ld-model-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
   }
   function closeModelActions(event: KeyboardEvent, id: string) {
     if (event.key !== 'Escape' || modelActionsId !== id) return;
