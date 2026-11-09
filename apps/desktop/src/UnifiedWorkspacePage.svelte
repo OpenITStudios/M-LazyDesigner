@@ -458,7 +458,7 @@
     return afterDetach(() => runProjectAction('open-folder', id));
   }
   function registerFolder() {
-    if (statusProbeFailures >= 2 || !status) return Promise.resolve();
+    if (statusProbeFailures >= 2 || readinessOutdated || !status || fixture || actionBusy) return Promise.resolve();
     return afterDetach(addProjectFolder);
   }
   function closeNewFolderForm() {
@@ -505,7 +505,7 @@
     return openModelSafely(model.id);
   }
   function togglePinnedProject(project: ProjectNavigationProject) {
-    if (fixture || actionBusy || statusProbeFailures >= 2) return Promise.resolve();
+    if (fixture || actionBusy || statusProbeFailures >= 2 || readinessOutdated) return Promise.resolve();
     // Pinning is a preference change, not a file picker or a model mutation.
     return runProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id);
   }
