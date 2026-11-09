@@ -192,6 +192,16 @@ async fn add_project_folder() -> Result<ProjectNavigationActionResult, DesktopEr
 }
 
 #[tauri::command]
+async fn create_project_folder(name: String) -> Result<ProjectNavigationActionResult, DesktopError> {
+    let result = tauri::async_runtime::spawn_blocking(move || project_navigation::create_project_folder(&name))
+        .await
+        .map_err(|error| DesktopError::recoverable("PROJECT_FOLDER_CREATE_FAILED", error.to_string()))?
+        .map_err(|message| DesktopError::recoverable("PROJECT_FOLDER_CREATE_FAILED", message))?;
+    operation_log::record("project:create-folder", result.status);
+    Ok(result)
+}
+
+#[tauri::command]
 async fn prepare_delete_project(id: String) -> Result<project_deletion::ProjectDeletePreview, DesktopError> {
     tauri::async_runtime::spawn_blocking(move || project_deletion::prepare(id))
         .await
@@ -304,6 +314,7 @@ fn main() {
             bootstrap_install,
             project_navigation_action,
             add_project_folder,
+            create_project_folder,
             prepare_delete_project,
             cancel_delete_project,
             confirm_delete_project,
