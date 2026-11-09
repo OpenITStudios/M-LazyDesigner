@@ -27,7 +27,7 @@
   export let layout: EditorLayoutState;
   export let openModel: (id?: string) => Promise<void>;
   export let addProjectFolder: () => Promise<void>;
-  export let createProjectFolder: (name: string) => Promise<'created' | 'cancelled' | 'failed'>;
+  export let createProjectFolder: (name: string) => Promise<'created' | 'created-unverified' | 'cancelled' | 'failed'>;
   export let runProjectAction: (action: ProjectAction, id: string) => Promise<void>;
   export let focusCurrentEditor: () => Promise<void>;
   export let openBlockbenchEditor: () => Promise<void>;
@@ -419,11 +419,14 @@
         return;
       }
       const outcome = await createProjectFolder(name);
-      if (outcome === 'created') {
+      if (outcome === 'created' || outcome === 'created-unverified') {
         creatingFolder = false;
         newFolderName = '';
+        if (outcome === 'created-unverified') {
+          localNotice = 'Folder creation was acknowledged, but Projects could not refresh. Refresh status before trying again.';
+        }
       } else if (outcome === 'failed') {
-        folderNameError = 'Could not complete the folder operation. See the error above.';
+        folderNameError = 'Folder creation could not be confirmed. Check the error above before retrying.';
       }
       // Cancelling the location picker keeps the name so it can be retried.
     } catch (error) {
