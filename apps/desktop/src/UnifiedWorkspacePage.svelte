@@ -765,7 +765,7 @@
             <section id="ld-sidebar-status" role="tabpanel" aria-labelledby="ld-sidebar-status-tab"
               hidden={sidebarTab !== 'status'} class="sidebar-page sidebar-status">
           <section class="status-overview" aria-label="System status">
-            <h3>Connection status</h3>
+            <h3>System status</h3>
             <div class="status-overview-row">
               <span class="status-overview-label">System readiness</span>
               <span class="status-overview-value">
