@@ -568,9 +568,10 @@
               <div class="project-group">
                 <div class="project-line" class:active-project={active?.project_id === project.id}>
                   <button type="button" class="project-expand"
-                    aria-label={search.trim()
+                    aria-label={(search.trim()
                       ? 'Filtered models in project ' + project.name
-                      : (expanded(project) ? 'Hide models for ' : 'Show models for ') + project.name}
+                      : (expanded(project) ? 'Hide models for ' : 'Show models for ') + project.name)
+                      + (active?.project_id === project.id ? ', contains current model' : '')}
                     aria-expanded={expanded(project) || Boolean(search.trim())}
                     disabled={Boolean(search.trim())}
                     onclick={() => toggleProject(project)}>
@@ -579,7 +580,7 @@
                     <span class="project-icon" aria-hidden="true"><EditorChromeIcon name="folder"/></span>
                     <span class="project-name" title={project.name}>{project.name}</span>
                     {#if active?.project_id === project.id}
-                      <span class="project-active-indicator" aria-label="Contains current model" title="Contains current model">●</span>
+                      <span class="project-active-indicator" aria-hidden="true" title="Contains current model">●</span>
                     {/if}
                   </button>
                   <button type="button" class="project-actions-toggle"
@@ -1038,6 +1039,7 @@
   .project-line {display:flex;align-items:center;gap:1px;min-height:30px}
   .project-line:focus-within{background:var(--ed-raised)}
   .project-line.active-project .project-name{color:var(--ed-text);font-weight:650}
+  .project-line.active-project .project-icon{color:var(--ed-text)}
   .project-active-indicator{margin-left:auto;flex:none;color:var(--ed-accent);font-size:9px;line-height:1}
   .project-expand {
     display:flex;align-items:center;gap:6px;flex:1;min-width:0;
@@ -1048,7 +1050,11 @@
   .project-expand:hover:not(:disabled),.model-open:hover:not(:disabled),.recent-model:hover:not(:disabled){
     background:var(--ed-raised);color:var(--ed-text);
   }
+  /* Search results remain readable and keyboard-discoverable as static tree headers. */
   .project-expand:disabled{opacity:1;cursor:default}
+  .project-expand:focus-visible,.project-actions-toggle:focus-visible{
+    outline:2px solid var(--ed-accent);outline-offset:-2px;
+  }
   .tree-caret{
     display:grid;place-items:center;flex:none;
     width:13px;height:16px;color:var(--ed-muted-soft);
