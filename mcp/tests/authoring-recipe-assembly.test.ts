@@ -322,6 +322,25 @@ describe("Structure-first initial Recipe batch using declared form reasons", () 
     expect(seed).toEqual(original);
   });
 
+  test("persisted source remains matched after source-owned anchor placement", () => {
+    const seed = blank();
+    seed.constraints = [{
+      kind: "ANCHOR", id: "detail-attaches-to-body",
+      source_instance_id: "shape:cuboid:a-detail:0",
+      target_instance_id: "shape:cuboid:z-body:0",
+      axes: ["X"],
+      source_anchor: ["MIN", "CENTER", "CENTER"],
+      target_anchor: ["MAX", "CENTER", "CENTER"],
+    }];
+    const planned = buildAdvancedGeometryRecipeCandidate(seed, [detail, body]);
+    expect(reviewStoredAdvancedGeometrySource(planned.next_recipe).state)
+      .toBe("AVAILABLE_MATCHED_SOURCE");
+    const tampered = structuredClone(planned.next_recipe);
+    tampered.constraints![0]!.target_instance_id = "external:0";
+    expect(reviewStoredAdvancedGeometrySource(tampered).state)
+      .toBe("SOURCE_RECIPE_MISMATCH");
+  });
+
   test("unresolvable initial batch anchor still fails at canonical final compilation", () => {
     const seed = blank();
     seed.constraints = [{

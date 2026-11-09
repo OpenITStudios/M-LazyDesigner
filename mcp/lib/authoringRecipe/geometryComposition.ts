@@ -184,6 +184,31 @@ export function reviewStoredAdvancedGeometrySource(recipe: AuthoringRecipe): {
       patterns: [],
     }, sources).next_recipe;
     const selected = new Set(sources.map(source => source.id));
+    // A persisted source cohort can legitimately be moved by explicit
+    // Recipe ANCHOR constraints. Reconstruct those transformations only
+    // when every endpoint belongs to this exact source-owned cohort.
+    // External dependencies remain unverified rather than guessed.
+    const sourceInstanceIds = new Set(
+      expected.patterns.flatMap(pattern => {
+        if (pattern.kind === "GRID") {
+          return Array.from({ length: pattern.counts[0] * pattern.counts[1] },
+            (_, index) => pattern.id + ":" + index);
+        }
+        return Array.from({ length: pattern.count },
+          (_, index) => pattern.id + ":" + index);
+      })
+    );
+    const scopedConstraints = recipe.constraints ?? [];
+    const scopedSymmetry = recipe.symmetry ?? [];
+    if (scopedConstraints.some(row =>
+      !sourceInstanceIds.has(row.source_instance_id) ||
+      !sourceInstanceIds.has(row.target_instance_id)) ||
+      scopedSymmetry.some(row =>
+        !sourceInstanceIds.has(row.source_instance_id))) {
+      return empty("SOURCE_RECIPE_MISMATCH");
+    }
+    expected.constraints = structuredClone(scopedConstraints);
+    expected.symmetry = structuredClone(scopedSymmetry);
     const ownerByPattern = new Map(
       recipe.patterns.map(pattern => [pattern.id, pattern.feature_id] as const)
     );

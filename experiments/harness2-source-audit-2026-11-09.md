@@ -86,3 +86,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Candidate:** preserve primary-form-first ordering; defer the canonical Recipe compilation and per-feature realized-count validation until the full candidate has been constructed. Continue using the existing compiler as the sole authority; no dependency inference, native mutation or reference-content approval is introduced. A missing target must still fail at final compile.
 
 **Falsifiers authored:** primary/detail batch with a declared forward endpoint and a missing endpoint; assert original Recipe immutability and source-only status. **NOT_EXECUTED**. Curve construction retains its existing specialized path.
+
+## Harness² iteration F — persisted source vs constrained geometry (2026-11-09)
+
+**Source defect:** `reviewStoredAdvancedGeometrySource` regenerated an unconstrained expected Recipe, then compared it to a saved Recipe whose valid source-owned ANCHOR constraints had moved placements. This could falsely classify a valid saved shape as `SOURCE_RECIPE_MISMATCH` and block a subsequent bounded revision.
+
+**Candidate:** replay only explicit constraints and symmetry within the exact reconstructed source-owned instance cohort before the existing compiled-placement comparison. Cross-cohort or unresolved endpoints still fail closed; no guessed attachment, image proof or native authorization. **Regression authored, NOT_EXECUTED**.
