@@ -1470,7 +1470,18 @@
     grid-template-columns:minmax(0,1fr) 6px var(--tools-width,260px);
   }
   .unified-body.tools-rail.with-inspector{grid-template-columns:minmax(0,1fr) 44px}
-  .unified-sidebar{display:flex;flex-direction:column;overflow:hidden;padding:0;border-left:1px solid var(--ed-border);background:#15171b;font-size:13px}
+  .unified-sidebar{display:flex;flex-direction:column;overflow:hidden;padding:0;border-left:1px solid var(--ed-border);background:#15171b;font-size:13px;container:ld-sidebar / inline-size}
+  /* Width-aware rather than window-aware: the dock itself ranges 220–300px. */
+  @container ld-sidebar (max-width: 240px) {
+    .sidebar-top{padding-inline:9px}
+    .sidebar-page{padding-inline:9px}
+    .sidebar-tabs button{gap:5px;font-size:12px}
+    .sidebar-page .project-section-heading{gap:4px}
+    .sidebar-page .project-section-heading h3{font-size:12px}
+    .sidebar-page .project-section-heading .sidebar-add-folder{padding-inline:6px;font-size:11px}
+    .sidebar-status .status-overview-row{gap:5px}
+    .sidebar-status .status-overview-value{font-size:11px}
+  }
   .sidebar-top{flex:none;padding:0 12px}
   .sidebar-brand{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid var(--ed-border);color:var(--ed-text);font-size:14px}
   .sidebar-brand :global(svg){color:var(--ed-accent)}
