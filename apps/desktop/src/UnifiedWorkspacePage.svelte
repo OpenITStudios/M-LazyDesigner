@@ -27,7 +27,7 @@
   export let layout: EditorLayoutState;
   export let openModel: (id?: string) => Promise<void>;
   export let addProjectFolder: () => Promise<void>;
-  export let createProjectFolder: (name: string) => Promise<void>;
+  export let createProjectFolder: (name: string) => Promise<'created' | 'cancelled' | 'failed'>;
   export let runProjectAction: (action: ProjectAction, id: string) => Promise<void>;
   export let focusCurrentEditor: () => Promise<void>;
   export let openBlockbenchEditor: () => Promise<void>;
@@ -56,6 +56,7 @@
   let creatingFolder = false;
   let newFolderName = '';
   let folderNameError = '';
+  let creatingFolderPending = false;
   let executing = false;
   let localNotice = '';
   let searchInput: HTMLInputElement | undefined;
@@ -407,6 +408,31 @@
     if (statusProbeFailures >= 2 || !status) return Promise.resolve();
     return afterDetach(addProjectFolder);
   }
+  async function submitNewFolder(name: string) {
+    if (creatingFolderPending || fixture || actionBusy || !status || statusProbeFailures >= 2) return;
+    creatingFolderPending = true;
+    folderNameError = '';
+    try {
+      const restored = await detach();
+      if (!restored) {
+        folderNameError = 'Restore the Blockbench window before choosing a folder location.';
+        return;
+      }
+      const outcome = await createProjectFolder(name);
+      if (outcome === 'created') {
+        creatingFolder = false;
+        newFolderName = '';
+      } else if (outcome === 'failed') {
+        folderNameError = 'Could not complete the folder operation. See the error above.';
+      }
+      // Cancelling the location picker keeps the name so it can be retried.
+    } catch (error) {
+      folderNameError = 'Folder operation failed. Check the error and retry.';
+      localNotice = String(error);
+    } finally {
+      creatingFolderPending = false;
+    }
+  }
   function chooseModel(model: ProjectNavigationModel) {
     // Model IDs are revalidated by Rust. Never fake activation in the UI.
     if (model.active) {
@@ -604,25 +630,25 @@
           <form class="create-folder-form" onsubmit={(event) => {
             event.preventDefault();
             const name = newFolderName;
-            if (actionBusy || fixture) return;
+            if (actionBusy || fixture || creatingFolderPending) return;
             if (!validateModelRenameStem(name)) {
               folderNameError = 'Enter a valid folder name without reserved Windows characters or trailing spaces.';
               return;
             }
-            folderNameError = '';
-            void afterDetach(() => createProjectFolder(name));
+            void submitNewFolder(name);
           }}>
             <label for="ld-new-folder-name">Project folder name</label>
             <input id="ld-new-folder-name" type="text" maxlength="120"
               placeholder="e.g. Furniture Pack" bind:value={newFolderName} required
               aria-invalid={Boolean(folderNameError)}
               oninput={() => folderNameError = ''}
-              onkeydown={(event) => { if (event.key === 'Escape') { creatingFolder = false; newFolderName = ''; } }}/>
+              disabled={creatingFolderPending}
+              onkeydown={(event) => { if (event.key === 'Escape' && !creatingFolderPending) { creatingFolder = false; newFolderName = ''; folderNameError = ''; } }}/>
             {#if folderNameError}<p class="folder-name-error" role="alert">{folderNameError}</p>{/if}
             <p>Choose the parent location next. This creates a folder only, not a model.</p>
             <div class="create-folder-actions">
-              <button type="button" onclick={() => { creatingFolder = false; newFolderName = ''; folderNameError = ''; }}>Cancel</button>
-              <button type="submit" disabled={!newFolderName.trim() || actionBusy || fixture}>Choose location…</button>
+              <button type="button" disabled={creatingFolderPending} onclick={() => { creatingFolder = false; newFolderName = ''; folderNameError = ''; }}>Cancel</button>
+              <button type="submit" disabled={!newFolderName.trim() || actionBusy || fixture || creatingFolderPending}>{creatingFolderPending ? 'Creating…' : 'Choose location…'}</button>
             </div>
           </form>
         {/if}
