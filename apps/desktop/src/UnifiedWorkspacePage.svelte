@@ -1563,6 +1563,19 @@
   .sidebar-page .active-project-focus:hover:not(:disabled){background:var(--ed-select);color:var(--ed-text)}
   .sidebar-page .active-project-focus:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .active-project-empty{font-size:12px;color:var(--ed-muted);line-height:1.4}
+  /* Unified keyboard affordance for the sidebar's primary controls.
+     Keep outlines visible on dark surfaces without relying on hover. */
+  .sidebar-tabs button:focus-visible,
+  .sidebar-footer:focus-visible,
+  .sidebar-page .recent-model:focus-visible,
+  .sidebar-page .add-existing-folder:focus-visible,
+  .sidebar-page .create-folder-actions button:focus-visible,
+  .sidebar-status .status-overview-actions button:focus-visible,
+  .sidebar-page .project-expand:focus-visible,
+  .sidebar-page .model-open:focus-visible{
+    outline:2px solid var(--ed-accent);
+    outline-offset:-2px;
+  }
   .sidebar-status .status-overview-value:focus-visible{outline:2px solid var(--ed-accent);outline-offset:3px;border-radius:3px}
   .sidebar-page .project-inline-actions.open-up{top:calc(-1 * var(--context-menu-height) - 4px)}
   .sidebar-page .model-context-actions.open-up{top:auto;bottom:calc(100% + 4px)}
