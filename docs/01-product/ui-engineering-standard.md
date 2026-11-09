@@ -192,3 +192,22 @@ Every interactive control has: accessible name, visible affordance, action desti
 **P0 — release boundary:** Unified Editor remains dev-gated. Native placement/recovery and Windows packaging are not yet validated. HTML preview and generated branding mockups are not evidence of live Blockbench rendering.
 
 **Source audit verdict:** placement and labeling improved; native/pixel alignment **UNVERIFIED**. Do not describe this as a completed end-to-end UI audit until actual visual and interaction evidence exists.
+
+## R. Final preview V11 visual blind-spot audit — 2026-11-09
+
+**Scope:** user-provided screenshots of the Recent Models disclosure and Ready footer, plus source review of `UnifiedWorkspacePage.svelte` on `Local`. No native screenshot or executable test was performed.
+
+| Severity | Observation | Source action / remaining gate |
+| --- | --- | --- |
+| P1 | Recent Models chevron appears too low relative to the label | Added a dedicated `recent-caret` layout with explicit 16×20 alignment, a 14px centered SVG, and separate title/count flex items. Verify at 220/260/300px and Windows 100/125/150% scaling. |
+| P2 | Footer Ready trailing glyph is redundant and visually distracting | Removed the decorative diagnostic glyph; Ready footer remains an accessible Status navigation action with last-checked tooltip. |
+| P1 | Active model Focus action could remain enabled on an aged readiness snapshot | Aligned Active Project focus, tree row, context menu and handler with `readinessOutdated` guard. Opening a different model retains its own backend validation. |
+| P1 | Context menus near the lower edge may be clipped by the scrollable sidebar | Existing source has flip-up positioning and height caps; native/browser viewport clipping and keyboard focus are unverified. |
+| P1 | 220px sidebar could truncate Help & settings, long model names or search content | Container rules and ellipsis exist; verify tooltip and accessible labels under width/DPI constraints. |
+| P1 | Focus Editor exit control may overlap native surface at narrow widths | Source provides a separate exit button; position, click target and native stacking require real visual verification. |
+| P2 | Dense tree/section spacing risks inconsistent visual rhythm | Comfortable-density spacing authored; verify tab, active summary, recent group, folder controls and footer with actual rendered measurements. |
+| P2 | Some legacy CSS selectors remain alongside newer overrides | Consolidation can improve maintainability, but should be done in a separate behavior-preserving change with visual comparison, not by speculative bulk deletion. |
+
+**Acceptance criteria:** Recent chevron and label optical centers match; footer has only status dot and label; no clipped 32px controls or obscured context menus; selection remains visible without color alone; keyboard focus and disabled states are legible; 16px SVGs have consistent stroke and optical size; the native Blockbench center remains untouched.
+
+**Evidence boundary:** these are source-authored corrections and explicit QA targets, not a claim of completed pixel-perfect or native validation. Do not introduce a fake native viewport or unapproved UI features to close the checklist.
