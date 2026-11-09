@@ -134,3 +134,9 @@ The highest-value next investigation is **not** to add more agent methods or a n
 **Source defect:** `analyzeAxisAlignedSurfaceEvidence` counted every input row as a separate Cube, even when two rows shared the same native UUID. Such duplicate input can manufacture a self-overlap and a spurious z-fighting blocker, violating the intended distinction between purposeful overlapping distinct Cubes and malformed duplicate observations. The world-OBB reviewer already requires unique UUIDs.
 
 **Candidate:** fail closed on missing/duplicate native Cube UUIDs before same-parent pair scans. Do not change the positive-volume-overlap policy: two distinct same-parent Cubes may intentionally intersect, and remain review evidence rather than automatic deletion. Negative/positive regression authored, **NOT_EXECUTED**; no local/native or visual proof.
+
+## Harness² iteration N — exact spatial vector arity across surface reviewers (2026-11-10)
+
+**Source defect:** `finite3` accepted vectors with four or more components by checking only the first three. A malformed Cube could be silently treated as a valid axis-aligned volume, allowing a false clean scan or invented overlap. The OBB owner was already hardened to exact arity in iteration J, but the surface owner remained inconsistent.
+
+**Candidate:** require exactly three finite numeric components for all `finite3` checks in the existing surface owner. Regression authored for four-coordinate bounds and four-component rotation: both must remain partial and must not enter same-parent overlap comparisons. This is input validity only; intentional overlap remains advisory. **Tests NOT_EXECUTED; local/native/visual UNVERIFIED.**

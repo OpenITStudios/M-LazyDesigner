@@ -121,6 +121,25 @@ test("duplicate Cube UUID cannot manufacture a surface collision with itself", (
   expect(distinct.coplanar_overlap_count).toBeGreaterThan(0);
 });
 
+test("surface analysis never truncates malformed four-axis Cube coordinates", () => {
+  const base = { ...cube("base", [0, 0, 0], [4, 4, 4]), parent_id: "root" };
+  const extraFrom = { ...cube("extra", [0, 0, 0, 99], [4, 4, 4]), parent_id: "root" };
+  const invalidBounds = analyzeAxisAlignedSurfaceEvidence([base, extraFrom]);
+  expect(invalidBounds.state).toBe("partial");
+  expect(invalidBounds.invalid_cube_count).toBe(1);
+  expect(invalidBounds.checked_pair_count).toBe(0);
+  expect(invalidBounds.coplanar_overlap_count).toBe(0);
+
+  const extraRotation = {
+    ...cube("rotated", [0, 0, 0], [4, 4, 4], [0, 0, 0, 0]),
+    parent_id: "root",
+  };
+  const invalidRotation = analyzeAxisAlignedSurfaceEvidence([base, extraRotation]);
+  expect(invalidRotation.state).toBe("partial");
+  expect(invalidRotation.excluded_rotated_cube_count).toBe(1);
+  expect(invalidRotation.checked_pair_count).toBe(0);
+});
+
 test("positive volume overlap is evidence but not automatically a texture blocker", () => {
   const result = analyzeAxisAlignedSurfaceEvidence([
     cube("outer", [0, 0, 0], [6, 6, 6]),

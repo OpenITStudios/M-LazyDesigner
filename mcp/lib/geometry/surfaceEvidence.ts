@@ -900,7 +900,10 @@ type Face = {
 };
 
 function finite3(values: readonly number[] | undefined): values is readonly [number, number, number] {
-  return Boolean(values && values.length >= 3 && values.slice(0, 3).every(Number.isFinite));
+  // A 4-component vector is not a valid 3D Cube transform. Ignoring the
+  // fourth entry can turn malformed native geometry into a false clean scan.
+  return Boolean(Array.isArray(values) && values.length === 3 &&
+    values.every(value => typeof value === "number" && Number.isFinite(value)));
 }
 
 function hasRotation(cube: SurfaceEvidenceCube, epsilon: number): boolean {
