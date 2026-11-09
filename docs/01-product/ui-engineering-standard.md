@@ -166,3 +166,13 @@ Every interactive control has: accessible name, visible affordance, action desti
 - **Native boundary inspected:** `NativeEditorStage.svelte` uses Rust `native_editor_surface` receipts for present/update/detach. Detach requires an explicit `DETACHED` receipt; failure marks placement `UNCERTAIN` and blocks the caller's navigation. The source also has an initial placement attempt and resize-driven updates.
 - **Release blockers remain:** actual Windows native composition, detach/restore under rapid navigation, focus/keyboard ownership, resize/DPI and taskbar recovery, error-path behavior, executable tests, and an explicit product decision to expose the Editor in production. Do not remove `import.meta.env.DEV` until these gates have evidence.
 - **Current verdict:** design approved, source improvements authored, **production Unified Editor NOT ENABLED / NATIVE UNVERIFIED / PACKAGE NOT READY**.
+
+## P. Width-aware sidebar review — 2026-11-09
+
+**Source:** `apps/desktop/src/UnifiedWorkspacePage.svelte` at branch `Local`. The dock supports widths from 220px to 300px, independent of the overall window width.
+
+- A named CSS inline-size container (`ld-sidebar`) now scopes compact styles to the actual sidebar rather than relying exclusively on `@media` window widths.
+- At 240px or less: reduce horizontal padding and tab gaps, keep New Folder readable, and tighten the Status label/value spacing. Do not hide labels, shorten action names arbitrarily, or remove keyboard access.
+- At 260px and 300px: retain baseline typography, tree rows, selected-model indicator and context-menu action sizes.
+- **Future visual acceptance matrix:** 220/240/260/300px; ready/stale/error states; long project/model names; project menu near bottom edge; keyboard-only navigation; 100/125/150% Windows DPI; light/forced-colors as applicable.
+- **Evidence:** source-only responsive rules authored. No browser screenshot, computed layout, native Windows check or pixel-level assertion was performed.
