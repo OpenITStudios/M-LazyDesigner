@@ -680,6 +680,27 @@ pub(crate) fn add_project_folder() -> Result<ProjectNavigationActionResult, Stri
     Ok(ProjectNavigationActionResult { status: register_project_folder_at(&path, &folder)? })
 }
 
+/// Fail closed on case-insensitive Windows name collisions, including an
+/// existing file with the requested name. Never create models or subfolders.
+fn create_empty_project_directory(parent: &Path, name: &str) -> Result<PathBuf, String> {
+    let name = validated_model_rename_stem(name)?;
+    plain_project_folder(parent)?;
+    let requested = name.to_lowercase();
+    for entry in fs::read_dir(parent)
+        .map_err(|error| format!("Cannot inspect the selected parent folder: {error}"))?
+    {
+        let entry = entry.map_err(|error| format!("Cannot inspect an existing folder entry: {error}"))?;
+        if entry.file_name().to_string_lossy().to_lowercase() == requested {
+            return Err("A file or folder with that name already exists in this location.".to_string());
+        }
+    }
+    let target = parent.join(name);
+    fs::create_dir(&target).map_err(|error| {
+        format!("Could not create project folder (nothing was registered): {error}")
+    })?;
+    Ok(target)
+}
+
 /// Creates only a project directory. Never creates a model or asset file.
 pub(crate) fn create_project_folder(name: &str) -> Result<ProjectNavigationActionResult, String> {
     let name = validated_model_rename_stem(name)?;
@@ -690,11 +711,7 @@ pub(crate) fn create_project_folder(name: &str) -> Result<ProjectNavigationActio
     let parent = fs::canonicalize(&parent)
         .map_err(|_| "Selected parent folder is unavailable.".to_string())?;
     plain_project_folder(&parent)?;
-    let target = parent.join(name);
-    // create_dir is non-overwriting; no mkdir -p and no implicit asset files.
-    fs::create_dir(&target).map_err(|error| {
-        format!("Could not create project folder (nothing was registered): {error}")
-    })?;
+    let target = create_empty_project_directory(&parent, name)?;
     let prefs_path = project_navigation_preferences_path()
         .ok_or_else(|| "Project folder created, but LOCALAPPDATA is unavailable; folder was not registered.".to_string())?;
     match register_project_folder_at(&prefs_path, &target) {
@@ -1120,6 +1137,20 @@ pub(crate) fn path(id: &str, profile_id: Option<&str>) -> Result<ProjectPathResu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_project_folder_is_empty_and_rejects_existing_names() {
+        let parent = temp_project("folder-create");
+        let created = create_empty_project_directory(&parent, "Furniture Pack").unwrap();
+        assert!(created.is_dir());
+        assert_eq!(fs::read_dir(&created).unwrap().count(), 0);
+        assert!(create_empty_project_directory(&parent, "Furniture Pack").is_err());
+        assert!(create_empty_project_directory(&parent, "furniture pack").is_err());
+        assert!(create_empty_project_directory(&parent, "CON").is_err());
+        fs::write(parent.join("AlreadyHere"), b"file").unwrap();
+        assert!(create_empty_project_directory(&parent, "alreadyhere").is_err());
+        fs::remove_dir_all(parent).unwrap();
+    }
 
     #[test]
     fn model_rename_stem_rejects_windows_unsafe_names() {
