@@ -767,7 +767,7 @@
           <section class="status-overview" aria-label="System status">
             <h3>Connection status</h3>
             <div class="status-overview-row">
-              <span class="status-overview-label">Blockbench</span>
+              <span class="status-overview-label">System readiness</span>
               <span class="status-overview-value">
                 <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
                   class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
@@ -777,25 +777,26 @@
             <div class="status-overview-row">
               <span class="status-overview-label">AI connection</span>
               <span class="status-overview-value">
-                <i class:verified={Boolean(aiStatus?.recentlyVerified)}
-                  class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
-                {aiStatus?.label ?? 'Not verified'}
+                <i class:verified={Boolean(aiStatus?.recentlyVerified && !loading)}
+                  class:stale={Boolean(aiStatus?.needsRefresh || loading)} aria-hidden="true"></i>
+                {loading ? 'Checking…' : aiStatus?.label ?? 'Not verified'}
               </span>
             </div>
             {#if statusProbeFailures >= 2 || readinessOutdated || !status?.readiness.ready}
               <p class="status-overview-help" role="status">{readinessDetail}</p>
             {/if}
-            {#if aiStatus?.needsRefresh}
+            {#if !loading && aiStatus?.needsRefresh}
               <p class="status-overview-help">{aiStatus.detail}</p>
             {/if}
             <div class="status-overview-actions">
               <button type="button" disabled={actionBusy || fixture || loading}
                 onclick={() => void refresh()}><EditorChromeIcon name="refresh"/> Refresh</button>
               <button type="button" class="text-action" disabled={navigationPending}
-                onclick={navigateSupport}>Help & troubleshooting</button>
+                onclick={navigateSupport}>Troubleshoot</button>
             </div>
             <details class="status-advanced">
               <summary>Technical details</summary>
+              <p class="subtle-note">Values below are from the latest Desktop observation, not live measurements.</p>
               <div class="diagnostic-facts" aria-label="Last observed component status">
                 <div><span>Blockbench process</span><strong>{status
                   ? status.blockbench.running ? 'Detected' : 'Not running'
@@ -810,7 +811,7 @@
                 <div><span>Projects observed</span><strong>{observedProjectCount ?? '—'}</strong></div>
                 <div><span>Models observed</span><strong>{observedModelCount ?? '—'}</strong></div>
               </div>
-              <p class="subtle-note">{aiStatus?.detail ?? 'AI connection has not been verified.'}</p>
+              <p class="subtle-note">AI: {aiStatus?.detail ?? 'Connection has not been verified.'}</p>
               {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
               {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
               <button type="button" class="text-action" disabled={navigationPending}
