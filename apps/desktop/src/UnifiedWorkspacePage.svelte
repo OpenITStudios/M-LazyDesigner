@@ -566,7 +566,7 @@
           <div class="project-tree" role="group" aria-label="Project models">
             {#each projects as project (project.id)}
               <div class="project-group">
-                <div class="project-line">
+                <div class="project-line" class:active-project={active?.project_id === project.id}>
                   <button type="button" class="project-expand"
                     aria-label={search.trim()
                       ? 'Filtered models in project ' + project.name
@@ -578,6 +578,9 @@
                       aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
                     <span class="project-icon" aria-hidden="true"><EditorChromeIcon name="folder"/></span>
                     <span class="project-name" title={project.name}>{project.name}</span>
+                    {#if active?.project_id === project.id}
+                      <span class="project-active-indicator" aria-label="Contains current model" title="Contains current model">●</span>
+                    {/if}
                   </button>
                   <button type="button" class="project-actions-toggle"
                     data-project-id={project.id}
@@ -1032,7 +1035,10 @@
   .search-count.sr-only{padding:0}
   .project-tree {display:grid;gap:0;min-width:0;border-top:1px solid var(--ed-border-soft);padding-top:3px}
   .project-group {min-width:0} /* Blockbench Outliner uses contiguous rows; no divider between sibling folders. */
-  .project-line {display:flex;align-items:center;gap:1px;min-height:30px} .project-line:focus-within{background:var(--ed-raised)}
+  .project-line {display:flex;align-items:center;gap:1px;min-height:30px}
+  .project-line:focus-within{background:var(--ed-raised)}
+  .project-line.active-project .project-name{color:var(--ed-text);font-weight:650}
+  .project-active-indicator{margin-left:auto;flex:none;color:var(--ed-accent);font-size:9px;line-height:1}
   .project-expand {
     display:flex;align-items:center;gap:6px;flex:1;min-width:0;
     height:30px;padding:2px 5px;line-height:1.2;
