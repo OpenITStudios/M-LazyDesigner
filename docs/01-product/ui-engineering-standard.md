@@ -242,3 +242,21 @@ Every interactive control has: accessible name, visible affordance, action desti
 | Windows icons/installer | Regenerated Tauri icon outputs and actual NSIS package verification | NOT_EXECUTED |
 
 **Freeze rule:** do not reopen the approved layout or icon family for speculative polish. Only fix evidence-backed regressions discovered by actual validation, keeping changes minimal and preserving the user's design approval. Any final report must distinguish `DESIGN_APPROVED`, `SOURCE_AUTHORED`, `NOT_EXECUTED`, and `NATIVE_UNVERIFIED`.
+
+## T. Native editor absent-state recovery — 2026-11-09
+
+**User-reported issue:** when Blockbench is closed, the large native reservation appears empty and lacks an obvious way to restart the editor. This is a usability recovery path, not permission to simulate Blockbench.
+
+**Referenced method:** pinned `OpenITStudios/M-Minecraft-Emulator` `Local` at `f24a1aad133ad80eb15d779545805769eca492f4`; adopted its `PIN → EXECUTION CONTEXT → READ MINIMUM → DIAGNOSE OWNER → BOUNDED CHANGE → VERIFY → COMMIT/HANDOFF → STOP` discipline, rather than copying emulator runtime logic or modifying its repository.
+
+**Source correction:** `UnifiedWorkspacePage.svelte` now overlays a centered, host-owned recovery panel only when a successful, recent Desktop snapshot confirms `blockbench.running === false`. The panel exposes `Open Blockbench` through existing `openBlockbenchEditor` after the original Detach safety path and `Refresh status` through existing status refresh. Unverified/loading/stale/unavailable snapshots show `Checking Blockbench` and only Refresh; no false stopped claim. The underlying `NativeEditorStage` stays mounted and owns the untouched native aperture. No automation retries, process polling, imitation viewport, or second lifecycle controller were added.
+
+**Acceptance matrix for later executable/native review:**
+1. Running and fresh → recovery panel absent; original native editor remains authoritative.
+2. Stopped and fresh → centered `Blockbench is closed`, enabled launch only outside busy/fixture state.
+3. Launch acknowledged but verification pending → no false success; refresh/observed state controls recovery.
+4. Loading/unavailable/stale/probe failure → `Checking Blockbench`, no launch allowed until observation succeeds.
+5. Detach fails or placement uncertain → existing error/recovery protections continue to block unsafe navigation.
+6. Keyboard focus, accessible labels, long locale strings, Windows DPI, native stacking and Focus Editor mode require actual review.
+
+**Proof:** `SOURCE_AUTHORED`, `REGRESSION_AUTHORED_NOT_RUN`; no Svelte compile, Windows native run, Blockbench runtime or package verification. Production Editor remains dev-gated.
