@@ -594,7 +594,7 @@
 
         {#if !search.trim() && active}
           <section class="active-project-summary" aria-label="Active project at last observation">
-            <div class="active-project-heading">Active project</div>
+            <div class="active-project-heading">{active.project_id ? 'Active project' : 'Current model'}</div>
             <div class="active-project-name" title={active.project_name ?? 'Project not identified'}>
               <EditorChromeIcon name="folder"/>
               <strong>{active.project_name ?? 'Unassigned project'}</strong>
