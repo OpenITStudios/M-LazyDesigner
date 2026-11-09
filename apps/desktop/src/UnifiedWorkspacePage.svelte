@@ -920,7 +920,7 @@
   /* Blockbench panel tab bars are 40px in the v5.2.1 source. */
   .pane-heading {
     display:flex;align-items:center;justify-content:space-between;gap:4px;
-    height:40px;margin:0 -7px 10px;padding:0 9px;
+    height:40px;margin:0 -7px 7px;padding:0 9px;
     background:var(--color-back);border-bottom:1px solid var(--ed-border);
   }
   .pane-actions{display:flex;align-items:center;gap:3px;min-width:0}
@@ -937,7 +937,7 @@
   }
   .diagnostic-tabs {
     display:flex;align-items:stretch;flex:1 1 auto;min-width:0;
-    height:40px;padding:3px 0 0;gap:1px;
+    height:40px;padding:3px 0 0;gap:0;
     background:var(--color-back);
   }
   .diagnostic-collapse{
@@ -951,7 +951,7 @@
   .diagnostic-collapse:focus-visible{outline:2px solid var(--ed-accent);outline-offset:-2px}
   .diagnostic-tabs button {
     flex:1 1 0;min-width:0;height:36px;margin:0;padding:0 4px;
-    border:0;border-radius:5px 5px 0 0;
+    border:0;border-radius:3px 3px 0 0;
     background:transparent;color:var(--ed-muted-soft);
     font-size:12px;font-weight:650;letter-spacing:-.01em;
     text-transform:uppercase;white-space:nowrap;cursor:pointer;
@@ -959,10 +959,10 @@
   .diagnostic-tabs button.selected {
     background:var(--color-ui);color:var(--ed-text);
   }
-  .diagnostic-facts{display:grid;margin:10px 0;border-top:1px solid var(--ed-border)}
+  .diagnostic-facts{display:grid;margin:8px 0;border-top:1px solid var(--ed-border)}
   .diagnostic-facts>div{
     display:flex;justify-content:space-between;align-items:flex-start;gap:9px;
-    padding:8px 0;border-bottom:1px solid var(--ed-border);font-size:11px;
+    padding:6px 0;border-bottom:1px solid var(--ed-border);font-size:11px;
   }
   .diagnostic-facts span{color:var(--ed-muted)}
   .diagnostic-facts strong{color:var(--ed-text);text-align:right;font-weight:650;overflow-wrap:anywhere}
@@ -974,23 +974,23 @@
     outline:2px solid var(--ed-accent);outline-offset:-2px;
   }
   .pane-heading button {
-    display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--ed-border);
-    border-radius:3px;background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
+    display:grid;place-items:center;width:27px;height:27px;border:1px solid transparent;
+    border-radius:2px;background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
   }
   .search-label{display:block;margin:0 4px 5px;font-size:11px;color:var(--ed-muted)}
-  .search-controls{position:relative;display:flex;align-items:center;gap:4px;min-width:0;margin-top:5px}
+  .search-controls{position:relative;display:flex;align-items:center;gap:4px;min-width:0;margin:3px 1px 0}
   .search-icon{
-    position:absolute;left:8px;top:8px;display:grid;place-items:center;
+    position:absolute;left:8px;top:6px;display:grid;place-items:center;
     pointer-events:none;color:var(--ed-muted-soft);
   }
   .explorer input {
-    flex:1 1 auto;width:100%;min-width:0;min-height:32px;border:1px solid var(--ed-border);
-    border-radius:3px;background:var(--ed-bg);color:var(--ed-text);padding:5px 8px 5px 29px;font-size:12px;
+    flex:1 1 auto;width:100%;min-width:0;min-height:28px;border:1px solid var(--ed-border);
+    border-radius:2px;background:var(--color-back);color:var(--ed-text);padding:4px 8px 4px 29px;font-size:12px;
   }
   /* The Editor provides an explicit clear control when filtered. */
   .explorer input::-webkit-search-cancel-button{display:none}
   .search-controls button{
-    flex:none;width:27px;min-height:32px;border:0;border-radius:4px;
+    flex:none;width:27px;min-height:28px;border:0;border-radius:2px;
     background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
   }
   .search-controls button:hover{background:var(--ed-raised);color:var(--ed-text)}
@@ -1137,8 +1137,8 @@
   .recent-heading:hover{background:var(--ed-raised);color:var(--ed-text)}
   .recent-count{margin-left:auto;color:var(--ed-muted-soft);font-size:10px}
   .recent-model {
-    display:grid;gap:2px;width:100%;min-width:0;border:0;border-radius:4px;
-    background:transparent;text-align:left;color:var(--ed-text);padding:6px;font-size:12px;cursor:pointer;
+    display:grid;gap:2px;width:100%;min-width:0;border:0;border-radius:2px;
+    background:transparent;text-align:left;color:var(--ed-text);padding:5px 6px;font-size:12px;cursor:pointer;
   }
   .recent-model span,.recent-model small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .recent-model small{font-size:10px;color:var(--ed-muted-soft)}
@@ -1149,12 +1149,12 @@
   }
   .native-stage :global(.native-editor-page){min-width:0;width:100%}
   .read-only-label {font-size:10px;color:var(--ed-muted-soft);letter-spacing:.04em}
-  .inspector-section{padding:9px 2px 13px;margin-bottom:5px;border-bottom:1px solid var(--ed-border)}
+  .inspector-section{padding:7px 2px 10px;margin-bottom:3px;border-bottom:1px solid var(--ed-border)}
   .inspector-section h4{
-    font-size:12px;font-weight:650;color:var(--ed-text);margin:0 0 10px;
+    font-size:12px;font-weight:650;color:var(--ed-text);margin:0 0 7px;
     text-transform:uppercase;letter-spacing:.03em;
   }
-  .inspector-section p{margin:7px 0;font-size:11px;color:var(--ed-muted);line-height:1.5}
+  .inspector-section p{margin:6px 0;font-size:11px;color:var(--ed-muted);line-height:1.45}
   .inspector-section .subtle-note{color:var(--ed-muted-soft);font-size:11px}
   .pane-actions .read-only-label{font-size:9px;white-space:nowrap}
   .inspector-section button.text-action{color:var(--ed-accent);padding-left:0}
