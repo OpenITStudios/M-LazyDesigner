@@ -623,11 +623,11 @@
             </button>
             {#if recentExpanded}
               {#each recentTargets as target (target.model.id)}
-                <button class="recent-model" type="button" disabled={actionBusy || fixture}
-                  title={target.model.exists ? target.model.name : 'Model file is missing'}
-                  aria-label={'Open recent model ' + target.model.name + ' from ' + target.project.name}
+                <button class="recent-model" type="button" disabled={actionBusy || fixture || !target.model.exists}
+                  title={target.model.exists ? target.model.name + ' — ' + target.project.name : 'Missing file: ' + target.model.name + ' — ' + target.project.name}
+                  aria-label={(target.model.exists ? 'Open recent model ' : 'Missing recent model ') + target.model.name + ' from ' + target.project.name}
                   onclick={() => void openModelSafely(target.model.id)}>
-                  <span>{target.model.name}</span><small>{target.project.name}</small>
+                  <span>{target.model.name}</span><small>{target.model.exists ? target.project.name : target.project.name + ' · Missing file'}</small>
                 </button>
               {/each}
             {/if}
@@ -1259,7 +1259,9 @@
     background:transparent;text-align:left;color:var(--ed-text);padding:5px 6px;font-size:12px;cursor:pointer;
   }
   .recent-model span,.recent-model small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .recent-model small{font-size:10px;color:var(--ed-muted-soft)}
+  .recent-model small{font-size:11px;color:var(--ed-muted-soft)}
+  .recent-model:disabled{cursor:not-allowed;opacity:.72}
+  .recent-model:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .native-stage{
     display:flex;min-width:0;min-height:0;overflow:hidden;
     --ed-native-bg:var(--color-dark);
