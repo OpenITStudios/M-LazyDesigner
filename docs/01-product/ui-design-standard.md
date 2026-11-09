@@ -3,6 +3,8 @@
 **Status:** ADOPTED design contract for new and modified Desktop UI on branch `Local` (2026-11-09).  
 **Owner:** `docs/01-product/interface-ux.md` remains the product-behavior authority; this file owns visual consistency and interaction presentation. Source code owns implemented behavior. This standard does **not** certify a native build.
 
+**Engineering implementation companion:** [UI Engineering Standard](ui-engineering-standard.md) defines SVG/icon rules, semantic token ownership, accessibility, responsive acceptance, component state matrices and a tracked blind-spot register. Both documents are mandatory for Desktop UI changes; neither overrides native safety rules.
+
 ## 1. Product principles (MUST)
 
 1. **Work first.** Show the current model/project before secondary actions and technical information.
