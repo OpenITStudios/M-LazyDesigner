@@ -17,7 +17,7 @@
 
 ## 2. Approved Unified Editor hierarchy
 
-- **Top toolbar (minimal):** Workspace navigation, `Editor` title, Focus control (if retained), conditional Open Blockbench, conditional Restore window, Support. The toolbar MUST NOT repeat the LazyDesigner brand or the active project/model already shown in the sidebar.
+- **Top toolbar (minimal, approved 2026-11-09):** show `LazyDesigner — [active project name]` as the sole header identity, or `LazyDesigner — No active project` when none is observed. Do not display a Workspace button or the generic `Editor` title here. Keep Focus control, conditional Open Blockbench, conditional Restore window and Support. The sidebar Active Project remains the actionable context; the header is a compact, read-only identity. Long project names truncate with the full value available as a title/accessible heading. Never remove the native recovery route merely to simplify the toolbar.
 - **Native center:** empty reservation for the real Blockbench window. Never draw a faux Blockbench viewport.
 - **One right sidebar:** brand `LazyDesigner`, two tabs `Projects` and `Status`, content, concise status footer. Do not add a permanent minimize/collapse button to the sidebar header.
 - **Projects tab order:** Active project/current model (including explicit empty state) → Open existing model → Recent Models → Project folders (New folder, Add existing folder, search, tree). Active project is the orientation anchor, not a second editor. Search may hide the active summary while filtering; do not lose the active state.
