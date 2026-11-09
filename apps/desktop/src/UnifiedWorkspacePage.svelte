@@ -42,7 +42,7 @@
   let editorWidth = 0;
   let drag: { dock: EditorDock; pointerId: number; x: number; width: number } | null = null;
   let search = '';
-  let diagnosticTab: 'diagnostic' | 'activity' = 'diagnostic';
+  let sidebarTab: 'projects' | 'status' = 'projects';
   let showAll = false;
   // Independent project expansion mirrors Blockbench's multi-open Outliner.
   // The active project opens by default until explicitly collapsed.
@@ -94,13 +94,13 @@
   $: actionBusy = Boolean(busyAction) || executing || navigationPending;
   // Both sides are always present in ordinary editor mode. Only Focus Editor
   // hides them. Narrow widths collapse content to reachable shortcut rails.
-  $: showProjects = !layout.focusMode;
+  $: showProjects = false; // Projects now lives inside the single right sidebar.
   $: showTools = !layout.focusMode;
-  $: explorerRail = showProjects && !layout.projectsExpanded;
+  $: explorerRail = false;
   $: diagnosticRail = showTools && !layout.diagnosticExpanded;
   $: otherRailWidth = layout.band === 'compact' ? 44 : 48;
   $: canExpandProjects = canExpandEditorDock(editorWidth, 'projects', layout.projectsWidth, otherRailWidth);
-  $: canExpandDiagnostic = canExpandEditorDock(editorWidth, 'tools', layout.toolsWidth, otherRailWidth);
+  $: canExpandDiagnostic = canExpandEditorDock(editorWidth, 'tools', layout.toolsWidth, 0);
 
   function expanded(project: ProjectNavigationProject): boolean {
     return expandedProjectIds.has(project.id)
@@ -145,24 +145,16 @@
       toggle?.focus();
     });
   }
-  function onDiagnosticTabKeydown(
-    event: KeyboardEvent,
-    current: 'diagnostic' | 'activity',
-  ) {
-    const tabs = ['diagnostic', 'activity'] as const;
-    const index = tabs.indexOf(current);
-    const next = event.key === 'ArrowRight' ? tabs[(index + 1) % tabs.length]
-      : event.key === 'ArrowLeft' ? tabs[(index + tabs.length - 1) % tabs.length]
-      : event.key === 'Home' ? tabs[0]
-      : event.key === 'End' ? tabs[tabs.length - 1] : null;
+  function onSidebarTabKeydown(event: KeyboardEvent, current: 'projects' | 'status') {
+    const next = event.key === 'ArrowRight' || event.key === 'ArrowLeft'
+      ? (current === 'projects' ? 'status' : 'projects')
+      : event.key === 'Home' ? 'projects' : event.key === 'End' ? 'status' : null;
     if (!next) return;
     event.preventDefault();
-    diagnosticTab = next;
-    void tick().then(() => {
-      editorRoot.querySelector<HTMLButtonElement>(
-        '[data-companion-tab="' + next + '"]',
-      )?.focus();
-    });
+    sidebarTab = next;
+    void tick().then(() => editorRoot.querySelector<HTMLButtonElement>(
+      next === 'projects' ? '#ld-sidebar-projects-tab' : '#ld-sidebar-status-tab',
+    )?.focus());
   }
   function toggleProjectsPanel() {
     const opening = layout.focusMode || !layout.projectsExpanded;
@@ -441,19 +433,19 @@
     </div>
     <div class="editor-controls" role="group" aria-label="Editor actions and panels">
       <button type="button" bind:this={explorerToggle} class="dock-toggle" class:chosen={showProjects && !explorerRail}
-        aria-label="Toggle Project Explorer"
+        aria-label="Show Projects"
         title={canExpandProjects ? 'Expand or collapse Project Explorer' : 'Browse projects through Workspace at this width'}
         disabled={explorerRail && !canExpandProjects}
         aria-expanded={showProjects && !explorerRail}
         aria-controls={showProjects ? 'ld-unified-explorer' : undefined}
-        onclick={toggleProjectsPanel}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
+        onclick={() => { sidebarTab = 'projects'; if (diagnosticRail) expandDiagnostic(); }}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
       <button type="button" bind:this={diagnosticToggle} class="dock-toggle" class:chosen={showTools && !diagnosticRail}
-        aria-label="Toggle Inspector panel"
+        aria-label="Show Status"
         title={canExpandDiagnostic ? 'Expand or collapse Inspector panel' : 'Use Support to inspect the connection at this width'}
         disabled={diagnosticRail && !canExpandDiagnostic}
         aria-expanded={showTools && !diagnosticRail}
         aria-controls={showTools ? 'ld-unified-inspector' : undefined}
-        onclick={toggleDiagnosticPanel}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Inspector</span></button>
+        onclick={() => { sidebarTab = 'status'; if (diagnosticRail) expandDiagnostic(); }}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Status</span></button>
       <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
@@ -488,25 +480,58 @@
   <div class="unified-body" class:with-projects={showProjects} class:with-inspector={showTools}
     class:rail={explorerRail} class:tools-rail={diagnosticRail}
     style={`--explorer-width: ${layout.projectsWidth}px; --tools-width: ${layout.toolsWidth}px;`}>
-    {#if showProjects}
-      <aside id="ld-unified-explorer" class="explorer dock-panel" class:rail={explorerRail} aria-label="Project Explorer">
-        {#if explorerRail}
-          <div class="rail-actions" role="group" aria-label="Project Explorer shortcuts">
-            {#if canExpandProjects}
-              <button type="button" aria-label="Expand Project Explorer" title="Expand Project Explorer"
-                onclick={expandExplorer}><EditorChromeIcon name="projects"/></button>
-            {:else}
-              <button type="button" aria-label="Browse projects in Workspace"
-                title="Open Workspace after restoring the original Blockbench window"
-                disabled={navigationPending} onclick={navigateWorkspace}><EditorChromeIcon name="projects"/></button>
-            {/if}
-            <button type="button" aria-label="Open Model from Project Explorer" title="Open Model…"
-              disabled={actionBusy || fixture} onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/></button>
-            <button type="button" aria-label="Add Project Folder from Project Explorer" title="Add Project Folder"
-              disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-              onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
-          </div>
+    <!-- Empty native window reservation, never a recreated editor or a visual placeholder. -->
+    <section class="native-stage" aria-label="Blockbench native editor area">
+      <NativeEditorStage bind:this={nativeStage} {fixture} compact={true}
+        onPlacementChange={onNativePlacementChange}/>
+    </section>
+
+    {#if showTools}
+      {#if !diagnosticRail}
+        <div class="dock-resizer" role="separator" tabindex="0"
+          aria-label="Resize LazyDesigner sidebar" aria-orientation="vertical"
+          aria-valuemin={220} aria-valuemax={300} aria-valuenow={layout.toolsWidth}
+          title="Drag or use arrow keys to resize sidebar"
+          onpointerdown={(event) => startDockResize(event, 'tools')}
+          onkeydown={(event) => resizeDockWithKeyboard(event, 'tools')}></div>
+      {/if}
+      <aside id="ld-unified-inspector" class="inspector dock-panel unified-sidebar" class:rail={diagnosticRail}
+        aria-label="LazyDesigner sidebar">
+        {#if diagnosticRail}
+          <div class="rail-actions" role="group" aria-label="Diagnostic shortcuts">
+            {#if canExpandDiagnostic}
+              <button type="button" title="Expand Diagnostic"
+                aria-label="Expand Diagnostic panel"
+                onclick={expandDiagnostic}><EditorChromeIcon name="diagnostic"/></button>
+    
         {:else}
+          <div class="sidebar-top">
+            <div class="sidebar-brand"><EditorChromeIcon name="model"/><strong>LazyDesigner</strong>
+              <button type="button" class="sidebar-collapse" aria-label="Collapse sidebar"
+                title="Collapse sidebar" onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
+            </div>
+            <div class="sidebar-tabs" role="tablist" aria-label="LazyDesigner sections">
+              <button type="button" role="tab" id="ld-sidebar-projects-tab"
+                aria-selected={sidebarTab === 'projects'} aria-controls="ld-sidebar-projects"
+                tabindex={sidebarTab === 'projects' ? 0 : -1}
+                class:selected={sidebarTab === 'projects'}
+                onclick={() => sidebarTab = 'projects'}
+                onkeydown={(event) => onSidebarTabKeydown(event, 'projects')}>
+                <EditorChromeIcon name="projects"/> Projects
+              </button>
+              <button type="button" role="tab" id="ld-sidebar-status-tab"
+                aria-selected={sidebarTab === 'status'} aria-controls="ld-sidebar-status"
+                tabindex={sidebarTab === 'status' ? 0 : -1}
+                class:selected={sidebarTab === 'status'}
+                onclick={() => sidebarTab = 'status'}
+                onkeydown={(event) => onSidebarTabKeydown(event, 'status')}>
+                <EditorChromeIcon name="activity"/> Status
+              </button>
+            </div>
+          </div>
+          <div class="sidebar-content">
+            <section id="ld-sidebar-projects" role="tabpanel" aria-labelledby="ld-sidebar-projects-tab"
+              hidden={sidebarTab !== 'projects'} class="sidebar-page explorer">
         <div class="pane-heading">
           <h3 tabindex="-1" bind:this={explorerHeading}>Projects</h3>
           <div class="pane-actions">
@@ -687,77 +712,11 @@
           </div>
         {/if}
         {/if}
-      </aside>
-      {#if !explorerRail}
-        <div class="dock-resizer" role="separator" tabindex="0"
-          aria-label="Resize Project Explorer" aria-orientation="vertical"
-          aria-valuemin={160} aria-valuemax={260} aria-valuenow={layout.projectsWidth}
-          title="Drag or use arrow keys to resize Project Explorer"
-          onpointerdown={(event) => startDockResize(event, 'projects')}
-          onkeydown={(event) => resizeDockWithKeyboard(event, 'projects')}></div>
-      {/if}
-    {/if}
 
-    <!-- Empty native window reservation, never a recreated editor or a visual placeholder. -->
-    <section class="native-stage" aria-label="Blockbench native editor area">
-      <NativeEditorStage bind:this={nativeStage} {fixture} compact={true}
-        onPlacementChange={onNativePlacementChange}/>
-    </section>
-
-    {#if showTools}
-      {#if !diagnosticRail}
-        <div class="dock-resizer" role="separator" tabindex="0"
-          aria-label="Resize Diagnostic panel" aria-orientation="vertical"
-          aria-valuemin={220} aria-valuemax={300} aria-valuenow={layout.toolsWidth}
-          title="Drag or use arrow keys to resize Diagnostic panel"
-          onpointerdown={(event) => startDockResize(event, 'tools')}
-          onkeydown={(event) => resizeDockWithKeyboard(event, 'tools')}></div>
-      {/if}
-      <aside id="ld-unified-inspector" class="inspector dock-panel" class:rail={diagnosticRail}
-        aria-label="Inspector">
-        {#if diagnosticRail}
-          <div class="rail-actions" role="group" aria-label="Diagnostic shortcuts">
-            {#if canExpandDiagnostic}
-              <button type="button" title="Expand Diagnostic"
-                aria-label="Expand Diagnostic panel"
-                onclick={expandDiagnostic}><EditorChromeIcon name="diagnostic"/></button>
-            {:else}
-              <button type="button" title="Open connection Support after restoring Blockbench"
-                aria-label="Open Diagnostic Support" disabled={navigationPending}
-                onclick={navigateSupport}><EditorChromeIcon name="diagnostic"/></button>
-            {/if}
-            <button type="button" title="Technical activity" aria-label="Open technical activity"
-              disabled={navigationPending} onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
-          </div>
-        {:else}
-          <!-- Native-aligned Inspector: compact context first, technical data on demand. -->
-          <div class="diagnostic-panel-bar">
-            <div class="diagnostic-tabs" role="tablist" aria-label="Inspector sections">
-            <button type="button" role="tab" id="ld-tab-diagnostic"
-              data-companion-tab="diagnostic"
-              class:selected={diagnosticTab === 'diagnostic'}
-              aria-selected={diagnosticTab === 'diagnostic'}
-              aria-controls="ld-inspector-diagnostic"
-              tabindex={diagnosticTab === 'diagnostic' ? 0 : -1}
-              onclick={() => diagnosticTab = 'diagnostic'}
-              onkeydown={(event) => onDiagnosticTabKeydown(event, 'diagnostic')}>Overview</button>
-            <button type="button" role="tab" id="ld-tab-activity"
-              data-companion-tab="activity"
-              class:selected={diagnosticTab === 'activity'}
-              aria-selected={diagnosticTab === 'activity'}
-              aria-controls="ld-inspector-activity"
-              tabindex={diagnosticTab === 'activity' ? 0 : -1}
-              onclick={() => diagnosticTab = 'activity'}
-              onkeydown={(event) => onDiagnosticTabKeydown(event, 'activity')}>Activity</button>
-            </div>
-            <button type="button" class="diagnostic-collapse"
-              title="Collapse Inspector to right rail"
-              aria-label="Collapse Inspector panel to icons"
-              onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
-          </div>
-          <section role="tabpanel" tabindex="0" class="inspector-section diagnostic-section"
-            id="ld-inspector-diagnostic" aria-labelledby="ld-tab-diagnostic"
-            hidden={diagnosticTab !== 'diagnostic'}>
+            </section>
+            <section id="ld-sidebar-status" role="tabpanel" aria-labelledby="ld-sidebar-status-tab"
+              hidden={sidebarTab !== 'status'} class="sidebar-page sidebar-status">
+          <section class="inspector-section diagnostic-section">
             <div class="inspector-context" aria-label="Current model context">
               <div class="context-heading">Current model</div>
               <div class="context-model" title={active?.model_name ?? continuing?.model.name ?? 'No active model'}>
@@ -770,7 +729,7 @@
               </div>
               {#if active?.dirty}<span class="context-dirty">Unsaved changes at last observation</span>{/if}
             </div>
-            <div class="inspector-status-heading">Workspace status</div>
+            <div class="inspector-status-heading">Readiness</div>
             <div class="connection-status" role="status">
               <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
                 class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
@@ -803,10 +762,8 @@
               onclick={() => void refresh()}>Refresh status</button>
             <button type="button" class="text-action" disabled={navigationPending} onclick={navigateSupport}>Troubleshooting</button>
           </section>
-          <section role="tabpanel" tabindex="0" class="inspector-section activity-section"
-            id="ld-inspector-activity" aria-labelledby="ld-tab-activity"
-            hidden={diagnosticTab !== 'activity'}>
-            <h4>Connection</h4>
+          <section class="inspector-section activity-section">
+            <div class="inspector-status-heading">AI connection</div>
             <div class="connection-status" role="status">
               <i class:verified={Boolean(aiStatus?.recentlyVerified)}
                 class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
@@ -823,9 +780,20 @@
             </details>
             <button type="button" class="text-action" disabled={navigationPending} onclick={navigateActivity}>View Gateway statistics</button>
           </section>
-          {#if !fixture && nativePlacementDetail}
-            <div class="inspector-footnote" role="status">Blockbench window: {nativePlacementDetail}</div>
-          {/if}
+
+              {#if !fixture && nativePlacementDetail}
+                <div class="inspector-footnote" role="status">Blockbench window: {nativePlacementDetail}</div>
+              {/if}
+            </section>
+          </div>
+          <button type="button" class="sidebar-footer"
+            aria-label="Open Status: {readinessLabel}"
+            onclick={() => sidebarTab = 'status'}>
+            <span class="connection-status"><i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
+              class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i></span>
+            <span>{readinessLabel}</span>
+            <EditorChromeIcon name="diagnostic"/>
+          </button>
         {/if}
       </aside>
     {/if}
@@ -917,7 +885,7 @@
   }
   /* Both docks participate in the grid: no host overlay hides native controls. */
   .unified-body.with-projects {grid-template-columns:var(--explorer-width,220px) 6px minmax(0,1fr)}
-  .unified-body.with-inspector {grid-template-columns:minmax(0,1fr) 6px var(--tools-width,240px)}
+  .unified-body.with-inspector {grid-template-columns:minmax(0,1fr) 6px var(--tools-width,260px)}
   .unified-body.with-projects.with-inspector {
     grid-template-columns:var(--explorer-width,220px) 6px minmax(0,1fr) 6px var(--tools-width,240px);
   }
@@ -1307,4 +1275,39 @@
     .toolbar-separator{margin:0 1px;height:17px}
     .editor-controls .launch-editor,.editor-controls .open-model{font-size:11px}
   }
+
+  /* Unified right-side companion. Native Blockbench retains the full left/center area. */
+  .unified-body.with-projects.with-inspector,
+  .unified-body.rail.with-projects.with-inspector,
+  .unified-body.tools-rail.with-projects.with-inspector,
+  .unified-body.rail.tools-rail.with-projects.with-inspector{
+    grid-template-columns:minmax(0,1fr) 6px var(--tools-width,260px);
+  }
+  .unified-body.tools-rail.with-inspector{grid-template-columns:minmax(0,1fr) 44px}
+  .unified-sidebar{display:flex;flex-direction:column;overflow:hidden;padding:0;border-left:1px solid var(--ed-border);background:var(--color-back)}
+  .sidebar-top{flex:none;padding:0 12px}
+  .sidebar-brand{display:flex;align-items:center;gap:9px;height:48px;border-bottom:1px solid var(--ed-border);color:var(--ed-text);font-size:13px}
+  .sidebar-brand :global(svg){color:var(--ed-accent)}
+  .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
+  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:12px 0 8px}
+  .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:36px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:12px;cursor:pointer}
+  .sidebar-tabs button.selected{background:var(--ed-raised);color:var(--ed-text);font-weight:650}
+  .sidebar-tabs button:hover:not(.selected){background:var(--ed-select);color:var(--ed-text)}
+  .sidebar-content{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
+  .sidebar-page{padding:0 12px 16px}
+  .sidebar-page[hidden]{display:none}
+  .sidebar-page.explorer{border:0;background:transparent}
+  .sidebar-page .pane-heading{height:31px;margin:0 -4px 5px;padding:0 4px;background:transparent;border:0}
+  .sidebar-page .pane-heading h3{font-size:11px;font-weight:600;text-transform:none;letter-spacing:0}
+  .sidebar-page .project-tree{border-top:0}
+  .sidebar-page .search-count:not(.sr-only){padding:5px 5px}
+  .sidebar-page .project-expand{font-weight:550}
+  .sidebar-page .model-line.current{background:var(--ed-select)}
+  .sidebar-page .inspector-section{border:0;padding:10px 0}
+  .sidebar-footer{flex:none;display:flex;align-items:center;gap:9px;min-height:44px;margin:0 12px;padding:8px 2px;border:0;border-top:1px solid var(--ed-border);background:transparent;color:var(--ed-muted);font-size:11px;text-align:left;cursor:pointer}
+  .sidebar-footer>span:nth-child(2){flex:1}
+  .sidebar-footer:hover{color:var(--ed-text)}
+  .sidebar-footer .connection-status{gap:0}
+  .sidebar-footer .connection-status i{display:block}
+  .unified-sidebar.rail{padding:5px 3px}
 </style>
