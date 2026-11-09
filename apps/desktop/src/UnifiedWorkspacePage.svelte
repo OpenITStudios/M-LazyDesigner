@@ -546,10 +546,7 @@
               hidden={sidebarTab !== 'projects'} class="sidebar-page explorer">
         <div class="project-primary-action">
           <button type="button" class="sidebar-open-model" disabled={actionBusy || fixture}
-            onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/> Open model…</button>
-          <button type="button" class="sidebar-add-folder" title="Add an existing project folder"
-            aria-label="Add existing project folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-            onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
+            onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/> Open existing model…</button>
         </div>
         {#if statusProbeFailures >= 2}
           <div class="state-note" role="status">
@@ -580,6 +577,12 @@
           </div>
         {/if}
 
+        <div class="project-section-heading">
+          <h3>Project folders</h3>
+          <button type="button" class="sidebar-add-folder" title="Register an existing folder as a project"
+            aria-label="Add existing project folder" disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
+            onclick={() => void registerFolder()}><EditorChromeIcon name="add"/> Add folder</button>
+        </div>
         {#if navigation && navigation.projects.length > 0}
           <label class="search-label sr-only" for="ld-unified-model-search">Find a project or model</label>
           <div class="search-controls">
@@ -716,17 +719,17 @@
                 {/if}
               </div>
             {/each}
-            {#if projects.length === 0}<p class="empty-state">No matching projects or models.</p>{/if}
+            {#if projects.length === 0}<p class="empty-state">{search.trim() ? 'No matching folders or models.' : 'No project folders to display.'}</p>{/if}
           </div>
           {#if navigation.projects.length > 6 && !search.trim()}
             <button class="more-projects" type="button" onclick={() => showAll = !showAll}>{showAll ? 'Show fewer projects' : 'Show all projects'}</button>
           {/if}
         {:else}
           <div class="explorer-empty">
-            <p class="empty-state">{loading ? 'Checking projects…' : status ? 'No project folders added yet. Register an existing folder to browse its models.' : 'Project list unavailable. You can still use Open Model in the toolbar.'}</p>
+            <p class="empty-state">{loading ? 'Checking projects…' : status ? 'No project folders yet. Add an existing folder to organize your models.' : 'Project list unavailable. You can still open an existing model above.'}</p>
             {#if status && !loading}
               <button type="button" class="empty-add-folder" disabled={actionBusy || fixture || statusProbeFailures >= 2}
-                onclick={() => void registerFolder()}>+ Add Project Folder</button>
+                onclick={() => void registerFolder()}>Add existing folder</button>
             {/if}
           </div>
         {/if}
@@ -1400,4 +1403,12 @@
   .sidebar-page .recent-group{margin:3px 0 15px;padding:0 0 12px;border-top:0;border-bottom:1px solid var(--ed-border)}
   .sidebar-page .recent-heading{font-weight:650}
   @media(hover:none){.sidebar-page .model-actions-toggle{opacity:1}}
+
+  /* Projects are folders, not model generators. Keep folder management with the tree. */
+  .sidebar-page .project-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 9px}
+  .sidebar-page .project-section-heading h3{margin:0;color:var(--ed-text);font-size:13px;font-weight:650}
+  .sidebar-page .project-section-heading .sidebar-add-folder{display:flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:5px 9px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;font-weight:550;cursor:pointer}
+  .sidebar-page .project-section-heading .sidebar-add-folder:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .project-section-heading .sidebar-add-folder:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
+  .sidebar-page .project-primary-action{margin-bottom:12px}
 </style>
