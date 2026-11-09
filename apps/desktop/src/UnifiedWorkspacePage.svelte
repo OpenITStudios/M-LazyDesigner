@@ -69,6 +69,9 @@
   $: projects = navigation ? visibleProjects(navigation, search, showAll) : [];
   $: uniqueTarget = navigation ? uniqueModelSearchTarget(navigation, search) : null;
   $: recentTargets = navigation ? recentModelTargets(navigation).slice(0, 3) : [];
+  $: activeModelTarget = active?.model_id && navigation
+    ? navigation.projects.flatMap(project => project.models).find(model => model.id === active.model_id) ?? null
+    : null;
   $: continuing = navigation ? continueTarget(navigation) : null;
   $: aiStatus = status ? aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs) : null;
   // Read-only projection of the existing Rust-owned status. Use the same
@@ -182,6 +185,8 @@
     if (!next) return;
     event.preventDefault();
     sidebarTab = next;
+    projectActionsId = null;
+    modelActionsId = null;
     void tick().then(() => editorRoot.querySelector<HTMLButtonElement>(
       next === 'projects' ? '#ld-sidebar-projects-tab' : '#ld-sidebar-status-tab',
     )?.focus());
@@ -594,11 +599,22 @@
               <EditorChromeIcon name="folder"/>
               <strong>{active.project_name ?? 'Unassigned project'}</strong>
             </div>
-            <div class="active-project-model" title={active.model_name}>
-              <EditorChromeIcon name="model"/>
-              <span>{active.model_name}</span>
-              {#if active.dirty}<span class="active-project-unsaved" title="Unsaved at last observation">●</span>{/if}
-            </div>
+            {#if activeModelTarget?.exists && statusProbeFailures < 2}
+              <button type="button" class="active-project-model active-project-focus"
+                title={'Focus ' + active.model_name + ' in Blockbench'}
+                disabled={actionBusy || fixture}
+                onclick={() => void chooseModel(activeModelTarget!)}>
+                <EditorChromeIcon name="model"/>
+                <span>{active.model_name}</span>
+                {#if active.dirty}<span class="active-project-unsaved" title="Unsaved at last observation">●</span>{/if}
+              </button>
+            {:else}
+              <div class="active-project-model" title={active.model_name}>
+                <EditorChromeIcon name="model"/>
+                <span>{active.model_name}</span>
+                {#if active.dirty}<span class="active-project-unsaved" title="Unsaved at last observation">●</span>{/if}
+              </div>
+            {/if}
           </section>
         {/if}
 
@@ -1518,4 +1534,7 @@
   .sidebar-page .active-project-name :global(svg){color:var(--ed-accent)}
   .sidebar-page .active-project-model{margin-top:7px;padding-left:7px;color:var(--ed-muted)}
   .sidebar-page .active-project-unsaved{color:#e9bb6d}
+  .sidebar-page .active-project-focus{width:100%;border:0;border-radius:5px;background:transparent;text-align:left;cursor:pointer;padding:5px 7px}
+  .sidebar-page .active-project-focus:hover:not(:disabled){background:var(--ed-select);color:var(--ed-text)}
+  .sidebar-page .active-project-focus:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
 </style>
