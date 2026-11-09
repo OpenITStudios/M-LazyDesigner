@@ -211,3 +211,34 @@ Every interactive control has: accessible name, visible affordance, action desti
 **Acceptance criteria:** Recent chevron and label optical centers match; footer has only status dot and label; no clipped 32px controls or obscured context menus; selection remains visible without color alone; keyboard focus and disabled states are legible; 16px SVGs have consistent stroke and optical size; the native Blockbench center remains untouched.
 
 **Evidence boundary:** these are source-authored corrections and explicit QA targets, not a claim of completed pixel-perfect or native validation. Do not introduce a fake native viewport or unapproved UI features to close the checklist.
+
+## S. UI/UX design closeout and residual gates — 2026-11-09
+
+**Decision:** the approved LazyDesigner UI design is frozen after V12 feedback. No further aesthetic iteration is required before native validation. This is a **source/design closeout**, not an executable or Windows release acceptance.
+
+### Source-reviewed and addressed
+
+- Approved LD logo in the app/project title, navigation and sidebar; brand asset is distinct from the action-icon registry.
+- Single right-side Projects/Status companion; native Blockbench area is never recreated in HTML.
+- Comfortable-density section rhythm, compact-width rules ordered after baseline styles, 220–300px dock limits.
+- Recent Models disclosure chevron aligned by a dedicated flex item; Ready footer has no redundant trailing icon.
+- Status main labels are concise (`Ready`, `Verified` when applicable); last-observed timestamp remains available by title/accessible text. System/AI dots have explicit 8px geometry and state colors.
+- Focus, folder mutations and model actions respect stale-status guards across relevant UI and handler paths.
+- Help & settings has a readable label and an existing Support route, not a decorative question-mark action.
+- Keyboard focus recovery after dock collapse now targets only connected, visible, enabled buttons, otherwise the focusable title.
+- Source registry audit: all **12 distinct static `EditorChromeIcon` names** used in `UnifiedWorkspacePage.svelte` resolve to registered names; no raw SVG is embedded in that page.
+
+### Explicitly not proven
+
+| Gate | Acceptance evidence required | Status |
+| --- | --- | --- |
+| Svelte/TypeScript compilation | Actual typecheck and frontend build at the exact SHA | NOT_EXECUTED |
+| Real HTML layout | Browser render of current source, 220/240/260/300px; screenshot comparison and clipping check | UNVERIFIED |
+| SVG optical centering | 100/125/150% DPI at 16/20/24/32px and forced colors | UNVERIFIED |
+| Context menus | Last-row flip-up, pointer outside, Escape, focus restore, scroll containment | UNVERIFIED |
+| Status visual states | Ready/Checking/Stale/Unavailable, dot colors, labels, tooltips and screen reader names | UNVERIFIED |
+| Native Blockbench integration | Present/Detach recovery, focus ownership, resizing and error paths on Windows | UNVERIFIED |
+| Production Editor availability | Explicit removal of dev-only gate only after native acceptance | NOT ENABLED |
+| Windows icons/installer | Regenerated Tauri icon outputs and actual NSIS package verification | NOT_EXECUTED |
+
+**Freeze rule:** do not reopen the approved layout or icon family for speculative polish. Only fix evidence-backed regressions discovered by actual validation, keeping changes minimal and preserving the user's design approval. Any final report must distinguish `DESIGN_APPROVED`, `SOURCE_AUTHORED`, `NOT_EXECUTED`, and `NATIVE_UNVERIFIED`.
