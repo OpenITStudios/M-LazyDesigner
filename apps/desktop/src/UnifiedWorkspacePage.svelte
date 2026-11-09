@@ -519,7 +519,7 @@
           </div>
         {:else}
         <div class="pane-heading">
-          <h3 tabindex="-1" bind:this={explorerHeading}>Project Explorer</h3>
+          <h3 tabindex="-1" bind:this={explorerHeading}>Projects</h3>
           <div class="pane-actions">
             <button type="button" aria-label="Collapse Project Explorer to icons"
               title="Collapse Project Explorer to icons"
@@ -542,7 +542,7 @@
           <div class="search-controls">
             <span class="search-icon" aria-hidden="true"><EditorChromeIcon name="search"/></span>
             <input id="ld-unified-model-search" bind:this={searchInput} type="search"
-              placeholder="Search project or model…" bind:value={search} onkeydown={searchKeydown}
+              placeholder="Find model or project…" bind:value={search} onkeydown={searchKeydown}
               aria-describedby="ld-unified-search-count ld-unified-search-help"/>
             {#if search.trim()}
               <button type="button" aria-label="Clear project search" title="Clear search" onclick={clearSearch}>×</button>
@@ -725,7 +725,7 @@
           onkeydown={(event) => resizeDockWithKeyboard(event, 'tools')}></div>
       {/if}
       <aside id="ld-unified-inspector" class="inspector dock-panel" class:rail={diagnosticRail}
-        aria-label="Diagnostic">
+        aria-label="Inspector">
         {#if diagnosticRail}
           <div class="rail-actions" role="group" aria-label="Diagnostic shortcuts">
             {#if canExpandDiagnostic}
@@ -741,9 +741,9 @@
               disabled={navigationPending} onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
           </div>
         {:else}
-          <!-- One Blockbench-style 40px panel bar; the selected tab IS the title. -->
+          <!-- Native-aligned Inspector: compact context first, technical data on demand. -->
           <div class="diagnostic-panel-bar">
-            <div class="diagnostic-tabs" role="tablist" aria-label="Diagnostic sections">
+            <div class="diagnostic-tabs" role="tablist" aria-label="Inspector sections">
             <button type="button" role="tab" id="ld-tab-diagnostic"
               data-companion-tab="diagnostic"
               class:selected={diagnosticTab === 'diagnostic'}
@@ -751,7 +751,7 @@
               aria-controls="ld-inspector-diagnostic"
               tabindex={diagnosticTab === 'diagnostic' ? 0 : -1}
               onclick={() => diagnosticTab = 'diagnostic'}
-              onkeydown={(event) => onDiagnosticTabKeydown(event, 'diagnostic')}>Diagnostic</button>
+              onkeydown={(event) => onDiagnosticTabKeydown(event, 'diagnostic')}>Overview</button>
             <button type="button" role="tab" id="ld-tab-activity"
               data-companion-tab="activity"
               class:selected={diagnosticTab === 'activity'}
@@ -762,20 +762,32 @@
               onkeydown={(event) => onDiagnosticTabKeydown(event, 'activity')}>Activity</button>
             </div>
             <button type="button" class="diagnostic-collapse"
-              title="Collapse Diagnostic to right rail"
-              aria-label="Collapse Diagnostic panel to icons"
+              title="Collapse Inspector to right rail"
+              aria-label="Collapse Inspector panel to icons"
               onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
           </div>
           <section role="tabpanel" tabindex="0" class="inspector-section diagnostic-section"
             id="ld-inspector-diagnostic" aria-labelledby="ld-tab-diagnostic"
             hidden={diagnosticTab !== 'diagnostic'}>
-            <h4>Readiness</h4>
+            <div class="inspector-context" aria-label="Current model context">
+              <div class="context-heading">Current model</div>
+              <div class="context-model" title={active?.model_name ?? continuing?.model.name ?? 'No active model'}>
+                <EditorChromeIcon name="model"/>
+                <strong>{active?.model_name ?? continuing?.model.name ?? 'No active model'}</strong>
+              </div>
+              <div class="context-project">
+                <EditorChromeIcon name="folder"/>
+                <span>{active?.project_name ?? continuing?.project.name ?? 'No project selected'}</span>
+              </div>
+              {#if active?.dirty}<span class="context-dirty">Unsaved changes at last observation</span>{/if}
+            </div>
+            <div class="inspector-status-heading">Workspace status</div>
             <div class="connection-status" role="status">
               <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
                 class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
               <strong>{readinessLabel}</strong>
             </div>
-            <p>{readinessDetail}</p>
+            <p class="status-summary">{readinessDetail}</p>
             <details class="panel-disclosure">
               <summary>Component status</summary>
               <div class="diagnostic-facts" aria-label="Last observed Blockbench and plugin status">
@@ -993,6 +1005,7 @@
   }
   .diagnostic-tabs button.selected {
     background:var(--color-ui);color:var(--ed-text);
+    box-shadow:inset 0 -2px var(--ed-accent);
   }
   .diagnostic-facts{display:grid;margin:8px 0;border-top:1px solid var(--ed-border)}
   .diagnostic-facts>div{
@@ -1196,7 +1209,17 @@
   }
   .native-stage :global(.native-editor-page){min-width:0;width:100%}
   .read-only-label {font-size:10px;color:var(--ed-muted-soft);letter-spacing:.04em}
-  .inspector-section{padding:7px 2px 10px;margin-bottom:3px;border-bottom:1px solid var(--ed-border)}
+  .inspector-section{padding:8px 3px 12px;margin-bottom:3px;border-bottom:1px solid var(--ed-border)}
+  .inspector-context{padding:5px 0 14px;margin-bottom:12px;border-bottom:1px solid var(--ed-border)}
+  .context-heading,.inspector-status-heading{font-size:10px;font-weight:650;color:var(--ed-muted-soft);letter-spacing:.035em;margin-bottom:9px}
+  .context-model{display:flex;align-items:center;gap:8px;min-width:0;color:var(--ed-text);font-size:13px}
+  .context-model strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650}
+  .context-model :global(svg){flex:none;color:var(--ed-accent)}
+  .context-project{display:flex;align-items:center;gap:7px;margin:8px 0 0 2px;color:var(--ed-muted);font-size:11px;min-width:0}
+  .context-project span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .context-project :global(svg){flex:none}
+  .context-dirty{display:block;margin:7px 0 0 2px;font-size:10px;color:#e1b65f}
+  .status-summary{margin-bottom:10px}
   .inspector-section h4{
     font-size:12px;font-weight:650;color:var(--ed-text);margin:0 0 7px;
     text-transform:uppercase;letter-spacing:.03em;
