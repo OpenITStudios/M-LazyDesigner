@@ -8,7 +8,8 @@
   export let refresh: () => Promise<void>;
   export let copyJson: () => Promise<void>;
   export let exportJson: () => Promise<void>;
-  export let backToSupport: () => void;
+  export let goBack: () => void;
+  export let backLabel = 'Back';
 
   let selectedKey = '';
   let selected: AnalyticsProject | null = null;
@@ -22,7 +23,7 @@
 </script>
 
 <main class="page-content analytics-content">
-  <button class="analytics-back" onclick={backToSupport}>← Back to Support</button>
+  <button class="analytics-back" onclick={goBack}>← {backLabel}</button>
   <div class="analytics-heading">
     <div>
       <h2>Gateway analytics</h2>
