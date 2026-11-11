@@ -181,6 +181,9 @@ export function normalizeRuntimeCallResult(
   // The Gateway does not implement multi-round-trip input collection.
   // Never let a deferred/malformed result adopt a project, switch a Stage,
   // or look like a successful native mutation; a retry may duplicate work.
+  // In particular, MCP input_required.requestState is opaque to clients:
+  // do not echo that state, input requests, or arbitrary malformed native
+  // payloads back into the AI-facing Gateway error result.
   const needsInput = isRecord(result) && result.resultType === "input_required";
   return {
     content: [
@@ -191,7 +194,11 @@ export function normalizeRuntimeCallResult(
           : "LazyDesigner Runtime returned a non-complete or invalid tool result. Inspect native state before deciding whether to retry a mutation.",
       },
     ],
-    structuredContent: { runtime_result: result },
+    structuredContent: {
+      gateway_result_issue: needsInput
+        ? "INPUT_REQUIRED_UNSUPPORTED"
+        : "NON_COMPLETE_RUNTIME_RESULT",
+    },
     isError: true,
   };
 }

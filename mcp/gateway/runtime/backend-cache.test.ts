@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BlockitRuntimeBackend } from "./backend";
+import { normalizeRuntimeCallResult } from "./backendContract";
 import {
   createRuntimeSignature,
   sameRuntimeGenerationAfterPlannedHandoff,
@@ -196,6 +197,54 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(wrongTarget.closes()).toBe(1);
   });
 
+  test("unsupported Runtime results never echo opaque MCP request state or malformed payloads", () => {
+    const opaque = "session-private-opaque-token";
+    const malformed = {
+      resultType: "input_required",
+      requestState: opaque,
+      inputRequests: { approval: { description: "sensitive approval details" } },
+      content: [{ type: "text", text: "sensitive Runtime content" }],
+      structuredContent: { native_secret: "sensitive Runtime structured data" },
+    };
+    const deferred = normalizeRuntimeCallResult(malformed);
+    expect(deferred.isError).toBe(true);
+    expect(deferred.structuredContent).toEqual({
+      gateway_result_issue: "INPUT_REQUIRED_UNSUPPORTED",
+    });
+    expect(deferred.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("cannot complete the deferred call"),
+    });
+    const exposed = JSON.stringify(deferred);
+    for (const secret of [
+      opaque, "sensitive approval details", "sensitive Runtime content",
+      "sensitive Runtime structured data",
+    ]) {
+      expect(exposed).not.toContain(secret);
+    }
+
+    const nonComplete = normalizeRuntimeCallResult({
+      resultType: "future_deferred",
+      structuredContent: { native_secret: opaque },
+      content: [],
+    });
+    expect(nonComplete.isError).toBe(true);
+    expect(nonComplete.structuredContent).toEqual({
+      gateway_result_issue: "NON_COMPLETE_RUNTIME_RESULT",
+    });
+    expect(JSON.stringify(nonComplete)).not.toContain(opaque);
+
+    // No loss of existing successful legacy results, explicit complete
+    // results or native business-logic errors.
+    for (const completed of [
+      { content: [], structuredContent: { execution: "applied" } },
+      { resultType: "complete", content: [], structuredContent: { verified: true } },
+      { content: [{ type: "text", text: "validation failed" }], isError: true },
+    ]) {
+      expect(normalizeRuntimeCallResult(completed)).toBe(completed);
+    }
+  });
+
   test("deferred native mutation fails as OUTCOME_UNKNOWN and withdraws the stale lease", async () => {
     let invalidations = 0;
     const backend = new BlockitRuntimeBackend(
@@ -348,7 +397,9 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     state.client = { callTool: async () => inputRequired };
     const read = await backend.invokeCapabilityWithMetadata("inspect_elements", {});
     expect(read.result.isError).toBe(true);
-    expect(read.result.structuredContent).toEqual({ runtime_result: inputRequired });
+    expect(read.result.structuredContent).toEqual({
+      gateway_result_issue: "INPUT_REQUIRED_UNSUPPORTED",
+    });
     expect(state.projectUuid).toBe("project-verified");
     expect(state.catalog.has("inspect_elements")).toBe(true);
 
