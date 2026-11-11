@@ -116,18 +116,56 @@ describe("gateway recovery semantics", () => {
     }
   });
 
-  test("normal availability and unknown issue codes retain their own recovery", () => {
+  test("unknown native receipt codes also require inspection, never replay", () => {
     expect(recoveryForGatewayError("BACKEND_UNAVAILABLE", true)).toMatchObject({
       category: "AVAILABILITY",
       safe_to_retry: true,
       state_uncertain: false,
       requires_status_refresh: true,
     });
-    expect(recoveryForGatewayError("BACKEND_UNAVAILABLE", false, {
-      receipt_issue: "SOMETHING_ELSE",
+
+    // A receipt issue is a post-invocation authority failure even if the
+    // producer has added a new reason or returned malformed diagnostics.
+    for (const receiptIssue of ["FUTURE_NATIVE_RECEIPT_CODE", "", null]) {
+      const recovery = recoveryForGatewayError("BACKEND_UNAVAILABLE", true, {
+        receipt_issue: receiptIssue,
+      });
+      expect(recovery).toMatchObject({
+        category: "AFFINITY",
+        safe_to_retry: false,
+        state_uncertain: true,
+        requires_status_refresh: true,
+        requires_user_action: false,
+      });
+      expect(recovery.action).toContain("never replay the mutation");
+    }
+
+    // The AI-facing Gateway error must not inherit the producer's optimistic
+    // retry hint when a native receipt is rejected.
+    const output = gatewayErrorResult(new GatewayBackendError(
+      "BACKEND_UNAVAILABLE",
+      "An unknown native receipt validation error followed execution.",
+      true,
+      { capability: "manage_cubes", receipt_issue: "FUTURE_NATIVE_RECEIPT_CODE" }
+    ));
+    expect(output.structuredContent).toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      receipt_issue: "FUTURE_NATIVE_RECEIPT_CODE",
+      recovery: {
+        category: "AFFINITY",
+        safe_to_retry: false,
+        state_uncertain: true,
+        requires_status_refresh: true,
+      },
+    });
+
+    // An ordinary, pre-execution availability report remains retryable.
+    expect(recoveryForGatewayError("BACKEND_UNAVAILABLE", true, {
+      capability: "manage_cubes",
+      retry_after_ms: 100,
     })).toMatchObject({
       category: "AVAILABILITY",
-      safe_to_retry: false,
+      safe_to_retry: true,
       state_uncertain: false,
     });
   });

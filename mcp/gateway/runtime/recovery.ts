@@ -59,14 +59,11 @@ export function recoveryForGatewayError(
     };
   }
 
-  if (
-    code === "BACKEND_UNAVAILABLE" &&
-    (details.receipt_issue === "MISSING_PROJECT_UUID" ||
-      details.receipt_issue === "MISSING_AUTHORING_PHASE" ||
-      details.receipt_issue === "RUNTIME_SURFACE_MISMATCH" ||
-      details.receipt_issue === "SURFACE_CHANGE_MISMATCH" ||
-      details.receipt_issue === "AUTHORING_TARGET_MISMATCH")
-  ) {
+  // A receipt validation issue follows the native call. A new or malformed
+  // issue code must not fall back to retryable transport unavailability:
+  // the authored mutation may already have happened.
+  if (code === "BACKEND_UNAVAILABLE" &&
+      Object.hasOwn(details, "receipt_issue")) {
     // A successful native mutation may precede the failed authority receipt
     // validation. Missing AND contradictory project/Stage identity are
     // uncertain outcomes; never advise replay before state inspection.
