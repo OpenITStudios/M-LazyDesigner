@@ -66,6 +66,74 @@ function deltaFromGateway(value: unknown): Record<string, unknown> {
 }
 
 describe("real Gateway executor invocation -> Control output receipt continuation", () => {
+  test("direct invoke blocks only the exact evaluated Graph branch", async () => {
+    const calls: Array<{ capability: string; args: Record<string, unknown> }> = [];
+    const backend = {
+      async invokeCapabilityWithMetadata(
+        capability: string,
+        args: Record<string, unknown>
+      ): Promise<GatewayRuntimeInvocation> {
+        calls.push({ capability, args });
+        return {
+          result: {
+            isError: true,
+            content: [{ type: "text", text: "Runtime validated the operation." }],
+            structuredContent: { code: "RUNTIME_SCHEMA_REJECTED" },
+          },
+          readOnly: false,
+          verifiedProjectUuid: null,
+          phaseBefore: "animation",
+        };
+      },
+    } as unknown as BlockitRuntimeBackend;
+    const session = new GatewaySessionState();
+    session.replaceFacts({
+      project_bound: false,
+      animation_available: false,
+    });
+    const gateway = new GatewayCapabilityExecutor(
+      backend, new LocalCapabilityRegistry(), session
+    );
+
+    // A higher-priority, unsupported discriminator is selected by Graph,
+    // while resource_kind happens to match another declared branch. The
+    // branchless Animation fallback has false prerequisites, but they
+    // cannot be borrowed by that unsupported operation identity.
+    const ambiguous = await gateway.invoke("manage_animation_controller", {
+      operation: "future_unsupported",
+      resource_kind: "client_entity",
+    }) as {
+      isError?: boolean;
+      structuredContent?: Record<string, unknown>;
+    };
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.capability).toBe("manage_animation_controller");
+    expect(ambiguous.isError).toBe(true);
+    expect(ambiguous.structuredContent?.code).toBe("RUNTIME_SCHEMA_REJECTED");
+
+    // An exact but graphless resource branch also has no permission to
+    // borrow the generic controller fallback as a local preflight BLOCK.
+    const graphless = await gateway.invoke("manage_animation_controller", {
+      resource_kind: "client_entity",
+    });
+    expect((graphless as { isError?: boolean }).isError).toBe(true);
+    expect(calls).toHaveLength(2);
+
+    // An exact declared timeline Graph with known-false prerequisites must
+    // still block before any new native invocation.
+    const blocked = await gateway.invoke("manage_animation_timeline", {
+      operation: "keyframes",
+      action: "create",
+    }) as {
+      isError?: boolean;
+      structuredContent?: { code?: string; requires?: string[] };
+    };
+    expect(blocked.isError).toBe(true);
+    expect(blocked.structuredContent?.code).toBe("CAPABILITY_PRECONDITION_BLOCKED");
+    expect(blocked.structuredContent?.requires).toContain("animation_available");
+    expect(calls).toHaveLength(2);
+  });
+
   test("native Backend read-only decision cannot be promoted by a QUERY branch hint", async () => {
     const invokeWithBackendReadOnly = async (readOnly: boolean) => {
       const backend = {
