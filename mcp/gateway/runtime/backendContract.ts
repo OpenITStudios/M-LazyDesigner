@@ -155,18 +155,31 @@ export function normalizeNonNegativeInteger(
 export function normalizeRuntimeCallResult(
   result: unknown
 ): GatewayRuntimeCallResult {
-  if (isRecord(result) && Array.isArray(result.content)) {
+  // MCP's input_required (or a future result type) is not a completed tool
+  // call, even if it happens to carry a content array. Older MCP results
+  // without resultType remain valid completed results for compatibility.
+  if (isRecord(result) &&
+      (result.resultType === undefined || result.resultType === "complete") &&
+      Array.isArray(result.content) &&
+      (result.isError === undefined || typeof result.isError === "boolean")) {
     return result as GatewayRuntimeCallResult;
   }
 
+  // The Gateway does not implement multi-round-trip input collection.
+  // Never let a deferred/malformed result adopt a project, switch a Stage,
+  // or look like a successful native mutation; a retry may duplicate work.
+  const needsInput = isRecord(result) && result.resultType === "input_required";
   return {
     content: [
       {
         type: "text",
-        text: "LazyDesigner Runtime returned a non-standard deferred tool result.",
+        text: needsInput
+          ? "LazyDesigner Runtime requested additional input; this Gateway cannot complete the deferred call. Inspect native state before deciding whether to retry a mutation."
+          : "LazyDesigner Runtime returned a non-complete or invalid tool result. Inspect native state before deciding whether to retry a mutation.",
       },
     ],
     structuredContent: { runtime_result: result },
+    isError: true,
   };
 }
 
