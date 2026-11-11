@@ -70,6 +70,12 @@ export function gatewayErrorResult(error: unknown) {
       known.safeToRetry,
       known.details
     );
+    // A project-context error can carry a diagnostic `details.action`,
+    // but it cannot override the Gateway-owned recovery instruction in
+    // either the structured recovery contract or the legacy top-level hint.
+    const details = known.code === "PROJECT_CONTEXT_LOST"
+      ? { ...known.details, action: recovery.action }
+      : known.details;
     return {
       isError: true,
       content: [
@@ -78,7 +84,7 @@ export function gatewayErrorResult(error: unknown) {
       structuredContent: {
         // Details add diagnostics only: never allow a nested tool/transport
         // payload to replace the authoritative error identity or recovery.
-        ...known.details,
+        ...details,
         code: known.code,
         message: known.message,
         recovery,

@@ -30,10 +30,9 @@ export function recoveryForGatewayError(
       state_uncertain: false,
       requires_status_refresh: true,
       requires_user_action: true,
-      action:
-        typeof details.action === "string"
-          ? details.action
-          : "select intended Blockbench tab, then explicitly rebind Gateway project affinity",
+      // The operational recovery instruction is Gateway-owned, not a
+      // caller- or Runtime-supplied diagnostic string.
+      action: "select intended Blockbench tab, then call status with adopt_active_project=true",
     };
   }
 
