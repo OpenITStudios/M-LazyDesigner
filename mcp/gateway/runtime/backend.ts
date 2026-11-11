@@ -839,6 +839,10 @@ export class BlockitRuntimeBackend {
         );
       }
 
+      // One conservative operation classification governs retry safety,
+      // incomplete-result recovery and the read-only signal passed to Control.
+      // ToolAnnotations alone never authorize any of these decisions.
+      const interruption = classifyInterruptedCall(tool, args);
       try {
         const result: unknown = await this.client!.callTool(
           {
@@ -855,7 +859,7 @@ export class BlockitRuntimeBackend {
         // and surface canonical non-retryable recovery before any receipt,
         // project or authoring-Stage projection is applied.
         if (!isCompletedRuntimeCallResult(result) &&
-            tool.annotations?.readOnlyHint !== true) {
+            !interruption.safe_to_retry) {
           const inputRequired = isRecord(result) &&
             result.resultType === "input_required";
           const message = inputRequired
@@ -983,7 +987,7 @@ export class BlockitRuntimeBackend {
             result: normalizeGatewayManagedResult(
               phaseAffinityUpdated && !verifiedSameStage, managed
             ),
-            readOnly: tool.annotations?.readOnlyHint === true,
+            readOnly: interruption.safe_to_retry,
             verifiedProjectUuid: this.projectUuid,
             ...(observedRuntimeBuildIdentity
               ? { observedRuntimeBuildIdentity } : {}),
@@ -994,7 +998,7 @@ export class BlockitRuntimeBackend {
 
         return {
           result: managed,
-          readOnly: tool.annotations?.readOnlyHint === true,
+          readOnly: interruption.safe_to_retry,
           verifiedProjectUuid: null,
           ...(observedRuntimeBuildIdentity
             ? { observedRuntimeBuildIdentity } : {}),
@@ -1024,7 +1028,7 @@ export class BlockitRuntimeBackend {
           throw error;
         }
 
-        const classification = classifyInterruptedCall(tool, args);
+        const classification = interruption;
         const timedOut = isRequestTimeoutError(error);
         await this.closeConnectionUnsafe();
         const retryAfterMs = this.connection.markDegraded();

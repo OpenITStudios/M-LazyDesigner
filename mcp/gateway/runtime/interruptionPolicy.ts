@@ -1,5 +1,5 @@
 import type { BackendTool } from "../contracts/protocol";
-import { capabilityOperationClassByName } from "../../lib/capabilities/manifest";
+import { capabilityOperationClassByName, type CapabilityOperationClass } from "../../lib/capabilities/manifest";
 import { manifestEntriesForCapability } from "../capabilities/manifest";
 
 export type InterruptedCallClassification = {
@@ -8,11 +8,20 @@ export type InterruptedCallClassification = {
 };
 
 /**
- * Runtime ToolAnnotations are descriptive hints, not proof of the operation's
- * effects. Safe transport retry requires BOTH a read-only hint and a known,
- * query-only LazyDesigner contract for the exact selected branch.
+ * Only internally declared QUERY, PREVIEW and VALIDATION operations are
+ * observational for retry purposes. EXPORT, CONTROL, MUTATION and unknown
+ * operations must not be replayed on a transport interruption.
  */
-function contractProvesQuery(
+function isObservationalClass(value: CapabilityOperationClass): boolean {
+  return value === "QUERY" || value === "PREVIEW" || value === "VALIDATION";
+}
+
+/**
+ * Runtime ToolAnnotations are descriptive hints, not proof of the operation's
+ * effects. Retry safety requires the annotation AND a known observational
+ * LazyDesigner contract for the exact branch.
+ */
+function contractProvesObservation(
   tool: BackendTool,
   args: Readonly<Record<string, unknown>>
 ): boolean {
@@ -22,7 +31,7 @@ function contractProvesQuery(
   const branches = manifestEntriesForCapability(tool.name).filter(
     (entry) => entry.branch !== undefined
   );
-  if (branches.length === 0) return coreClass === "QUERY";
+  if (branches.length === 0) return isObservationalClass(coreClass);
 
   const matching = branches.filter((entry) =>
     entry.branch && args[entry.branch.field] === entry.branch.value
@@ -40,17 +49,17 @@ function contractProvesQuery(
       if (!nestedClass) return false;
       operationClass = nestedClass;
     }
-    return operationClass === "QUERY";
+    return isObservationalClass(operationClass);
   }
 
-  // A missing selector is acceptable only for a query-only capability with
+  // A missing selector is acceptable only for an observation-only capability with
   // no mutating or nested branch. Preserve inspect_elements' normal default
   // query flow; a wrong explicit mode must fail closed instead.
   if (branches.some((entry) =>
     entry.branch && typeof args[entry.branch.field] === "string"
   )) return false;
-  return coreClass === "QUERY" && branches.every((entry) =>
-    (entry.operationClass ?? coreClass) === "QUERY" &&
+  return isObservationalClass(coreClass) && branches.every((entry) =>
+    isObservationalClass(entry.operationClass ?? coreClass) &&
     entry.nestedActions === undefined
   );
 }
@@ -60,7 +69,7 @@ export function classifyInterruptedCall(
   args: Readonly<Record<string, unknown>> = {}
 ): InterruptedCallClassification {
   if (tool.annotations?.readOnlyHint === true &&
-      contractProvesQuery(tool, args)) {
+      contractProvesObservation(tool, args)) {
     return {
       code: "BACKEND_CALL_INTERRUPTED",
       safe_to_retry: true,

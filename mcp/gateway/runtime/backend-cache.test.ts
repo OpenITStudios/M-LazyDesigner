@@ -238,6 +238,67 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(invalidations).toBe(1);
   });
 
+
+  test("a false Runtime read-only hint cannot bypass post-mutation outcome inspection", async () => {
+    let invalidated = 0;
+    const backend = new BlockitRuntimeBackend(
+      "http://127.0.0.1:3000/bb-mcp", undefined,
+      { onRuntimeUnavailable: () => { invalidated += 1; } }
+    );
+    const state = backend as any;
+    state.projectUuid = "project-verified";
+    state.authoringPhase = "geometry";
+    state.ensureCatalogUnsafe = async () => {};
+    state.connection.markReady({ catalogRefreshed: true });
+    state.catalog = new Map([[
+      "manage_cubes",
+      { name: "manage_cubes", annotations: { readOnlyHint: true } },
+    ]]);
+    state.client = { callTool: async () => ({
+      resultType: "input_required",
+      inputRequests: { approval: { description: "Deferred mutation" } },
+    }) };
+    await expect(backend.invokeCapabilityWithMetadata("manage_cubes", {
+      operation: "create",
+    })).rejects.toMatchObject({
+      code: "OUTCOME_UNKNOWN",
+      safeToRetry: false,
+      details: { result_issue: "INPUT_REQUIRED_UNSUPPORTED" },
+    });
+    expect(state.projectUuid).toBe("project-verified");
+    expect(state.catalog.size).toBe(0);
+    expect(state.connection.snapshot().state).toBe("degraded");
+    expect(invalidated).toBe(1);
+  });
+
+  test("native Control read-only flag requires the canonical operation contract", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.projectUuid = "project-verified";
+    state.authoringPhase = "geometry";
+    state.ensureCatalogUnsafe = async () => {};
+    state.client = { callTool: async () => ({
+      content: [], structuredContent: { execution: "accepted" },
+    }) };
+    state.catalog = new Map([
+      ["manage_cubes", { name: "manage_cubes", annotations: { readOnlyHint: true } }],
+      ["inspect_elements", { name: "inspect_elements", annotations: { readOnlyHint: true } }],
+      ["capture_model_views", { name: "capture_model_views", annotations: { readOnlyHint: true } }],
+      ["export_model", { name: "export_model", annotations: { readOnlyHint: true } }],
+    ]);
+    for (const [name, args, expected] of [
+      ["manage_cubes", { operation: "create" }, false],
+      ["inspect_elements", { mode: "detail" }, true],
+      ["inspect_elements", { mode: "unknown_future_mode" }, false],
+      ["capture_model_views", {}, true],
+      ["export_model", {}, false],
+    ] as const) {
+      const invocation = await backend.invokeCapabilityWithMetadata(name, args);
+      expect(invocation.readOnly, name).toBe(expected);
+      expect(invocation.result.isError).not.toBe(true);
+    }
+  });
+
   test("unrecognized mutating results fail closed; completed and read-only errors remain compatible", async () => {
     const malformed = [
       { resultType: "future_deferred", content: [], structuredContent: { project_uuid: "unexpected" } },

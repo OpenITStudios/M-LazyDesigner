@@ -144,6 +144,12 @@ describe("Gateway deterministic fault semantics", () => {
     expect(classifyInterruptedCall(material)).toEqual(unsafe);
     expect(classifyInterruptedCall(material, { operation: "new_unknown_op" }))
       .toEqual(unsafe);
+    // Source-owned preview/validation reads should keep their existing
+    // interrupted-read behavior; exports may write files and never qualify.
+    expect(classifyInterruptedCall({ name: "capture_model_views", annotations: optimistic }))
+      .toEqual(retryable);
+    expect(classifyInterruptedCall({ name: "export_model", annotations: optimistic }))
+      .toEqual(unsafe);
   });
 
   test("runtime signature ignores noisy health fields but invalidates on runtime identity or phase changes", () => {
