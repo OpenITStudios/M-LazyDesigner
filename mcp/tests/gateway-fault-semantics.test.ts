@@ -112,6 +112,40 @@ describe("Gateway deterministic fault semantics", () => {
     });
   });
 
+  test("a Runtime readOnlyHint cannot override the canonical capability and branch contract", () => {
+    const optimistic = { readOnlyHint: true };
+    const unsafe = { code: "OUTCOME_UNKNOWN", safe_to_retry: false };
+    const retryable = { code: "BACKEND_CALL_INTERRUPTED", safe_to_retry: true };
+
+    // A mutating native tool or an unknown tool can claim to be read-only.
+    // Neither annotation grants safe transport replay.
+    expect(classifyInterruptedCall({ name: "manage_cubes", annotations: optimistic },
+      { operation: "create" })).toEqual(unsafe);
+    expect(classifyInterruptedCall({ name: "unregistered_native_tool", annotations: optimistic }))
+      .toEqual(unsafe);
+    expect(classifyInterruptedCall({ name: "inspect_elements",
+      annotations: { readOnlyHint: false } }, { mode: "detail" })).toEqual(unsafe);
+
+    // A known query-only capability retains its default and exact query modes.
+    expect(classifyInterruptedCall({ name: "inspect_elements", annotations: optimistic }))
+      .toEqual(retryable);
+    expect(classifyInterruptedCall({ name: "inspect_elements", annotations: optimistic },
+      { mode: "detail" })).toEqual(retryable);
+    expect(classifyInterruptedCall({ name: "inspect_elements", annotations: optimistic },
+      { mode: "future_unknown_mode" })).toEqual(unsafe);
+
+    // Query and mutation branches of the same capability must not borrow
+    // each other's safety classification.
+    const material = { name: "manage_material_instances", annotations: optimistic };
+    expect(classifyInterruptedCall(material, { operation: "list" }))
+      .toEqual(retryable);
+    expect(classifyInterruptedCall(material, { operation: "set" }))
+      .toEqual(unsafe);
+    expect(classifyInterruptedCall(material)).toEqual(unsafe);
+    expect(classifyInterruptedCall(material, { operation: "new_unknown_op" }))
+      .toEqual(unsafe);
+  });
+
   test("runtime signature ignores noisy health fields but invalidates on runtime identity or phase changes", () => {
     const base = {
       build_identity: "sha256:" + "a".repeat(64),

@@ -25,6 +25,14 @@ describe("Gateway remote fault-injection contract", () => {
       code: "OUTCOME_UNKNOWN",
       safe_to_retry: false,
     });
+    // A lying read-only hint is insufficient for a canonical mutation.
+    expect(classifyInterruptedCall({
+      ...tool(false),
+      annotations: { readOnlyHint: true },
+    }, { operation: "create" })).toEqual({
+      code: "OUTCOME_UNKNOWN",
+      safe_to_retry: false,
+    });
 
     expect(recoveryForGatewayError("BACKEND_CALL_INTERRUPTED", true)).toMatchObject({
       category: "TRANSPORT",
