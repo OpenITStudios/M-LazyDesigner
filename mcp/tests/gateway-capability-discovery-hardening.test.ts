@@ -115,9 +115,23 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     expect(known?.eligibility).toBeUndefined();
     expect(known?.why).toBeUndefined();
 
-    // An authoritative blocked condition cannot be softened by projection.
+    // The catalog has not selected a Cube operation. Even an upstream
+    // BLOCKED label cannot be attributed to this missing branch selection.
+    const [unselectedBlocked] = projectCapabilitiesForSearch([{
+      ...exact!,
+      eligibility: "BLOCKED",
+      requires: ["project_bound"],
+      predecessor: { capability: "create_project" },
+    }]);
+    expect(unselectedBlocked?.eligibility).toBe("UNKNOWN");
+    expect(unselectedBlocked?.requires).toBeUndefined();
+    expect(unselectedBlocked?.predecessor).toBeUndefined();
+    expect(unselectedBlocked?.why).toContain("not selected");
+
+    // A known selected Graph branch preserves a real missing prerequisite.
     const [blocked] = projectCapabilitiesForSearch([{
       ...exact!,
+      branch: { field: "operation", value: "create" },
       eligibility: "BLOCKED",
       requires: ["project_bound"],
     }]);
@@ -177,9 +191,20 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     expect(borrowedBlock?.requires).toBeUndefined();
     expect(borrowedBlock?.predecessor).toBeUndefined();
 
-    // A known failed prerequisite remains BLOCKED, never downgraded.
-    const [blocked] = projectCapabilitiesForSearch([{
+    // A blocked verdict without a selected timeline branch is not
+    // authoritative: the branchless fallback cannot supply its requires.
+    const [unselectedBlocked] = projectCapabilitiesForSearch([{
       ...exact!, eligibility: "BLOCKED", requires: ["animation_available"],
+    }]);
+    expect(unselectedBlocked?.eligibility).toBe("UNKNOWN");
+    expect(unselectedBlocked?.requires).toBeUndefined();
+
+    // A known failed prerequisite on an exact operation remains BLOCKED.
+    const [blocked] = projectCapabilitiesForSearch([{
+      ...exact!,
+      branch: { field: "operation", value: "keyframes" },
+      eligibility: "BLOCKED",
+      requires: ["animation_available"],
     }]);
     expect(blocked?.eligibility).toBe("BLOCKED");
     expect(blocked?.requires).toEqual(["animation_available"]);
