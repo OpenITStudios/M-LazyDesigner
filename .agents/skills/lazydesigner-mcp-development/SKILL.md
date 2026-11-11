@@ -50,6 +50,19 @@ TypeScript and Bun do not need standalone specialists merely because this implem
 7. **Update generated/public ownership through its source.** Never patch generated docs or prompt manifests as the implementation.
 8. **Use the proof budget from the active development route.** Static contract proof is not live Blockbench or visual proof.
 
+
+## Causal MCP reasoning — conditional decision check
+
+For a real client-facing MCP defect, use the [engineering reasoning contract](../../../docs/04-system/development-operating-standard.md#engineering-intelligence---causal-contract-reasoning-for-mcp-development), not a new planner or specialist.
+
+- Trace the **actual client request → Gateway capability and branch → registration → Runtime response/effect → consumer**. Find the first falsified or unproved edge. Manifest declaration, Capability Graph `READY` and transport success alone never prove a registered native implementation.
+- Distinguish public schema/result mismatch, wrong route/registration, correct dispatch but incorrect native effect, stale/unknown state, and visually poor but mechanically correct authoring. Keep Blockbench/Geometry/Texturing ownership unless an exact contract discrepancy establishes MCP ownership.
+- Before changing code, identify one accepted call, one rejected or ambiguous call, and one failure/recovery path. Compare advertised defaults, schema refinements, branch routing, error/`structuredContent` semantics, caller interpretation, and generated mirrors only where affected. Do not replay an interrupted mutation whose outcome is unknown.
+- For protocol changes, confirm the repository's **implemented and negotiated MCP version** and SDK before importing a newer specification. No automatic stateless-transport migration, additional public Gateway tool, or session manager because a newer MCP feature exists.
+- At `REMOTE_GITHUB`, preserve actual source/contract and regression evidence without claiming tests or native effects executed. A verifier that merely repeats implementation assumptions is not independent proof.
+
+If the contract already holds, use the first real wrong owner or report no MCP change required.
+
 ## Efficiency Checks
 
 When the task is about AI/Codex usage, prefer source-provable waste first:

@@ -101,6 +101,13 @@ Pixel art must read as deliberate clusters at normal model scale with Shading ON
 
 Do not start with the name of a material and mechanically apply a preset. At a real source-based styling decision, inspect the actual approved image crop and write a concise `pattern_observation` describing **(1) cluster shapes and scale, (2) value placement, (3) detail-rich versus resting regions**, and, for a directional recipe, **(4) the observed motif direction**. Link the observation to an existing `reference_surfaces` source image ID, exact image SHA, region ID and part ID before claiming the selected `surface_pattern` is observed. Compare the actual source traits with the existing `surfacePattern` recipe description, including its anti-patterns. If multiple recipes are plausible, the source direction is hidden or the visual trait cannot be confirmed, do not manufacture evidence or paint a generic texture; keep the affected material selection `REVIEW_REQUIRED`. The treatment plan only checks caller-described evidence linkage and physical bounds—**not** artistic similarity, live UV-mapped success or user approval. Never force this reference-only route onto an explicitly requested, already specified numeric pixel edit.
 
+
+### Professional material read — conditional artistic judgment
+
+For a design-original material choice or an apparently finished but visually incoherent material, judge the **actual shaded mapped model at intended size**: primary resting base/value mass, secondary form shadow, identity-critical accent and material-specific cluster direction/frequency. Use an explicit, temporary artistic hypothesis only where no approved reference or family decision resolves it. In faithful reconstruction, the actual approved source governs those decisions; never substitute a generic premium palette.
+
+Inspect one representative mapped surface *and its adjoining surface* for readable material, restraint, intentional detail-free areas, preserved markings, physical orientation and seams. If evidence supports the look, propagate the same treatment to comparable faces; otherwise correct the largest texture-owned mismatch before increasing detail. A neat atlas, automatic ramp, emissive glow or successful transaction cannot prove professional quality; perform the normal native/reference-matched review. Do not paint a Geometry defect or force an unverified material to `STYLED`.
+
 ## Texture Styling
 generic palette; copied unrelated texture; flat rectangles/random high-contrast noise ≠ completion.
 `BASE PASS → VALUE / FORM PASS → SURFACE PATTERN PASS → IDENTITY PASS → SECONDARY DETAIL PASS → RENDER / ALPHA VERIFY → VERIFY`.

@@ -81,6 +81,13 @@ When no BLOCKING pixel-art unknown remains, delegate directly to `lazydesigner-p
 
 No ceremonial pre-confirmation when no BLOCKING ambiguity remains. When unblocked, delegate to `lazydesigner-particle-reference-authoring`; mark reversible non-blocking choices `PROVISIONAL`, never invent hidden geometry, runtime truth, or performance.
 
+
+### Original-concept artistic direction (conditional)
+
+When the user requests a **new original visual design**, apply the existing [professional art reasoning](../../../docs/02-reference/art-direction.md#professional-visual-reasoning---original-design-versus-faithful-reconstruction): define one identity-bearing silhouette, supporting material/value hierarchy, focal accent and optional motion personality before generating the image. Only compare two concise concept directions if the ambiguity materially changes identity or later construction. These are **provisional creative choices**, not facts from an unseen reference; accepted visual output establishes authority after user review.
+
+When the user supplies an **approved reference** or requests a bounded correction, preserve it rather than performing an unsolicited redesign. Reference examples and marketplace images are craft study, not approved motifs or hidden geometry. Do not generate a set of extra preview images, require new approval ceremony or add new runtime tools.
+
 ## Prompt compiler
 
 After blocking information is resolved, use `lazydesigner-prompt-compiler` when normalization materially helps.
