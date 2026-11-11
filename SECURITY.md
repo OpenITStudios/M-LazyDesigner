@@ -4,7 +4,7 @@
 
 LazyDesigner is under active development on the `Local` branch. Security reports for development behavior should be checked against the current `Local` HEAD. No public stable release line is currently maintained; when stable releases are published, support will follow the latest supported release unless stated otherwise.
 
-Compatibility-bound `BlockIT` identifiers remain in some package/plugin/protocol/environment names. They do not imply a separate security boundary.
+The canonical package, plugin, protocol and environment identities use `LazyDesigner`. Retired `BlockIT` names may still appear as explicit migration detectors and legacy compatibility aliases; they do not authorize selecting an old Runtime, plugin or client configuration as the active installation and do not create a separate security boundary.
 
 ## Reporting a vulnerability
 

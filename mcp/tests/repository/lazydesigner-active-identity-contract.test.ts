@@ -43,6 +43,19 @@ describe("single LazyDesigner managed installation identity", () => {
     expect(manager).not.toContain('process.env.BLOCKIT_HOME');
   });
 
+  test("Desktop Cargo repository metadata names only the active source repository", async () => {
+    const [cargo, managed, security] = await Promise.all([
+      source("../apps/desktop/src-tauri/Cargo.toml"),
+      source("../distribution/managed-install.ts"),
+      source("../SECURITY.md"),
+    ]);
+    expect(managed).toContain('export const REPOSITORY = "OpenITStudios/M-LazyDesigner"');
+    expect(managed).toContain('export const LEGACY_REPOSITORY = "MIVUBI-STD/M-LazyDesigner"');
+    expect(cargo).toContain('repository = "https://github.com/OpenITStudios/M-LazyDesigner"');
+    expect(cargo).not.toContain('repository = "https://github.com/MIVUBI-STD/M-LazyDesigner"');
+    expect(security).toContain("Retired `BlockIT` names may still appear as explicit migration detectors");
+  });
+
   test("Runtime health and plugin lease reuse the canonical product ID", async () => {
     const [identity, runtime, lease] = await Promise.all([
       source("compatibility/lazydesigner-identity.ts"),
