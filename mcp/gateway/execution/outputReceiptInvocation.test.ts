@@ -101,8 +101,10 @@ describe("real Gateway executor invocation -> Control output receipt continuatio
     };
     expect(conservative.isError).not.toBe(true);
     expect(conservative.structuredContent?.items).toEqual([]);
+    // The compact Control projection intentionally omits capability ID:
+    // it is already known from the invoke request.
     expect(conservative.structuredContent?.control_delta).toMatchObject({
-      capability: "manage_material_instances",
+      project_uuid: UUID,
     });
 
     // The verified read-only fast path remains compact when the Backend
