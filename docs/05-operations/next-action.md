@@ -2,6 +2,14 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+
+## Active focus — dual reasoning effectiveness (2026-11-11)
+
+- **User-approved direction:** improve (1) causal MCP code-development reasoning and (2) professional voxel-art decisions **inside existing owners**, with no extra router, public Gateway tool, persistent tracker, runtime engine or mandatory tool installation. Current source contracts and specialized Skills are authored on `Local`; agent effectiveness and native visual quality remain **UNMEASURED**.
+- **Engineering proof target:** `engineering-graphless-ready-source-probe` in the existing skill-routing corpus, the actual `mcp/gateway/capabilities/graph.ts` unknown/READY P0 and affected search/direct-invoke consumers. It checks diagnosis and the complete correction boundary; canonical Graph+semantic revision+generated artifacts remain **uncoupled/unfinished** until the actual generator is available. Do not make partial Graph or generator-owned commits under the current hold.
+- **Artistic proof target:** reuse **one** approved-source `golden-full-asset-authoring` Beacon Courier Bot fixture, the existing QA-01 blind A/B review and current-revision native captures. A source-only critique cannot establish a completed model, professional material quality, native animation, or accepted-result improvement. Original-concept creativity remains separately provisional until a user-approved visual target exists.
+- **This track's STOP:** confirm exact-source routing/evidence contracts only; leave executable Codex, Bun, generator and installed Blockbench testing **NOT_EXECUTED** until the user explicitly reauthorizes them. Preserve the existing native Desktop P0 and Capability Graph P0 release blockers; this focused research/fixture work does **not** demote or close either. History remains in Git and proof interpretation in `current-validation.md`.
+
 ## Editor navigation and native Detach UX — 2026-11-09
 
 - **SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** The existing `App.svelte` admits at most one in-flight Detach before leaving Unified Editor and clears the pending state on success or failure. The same `UnifiedWorkspacePage.svelte` displays in-flow, non-shifting status through its subtitle, prevents competing route/model actions, and leaves the Editor open with explicit recovery guidance if Detach is not confirmed. Workspace, Support, Diagnostic and Activity navigation share this original route gate.

@@ -192,6 +192,25 @@ runtime/environment notes
 Compare implementation changes only against equivalent inputs and acceptance criteria. Accepted live benchmark runs must retain end-to-end provenance for the approved Reference Package fingerprint, Control task-context id, Runtime build identity, and resulting artifact revision. Baseline/candidate comparisons require the same Reference Package fingerprint; otherwise they are different authoring inputs and are not comparable efficiency experiments. A prepared fixture or passing static test is not live visual/runtime proof.
 
 
+
+### Reasoning A/B for professional visual quality — reuse the existing Golden
+
+For the **artistic reasoning** track, use only the already-approved `golden-full-asset-authoring` Beacon Courier Bot reference, immutable seed, native evidence capture and existing QA-01 blinded A/B review. No second Golden ID, new style scorer, image generator, extra approval system, or assumed quality baseline is created. This is a **faithful reconstruction** challenge; it does not, by itself, measure the agent's ability to invent a new original concept.
+
+In addition to the Golden's required Geometry/Texture/Animation acceptance, distinguish the *causal design choices* made on each side:
+
+1. **Reference interpretation:** Can the agent identify the defining silhouette, front/side/back part relationships, rear vent, articulated-arm gaps, main material regions and animated signal-pose identity from the **actual approved PNG**? If a feature is hidden or visually ambiguous, does it remain UNVERIFIED rather than guessed?
+2. **Professional form decisions:** Does the candidate prioritize source-backed primary mass, negative space and recognisable silhouette at normal display size over filler Cubes or unjustified ornate decoration? Review actual native front, side and back views—not the instruction text or hero image alone.
+3. **Material artistry:** Does the shaded, UV-mapped model use readable value groups, intentional pixel clusters, coherent copper/brass/iron/amber material roles, quiet surfaces and source-backed identity markings? Observe seams, face orientation, physical atlas mapping and detail readability on the actual model.
+4. **Motion craft:** Does the right-arm signal remain clear across its key moments, with correct pivot, contact, timing and loop return? A still image cannot prove that motion and grounded feet survive playback.
+5. **Evidence and acceptance:** Record concrete mismatch, owning stage, correction and matched before/after visual evidence. Each required quality dimension remains PASS/FAIL/UNVERIFIED; any critical failure or missing current reference/capture/playback blocks an accepted result.
+
+**Comparison control:** Keep the *same source commit, model identity, approved-reference bytes, seed bytes, Runtime build, task scope and review viewpoints* when testing an instruction/harness change. Distinct real Gateway session IDs and saved-output digests must be correlated using the existing Golden/Harness comparator. The independent human reviewer sees blinded A/B at matched camera, lighting, crop, scale and pose; the review includes precise reasons for preference or tie. Quality acceptance comes **before** comparing correction rounds, tool/image cost and time. Do not derive artistic superiority from fewer steps, an approved reference label, or matching SHA alone.
+
+**Original-design extension:** New-design creativity is a separate user-approved creative brief/review task under Reference Preparation. Use `art-intelligence-original-reference` to verify the *routing and provisional design decision*, but do not pretend it is a measured second native Golden benchmark. Once an original concept is approved, downstream modelling re-enters the faithful-reference pathway above.
+
+**Current state:** `SOURCE_PREPARED / A_B_NOT_EXECUTED / ARTISTIC_IMPROVEMENT_UNMEASURED` while Codex/native testing remains on hold.
+
 ## QA-01 — Blinded paired art-quality review (optional Golden evaluation)
 
 This **extends the existing single full-asset Golden Task** rather than creating another task/runner/scorer. Source rationale: [Riot process/portfolio guidance](https://www.riotgames.com/en/portfolio-and-reel-suggestions) emphasizes design decisions and readability; [DreamSim (NeurIPS 2023)](https://proceedings.nips.cc/paper_files/paper/2023/hash/9f09f316a3eaf59d9ced5ffaefe97e0f-Abstract-Conference.html) demonstrates limits of low-level pixel metrics. Neither source proves automated aesthetic quality or a LazyDesigner result.

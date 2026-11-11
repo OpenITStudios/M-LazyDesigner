@@ -181,4 +181,47 @@ describe("Skill lane and activation contract", () => {
     // Source/fixture integrity, not a real Codex routing trace or visual-quality test.
   });
 
+
+  test("source-backed dual reasoning probes demand real owner and prohibit unsupported proof", async () => {
+    const corpus = JSON.parse(await source("tests/fixtures/skill-routing-cases.json")) as {
+      cases: Array<{
+        id: string; lane: string; expected_skill: string; forbidden_skills: string[];
+        decision_probe?: {
+          evidence_state: string;
+          canonical_owner_path: string;
+          decision: string;
+          required_observations: string[];
+          prohibited_shortcuts: string[];
+        };
+      }>;
+    };
+    const probes = corpus.cases.filter((entry) => entry.decision_probe);
+    expect(probes.map((entry) => entry.id).sort()).toEqual([
+      "art-golden-beacon-rear-vent-proof",
+      "engineering-graphless-ready-source-probe",
+    ]);
+
+    for (const entry of probes) {
+      const probe = entry.decision_probe!;
+      expect(probe.evidence_state).toBe("SYNTHETIC_CASE_NOT_EXECUTED");
+      expect(probe.canonical_owner_path).toMatch(/^(mcp|docs)\/[a-zA-Z0-9._/-]+$/);
+      expect(await Bun.file("../" + probe.canonical_owner_path).exists()).toBe(true);
+      expect(probe.decision.length).toBeGreaterThan(12);
+      expect(probe.required_observations.length).toBeGreaterThanOrEqual(3);
+      expect(probe.prohibited_shortcuts.length).toBeGreaterThanOrEqual(3);
+      for (const requirement of [...probe.required_observations, ...probe.prohibited_shortcuts]) {
+        expect(requirement.length).toBeGreaterThan(20);
+      }
+      expect(entry.forbidden_skills).not.toContain(entry.expected_skill);
+    }
+
+    const engineering = probes.find((entry) => entry.id === "engineering-graphless-ready-source-probe")!;
+    const artistic = probes.find((entry) => entry.id === "art-golden-beacon-rear-vent-proof")!;
+    expect(engineering.lane).toBe("DEVELOPMENT");
+    expect(engineering.expected_skill).toBe("lazydesigner-mcp-development");
+    expect(artistic.lane).toBe("IN_USE");
+    expect(artistic.expected_skill).toBe("lazydesigner-modelling");
+    // These checks assert static case ownership, not model reasoning or native acceptance.
+  });
+
 });

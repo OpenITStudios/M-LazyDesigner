@@ -516,6 +516,64 @@
         "lazydesigner-mcp-development",
         "lazydesigner-skill-development"
       ]
+    },
+    {
+      "id": "engineering-graphless-ready-source-probe",
+      "kind": "collision",
+      "prompt": "Fix the source-backed LazyDesigner P0: evaluateCapabilityPreconditions can report READY for a branch with no Graph fact while Gateway/Control may show UNKNOWN. Trace the first wrong owner, registration and consumer; do not falsely claim that an unavailable canonical generator or native Blockbench test ran.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-mcp-development",
+      "decision_rule": "Known graphless READY/UNKNOWN inconsistency is MCP readiness/contract development; first diagnose the Graph source and affected consumers, and preserve native registration authority and generator coupling.",
+      "required_evidence_for_lane_crossing": "Current exact graph.ts code, capability manifest branch, catalog/direct-invoke consumer and actual Runtime registration path; live behavior remains unverified.",
+      "forbidden_skills": [
+        "lazydesigner-blockbench-development",
+        "lazydesigner-modelling",
+        "lazydesigner-development-brief"
+      ],
+      "decision_probe": {
+        "evidence_state": "SYNTHETIC_CASE_NOT_EXECUTED",
+        "canonical_owner_path": "mcp/gateway/capabilities/graph.ts",
+        "decision": "SOURCE_DIAGNOSIS_AND_COUPLED_CORRECTION_BOUNDARY",
+        "required_observations": [
+          "Exact Graph branch/no-entry source condition and first incorrect readiness inference",
+          "Known BLOCKED prerequisites remain blocked and graphless branch does not become native READY",
+          "Producer/consumer and generated API/semantic revision closure identified"
+        ],
+        "prohibited_shortcuts": [
+          "Claim successful registration or native READY from a Graph/search hint",
+          "Commit a partial Graph change or hand-edit generator-owned API/HTML",
+          "Report unexecuted code/tests or a synthetic prompt answer as PASS"
+        ]
+      }
+    },
+    {
+      "id": "art-golden-beacon-rear-vent-proof",
+      "kind": "pressure",
+      "prompt": "During the approved Beacon Courier Bot Golden evaluation, suppose an otherwise attractive front render lacks the required rear vent and right-arm gap in the actual model. The reviewer proposes hiding it with texture highlights. Decide who owns the defect and what native/reference evidence would prove a correct change.",
+      "lane": "IN_USE",
+      "expected_skill": "lazydesigner-modelling",
+      "decision_rule": "A source-required rear vent and physically missing gap are Geometry-owned, even if a hero render looks appealing; no texture effect or subjective preference substitutes for actual form and current native multi-view evidence.",
+      "required_evidence_for_lane_crossing": "Approved Beacon Courier source view, comparable model back/side captures with actual project/artifact revision and intended source part identities.",
+      "forbidden_skills": [
+        "lazydesigner-texturing",
+        "lazydesigner-mcp-development",
+        "lazydesigner-reference-preparation"
+      ],
+      "decision_probe": {
+        "evidence_state": "SYNTHETIC_CASE_NOT_EXECUTED",
+        "canonical_owner_path": "docs/03-authoring/modelling/standard.md",
+        "decision": "GEOMETRY_CORRECTION_WITH_VISUAL_PROOF_REQUIRED",
+        "required_observations": [
+          "Approved source and current shaded back/side model captures are comparable and revision-bound",
+          "Rear vent, articulated-arm gap and contact are assessed as real Geometry requirements",
+          "Correction reviewed at the affected views before any Texture or Animation completion claim"
+        ],
+        "prohibited_shortcuts": [
+          "Promote pleasing front-only render or pretty texture to whole-form PASS",
+          "Invent hidden geometry if required source evidence is unavailable",
+          "Claim the hypothetical Golden model was created or native proof executed"
+        ]
+      }
     }
   ]
 }
