@@ -449,6 +449,73 @@
         "lazydesigner-development-brief",
         "lazydesigner-reference-preparation"
       ]
+    },
+    {
+      "id": "engineering-reasoning-mcp-error-contract",
+      "kind": "positive",
+      "prompt": "Develop the LazyDesigner MCP result contract: the public tool accepts the request but the registered operation returns fields that disagree with its advertised structured result. Trace caller, branch, schema and response.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-mcp-development",
+      "decision_rule": "Client-visible schema/result mismatch belongs to MCP development. Prove accepted, rejected and error shapes before editing unrelated Blockbench code.",
+      "required_evidence_for_lane_crossing": "Exact public request, advertised schema, response shape and receiving consumer.",
+      "forbidden_skills": [
+        "lazydesigner-blockbench-development",
+        "lazydesigner-modelling",
+        "lazydesigner-texturing"
+      ]
+    },
+    {
+      "id": "engineering-reasoning-native-undo-owner",
+      "kind": "collision",
+      "prompt": "The LazyDesigner tool schema and result are correct, but a real Blockbench model edit leaves the native Undo history inconsistent. Diagnose the source cause.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-blockbench-development",
+      "decision_rule": "Correct public contract plus incorrect native Undo is Blockbench runtime ownership, not a reason to change public MCP schema.",
+      "required_evidence_for_lane_crossing": "Observed native Undo/effect mismatch from the exact registered executor.",
+      "forbidden_skills": [
+        "lazydesigner-mcp-development",
+        "lazydesigner-modelling",
+        "lazydesigner-texturing"
+      ]
+    },
+    {
+      "id": "art-intelligence-original-reference",
+      "kind": "positive",
+      "prompt": "Create an original voxel golem visual design from a Greek-temple theme. Establish its distinctive mass silhouette, material roles and concept before making a reference image; there is no approved target model.",
+      "lane": "IN_USE",
+      "expected_skill": "lazydesigner-reference-preparation",
+      "decision_rule": "Authorized original visual ideation remains Reference Preparation until reviewed; provisional design facts do not immediately become native model geometry.",
+      "forbidden_skills": [
+        "lazydesigner-mcp-development",
+        "lazydesigner-modelling",
+        "lazydesigner-development-brief"
+      ]
+    },
+    {
+      "id": "art-intelligence-fidelity-not-redesign",
+      "kind": "pressure",
+      "prompt": "The approved model reference shows a narrow head, broad arms and a hollow shoulder gap, but the first geometry blockout looks plain. Ignore the missing gap and invent more golden armor to look premium.",
+      "lane": "IN_USE",
+      "expected_skill": "lazydesigner-modelling",
+      "decision_rule": "Faithful reconstruction must resolve reference-proven mass and negative-space errors before speculative decoration; Geometry owns this correction.",
+      "forbidden_skills": [
+        "lazydesigner-reference-preparation",
+        "lazydesigner-mcp-development",
+        "lazydesigner-texturing"
+      ]
+    },
+    {
+      "id": "art-intelligence-material-read",
+      "kind": "collision",
+      "prompt": "The model silhouette and UV are correct, but its stone texture is noisy, the gold markings do not read at normal scale and the focal value grouping is missing. Improve the mapped texture.",
+      "lane": "IN_USE",
+      "expected_skill": "lazydesigner-texturing",
+      "decision_rule": "Material hierarchy and readable pixel clusters are Texturing-owned; successful paint tool response is not artistic acceptance.",
+      "forbidden_skills": [
+        "lazydesigner-modelling",
+        "lazydesigner-mcp-development",
+        "lazydesigner-skill-development"
+      ]
     }
   ]
 }

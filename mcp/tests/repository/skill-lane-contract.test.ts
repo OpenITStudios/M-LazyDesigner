@@ -158,4 +158,27 @@ describe("Skill lane and activation contract", () => {
     // Static policy integrity only. Real agent routing and Blockbench behavior are not executed here.
   });
 
+
+  test("engineering and artistic reasoning scenarios retain distinct owners", async () => {
+    const corpus = JSON.parse(await source("tests/fixtures/skill-routing-cases.json")) as {
+      cases: Array<{ id: string; kind: string; lane: string; expected_skill: string; forbidden_skills: string[] }>;
+    };
+    const scenarios = {
+      "engineering-reasoning-mcp-error-contract": ["DEVELOPMENT", "lazydesigner-mcp-development"],
+      "engineering-reasoning-native-undo-owner": ["DEVELOPMENT", "lazydesigner-blockbench-development"],
+      "art-intelligence-original-reference": ["IN_USE", "lazydesigner-reference-preparation"],
+      "art-intelligence-fidelity-not-redesign": ["IN_USE", "lazydesigner-modelling"],
+      "art-intelligence-material-read": ["IN_USE", "lazydesigner-texturing"],
+    } as const;
+
+    for (const [id, [lane, owner]] of Object.entries(scenarios)) {
+      const matching = corpus.cases.filter((item) => item.id === id);
+      expect(matching.length, id).toBe(1);
+      expect(matching[0]?.lane).toBe(lane);
+      expect(matching[0]?.expected_skill).toBe(owner);
+      expect(matching[0]?.forbidden_skills).not.toContain(owner);
+    }
+    // Source/fixture integrity, not a real Codex routing trace or visual-quality test.
+  });
+
 });
