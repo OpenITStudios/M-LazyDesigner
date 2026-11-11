@@ -196,12 +196,17 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(wrongTarget.closes()).toBe(1);
   });
 
-  test("only complete Runtime results can carry successful tool effects", async () => {
-    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+  test("deferred native mutation fails as OUTCOME_UNKNOWN and withdraws the stale lease", async () => {
+    let invalidations = 0;
+    const backend = new BlockitRuntimeBackend(
+      "http://127.0.0.1:3000/bb-mcp", undefined,
+      { onRuntimeUnavailable: () => { invalidations += 1; } }
+    );
     const state = backend as any;
     state.projectUuid = "project-verified";
     state.authoringPhase = "geometry";
     state.ensureCatalogUnsafe = async () => {};
+    state.connection.markReady({ catalogRefreshed: true });
     state.catalog = new Map([[
       "switch_authoring_phase",
       { name: "switch_authoring_phase", annotations: { readOnlyHint: false } },
@@ -209,67 +214,92 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     const deferred = {
       resultType: "input_required",
       inputRequests: { confirmation: { description: "Need input" } },
-      // Even an unexpected content array cannot turn input_required into
-      // a completed Stage transition.
       content: [],
       structuredContent: {
-        phase: "animation",
-        runtime_surface: "ANIMATION",
-        surface_changed: true,
+        phase: "animation", runtime_surface: "ANIMATION", surface_changed: true,
       },
     };
     state.client = { callTool: async () => deferred };
-    const result = await backend.invokeCapabilityWithMetadata(
+    await expect(backend.invokeCapabilityWithMetadata(
       "switch_authoring_phase", { target_phase: "animation" }
-    );
-    expect(result.result.isError).toBe(true);
-    expect(result.result.content[0]).toMatchObject({
-      type: "text",
-      text: expect.stringContaining("cannot complete the deferred call"),
+    )).rejects.toMatchObject({
+      code: "OUTCOME_UNKNOWN",
+      safeToRetry: false,
+      details: {
+        capability: "switch_authoring_phase",
+        result_issue: "INPUT_REQUIRED_UNSUPPORTED",
+      },
     });
-    expect(result.result.structuredContent).toEqual({ runtime_result: deferred });
     expect(state.authoringPhase).toBe("geometry");
     expect(state.projectUuid).toBe("project-verified");
     expect(state.pendingStageHandoff).toBeNull();
+    expect(state.catalog.size).toBe(0);
+    expect(state.connection.snapshot().state).toBe("degraded");
+    expect(invalidations).toBe(1);
   });
 
-  test("unrecognized or malformed Runtime results fail closed, completed legacy results stay valid", async () => {
+  test("unrecognized mutating results fail closed; completed and read-only errors remain compatible", async () => {
+    const malformed = [
+      { resultType: "future_deferred", content: [], structuredContent: { project_uuid: "unexpected" } },
+      { resultType: "complete", content: [], isError: "false", structuredContent: { project_uuid: "unexpected" } },
+      { resultType: "input_required", inputRequests: {} },
+      { structuredContent: { project_uuid: "unexpected" } },
+    ];
+    for (const invalid of malformed) {
+      const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+      const state = backend as any;
+      state.projectUuid = "project-verified";
+      state.authoringPhase = "geometry";
+      state.ensureCatalogUnsafe = async () => {};
+      state.catalog = new Map([[
+        "create_project",
+        { name: "create_project", annotations: { readOnlyHint: false } },
+      ]]);
+      state.client = { callTool: async () => invalid };
+      await expect(backend.invokeCapabilityWithMetadata("create_project", {}))
+        .rejects.toMatchObject({ code: "OUTCOME_UNKNOWN", safeToRetry: false });
+      expect(state.projectUuid).toBe("project-verified");
+      expect(state.catalog.size).toBe(0);
+    }
+
     const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
     const state = backend as any;
     state.projectUuid = "project-verified";
     state.authoringPhase = "geometry";
     state.ensureCatalogUnsafe = async () => {};
     state.catalog = new Map([[
-      "create_project",
-      { name: "create_project", annotations: { readOnlyHint: false } },
+      "manage_cubes",
+      { name: "manage_cubes", annotations: { readOnlyHint: false } },
     ]]);
-    for (const malformed of [
-      { resultType: "future_deferred", content: [], structuredContent: { project_uuid: "unexpected" } },
-      { resultType: "complete", content: [], isError: "false", structuredContent: { project_uuid: "unexpected" } },
-      { resultType: "input_required", inputRequests: {} },
-      { structuredContent: { project_uuid: "unexpected" } },
-    ]) {
-      state.client = { callTool: async () => malformed };
-      const response = await backend.invokeCapabilityWithMetadata("create_project", {});
-      expect(response.result.isError).toBe(true);
-      expect(response.result.structuredContent).toEqual({ runtime_result: malformed });
-      expect(state.projectUuid).toBe("project-verified");
-    }
-    // Older MCP CallToolResult has no resultType and is still a success.
-    const legacy = {
-      content: [],
-      structuredContent: { execution: "accepted" },
-    };
-    state.catalog.set("manage_cubes", {
-      name: "manage_cubes", annotations: { readOnlyHint: false },
-    });
-    state.client = { callTool: async () => legacy };
-    const result = await backend.invokeCapabilityWithMetadata(
+    state.client = { callTool: async () => ({
+      content: [], structuredContent: { execution: "accepted" },
+    }) };
+    const legacy = await backend.invokeCapabilityWithMetadata(
       "manage_cubes", { operation: "update" }
     );
-    expect(result.result.isError).not.toBe(true);
-    expect(result.result.structuredContent).toEqual(legacy.structuredContent);
+    expect(legacy.result.isError).not.toBe(true);
+    expect(legacy.result.structuredContent).toEqual({ execution: "accepted" });
+
+    state.catalog.set("inspect_elements", {
+      name: "inspect_elements", annotations: { readOnlyHint: true },
+    });
+    const inputRequired = { resultType: "input_required", inputRequests: {} };
+    state.client = { callTool: async () => inputRequired };
+    const read = await backend.invokeCapabilityWithMetadata("inspect_elements", {});
+    expect(read.result.isError).toBe(true);
+    expect(read.result.structuredContent).toEqual({ runtime_result: inputRequired });
     expect(state.projectUuid).toBe("project-verified");
+    expect(state.catalog.has("inspect_elements")).toBe(true);
+
+    state.client = { callTool: async () => ({
+      content: [{ type: "text", text: "Native business-logic validation error" }],
+      isError: true,
+    }) };
+    const legitimateError = await backend.invokeCapabilityWithMetadata(
+      "manage_cubes", { operation: "update" }
+    );
+    expect(legitimateError.result.isError).toBe(true);
+    expect(state.catalog.has("manage_cubes")).toBe(true);
   });
 
   test("successful native call carries its existing verified project identity", async () => {

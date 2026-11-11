@@ -152,17 +152,24 @@ export function normalizeNonNegativeInteger(
   return Number.isFinite(value) && value >= 0 ? Math.trunc(value) : fallback;
 }
 
+/** A completed CallToolResult may omit resultType on older MCP protocol versions. */
+export function isCompletedRuntimeCallResult(
+  result: unknown
+): result is GatewayRuntimeCallResult {
+  return isRecord(result) &&
+    (result.resultType === undefined || result.resultType === "complete") &&
+    Array.isArray(result.content) &&
+    (result.isError === undefined || typeof result.isError === "boolean");
+}
+
 export function normalizeRuntimeCallResult(
   result: unknown
 ): GatewayRuntimeCallResult {
-  // MCP's input_required (or a future result type) is not a completed tool
-  // call, even if it happens to carry a content array. Older MCP results
-  // without resultType remain valid completed results for compatibility.
-  if (isRecord(result) &&
-      (result.resultType === undefined || result.resultType === "complete") &&
-      Array.isArray(result.content) &&
-      (result.isError === undefined || typeof result.isError === "boolean")) {
-    return result as GatewayRuntimeCallResult;
+  // A read-only incomplete result remains an explicit error result. For
+  // potentially mutating capabilities, the Backend instead invalidates
+  // its lease and reports OUTCOME_UNKNOWN before invoking this normalizer.
+  if (isCompletedRuntimeCallResult(result)) {
+    return result;
   }
 
   // The Gateway does not implement multi-round-trip input collection.

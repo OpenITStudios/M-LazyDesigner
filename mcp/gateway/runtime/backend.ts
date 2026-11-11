@@ -41,6 +41,7 @@ import {
   GatewayBackendError,
   errorMessage,
   isRecord,
+  isCompletedRuntimeCallResult,
   isRequestTimeoutError,
   isRuntimeProjectContextError,
   normalizeGatewayManagedResult,
@@ -849,6 +850,34 @@ export class BlockitRuntimeBackend {
           },
           { timeout: this.callTimeoutMs }
         );
+        // A deferred or malformed response is not proof that a potentially
+        // mutating native call did nothing. Retire the catalog/Control lease
+        // and surface canonical non-retryable recovery before any receipt,
+        // project or authoring-Stage projection is applied.
+        if (!isCompletedRuntimeCallResult(result) &&
+            tool.annotations?.readOnlyHint !== true) {
+          const inputRequired = isRecord(result) &&
+            result.resultType === "input_required";
+          const message = inputRequired
+            ? `LazyDesigner Runtime requested additional input for "${capability}". Gateway cannot complete this deferred mutation; inspect native state before retrying.`
+            : `LazyDesigner Runtime returned an incomplete or invalid result for "${capability}". The mutation may already have executed; inspect native state before retrying.`;
+          await this.closeConnectionUnsafe();
+          const retryAfterMs = this.connection.markDegraded();
+          this.lastError = message;
+          this.onRuntimeUnavailable?.();
+          throw new GatewayBackendError(
+            "OUTCOME_UNKNOWN",
+            message,
+            false,
+            {
+              capability,
+              result_issue: inputRequired
+                ? "INPUT_REQUIRED_UNSUPPORTED"
+                : "NON_COMPLETE_RUNTIME_RESULT",
+              retry_after_ms: retryAfterMs,
+            }
+          );
+        }
         const normalized = normalizeRuntimeCallResult(result);
         let managed = normalized;
         const application = resolveGatewayCapabilityEffects(
