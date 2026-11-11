@@ -66,6 +66,56 @@ function deltaFromGateway(value: unknown): Record<string, unknown> {
 }
 
 describe("real Gateway executor invocation -> Control output receipt continuation", () => {
+  test("native Backend read-only decision cannot be promoted by a QUERY branch hint", async () => {
+    const invokeWithBackendReadOnly = async (readOnly: boolean) => {
+      const backend = {
+        async invokeCapabilityWithMetadata(
+          capability: string,
+          args: Record<string, unknown>
+        ): Promise<GatewayRuntimeInvocation> {
+          expect(capability).toBe("manage_material_instances");
+          expect(args.operation).toBe("list");
+          return {
+            result: {
+              content: [{ type: "text", text: "Material instances inspected." }],
+              structuredContent: { operation: "list", items: [] },
+            },
+            // This is the already-classified Backend decision, not an
+            // unscreened Runtime ToolAnnotations.readOnlyHint.
+            readOnly,
+            verifiedProjectUuid: UUID,
+            phaseBefore: "geometry",
+          };
+        },
+      } as unknown as BlockitRuntimeBackend;
+      return new GatewayCapabilityExecutor(
+        backend, new LocalCapabilityRegistry(), new GatewaySessionState()
+      ).invoke("manage_material_instances", { operation: "list" });
+    };
+
+    // The static manifest calls 'list' a QUERY, but it cannot override a
+    // conservative native Backend readOnly=false in the Control projection.
+    const conservative = await invokeWithBackendReadOnly(false) as {
+      isError?: boolean;
+      structuredContent?: Record<string, unknown>;
+    };
+    expect(conservative.isError).not.toBe(true);
+    expect(conservative.structuredContent?.items).toEqual([]);
+    expect(conservative.structuredContent?.control_delta).toMatchObject({
+      capability: "manage_material_instances",
+    });
+
+    // The verified read-only fast path remains compact when the Backend
+    // itself positively classifies the operation as safe.
+    const confirmed = await invokeWithBackendReadOnly(true) as {
+      isError?: boolean;
+      structuredContent?: Record<string, unknown>;
+    };
+    expect(confirmed.isError).not.toBe(true);
+    expect(confirmed.structuredContent?.items).toEqual([]);
+    expect(confirmed.structuredContent).not.toHaveProperty("control_delta");
+  });
+
   test("Backend-confirmed native project receipt uses existing receipt-only Delta", async () => {
     const response = await executor(UUID).invoke("export_model", {
       codec_id: "project",

@@ -22,7 +22,6 @@ import {
 } from "../capabilities/graph";
 import {
   manifestEntriesForCapability,
-  manifestEntryForBranch,
   nestedOperationClassForArguments,
 } from "../capabilities/manifest";
 import type { LocalCapabilityRegistry } from "../providers/registry";
@@ -213,11 +212,13 @@ export class GatewayCapabilityExecutor {
           : runtimeInvocation!.readOnly;
       const nestedOperationClass =
         nestedOperationClassForArguments(capability, args);
-      const branchReadOnly =
-        nestedOperationClass === "QUERY" ||
-        manifestEntryForBranch(capability, branch)?.operationClass === "QUERY";
       const branchControl = nestedOperationClass === "CONTROL";
-      const effectiveReadOnly = readOnly || branchReadOnly;
+      // The native Backend already required a matching internal operation
+      // contract plus a read-only Runtime annotation. A QUERY branch label
+      // alone must not turn the Backend's false result into true, suppress
+      // Control Delta, or discard the source's conservative verification.
+      // Local providers remain trusted through their registered descriptor.
+      const effectiveReadOnly = readOnly;
 
       const succeeded = result.isError !== true;
       const receipt = deriveControlReceipt(
