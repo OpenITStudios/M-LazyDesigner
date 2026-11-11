@@ -15,6 +15,40 @@ This document is the **single semantic owner for shared 3D visual-family directi
 
 This adds no per-Cube lookup, new Gateway tool, second Style Lock, parser, runtime routing layer or automatic mutation. [Full source classification](../04-system/authoring-knowledge-maturity.md#visual-craft-source-disposition-crosswalk--maintenance-only) is for maintainers, not ordinary asset context.
 
+
+## Professional visual reasoning — original design versus faithful reconstruction
+
+**Purpose:** give the existing Reference Preparation and active Geometry/Texture/Animation specialist a *decision-making method* for professional-looking voxel assets. It is conditional cross-domain art direction, not a style preset, new Skill, generated output schema, independent art critic service, or promise that a model is visually excellent. Apply it only at a genuine design ambiguity or review boundary, never per Cube/pixel.
+
+**Choose the visual authority before proposing shape:**
+
+- **FAITHFUL RECONSTRUCTION:** A supplied and approved reference controls visible identity, silhouette, proportions, material regions and intentional asymmetry. Explore alternative *construction methods*, not alternative character designs. Unknown rear geometry, hidden contacts or unseen material remain unresolved, not artistically improvised facts.
+- **ORIGINAL DESIGN:** The user authorizes creation of a new concept from a brief or broad style direction. Propose a coherent artistic interpretation using reversible creative choices; keep those choices `PROVISIONAL` until visually reviewed and accepted. A marketplace example is inspiration for general craft (hierarchy, palette relationship, geometry economy), not a substitute source for distinctive motifs or permission to copy an asset. Once a target is approved, subsequent reconstruction follows that target.
+- **HYBRID / RE-DESIGN:** Preserve explicitly locked attributes and identify exactly what the user permitted to change. Do not replace the source identity merely because a reference lacks a back view or a prompt says 'professional'.
+
+**One compact art-direction hypothesis, only for a material choice:**
+
+```text
+Identity: what should read first at gameplay/thumbnail size?
+Form: dominant mass rhythm, silhouette landmark, attachment, true negative space
+Materials: primary / supporting / focal material roles, value separation, cluster scale
+Motion (if required): weight, pivot, contact, anticipation/settle vocabulary
+Evidence: which facts are seen, user-specified, provisional or unknown?
+```
+
+Reason from **large to small**: silhouette and proportion → recognisable secondary masses/negative spaces → value grouping and material contrast → identity marks → sparse micro-detail. The design is not automatically more professional because it contains more Cubes, higher texture resolution, glow, or more animation keyframes. When an original-concept decision has two genuinely different viable approaches, contrast at most 2–3 concise alternatives by the *specific criterion that changes* (for example strong squared guardian silhouette versus separated curved shoulder masses). Select one grounded option or request the missing artistic decision; never generate multiple full images or models by default. An already-approved reference bypasses this speculative choice.
+
+**Art review under equivalent viewing conditions:**
+
+1. **Form read:** inspect actual comparable front/side/three-quarter views (and back where identity depends on it), at normal intended display size; ask whether the subject, proportions, focal read, negative spaces and attachments survive when detail is suppressed. A hero render cannot hide a wrong rear silhouette.
+2. **Value/material read:** for an approved source, compare mapped shaded model surfaces with the actual reference; look for readable primary/secondary/accent hierarchy, nonuniform material treatment, clean integer pixel clusters and deliberate quiet areas. Check important face orientation, unintended seams and markings that wrongly mirror. Flat-atlas aesthetics alone are insufficient.
+3. **Motion read:** for animated assets, review the intended signature pose and contact/clearance at the critical time, not only a pleasing static frame. Material and geometry distinctions must survive the movement.
+4. **Decision:** name the **highest identity-bearing mismatch**, its exact owning domain, and the smallest justified correction. Mark `PASS | FAIL | UNVERIFIED` only against actual current evidence under the existing [quality benchmark](../../mcp/docs/QUALITY_BENCHMARK.md); a pleasing preview, heuristic score or research screenshot is not native/user approval.
+
+**Source-specific guidance:** The [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) explains face-value hierarchy, early large color regions, pixel-cluster editing and banding avoidance. Its **Vanilla-specific look is optional**: original user-approved marketplace/stylized directions may differ in palette, texture resolution, shading grammar and geometric density. The [Blockbench editor](https://blockbench.net/) supports cubic geometry, palette painting, UV and animation; the [Microsoft Bedrock guide](https://learn.microsoft.com/en-us/minecraft/creator/documents/blockbench?view=minecraft-bedrock-stable) explains bone/UV constraints. Technique must be adapted to the approved Bedrock asset, not presumed universally compatible.
+
+**Handoff:** pass only the approved or explicitly provisional decisions that change the current stage through the existing Reference Package/Control projection: Geometry gets form and contact, Texture gets material/value/pixel rhythm, Animation gets pivot/motion personality. Do not invent a `style_lock_id`, add a new check per-Cube, promote unverified images to construction proof, or reopen completed design choices without conflicting evidence.
+
 ## Operational Visual Craft Matrix — selectively adopted guidance (2026-11-01)
 
 Discovery has ended by user decision. This single existing Art Direction owner distills the 56 GK/TK/AK research notes and 15 CX dossiers in [Geometry](../03-authoring/modelling/research-sources.md), [Texture](../03-authoring/texture/research-sources.md), and [Animation](../03-authoring/animation/research-sources.md). They are provenance, NOT 56 executable presets, learned weights or a licensed data set. Current approved asset/reference and Bedrock constraints always win.
