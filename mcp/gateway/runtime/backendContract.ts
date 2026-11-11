@@ -8,15 +8,21 @@ import type { GatewayEffectApplication } from "../capabilities/effects";
 import type { BlockitAuthoringPhaseAffinity } from "../../lib/runtime/affinity";
 import type { JsonRecord } from "../contracts/protocol";
 
+/** Internal Gateway-owned codes. Plain exception objects cannot assert these
+ * identities merely by having the same `code` string. */
+export const GATEWAY_BACKEND_ERROR_CODES = [
+  "BACKEND_UNAVAILABLE",
+  "CAPABILITY_NOT_FOUND",
+  "BACKEND_CALL_INTERRUPTED",
+  "OUTCOME_UNKNOWN",
+  "PROJECT_CONTEXT_LOST",
+  "GATEWAY_BUSY",
+  "GATEWAY_QUEUE_EXPIRED",
+  "GATEWAY_QUEUE_CANCELLED",
+] as const;
+
 export type GatewayBackendErrorCode =
-  | "BACKEND_UNAVAILABLE"
-  | "CAPABILITY_NOT_FOUND"
-  | "BACKEND_CALL_INTERRUPTED"
-  | "OUTCOME_UNKNOWN"
-  | "PROJECT_CONTEXT_LOST"
-  | "GATEWAY_BUSY"
-  | "GATEWAY_QUEUE_EXPIRED"
-  | "GATEWAY_QUEUE_CANCELLED";
+  (typeof GATEWAY_BACKEND_ERROR_CODES)[number];
 
 export class GatewayBackendError extends Error {
   constructor(

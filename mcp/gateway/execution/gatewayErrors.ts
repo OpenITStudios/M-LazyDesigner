@@ -1,4 +1,7 @@
-import { GatewayBackendError } from "../runtime/backendContract";
+import {
+  GatewayBackendError,
+  GATEWAY_BACKEND_ERROR_CODES,
+} from "../runtime/backendContract";
 import type { JsonRecord } from "../contracts/protocol";
 import { recoveryForGatewayError } from "../runtime/recovery";
 
@@ -45,6 +48,19 @@ function errorRecord(error: unknown): {
   if (!error || typeof error !== "object") return null;
   const candidate = error as Record<string, unknown>;
   if (typeof candidate.code !== "string") return null;
+  // Non-Backend exceptions (including legitimate local-provider exceptions)
+  // may carry their own error code, but they cannot claim Gateway transport,
+  // queue, project-affinity or retry authority by copying a reserved code.
+  // Keep the attempted code as a diagnostic; do not trust its supplied
+  // action, recovery, safeToRetry, or mutable effect details.
+  if (GATEWAY_BACKEND_ERROR_CODES.some((code) => code === candidate.code)) {
+    return {
+      code: "GATEWAY_ERROR",
+      message: "An unverified exception reported a Gateway-owned backend code.",
+      safeToRetry: false,
+      details: { reported_code: candidate.code },
+    };
+  }
   const details =
     candidate.details &&
     typeof candidate.details === "object" &&
