@@ -1,0 +1,783 @@
+{
+  "cutoff_utc": "2026-11-12T14:10:04.354Z",
+  "counts": {
+    "UserMessage": 87,
+    "AgentMessage": 213,
+    "CommandExecution": 645,
+    "Extension": 6,
+    "McpToolCall": 2932,
+    "FileChange": 4,
+    "ImageView": 3
+  },
+  "provider_supplement_items": 1196,
+  "tools": {
+    "lazydesigner.status": 41,
+    "lazydesigner.search_capabilities": 31,
+    "lazydesigner.describe_capability": 80,
+    "lazydesigner.invoke_capability": 2610,
+    "node_repl.js": 170
+  },
+  "mcp_duration_seconds_sum": 172.4869146999996,
+  "flagged_tool_events": [
+    {
+      "ordinal": 307,
+      "timestamp": "2026-11-12T05:31:37.829Z",
+      "id": "exec-ae75f631-adaf-45b0-ae4b-babd5ab685a1",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 323,
+      "timestamp": "2026-11-12T05:31:55.355Z",
+      "id": "exec-5e3b7823-2375-4170-bce7-f4ea0ad08e1e",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 360,
+      "timestamp": "2026-11-12T05:33:20.319Z",
+      "id": "exec-764c901e-9102-48de-89d7-4612876b344f",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 401,
+      "timestamp": "2026-11-12T05:34:21.443Z",
+      "id": "exec-cfb265a2-d5f8-4c17-bcbe-5e59784ef752",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 412,
+      "timestamp": "2026-11-12T05:34:54.958Z",
+      "id": "exec-4b3d1d19-6b09-4142-a5be-bfe36a0a9534",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 445,
+      "timestamp": "2026-11-12T05:35:43.377Z",
+      "id": "exec-748c7183-9268-4900-9611-cd7c1b550a21",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 479,
+      "timestamp": "2026-11-12T05:36:22.500Z",
+      "id": "exec-63f07dd9-4d8b-47b8-a280-1f54c433dc44",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 497,
+      "timestamp": "2026-11-12T05:37:21.783Z",
+      "id": "exec-5a902212-4290-4d77-8fce-91b88617df7a",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 520,
+      "timestamp": "2026-11-12T05:38:17.520Z",
+      "id": "exec-0ed1d25b-d479-45f3-bc00-077f690a86e7",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 548,
+      "timestamp": "2026-11-12T05:39:14.996Z",
+      "id": "exec-cdafafcc-05fa-4fb9-a021-1372ee18ccd3",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 569,
+      "timestamp": "2026-11-12T05:40:43.982Z",
+      "id": "exec-1447c7f9-9fe3-40fe-81c5-8b758952a393",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 576,
+      "timestamp": "2026-11-12T05:40:57.009Z",
+      "id": "exec-522507d5-0463-488c-b50e-514374e8f39b",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 585,
+      "timestamp": "2026-11-12T05:41:06.681Z",
+      "id": "exec-90c6920f-b73a-4638-962d-178f7514d0a8",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 631,
+      "timestamp": "2026-11-12T05:42:03.909Z",
+      "id": "exec-2a8c9e79-f821-40ce-a1aa-80f046f4b016",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 648,
+      "timestamp": "2026-11-12T05:42:28.168Z",
+      "id": "exec-58d80288-8ee5-4914-b6dc-8e3b2fad5232",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 678,
+      "timestamp": "2026-11-12T05:43:37.301Z",
+      "id": "exec-3edc98bc-7e29-4ce3-9d50-4f20436a3a61",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 722,
+      "timestamp": "2026-11-12T05:44:43.065Z",
+      "id": "exec-5c0be97c-b4c2-40b6-94ab-8d5c0a3c9626",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 743,
+      "timestamp": "2026-11-12T05:45:40.716Z",
+      "id": "exec-8061015c-2535-4f5b-90d6-0971521f413f",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 766,
+      "timestamp": "2026-11-12T05:46:33.675Z",
+      "id": "exec-a1afa6cf-c2fd-4728-a607-c9d81b6a853e",
+      "tool": "describe_capability",
+      "status": "failed",
+      "markers": [
+        "CAPABILITY_NOT_FOUND"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 803,
+      "timestamp": "2026-11-12T05:47:42.892Z",
+      "id": "exec-0d3bed57-a2b6-4d6d-aec9-facbb205134c",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 813,
+      "timestamp": "2026-11-12T05:47:54.211Z",
+      "id": "exec-8aa262a6-d018-4778-ae3a-04fb9eeb2c06",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 828,
+      "timestamp": "2026-11-12T05:48:29.675Z",
+      "id": "exec-c71312c8-64a3-499e-96be-12a72f7fb989",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 888,
+      "timestamp": "2026-11-12T05:51:40.124Z",
+      "id": "exec-9f7e827d-ad6d-4cbf-8a5b-b3a80416c62b",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 905,
+      "timestamp": "2026-11-12T05:53:38.420Z",
+      "id": "exec-16a5d4e8-69a4-4e9a-b885-f90f9d2fa9be",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 917,
+      "timestamp": "2026-11-12T05:54:10.064Z",
+      "id": "exec-538cc337-37bc-4d84-9630-e283f911bfe3",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1006,
+      "timestamp": "2026-11-12T06:01:02.198Z",
+      "id": "exec-b247b8f5-6d04-42b5-86d1-b53d65b77706",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1008,
+      "timestamp": "2026-11-12T06:01:02.217Z",
+      "id": "exec-135b1fc6-5b32-4038-b344-f61795c8684d",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1037,
+      "timestamp": "2026-11-12T06:03:31.019Z",
+      "id": "exec-19385dfb-7391-43aa-9601-059ca89b0f52",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1131,
+      "timestamp": "2026-11-12T06:11:04.699Z",
+      "id": "exec-e1d4911a-359a-4a48-bb2a-557c06103812",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 1228,
+      "timestamp": "2026-11-12T06:21:37.872Z",
+      "id": "exec-007e4a07-3aeb-4784-b528-74033c4c2f75",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1230,
+      "timestamp": "2026-11-12T06:21:37.895Z",
+      "id": "exec-fb0cd517-a5cf-4c67-99e6-81674ec08917",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1370,
+      "timestamp": "2026-11-12T06:33:30.437Z",
+      "id": "exec-e54d44f7-22ff-41e2-b792-fe22e0a157cc",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1407,
+      "timestamp": "2026-11-12T06:36:58.772Z",
+      "id": "exec-60535646-ac08-4909-9ffc-c6d63192893a",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1483,
+      "timestamp": "2026-11-12T06:40:36.419Z",
+      "id": "exec-7820f202-7313-494f-b914-44cad82187d2",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 1515,
+      "timestamp": "2026-11-12T06:42:23.644Z",
+      "id": "exec-37921fb9-c379-4b91-b88d-c939d54a1f43",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1662,
+      "timestamp": "2026-11-12T06:53:09.234Z",
+      "id": "exec-1b884e55-6a12-4283-a826-e25075e8cdbd",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 1908,
+      "timestamp": "2026-11-12T07:10:57.091Z",
+      "id": "exec-c34f0b36-703e-4f01-8d7f-a677727fe120",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 1918,
+      "timestamp": "2026-11-12T07:11:58.810Z",
+      "id": "exec-390071fd-0caf-48a4-8f6a-dcbbd631341c",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 1937,
+      "timestamp": "2026-11-12T07:14:24.444Z",
+      "id": "exec-177e03bb-4758-42f1-bee8-ec1bc4f32250",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 2062,
+      "timestamp": "2026-11-12T07:20:06.968Z",
+      "id": "exec-a3c58805-a2a9-453c-96d9-3022e6c3d71c",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2118,
+      "timestamp": "2026-11-12T07:22:06.685Z",
+      "id": "exec-ad9e8b77-b0e1-4673-8d9f-149319f9ee13",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2324,
+      "timestamp": "2026-11-12T07:34:38.196Z",
+      "id": "exec-3b4cd05f-7225-4d19-a762-3f255d1b1088",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "CAPABILITY_NOT_FOUND"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2331,
+      "timestamp": "2026-11-12T07:34:51.039Z",
+      "id": "exec-3f83e332-a37a-4835-9c25-9bf253ec0330",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "CAPABILITY_NOT_FOUND"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2493,
+      "timestamp": "2026-11-12T07:42:09.771Z",
+      "id": "exec-3cc5fa33-de3b-4e14-abd2-006fbc2a57f1",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2566,
+      "timestamp": "2026-11-12T07:47:32.599Z",
+      "id": "exec-cb385bd6-1c15-48b6-ab73-7c128a85dddf",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 2602,
+      "timestamp": "2026-11-12T07:48:50.280Z",
+      "id": "exec-2145aa68-b435-424e-999f-994963b3a93f",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2632,
+      "timestamp": "2026-11-12T07:50:32.032Z",
+      "id": "exec-7fd0c584-13a3-4258-b5b2-a532c8a5ffdf",
+      "tool": "describe_capability",
+      "status": "failed",
+      "markers": [
+        "CAPABILITY_NOT_FOUND"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 2764,
+      "timestamp": "2026-11-12T08:07:26.056Z",
+      "id": "exec-3860bb3d-66a7-4ce2-b933-6395f85aa5fa",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 3113,
+      "timestamp": "2026-11-12T08:25:09.728Z",
+      "id": "exec-a453f712-2133-4655-9083-1823a83cca7f",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 3124,
+      "timestamp": "2026-11-12T08:25:26.651Z",
+      "id": "exec-4e4f98b4-b594-4ff6-9f41-f3250b158b2f",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 3514,
+      "timestamp": "2026-11-12T08:40:36.533Z",
+      "id": "exec-818d3b1f-ba77-48e4-b9f3-3bf5bdae0689",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 4191,
+      "timestamp": "2026-11-12T09:08:54.123Z",
+      "id": "exec-467b2fa7-4d58-4487-917b-8634382e9529",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 4694,
+      "timestamp": "2026-11-12T09:40:07.971Z",
+      "id": "exec-d8b2813b-5ac7-4419-b156-f00b605b98ea",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 4781,
+      "timestamp": "2026-11-12T09:51:33.033Z",
+      "id": "exec-c254eb03-0642-43b5-80cf-ea803abe4988",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 4812,
+      "timestamp": "2026-11-12T09:52:03.046Z",
+      "id": "exec-08ec6191-5f5c-4404-af73-e1a1e6393938",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 5794,
+      "timestamp": "2026-11-12T10:41:02.492Z",
+      "id": "exec-c8c8187f-9968-4418-acc6-d5de7b12cdb4",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 5938,
+      "timestamp": "2026-11-12T10:50:42.751Z",
+      "id": "exec-b4dea0e3-31be-4999-916d-a3cc4087367a",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 5972,
+      "timestamp": "2026-11-12T10:54:18.252Z",
+      "id": "exec-09266fe5-fd88-41f2-af1c-a8bc1404360e",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 5992,
+      "timestamp": "2026-11-12T10:55:48.248Z",
+      "id": "exec-47c7b4de-5331-4352-82a7-6d6235677109",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 6518,
+      "timestamp": "2026-11-12T11:29:40.341Z",
+      "id": "exec-9077c901-2df0-46a1-822c-68f5a4db7a3c",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 6584,
+      "timestamp": "2026-11-12T11:38:27.911Z",
+      "id": "exec-da9718bd-b11c-4572-a9c1-b2ab9bc58119",
+      "tool": "js",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 6957,
+      "timestamp": "2026-11-12T12:10:04.114Z",
+      "id": "exec-18fd0c1e-6971-4a4d-a8dd-890f74761ee2",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 6965,
+      "timestamp": "2026-11-12T12:10:04.483Z",
+      "id": "exec-75a74280-33b9-4905-a213-1d6db24299dc",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 6990,
+      "timestamp": "2026-11-12T12:11:34.480Z",
+      "id": "exec-76d52801-cc33-40de-a3c9-163307508d8f",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 7048,
+      "timestamp": "2026-11-12T12:16:01.124Z",
+      "id": "exec-132f9c64-ee17-4df7-a00f-1e70a7e3678e",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 7050,
+      "timestamp": "2026-11-12T12:16:01.153Z",
+      "id": "exec-3b462d0c-de33-499f-9426-f37c5eb9e53b",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 7063,
+      "timestamp": "2026-11-12T12:16:44.890Z",
+      "id": "exec-1104d67a-3b8f-4c7e-941a-9c880d283a9b",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 7464,
+      "timestamp": "2026-11-12T12:42:41.113Z",
+      "id": "exec-3f538423-85c6-434d-a801-645450527043",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "CATALOG_STALE"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 7480,
+      "timestamp": "2026-11-12T12:43:29.670Z",
+      "id": "exec-bb8007b7-77f3-4be7-8471-420f0c410c2f",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 7502,
+      "timestamp": "2026-11-12T12:44:59.352Z",
+      "id": "exec-a3b70e61-1223-4ecb-aa26-9f03a922f99f",
+      "tool": "status",
+      "status": "completed",
+      "markers": [
+        "RUNTIME_CLIENT_NOT_READY"
+      ],
+      "result_is_error": false
+    },
+    {
+      "ordinal": 7563,
+      "timestamp": "2026-11-12T12:50:42.297Z",
+      "id": "exec-e0b5e519-3ace-44ad-8b88-ad5cf12e323a",
+      "tool": "describe_capability",
+      "status": "failed",
+      "markers": [
+        "CAPABILITY_NOT_FOUND"
+      ],
+      "result_is_error": true
+    },
+    {
+      "ordinal": 7642,
+      "timestamp": "2026-11-12T12:54:38.450Z",
+      "id": "exec-08bd314d-2410-4899-b337-952221f62a6b",
+      "tool": "invoke_capability",
+      "status": "failed",
+      "markers": [
+        "postcondition mismatch"
+      ],
+      "result_is_error": true
+    }
+  ],
+  "flagged_count": 72,
+  "media_count": 1857,
+  "media_bytes": 42409356,
+  "asset_files": 40,
+  "intermediate_files": 79,
+  "credential_redaction_count": 0,
+  "notes": [
+    "Counts reflect available native completed-event records, not artistic acceptance.",
+    "Tool duration sum excludes sampling/reasoning/user waits and does not equal total wall time.",
+    "Marker counts include status degradation and capability mismatch; not every marker proves a product defect.",
+    "Provider supplement overlaps canonical transcript at a different protocol layer; do not add counts as independent turns."
+  ],
+  "original_user_attachments": 99,
+  "missing_original_attachments": 0
+}
