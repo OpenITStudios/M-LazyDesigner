@@ -187,3 +187,66 @@ Dataset primer: [README](README.md), [messages.md](messages.md), [transcript.jso
 - Tidak menjalankan Bun, Blockbench, Minecraft, CI, install, release, atau edit aset dalam audit ini. Proposal regression belum merupakan PASS. Native visual acceptance dan APK/Bedrock material alpha tetap perlu bukti sesuai scope; user tidak diminta mengulang manual test sebagai prasyarat laporan ini.
 - Owner current continuation tetap `docs/05-operations/next-action.md`; laporan ini adalah historical evidence + remediation map dalam existing session archive, **bukan** tracker status paralel. Product-specific native Desktop P0 dan Capability Graph exact branch P0 tetap terpisah. Seluruh implementasi berikutnya memerlukan exact current Local HEAD, canonical source, coherent regression, proof ceiling yang benar.
 - **Priority recommendation:** mulai dari B→C→D→E, lalu F/G berdasarkan bukti. Ini menyasar kesalahan berulang dengan perubahan paling kecil dan risiko paling rendah. Hasil **belum** dapat dinyatakan meningkatkan mutu sampai matched accepted/native run membuktikannya.
+
+
+## 8. Audit lanjutan: bias orientasi pemindaian dan false-finish (12 November 2026)
+
+> **Batas bukti:** angka di bawah dihitung langsung dari `transcript.jsonl` historis. Kode mengacu ke source `Local` saat audit, **bukan** bukti bahwa build terpasang saat sesi berasal dari commit yang sama. Hasil perbandingan piksel referensi versus model dan native reproduction tetap `UNVERIFIED`.
+
+### 8.1 [P0] Kesenjangan QA texture per arah ternyata sangat tidak merata
+
+Dari dua receipt native `list_textures(diagnostics=true, diagnostic_scope="full")`:
+
+| Aset, ordinal | down | up | north | south | west | east | Total scanned | Budget omissions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Golem, **3440** | 62/62 | 62/62 | **0/62** | 24/62 | **2/62** | **2/62** | **152/372** | **220** |
+| Merchant, **7701** | 49/49 | 49/49 | 49/49 | 49/49 | 49/49 | **45/49** | **290/294** | **4** |
+
+**OBSERVED:** Ketika Golem diperiksa, seluruh `north` terlewat, sedangkan `west/east` hampir seluruhnya tidak ter-scan; `up/down` diperiksa lengkap. Ini adalah **blindspot pemeriksaan piksel**, bukan bukti 220 sisi tidak dicat. Perhitungan tersebut berdasarkan *Cube-local face*, bukan visibilitas dunia. Pada Merchant empat omission `east` yang sudah dapat ditargetkan adalah `pauldron_right`, `wheel_hub_1`, `forearm_core_right`, `chest_core`.
+
+**SOURCE_CONFIRMED di Local:** `mcp/server/tools/validation/qualityIntelligence.ts` pada sekitar baris 39 dan 245–409 memakai `TEXTURE_OPTIMIZATION_PIXEL_BUDGET=32_768` dan iterasi arah tetap `["down","up","south","north","west","east"]` di dalam `textureOptimizationRuntime()`. Bila `pixelBudgetUsed + pixelCount` melebihi batas, sisi tersebut dicatat sebagai `budget` omission. Urutan tetap memang berusaha melindungi soles/undersides, tetapi dapat menghabiskan budget sebelum arah belakang/samping terjangkau. `mcp/lib/texture/diagnosticReadContext.ts` mempunyai batas shared native 65.536 piksel yang berbeda; kedua limit jangan disamakan.
+
+**INFERENCE, belum reproduksi native:** fixed orientation order, ukuran patch, region-cache dan budget mungkin memunculkan *directional starvation*. Source yang dibaca belum membuktikan kode persis ini dipakai build historis; perlu regression fixture dengan source/build identity terikat.
+
+**TARGET tanpa menambah Gateway tool:** gunakan `face_review_ledger` existing untuk inventaris semua Cube face tanpa full pixel-read. Pilih kandidat sample bounded dalam dua pass: (1) pemeriksaan minimal representatif lintas orientasi/material yang relevan, termasuk back/side dan bottom; (2) habiskan budget sisa untuk material berisiko/target koreksi yang memang dibutuhkan. Deterministik menurut Cube UUID, source revision, material, physical texel. Patch terlalu besar/scan budget habis harus menghasilkan omission + focused review target, bukan klaim keseluruhan PASS. Material `INTENTIONAL_FLAT` tetap sah jika sesuai referensi; jangan menambahkan noise untuk memuaskan metrik.
+
+**REG-FACE-BALANCE-14:** fixture 372-face di bawah budget terbatas harus memperlihatkan inventaris enam arah lengkap dan kesempatan sample bounded untuk arah yang eligible; source diff terhadap urutan lama menurunkan konsentrasi omission hanya di belakang/samping tanpa menyembunyikan `partial`. Fixture Merchant tetap mengekspos empat UUID+face untuk targeted review. Keberhasilan teknis tidak sama dengan artistic PASS.
+
+### 8.2 [P0] “Selesai” belum berarti diterima pengguna
+
+Pasangan pesan **agen menyatakan perbaikan/penyelesaian → pengguna membantah hasilnya** yang dapat ditelusuri di `messages.md` dan `transcript.jsonl`:
+
+| Agent ordinal | User ordinal | Pola kegagalan acceptance |
+| ---: | ---: | --- |
+| **2311** | **2320** | Agent menyebut gradasi scan sudah sesuai; pengguna menyatakan gradasi masih salah |
+| **3856** | **3865** | Agent menyebut semua 372 face telah diperiksa serta depan/belakang/samping dipoles; pengguna menemukan armor belakang polos |
+| **6530** | **6540** | Agent mengklaim style Minion sudah mengikuti Golem termasuk belakang/samping; pengguna menemukan shading/color grading belum lengkap |
+| **7387** | **7396** | Agent menyatakan Death sudah rebah; pengguna masih melihat animasi melayang |
+| **8086** | **8096** | Agent mengklaim Merchant sudah mengikuti blue-master; pengguna melakukan reverse karena styling berbeda |
+| **8220** | **8229** | Agent menyebut varian merah/biru selesai; pengguna melihat style dua varian tidak seragam |
+
+**OBSERVED:** Ini membuktikan klaim “selesai” pada aspek tersebut belum mencapai *user acceptance*. Tidak membuktikan satu penyebab tunggal atau berarti semua operasi intermediate salah. Khusus klaim 372 sisi, full diagnostic sebelumnya (3440) hanya mengamati 152/372; belum ditemukan dalam dua `list_textures` full diagnostic sebuah bukti native yang menutup seluruh 372 sisi. Jangan menyatakan screenshot tunggal atau pernyataan “sudah dicek” sebagai verifikasi seluruh permukaan.
+
+**REG-CLAIM-SCOPE-15:** sebelum klaim final, Control/Skill harus membedakan *saved/technically valid* dengan `PASS | FAIL | UNVERIFIED` visual berdasarkan sumber gambar dan view saat ini. Saat sisi belakang belum diperiksa, klaim scope harus hanya tentang sisi yang benar-benar dilihat. Koreksi eksplisit pengguna menjaga masalah tetap terbuka, tidak dipadamkan oleh receipt paint berikutnya. Jangan tambahkan stage/approval gate baru pada setiap edit.
+
+### 8.3 [P0] Kontinuitas task/cohort: Control menyediakan ID tetapi client melewatkannya
+
+Dari `transcript.jsonl` (lapisan outer `invoke_capability`, bukan payload internal):
+
+- **41** `status` mengandung `control.task_context_id`; ada **27** ID unik (sehingga tidak aman menganggap identitas selalu sama lintas task/reorientasi).
+- Dari **2.610** `invoke_capability`, hanya **3** memakai outer `task_context_id`, semuanya `manage_cubes` pada ordinal **384–386**.
+- **1.197** `paint_texture_transaction` menandai `cohort_boundary="CONTINUE"`, **0** menyertakan `task_context_id`; **1.183** masih mengembalikan image item. Ini tidak membuktikan seluruh image tidak diperlukan, tetapi menunjukkan syarat defer yang diminta tidak terbentuk.
+- Dari **99** `switch_authoring_phase`, **65** tidak mengganti Runtime surface, **34** menggantinya; **99** memiliki `gateway_catalog_invalidated=true` dan **98** meminta status refresh. Jangan menghapus refresh begitu saja: perubahan semantic stage bisa tetap mengubah authority/schema walaupun surface sama.
+
+**TARGET:** pertahankan latest current project/task ID yang diberikan Control dan kirim pada outer `invoke_capability` dalam semantic cohort yang sama; `CONTINUE` pada edit intermediate dan `COMPLETE` pada review boundary. Bila `CONTINUE` tanpa task ID, Gateway perlu explicit warning/invalid cohort intent tanpa menyamarkan result dan tanpa auto retry mutation. Pertahankan final image/focused read serta fail-closed pada project/revision mismatch. Tidak perlu task registry tambahan atau public fifth tool.
+
+**REG-COHORT-CONTEXT-16:** matched golden trace membuktikan task ID benar mengalir Status→invoke, staleness/reorientation terkelola, PNG intermediate terdefer hanya saat seluruh syarat native/image verified terpenuhi, dan final visual debt/evidence tetap ditutup secara eksplisit.
+
+### 8.4 Urutan perbaikan yang disarankan setelah audit
+
+1. Reproduksi `REG-FACE-BALANCE-14` dengan fixture dan source/build pinned; perbaiki keadilan coverage sebelum klaim *semua sisi sudah bertekstur*.
+2. Audit kontrak consumer `REG-COHORT-CONTEXT-16` dan bind `REG-REF-01` agar latest user correction, accepted reference dan task ID bertahan lintas phase/model/compaction.
+3. Koreksi false-finish lewat `REG-CLAIM-SCOPE-15`: region/material/view yang belum dibuktikan tetap `UNVERIFIED`.
+4. Jalankan Golden A/B setelah source dan installed build benar-benar cocok. Metrik utama adalah *cost to accepted result*, rejection setelah claimed PASS, arah yang tidak diperiksa dan putaran koreksi; bukan sekadar jumlah fill, valid UV atau call.
+
+Ini addendum untuk P0-02/P0-03/P0-05 **pada owner laporan yang sudah ada**, bukan proyek/priority tracker kedua. `docs/05-operations/next-action.md` tetap pemilik current continuation. Tidak ada mutasi kode produksi, model, CI atau release akibat audit ini.
