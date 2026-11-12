@@ -1,3 +1,55 @@
+/**
+ * Schedule bounded pixel reads across Cube-local directions and UUID ranges.
+ * No pixel/UV/model edits; omitted faces still stay explicit and unverified.
+ */
+export const TEXTURE_CUBE_LOCAL_FACE_SCAN_ORDER = [
+  "down", "up", "south", "north", "west", "east",
+] as const;
+export type TextureCubeLocalFace = typeof TEXTURE_CUBE_LOCAL_FACE_SCAN_ORDER[number];
+
+export function planBalancedTextureFaceScanOrder<
+  T extends { cube_uuid: string; face: TextureCubeLocalFace }
+>(targets: readonly T[]): T[] {
+  const buckets = {} as Record<TextureCubeLocalFace, T[]>;
+  for (const face of TEXTURE_CUBE_LOCAL_FACE_SCAN_ORDER) buckets[face] = [];
+  for (const target of targets) {
+    const bucket = buckets[target.face];
+    if (!bucket) throw new Error("Unsupported Cube-local texture scan direction.");
+    bucket.push(target);
+  }
+
+  const spreadIndices = (length: number): number[] => {
+    if (length === 0) return [];
+    const indices = [0];
+    if (length > 1) indices.push(length - 1);
+    const ranges: Array<[number, number]> = [[0, length - 1]];
+    for (let cursor = 0; cursor < ranges.length; cursor += 1) {
+      const [left, right] = ranges[cursor];
+      if (right - left <= 1) continue;
+      const middle = Math.floor((left + right) / 2);
+      indices.push(middle);
+      ranges.push([left, middle], [middle, right]);
+    }
+    return indices;
+  };
+
+  const orderedBuckets = TEXTURE_CUBE_LOCAL_FACE_SCAN_ORDER.map((face) => {
+    const sorted = [...buckets[face]].sort((a, b) =>
+      a.cube_uuid.localeCompare(b.cube_uuid)
+    );
+    return spreadIndices(sorted.length).map((index) => sorted[index]);
+  });
+  const ordered: T[] = [];
+  const maxLength = Math.max(0, ...orderedBuckets.map((bucket) => bucket.length));
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const bucket of orderedBuckets) {
+      const target = bucket[index];
+      if (target) ordered.push(target);
+    }
+  }
+  return ordered;
+}
+
 export type TextureFacePatchInput = {
   cube_uuid: string;
   cube_name: string;

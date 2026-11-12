@@ -5,6 +5,8 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Active focus — dual reasoning effectiveness (2026-11-11)
 
+- **Texture scan fairness (13 Nov 2026; SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN):** Diagnostic now interleaves six Cube-local directions and UUID ranges within unchanged pixel budgets; synthetic coverage regression authored. See [Nov 12 audit §10](../../experiments/authoring-session-2026-11-12/deep-audit-and-remediation-map-2026-11-12.md#10-source-correction--bounded-face-scan-fairness-13-november-2026). Source change is not native/visual quality acceptance; installed build provenance and toolchain tests remain UNVERIFIED/NOT_EXECUTED. No CI/release authorized.
+
 - **Evidence continuation (12 Nov 2026; AUDIT ONLY):** The latest recorded Codex native asset-authoring session (banner, Golem, Minion, Merchant) has a [transcript-grounded deep audit and remediation map](../../experiments/authoring-session-2026-11-12/deep-audit-and-remediation-map-2026-11-12.md). Main candidate defects: unbound Reference Package, missing task-context IDs on paint cohorts, partial face-coverage audit, style/variant drift and uncertain artistic acceptance. This is a review/backlog, NOT an implemented quality improvement; keep existing Graph and native Desktop release P0s separate.
 
 - **User-approved direction:** improve (1) causal MCP code-development reasoning and (2) professional voxel-art decisions **inside existing owners**, with no extra router, public Gateway tool, persistent tracker, runtime engine or mandatory tool installation. Current source contracts and specialized Skills are authored on `Local`; agent effectiveness and native visual quality remain **UNMEASURED**.

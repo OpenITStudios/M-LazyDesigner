@@ -22,6 +22,8 @@ import {
 } from "@/lib/geometry/modelQuality";
 import {
   analyzeTextureOptimizationOpportunities,
+  planBalancedTextureFaceScanOrder,
+  TEXTURE_CUBE_LOCAL_FACE_SCAN_ORDER,
   type TextureFacePatchInput,
   type TextureScanOmission,
 } from "@/lib/texture/optimization";
@@ -262,142 +264,145 @@ export function textureOptimizationRuntime(context?: unknown) {
     face: string
   ) => omissions.push({ kind, cube_uuid: cube.uuid, cube_name: cube.name, face });
 
-  // Scan each orientation across the model before proceeding to the next.
-  // Under a finite shared pixel budget, a cube-major north-first traversal
-  // could exhaust reads before ever visiting small soles/undersides. Prefer
-  // a fixed coverage-first order; omissions still mark incomplete evidence.
-  const faceScanOrder = ["down", "up", "south", "north", "west", "east"] as const;
+  // Balance Cube-local directions and UUID ranges before bounded pixel reads.
+  // All invalid/over-budget face results remain explicit diagnostic omissions.
   const scanCubes = [...(Cube.all ?? [])].sort((a, b) =>
     a.uuid.localeCompare(b.uuid)
   );
-  for (const faceKey of faceScanOrder) {
-    for (const cube of scanCubes) {
+  const scanTargets = scanCubes.flatMap((cube: Cube) =>
+    TEXTURE_CUBE_LOCAL_FACE_SCAN_ORDER.flatMap((faceKey) => {
       const face = cube.faces[faceKey];
-      if (!face || face.enabled === false) continue;
+      return face && face.enabled !== false
+        ? [{ cube, cube_uuid: cube.uuid, face: faceKey }]
+        : [];
+    })
+  );
+  for (const { cube, face: faceKey } of planBalancedTextureFaceScanOrder(scanTargets)) {
+    const face = cube.faces[faceKey];
+    if (!face || face.enabled === false) continue;
 
-      const texture = face.getTexture();
-      if (!texture) {
-        omit(face.texture === null ? "blank" : "unresolved_texture", cube, faceKey);
-        continue;
-      }
+    const texture = face.getTexture();
+    if (!texture) {
+      omit(face.texture === null ? "blank" : "unresolved_texture", cube, faceKey);
+      continue;
+    }
 
-      const uv = [...face.uv];
-      if (uv.length !== 4 || uv.some((value) => !Number.isFinite(value))) {
-        omit("invalid_uv", cube, faceKey);
-        continue;
-      }
-      const ctx = texture.ctx;
-      const pixelWidth = ctx?.canvas?.width;
-      const pixelHeight = ctx?.canvas?.height;
-      const uvWidth = texture.getUVWidth();
-      const uvHeight = texture.getUVHeight();
-      if (
-        !ctx ||
-        !Number.isInteger(pixelWidth) ||
-        !Number.isInteger(pixelHeight) ||
-        pixelWidth <= 0 ||
-        pixelHeight <= 0 ||
-        !Number.isFinite(uvWidth) ||
-        !Number.isFinite(uvHeight) ||
-        uvWidth <= 0 ||
-        uvHeight <= 0
-      ) {
-        omit("non_integral_pixel_mapping", cube, faceKey);
-        continue;
-      }
+    const uv = [...face.uv];
+    if (uv.length !== 4 || uv.some((value) => !Number.isFinite(value))) {
+      omit("invalid_uv", cube, faceKey);
+      continue;
+    }
+    const ctx = texture.ctx;
+    const pixelWidth = ctx?.canvas?.width;
+    const pixelHeight = ctx?.canvas?.height;
+    const uvWidth = texture.getUVWidth();
+    const uvHeight = texture.getUVHeight();
+    if (
+      !ctx ||
+      !Number.isInteger(pixelWidth) ||
+      !Number.isInteger(pixelHeight) ||
+      pixelWidth <= 0 ||
+      pixelHeight <= 0 ||
+      !Number.isFinite(uvWidth) ||
+      !Number.isFinite(uvHeight) ||
+      uvWidth <= 0 ||
+      uvHeight <= 0
+    ) {
+      omit("non_integral_pixel_mapping", cube, faceKey);
+      continue;
+    }
 
-      const ratioX = pixelWidth / uvWidth;
-      const ratioY = pixelHeight / uvHeight;
-      const mapped = [
-        uv[0] * ratioX,
-        uv[1] * ratioY,
-        uv[2] * ratioX,
-        uv[3] * ratioY,
-      ];
-      if (mapped.some((value) => !isIntegralPhysicalPixelCoordinate(value))) {
-        omit("non_integral_pixel_mapping", cube, faceKey);
-        continue;
-      }
+    const ratioX = pixelWidth / uvWidth;
+    const ratioY = pixelHeight / uvHeight;
+    const mapped = [
+      uv[0] * ratioX,
+      uv[1] * ratioY,
+      uv[2] * ratioX,
+      uv[3] * ratioY,
+    ];
+    if (mapped.some((value) => !isIntegralPhysicalPixelCoordinate(value))) {
+      omit("non_integral_pixel_mapping", cube, faceKey);
+      continue;
+    }
 
-      // The grid predicate allows machine epsilon; pixel reads still require
-      // exact integer region coordinates and dimensions.
-      const texelCorners = mapped.map((value) => Math.round(value));
-      const left = Math.min(texelCorners[0], texelCorners[2]);
-      const top = Math.min(texelCorners[1], texelCorners[3]);
-      const right = Math.max(texelCorners[0], texelCorners[2]);
-      const bottom = Math.max(texelCorners[1], texelCorners[3]);
-      const width = right - left;
-      const height = bottom - top;
-      if (width <= 0 || height <= 0) {
-        omit("degenerate_uv", cube, faceKey);
-        continue;
-      }
-      if (
-        left < 0 ||
-        top < 0 ||
-        right > pixelWidth ||
-        bottom > pixelHeight
-      ) {
-        omit("non_integral_pixel_mapping", cube, faceKey);
-        continue;
-      }
+    // The grid predicate allows machine epsilon; pixel reads still require
+    // exact integer region coordinates and dimensions.
+    const texelCorners = mapped.map((value) => Math.round(value));
+    const left = Math.min(texelCorners[0], texelCorners[2]);
+    const top = Math.min(texelCorners[1], texelCorners[3]);
+    const right = Math.max(texelCorners[0], texelCorners[2]);
+    const bottom = Math.max(texelCorners[1], texelCorners[3]);
+    const width = right - left;
+    const height = bottom - top;
+    if (width <= 0 || height <= 0) {
+      omit("degenerate_uv", cube, faceKey);
+      continue;
+    }
+    if (
+      left < 0 ||
+      top < 0 ||
+      right > pixelWidth ||
+      bottom > pixelHeight
+    ) {
+      omit("non_integral_pixel_mapping", cube, faceKey);
+      continue;
+    }
 
-      const pixelCount = width * height;
-      const regionKey = JSON.stringify([texture.uuid, left, top, width, height]);
-      const cached = regions.get(regionKey);
-      const sharedCached = hasTextureDiagnosticRegion(
-        context,
-        texture,
-        left,
-        top,
+    const pixelCount = width * height;
+    const regionKey = JSON.stringify([texture.uuid, left, top, width, height]);
+    const cached = regions.get(regionKey);
+    const sharedCached = hasTextureDiagnosticRegion(
+      context,
+      texture,
+      left,
+      top,
+      width,
+      height
+    );
+    if (
+      !cached &&
+      !sharedCached &&
+      pixelBudgetUsed + pixelCount > TEXTURE_OPTIMIZATION_PIXEL_BUDGET
+    ) {
+      omit("budget", cube, faceKey);
+      continue;
+    }
+
+    try {
+      const shared = cached
+        ? { pixels: cached, cache_hit: true }
+        : readTextureDiagnosticRegion(
+            context,
+            texture,
+            left,
+            top,
+            width,
+            height
+          );
+      const pixels = shared.pixels;
+      if (!cached) {
+        regions.set(regionKey, pixels);
+        if (!shared.cache_hit) pixelBudgetUsed += pixelCount;
+      }
+      patches.push({
+        cube_uuid: cube.uuid,
+        cube_name: cube.name,
+        face: faceKey,
+        texture_uuid: texture.uuid,
+        texture_name: texture.name,
+        uv,
         width,
-        height
+        height,
+        pixels,
+      });
+    } catch (error) {
+      omit(
+        isTextureDiagnosticBudgetExceeded(error)
+          ? "budget"
+          : "non_integral_pixel_mapping",
+        cube,
+        faceKey
       );
-      if (
-        !cached &&
-        !sharedCached &&
-        pixelBudgetUsed + pixelCount > TEXTURE_OPTIMIZATION_PIXEL_BUDGET
-      ) {
-        omit("budget", cube, faceKey);
-        continue;
-      }
-
-      try {
-        const shared = cached
-          ? { pixels: cached, cache_hit: true }
-          : readTextureDiagnosticRegion(
-              context,
-              texture,
-              left,
-              top,
-              width,
-              height
-            );
-        const pixels = shared.pixels;
-        if (!cached) {
-          regions.set(regionKey, pixels);
-          if (!shared.cache_hit) pixelBudgetUsed += pixelCount;
-        }
-        patches.push({
-          cube_uuid: cube.uuid,
-          cube_name: cube.name,
-          face: faceKey,
-          texture_uuid: texture.uuid,
-          texture_name: texture.name,
-          uv,
-          width,
-          height,
-          pixels,
-        });
-      } catch (error) {
-        omit(
-          isTextureDiagnosticBudgetExceeded(error)
-            ? "budget"
-            : "non_integral_pixel_mapping",
-          cube,
-          faceKey
-        );
-      }
     }
   }
 

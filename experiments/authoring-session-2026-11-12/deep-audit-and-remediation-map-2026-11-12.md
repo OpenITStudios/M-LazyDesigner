@@ -294,3 +294,16 @@ Perbedaan itu terlihat jelas pada *false finish* 3856→3865 dan 6530→6540: *c
 4. **P1 — Native/artistic validation:** pastikan one-shot \`ai_ingestion_probe\` hanya saat perlu dan paired views sesuai skala, shading/pose dan reference; verify authoring quality lewat *independent* accepted/rejected Golden comparisons sebelum mengklaim sistem meningkat.
 
 **STOP/proof:** untuk \`REMOTE_GITHUB\` di sini hasilnya \`SOURCE_REVIEWED\` dan test \`NOT_EXECUTED\`. Native installed build source, actual pixel review ZIP, source-specific visual PASS, Minecraft output acceptance, dan pengurangan cost-to-accepted-result tetap \`UNVERIFIED\`. Audit yang sudah ditulis tidak memberikan wewenang mengganti source production, memulai CI, menginstal build, atau mengubah model tanpa unit pekerjaan yang terdefinisi berikutnya.
+
+## 10. Source correction — bounded face-scan fairness (13 November 2026)
+
+**State:** SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN. Source base `58937d57`. No native model/test execution or new visual PASS.
+
+**Evidence and cause:** the original `textureOptimizationRuntime` scanned every `down` face, then `up`, `south`, `north`, `west`, `east`. On historical Golem diagnostic ordinal 3440, 152/372 faces were scanned, including 0/62 `north` and only 2/62 each `west/east`. This identifies orientation starvation in **diagnostic pixel coverage**, not 220 unpainted faces.
+
+**Bounded fix:** `mcp/lib/texture/optimization.ts` now owns a pure deterministic `planBalancedTextureFaceScanOrder`, interleaving six local directions with UUID-range endpoint/midpoint sampling. `mcp/server/tools/validation/qualityIntelligence.ts` consumes that order without changing existing UV validation, exact-region cache, 32,768 unique-pixel budget, 65,536 shared diagnostic context budget, native read behavior, omissions, output schema, or mutation state. Disabled face targets are excluded as before. This distributes sampling opportunities; it does **not** guarantee all directions if physical texel sizes exceed budget, nor claim material/visual completeness.
+
+**New regression source:** `mcp/tests/texture-face-scan-balance.test.ts` asserts deterministic identity-preserving order, uneven directions, and synthetic mocked Blockbench 372-face/16×16-texel reads yielding 128 scanned/244 budget omissions with samples in all six directions, `gate=partial` and `visual_verdict=not_evaluated`. These are authored assertions, **NOT_EXECUTED**; no claim that this reproduces the deployed binary or improves actual Golem style.
+
+**Next falsifiers:** execute the targeted test in a matching LOCAL_CODE context when authorized; use identical real assets and installed-build provenance for a matched native diagnostic replay. Compare Cube-local orientation counts, omitted UUID/face, pixel budget, UV/cache/alpha and actual mapped view correspondence. Do not promote diagnostic improvement to texture PASS. For remaining blind spots, prioritize actual reference/approved style context continuity, material-aware candidates, and evidence-backed claim scope (`REG-CONTEXT-17`, `REG-READINESS-18`). No new Gateway tool, agent manager, store, CI or release.
+
