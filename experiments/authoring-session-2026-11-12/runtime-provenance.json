@@ -1,0 +1,767 @@
+{
+  "schema": "lazydesigner-authoring-runtime-provenance-1",
+  "recorded_date_local": "2026-11-12",
+  "timezone": "Asia/Jakarta",
+  "scope": "Historical authoring session; not a new live runtime probe",
+  "product_id": "lazydesigner-bedrock-entity-mcp",
+  "product_version": "0.2.0",
+  "profile": "bedrock_entity",
+  "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+  "semantic_catalog_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+  "public_gateway_surface": "stable_four: status, search_capabilities, describe_capability, invoke_capability",
+  "runtime_surface_counts": [
+    18,
+    47
+  ],
+  "status_samples": 41,
+  "identified_samples": 39,
+  "distinct_build_identities": 1,
+  "instances": [
+    {
+      "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+      "startup_time": "2026-11-12T05:09:34.732Z"
+    },
+    {
+      "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+      "startup_time": "2026-11-12T05:41:43.781Z"
+    }
+  ],
+  "source_commit_of_loaded_build": null,
+  "latest_installed_build_verdict": "UNVERIFIED",
+  "compared_remote_ref": {
+    "repository": "OpenITStudios/M-LazyDesigner",
+    "branch": "Local",
+    "commit": "03c01ee28e82e4d1d26668a45ce5e10022da39eb",
+    "package_name": "lazydesigner-bedrock-entity-mcp",
+    "package_version": "0.2.0"
+  },
+  "local_checkout_head": "44b03b524541001447013353bad154d54f158b23",
+  "local_checkout_package_name": "blockit-bedrock-entity-mcp",
+  "local_checkout_package_version": "0.2.0",
+  "evidence": [
+    {
+      "ordinal": 219,
+      "time": "2026-11-12T05:30:27.840Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "probing",
+        "reconnect_count": 0,
+        "reconnect": {
+          "failures": 0,
+          "retry_after_ms": 0
+        }
+      }
+    },
+    {
+      "ordinal": 323,
+      "time": "2026-11-12T05:31:55.355Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 360,
+      "time": "2026-11-12T05:33:20.319Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 401,
+      "time": "2026-11-12T05:34:21.443Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 445,
+      "time": "2026-11-12T05:35:43.377Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 497,
+      "time": "2026-11-12T05:37:21.783Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 520,
+      "time": "2026-11-12T05:38:17.520Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 548,
+      "time": "2026-11-12T05:39:14.996Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "c6548223-5520-4f9e-9959-469ac4ba7cd4",
+        "startup_time": "2026-11-12T05:09:34.732Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 575,
+      "time": "2026-11-12T05:40:56.999Z",
+      "identity": {
+        "build_identity": null,
+        "instance_id": null,
+        "startup_time": null,
+        "product_id": null,
+        "product_version": null,
+        "profile": null,
+        "exposed_tool_count": null
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "offline",
+        "reconnect_count": 5,
+        "reconnect": {
+          "failures": 2,
+          "retry_after_ms": 500
+        }
+      }
+    },
+    {
+      "ordinal": 611,
+      "time": "2026-11-12T05:41:38.509Z",
+      "identity": {
+        "build_identity": null,
+        "instance_id": null,
+        "startup_time": null,
+        "product_id": null,
+        "product_version": null,
+        "profile": null,
+        "exposed_tool_count": null
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "offline",
+        "reconnect_count": 5,
+        "reconnect": {
+          "failures": 3,
+          "retry_after_ms": 0
+        }
+      }
+    },
+    {
+      "ordinal": 631,
+      "time": "2026-11-12T05:42:03.909Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "degraded",
+        "reconnect_count": 5,
+        "reconnect": {
+          "failures": 0,
+          "retry_after_ms": 0
+        }
+      }
+    },
+    {
+      "ordinal": 743,
+      "time": "2026-11-12T05:45:40.716Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 803,
+      "time": "2026-11-12T05:47:42.892Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 836,
+      "time": "2026-11-12T05:48:43.235Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 888,
+      "time": "2026-11-12T05:51:40.124Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 905,
+      "time": "2026-11-12T05:53:38.420Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 917,
+      "time": "2026-11-12T05:54:10.064Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1006,
+      "time": "2026-11-12T06:01:02.198Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1008,
+      "time": "2026-11-12T06:01:02.217Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1037,
+      "time": "2026-11-12T06:03:31.019Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1228,
+      "time": "2026-11-12T06:21:37.872Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1230,
+      "time": "2026-11-12T06:21:37.895Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1370,
+      "time": "2026-11-12T06:33:30.437Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1407,
+      "time": "2026-11-12T06:36:58.772Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1515,
+      "time": "2026-11-12T06:42:23.644Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1662,
+      "time": "2026-11-12T06:53:09.234Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 1937,
+      "time": "2026-11-12T07:14:24.444Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 2566,
+      "time": "2026-11-12T07:47:32.599Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 2764,
+      "time": "2026-11-12T08:07:26.056Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 3067,
+      "time": "2026-11-12T08:22:11.483Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 4781,
+      "time": "2026-11-12T09:51:33.033Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 5938,
+      "time": "2026-11-12T10:50:42.751Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 5972,
+      "time": "2026-11-12T10:54:18.252Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 5992,
+      "time": "2026-11-12T10:55:48.248Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 6957,
+      "time": "2026-11-12T12:10:04.114Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 6990,
+      "time": "2026-11-12T12:11:34.480Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 7048,
+      "time": "2026-11-12T12:16:01.124Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 7063,
+      "time": "2026-11-12T12:16:44.890Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 7464,
+      "time": "2026-11-12T12:42:41.113Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 18
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 7480,
+      "time": "2026-11-12T12:43:29.670Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    },
+    {
+      "ordinal": 7502,
+      "time": "2026-11-12T12:44:59.352Z",
+      "identity": {
+        "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+        "instance_id": "a1d2e1ca-bef7-470c-a209-988b6c300744",
+        "startup_time": "2026-11-12T05:41:43.781Z",
+        "product_id": "lazydesigner-bedrock-entity-mcp",
+        "product_version": "0.2.0",
+        "profile": "bedrock_entity",
+        "exposed_tool_count": 47
+      },
+      "semantic_revision": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51",
+      "connection": {
+        "state": "ready"
+      }
+    }
+  ],
+  "interpretation": [
+    "A build hash is an artifact identity, not a Git commit SHA.",
+    "A changed instance ID with unchanged build hash is a restart, not evidence of an upgrade.",
+    "18/47 are stage-dependent native Runtime capability counts; four Gateway tools are the public chat surface, not a version number.",
+    "Matching package semver does not prove matching installed bytes or latest remote source.",
+    "This provenance does not assign all visual authoring failures to an implementation defect."
+  ]
+}

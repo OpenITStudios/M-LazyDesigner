@@ -18,8 +18,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 2324,
-      "sha256": "4a4b1045718ae7e0d036582da8fa20d4a56d7dc49dcd94229a98adbe5021bf75"
+      "bytes": 2535,
+      "sha256": "cd7da4533ab6f250a208067340bb4bda592b23cf2cf6a179af309e9c7c85ec66"
     },
     {
       "path": "analysis.md",
@@ -50,6 +50,16 @@
       "path": "evidence.zip",
       "bytes": 45214519,
       "sha256": "df638829bbc0f352ddcade84d1c72a0be9ac583285881bea7112761e8201a0b9"
+    },
+    {
+      "path": "runtime-version.md",
+      "bytes": 2732,
+      "sha256": "5e25b110b1e42b36163a25ce428fbbe4f708aa27ccc40698b389c18365965b67"
+    },
+    {
+      "path": "runtime-provenance.json",
+      "bytes": 28295,
+      "sha256": "7dc5a501c4d5c033b9eeb89d43bb64e2d29da3c0648920c0b698c3c1ae2a7bae"
     }
   ],
   "archive_entries": [
@@ -9968,5 +9978,11 @@
     "Not a replay engine or physics/Minecraft acceptance proof.",
     "Asset snapshots are the current available files, not reconstructed historical states."
   ],
-  "rendered_messages_normalization": "Trailing whitespace normalized only in messages.md; transcript.jsonl retains source text."
+  "rendered_messages_normalization": "Trailing whitespace normalized only in messages.md; transcript.jsonl retains source text.",
+  "runtime_provenance_summary": {
+    "product_version": "0.2.0",
+    "build_identity": "sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5",
+    "latest_installed_build": "UNVERIFIED",
+    "source_commit_of_loaded_build": null
+  }
 }
