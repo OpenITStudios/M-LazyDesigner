@@ -8,6 +8,7 @@ Paket publik lengkap yang tersedia untuk pekerjaan banner dinding/berdiri, CTF G
 - [runtime-version.md](runtime-version.md): penjelasan versi runtime0.2.0, build hash dan batas klaim terbaru.
 - [runtime-provenance.json](runtime-provenance.json):41 sampel status historis dan identitas build.
 - [metrics.json](metrics.json): hitungan, durasi dan ordinal error/marker, dengan batas interpretasinya.
+- [deep-audit-and-remediation-map-2026-11-12.md](deep-audit-and-remediation-map-2026-11-12.md): transcript-wide causal audit, quantitative bottlenecks, ownership map, remediation sequence, evidence limits and regression plan (audit only; not implementation).
 - [analysis.md](analysis.md): hambatan, kesalahan authoring, dugaan penyebab dan prioritas evaluasi.
 - [evidence.zip](evidence.zip): media unik,99 referensi asli pengguna,40 snapshot berkas aset,79 intermediate, media-index.json dan attachment-references.json.
 - [manifest.json](manifest.json): provenance, checksum dan batas kelengkapan.
