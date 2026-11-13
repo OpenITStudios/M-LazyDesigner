@@ -4,7 +4,7 @@
   "version": "0.1.0-draft",
   "status": "ADOPTED",
   "sourceRepository": "OpenITStudios/AgentSkill",
-  "sourceCommit": "d726ee745a7b38bfadaff2a5475cd875f41d5bea",
+  "sourceCommit": "44ab44a981f5ad036643bd5df3bbfc5cd2402664",
   "note": "Pinned source distribution only. Live Blockbench/Gateway, Codex and actual host instruction loading not executed or verified.",
   "files": {
     ".agent-standard/adapters/claude-code.md": "cc5426658d7c8ed42774dd61e1081507d6c5dfb9740361ca62806567bf739441",
@@ -29,7 +29,7 @@
     ".agents/skills/oits-agent-quality-review/SKILL.md": "119ab54bb559851ce7c9065b1d35d75cd2b2faec4e98e87a8aa7912ac817ce46",
     ".agents/skills/oits-development-brief/SKILL.md": "1782313ca18965a9ffd25cd4c9fe60d2d5218405f778b2961de17d5092c3aefa",
     ".agents/skills/oits-repository-audit/SKILL.md": "7d96ebac5c3c640b0a8125585215637c97b879948d532c56ad2c94627b0eead2",
-    "AGENTS.md": "13f028f4780c0b6d6dd63e35da31e2ecc370609154e450ab986f1ee61b61e349",
+    "AGENTS.md": "ec1b33e8efefb156c020a735b6dd1d945c2fc7ace327152640d4d9076a03a18e",
     "GITHUB_RULES.md": "a4a96c18ab041bf6fdc3a550c3aa32f4020057cc14799f2d50fcc677a8084b43"
   }
 }

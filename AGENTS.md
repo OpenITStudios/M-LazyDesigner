@@ -23,7 +23,7 @@
 
 ## Startup — bounded context
 1. Identify the target repository, selected branch, requested result and work mode. Pin actual HEAD before any material write; do not silently fall back to default `main`.
-2. Read this file, `GITHUB_RULES.md`, `.agent-standard/profile.json`, and only relevant clauses from `.agent-standard/core/`. Missing or contradictory authority is a blocker for the affected action, not permission to guess.
+2. Read this file, `GITHUB_RULES.md`, `.agent-standard/profile.json`, and **read the actual `.agent-standard/project-policy.md` when present or required by the profile** before routing a Skill or taking action. A profile note, link, path or lock is not proof that the local policy content was loaded. If a required local policy cannot be read, block the affected action; archived prior roots are history, not current instructions. Then load only relevant clauses from `.agent-standard/core/`. Missing or contradictory authority is a blocker for the affected action, not permission to guess.
 3. Choose `INSPECT`, `PLAN`, `DEVELOP`, `MAINTAIN`, `VALIDATE`, `PRODUCE` or `RELEASE` from intent and permission. `INSPECT` and `PLAN` are read-only by default.
 4. Find the first semantic owner and smallest evidence needed. Use the positive/negative activation table in `.agent-standard/core/decision-routing-and-ownership.md` when routing is non-trivial. Load **one primary** relevant Skill only if actually discoverable on the current host; otherwise follow the source-owned procedure without claiming Skill activation. Abstain when no Skill adds value. A Skill is never an independent permission grant.
 
