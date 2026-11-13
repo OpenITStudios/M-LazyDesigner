@@ -1,0 +1,307 @@
+{
+  "schemaVersion": 1,
+  "id": "oits-engineering-method-registry",
+  "version": "0.1.0-draft",
+  "status": "SOURCE_REVIEWED_NOT_HOST_TESTED",
+  "canonicalOwner": ".agent-standard/core/engineering-and-review-methods.md",
+  "usage": "Method names are conditional decision guides, not installed executors, plugin grants, or competing skill routers.",
+  "defaultEngineeringPass": [
+    "karpathy-guidelines",
+    "ponytail"
+  ],
+  "defaultPassMode": "single-compact-review",
+  "commonConstraints": {
+    "noAutoInstall": true,
+    "noAutoAgentOrHostSwitch": true,
+    "noCloudCiAsLocalTest": true,
+    "requireCurrentUserPermission": true,
+    "requireRealEvidenceForPass": true,
+    "leaveDomainSkillOwnershipLocal": true
+  },
+  "methods": [
+    {
+      "id": "karpathy-guidelines",
+      "name": "Karpathy Guidelines (community adaptation)",
+      "group": "baseline",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Material code design, implementation, maintenance or source review",
+        "Need to check assumptions and objective before code"
+      ],
+      "negativeTriggers": [
+        "Simple factual question or ordinary non-coding explanation"
+      ],
+      "procedure": [
+        "Name accepted result and the one material assumption that could be wrong",
+        "Choose the simplest complete approach consistent with actual code",
+        "Limit edits to the owning code and affected consumers; exclude speculative features",
+        "State source-level, falsifiable acceptance; local test remains deferred in ChatGPT + GitHub"
+      ],
+      "sourceOnlyEvidence": [
+        "Source diff reviewed at exact ref; authored tests are not executed proof"
+      ],
+      "prohibitions": [
+        "Do not represent community adaptation as official Karpathy endorsement",
+        "No unnecessary clarification or demanded localtest"
+      ],
+      "caseIds": {
+        "positive": "GOV-085",
+        "negative": "GOV-086"
+      },
+      "provenance": {
+        "repository": "multica-ai/andrej-karpathy-skills",
+        "revision": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+        "reviewedPath": "skills/karpathy-guidelines/SKILL.md",
+        "url": "https://github.com/multica-ai/andrej-karpathy-skills/blob/2c606141936f1eeef17fa3043a72095b4765b9c2/skills/karpathy-guidelines/SKILL.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "ponytail",
+      "name": "Ponytail — smallest complete safe change",
+      "group": "baseline",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Material source change or code review requiring compatibility and security checks"
+      ],
+      "negativeTriggers": [
+        "Ordinary read-only information and non-code conversation"
+      ],
+      "procedure": [
+        "Trace callers, interfaces, fixtures and configuration affected by the change",
+        "Select the fewest changes that fully solve the problem without breaking users",
+        "Preserve security, validation, accessibility and data safety",
+        "Review correctness, safety, callers, focused checks and unnecessary complexity WITH Karpathy in one pass",
+        "Author focused regressions when needed and report unexecuted tests honestly"
+      ],
+      "sourceOnlyEvidence": [
+        "Source-level affected-consumer review; no claim of runtime success"
+      ],
+      "prohibitions": [
+        "No second redundant review agent and no reduced testing standards to save lines",
+        "Never install Ponytail or activate CI/cloud testing without explicit authorization"
+      ],
+      "caseIds": {
+        "positive": "GOV-087",
+        "negative": "GOV-088"
+      },
+      "provenance": {
+        "repository": "dietrichgebert/ponytail",
+        "revision": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846",
+        "reviewedPath": "skills/ponytail/SKILL.md",
+        "url": "https://github.com/dietrichgebert/ponytail/blob/96608e078b2d5ea607c5c3b8b5a54d1c1fba6846/skills/ponytail/SKILL.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "pstack-poteto",
+      "name": "Pstack / Poteto — bounded engineering playbooks",
+      "group": "conditional",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Complex incident, difficult bug, architectural defect, measurable performance issue or meaningful refactor"
+      ],
+      "negativeTriggers": [
+        "Trivial known-owner fix, simple status, normal domain production"
+      ],
+      "procedure": [
+        "Classify incident, bug, investigation, performance or refactor",
+        "Use one focused playbook INSIDE current development owner, not another router",
+        "Separate symptom, competing causes and smallest discriminating evidence",
+        "Record a bounded source-only diagnosis if runtime is unavailable"
+      ],
+      "sourceOnlyEvidence": [
+        "Traceable source hypotheses, not fabricated reproduction or speed gain"
+      ],
+      "prohibitions": [
+        "No automatic subagents, new worktrees, CI, model changes or host switch"
+      ],
+      "caseIds": {
+        "positive": "GOV-089",
+        "negative": "GOV-090"
+      },
+      "provenance": {
+        "repository": "cursor/plugins",
+        "revision": "2776ddd2355d6d6c8747d3964600f28daf62f049",
+        "reviewedPath": "pstack/docs/guide/02-poteto-mode.md",
+        "url": "https://github.com/cursor/plugins/blob/2776ddd2355d6d6c8747d3964600f28daf62f049/pstack/docs/guide/02-poteto-mode.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "harness2",
+      "name": "Harness² — controlled comparison of agent methods",
+      "group": "conditional",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Explicitly requested agent-rule or skill quality evaluation with real permission for the relevant checks"
+      ],
+      "negativeTriggers": [
+        "Ordinary product work or no authorized benchmark environment"
+      ],
+      "procedure": [
+        "Define observed agent failure and fixed success criteria",
+        "Freeze baseline cases, source revisions and execution settings",
+        "Prepare candidate separately; run only on an actually permitted host",
+        "Compare quality and safety regressions; label unmeasured effects"
+      ],
+      "sourceOnlyEvidence": [
+        "Authored evaluation cases are source-only until actual repeated executions are available"
+      ],
+      "prohibitions": [
+        "No recursive autopromotion, cloud runners, uncontrolled model experiments or synthetic PASS"
+      ],
+      "caseIds": {
+        "positive": "GOV-093",
+        "negative": "GOV-094"
+      },
+      "provenance": {
+        "repository": "google-research/harness2",
+        "revision": "6868817518876de8fd170c6a8354daca273b6191",
+        "reviewedPath": "README.md",
+        "url": "https://github.com/google-research/harness2/blob/6868817518876de8fd170c6a8354daca273b6191/README.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "deepseek-harness",
+      "name": "DeepSeek Harness — session and tool lifecycle patterns",
+      "group": "conditional",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Tool lifecycle, capability discovery, permission admission or interrupted session design"
+      ],
+      "negativeTriggers": [
+        "Ordinary product edits unrelated to session or tool reliability"
+      ],
+      "procedure": [
+        "Identify true host and tool origin",
+        "Specify target, permitted effect, typed tool result and capability gate",
+        "Distinguish tool accepted from persisted and user-observed success",
+        "Reconcile uncertain non-idempotent effects before any retry"
+      ],
+      "sourceOnlyEvidence": [
+        "Tool contract/source design reviewed; no claimed installed middleware"
+      ],
+      "prohibitions": [
+        "Do not replace agent runtime, install preview plugins or start daemons automatically"
+      ],
+      "caseIds": {
+        "positive": "GOV-097",
+        "negative": "GOV-098"
+      },
+      "provenance": {
+        "repository": "deepseek-ai/deepseek-harness",
+        "revision": "fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159",
+        "reviewedPath": "README.md",
+        "url": "https://github.com/deepseek-ai/deepseek-harness/blob/fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159/README.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "rea",
+      "name": "REA — lawful opaque-artifact investigation",
+      "group": "conditional",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Authorized opaque binary/package/runtime comparison that source cannot answer AND actual provider access exists"
+      ],
+      "negativeTriggers": [
+        "Ordinary GitHub source review, unknown target rights, or no real runtime tool"
+      ],
+      "procedure": [
+        "Verify rights, target identity, and necessity of opaque investigation",
+        "Select smallest lawful, read-only evidence question",
+        "Distinguish observed binary facts, inference and uncertainty",
+        "In ChatGPT + GitHub plan source-only; leave native provider work to later approved PC-local context"
+      ],
+      "sourceOnlyEvidence": [
+        "Source plan only unless actual permitted REA provider ran"
+      ],
+      "prohibitions": [
+        "No unapproved installation, credential extraction, native PASS invention or forced localtest"
+      ],
+      "caseIds": {
+        "positive": "GOV-101",
+        "negative": "GOV-100"
+      },
+      "provenance": {
+        "repository": "morluto/rea",
+        "revision": "54906fdb1fc735b507961b2954f6968775cae4f6",
+        "reviewedPath": ".agents/skills/reverse-engineer-anything/SKILL.md",
+        "url": "https://github.com/morluto/rea/blob/54906fdb1fc735b507961b2954f6968775cae4f6/.agents/skills/reverse-engineer-anything/SKILL.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "name": "UI UX Pro Max — accessible interaction and layout review",
+      "group": "conditional",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Actual layout, UI navigation, interaction, accessibility or responsive design changes"
+      ],
+      "negativeTriggers": [
+        "Pure backend, database, nonvisual script or unrelated build system work"
+      ],
+      "procedure": [
+        "Pin user's approved visual identity and current component/design system",
+        "Inspect hierarchy, states, inputs, keyboard, responsive behavior and accessibility where relevant",
+        "Describe smallest real UI correction with explicit acceptance",
+        "Distinguish source-level markup inspection from connected native visual proof"
+      ],
+      "sourceOnlyEvidence": [
+        "SOURCE_REVIEWED from code; rendered UI acceptance only with a real observed target"
+      ],
+      "prohibitions": [
+        "Do not override approved product styles or claim visual PASS from source"
+      ],
+      "caseIds": {
+        "positive": "GOV-103",
+        "negative": "GOV-104"
+      },
+      "provenance": {
+        "repository": "nextlevelbuilder/ui-ux-pro-max-skill",
+        "revision": "6ae86f61f520d6ca229d2f40e070410638c908c5",
+        "reviewedPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+        "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill/blob/6ae86f61f520d6ca229d2f40e070410638c908c5/.claude/skills/ui-ux-pro-max/SKILL.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    },
+    {
+      "id": "matt-pocock",
+      "name": "Matt Pocock — precise domains and two-axis review",
+      "group": "conditional",
+      "state": "POLICY_ADAPTED_SOURCE_ONLY",
+      "triggers": [
+        "Ambiguous domain vocabulary, module contracts, hard debugging or substantial source review"
+      ],
+      "negativeTriggers": [
+        "Simple bounded correction not needing extra process"
+      ],
+      "procedure": [
+        "Clarify domain terminology through concrete edge cases and current source",
+        "Prefer cohesive module boundaries over abstractions for their own sake",
+        "For bugs, separate observed facts, hypotheses and discriminating evidence",
+        "For review, assess both Standards (correct practice) and Spec (what user requested)"
+      ],
+      "sourceOnlyEvidence": [
+        "Source-level two-axis review possible remotely; runtime reproduction deferred if unavailable"
+      ],
+      "prohibitions": [
+        "No new issue tracker, mandatory TDD runner, forced parallel subagents or cloud testing"
+      ],
+      "caseIds": {
+        "positive": "GOV-106",
+        "negative": "GOV-108"
+      },
+      "provenance": {
+        "repository": "mattpocock/skills",
+        "revision": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+        "reviewedPath": "skills/engineering/code-review/SKILL.md",
+        "url": "https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering/code-review/SKILL.md",
+        "copyPolicy": "REFERENCE_PATTERN_ONLY_REVIEW_LICENSE_BEFORE_COPY"
+      }
+    }
+  ]
+}

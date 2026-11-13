@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "repository": "OpenITStudios/M-LazyDesigner",
+  "activeBranch": "Local",
+  "branchPolicy": {
+    "writableBranches": [
+      "Local"
+    ],
+    "allowAutoBranch": false,
+    "allowAutoPromotion": false
+  },
+  "executionPolicy": {
+    "ci": "disabled",
+    "tests": "on_hold",
+    "nativeProof": "required_when_claimed"
+  },
+  "permissions": {
+    "crossRepoWrites": false,
+    "mutatingActionsRequireUserIntent": true,
+    "releaseRequiresExplicitApproval": true
+  },
+  "protectedPaths": [],
+  "holds": [
+    {
+      "id": "lazydesigner-codex-localtest-hold",
+      "reason": "User postponed Codex, localtest and native Blockbench validation from ChatGPT source development on 2026-11-05.",
+      "paths": [],
+      "blockedActions": [
+        "ci",
+        "test"
+      ],
+      "until": "Explicit user-selected later PC-local validation and hold release."
+    }
+  ],
+  "dataPolicy": "confidential-project",
+  "note": "Read .agent-standard/project-policy.md after shared root/profile. Local source branch, no CI or localtest. Existing 12 LazyDesigner domain Skills and nearest mcp/AGENTS.md remain authoritative in their domains. Historical original roots archived.",
+  "workflowPolicy": {
+    "sourceSurface": "CHATGPT_GITHUB",
+    "localValidationSurface": "LOCAL_PC_AGENT",
+    "localTestDuringSourcePhase": false,
+    "requestLocaltestFromChatGPT": false,
+    "githubActionsOrCloudTestSubstitution": false,
+    "localValidationRequiresExplicitTransition": true
+  }
+}
