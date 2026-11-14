@@ -32,9 +32,9 @@
   let paintTextureIndex = 0;
   let paintColor = '#e53935';
   let paintAlpha = 255;
-  let paintTool: 'pencil' | 'eraser' = 'pencil';
+  let paintTool: 'pencil' | 'eraser' | 'rectangle' = 'pencil';
   let paintRadius = 1;
-  let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number]; radius: number; erase: boolean; overflow: boolean } | null = null;
+  let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number]; radius: number; erase: boolean; rectangle: boolean; overflow: boolean } | null = null;
   let menu: Menu = null;
   let loading = true;
   let busy = false;
@@ -355,7 +355,8 @@
     paintStroke = {
       pointerId: event.pointerId, textureIndex: paintTextureIndex,
       epoch: snapshot.epoch, revision: snapshot.revision, points: [first], rgba,
-      radius: paintRadius, erase: paintTool === 'eraser', overflow: false,
+      radius: paintRadius, erase: paintTool === 'eraser',
+      rectangle: paintTool === 'rectangle', overflow: false,
     };
     target.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -370,6 +371,10 @@
     // Outside the atlas: do not extrapolate or paint unintended edges.
     if (!point) return;
     const [width, height] = snapshot.textureResolution;
+    if (stroke.rectangle) {
+      paintStroke = { ...stroke, points: [stroke.points[0], point] };
+      return;
+    }
     const next = extendPaintStroke(stroke.points, point, width, height);
     if (next) paintStroke = { ...stroke, points: next };
     else paintStroke = { ...stroke, overflow: true };
@@ -391,9 +396,15 @@
     if (!snapshot || busy ||
         snapshot.epoch !== stroke.epoch || snapshot.revision !== stroke.revision ||
         !snapshot.paintEditableTextures[stroke.textureIndex]) return;
-    apply([{ op: 'paint_texture_brush', texture_index: stroke.textureIndex,
-      points: stroke.points, radius: stroke.radius,
-      rgba: stroke.rgba, erase: stroke.erase }]);
+    if (stroke.rectangle) {
+      apply([{ op: 'paint_texture_rectangle', texture_index: stroke.textureIndex,
+        from: stroke.points[0], to: stroke.points[stroke.points.length - 1],
+        rgba: stroke.rgba, erase: false }]);
+    } else {
+      apply([{ op: 'paint_texture_brush', texture_index: stroke.textureIndex,
+        points: stroke.points, radius: stroke.radius,
+        rgba: stroke.rgba, erase: stroke.erase }]);
+    }
     event.preventDefault();
   }
 
@@ -796,7 +807,7 @@
   <section class="paint-workspace" aria-label="Paint workspace">
     <div class="paint-workspace-heading">
       <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
-      <span>RGBA8 · 256 × 256 maximum</span>
+      <span>RGBA8 · 256 × 256 maximum · 3D preview uses Bedrock default texture</span>
     </div>
     {#if snapshot}
       <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
@@ -820,12 +831,15 @@
               <select bind:value={paintTool} disabled={busy || !!paintStroke}>
                 <option value="pencil">Pencil</option>
                 <option value="eraser">Eraser</option>
+                <option value="rectangle">Filled Rectangle</option>
               </select>
             </label>
-            <label>Radius
-              <input type="number" min="1" max="8" step="1" bind:value={paintRadius}
-                disabled={busy || !!paintStroke}/>
-            </label>
+            {#if paintTool !== 'rectangle'}
+              <label>Radius
+                <input type="number" min="1" max="8" step="1" bind:value={paintRadius}
+                  disabled={busy || !!paintStroke}/>
+              </label>
+            {/if}
             <label>Color <input type="color" bind:value={paintColor}
               disabled={busy || !!paintStroke || paintTool === 'eraser'}/></label>
             <label>Alpha
@@ -838,7 +852,7 @@
               onpointerup={finishPaintStroke}
               onpointercancel={(event) => finishPaintStroke(event, true)}
               onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
-            <p class="dock-note">Pencil paints circular pixels; Eraser clears alpha. One stroke is one Rust Undo step. Maximum radius: 8.</p>
+            <p class="dock-note">Pencil and Eraser use circular strokes. Filled Rectangle uses two corners. Each completed gesture is one Rust Undo step.</p>
           {:else}
             <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
           {/if}

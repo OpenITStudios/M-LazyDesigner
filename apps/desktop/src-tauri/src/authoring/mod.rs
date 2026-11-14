@@ -114,6 +114,7 @@ pub enum EditOperation {
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
+    PaintTextureRectangle { texture_index: usize, from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -693,6 +694,14 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
             paint::brush(texture, doc.resolution.width, doc.resolution.height,
                 points, *radius, *rgba, *erase)?;
+            Ok(texture.get("uuid").and_then(Value::as_str)
+                .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::PaintTextureRectangle { texture_index, from, to, rgba, erase } => {
+            let texture = doc.texture_assets.get_mut(*texture_index)
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::rectangle(texture, doc.resolution.width, doc.resolution.height,
+                *from, *to, *rgba, *erase)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
         }

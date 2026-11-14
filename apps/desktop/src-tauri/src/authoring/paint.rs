@@ -166,6 +166,39 @@ pub(super) fn brush(
     Ok(())
 }
 
+/// A filled, inclusive rectangle in the bounded generated RGBA8 atlas.
+/// The two corners may arrive in either order; a single edit is one Undo step.
+pub(super) fn rectangle(
+    texture: &mut Value, width: u32, height: u32,
+    from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool,
+) -> Result<()> {
+    if from[0] >= width || from[1] >= height ||
+        to[0] >= width || to[1] >= height {
+        return Err("PAINT_COORDINATE_INVALID".into());
+    }
+    let mut pixels = decode(texture, width, height)?;
+    let desired = if erase { [0, 0, 0, 0] } else { rgba };
+    let x0 = from[0].min(to[0]) as usize;
+    let x1 = from[0].max(to[0]) as usize;
+    let y0 = from[1].min(to[1]) as usize;
+    let y1 = from[1].max(to[1]) as usize;
+    let mut changed = false;
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            let at = (y * width as usize + x) * 4;
+            if pixels[at..at + 4] != desired {
+                pixels[at..at + 4].copy_from_slice(&desired);
+                changed = true;
+            }
+        }
+    }
+    if !changed { return Ok(()); }
+    let source = encode(width, height, &pixels)?;
+    texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
+        .insert("source".into(), Value::String(source));
+    Ok(())
+}
+
 pub(super) fn pixel(
     texture: &mut Value, width: u32, height: u32, x: u32, y: u32, rgba: [u8; 4],
 ) -> Result<()> {

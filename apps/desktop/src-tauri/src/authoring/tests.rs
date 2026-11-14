@@ -15,6 +15,86 @@ fn sample_cube(uuid: &str) -> Cube {
 }
 
 #[test]
+fn paint_rectangle_fills_inclusive_reversed_corners_with_one_undo_step() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Rectangle", "rectangle").unwrap()
+    ).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: "00000000-0000-4000-8000-000000000139".into(),
+        name: "rectangle.png".into(),
+    }]).unwrap();
+    let blank = session.document().texture_assets[0].clone();
+    let receipt = session.apply(1, &[EditOperation::PaintTextureRectangle {
+        texture_index: 0, from: [3, 4], to: [1, 2],
+        rgba: [19, 42, 73, 200], erase: false,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.operation_count, 1);
+    let filled = session.document().texture_assets[0].clone();
+    let png_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD,
+        filled["source"].as_str().unwrap()
+            .strip_prefix("data:image/png;base64,").unwrap()).unwrap();
+    let mut reader = png::Decoder::new(std::io::Cursor::new(png_bytes))
+        .read_info().unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut pixels).unwrap();
+    let width = session.document().resolution.width as usize;
+    for y in 0..=5 {
+        for x in 0..=5 {
+            let start = (y * width + x) * 4;
+            let expected: &[u8] = if (1..=3).contains(&x) && (2..=4).contains(&y) {
+                &[19, 42, 73, 200]
+            } else {
+                &[0, 0, 0, 0]
+            };
+            assert_eq!(&pixels[start..start + 4], expected);
+        }
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    session.undo(2).unwrap();
+    assert_eq!(session.document().texture_assets[0], blank);
+    session.redo(3).unwrap();
+    assert_eq!(session.document().texture_assets[0], filled);
+    assert_eq!(session.apply(4, &[EditOperation::PaintTextureRectangle {
+        texture_index: 0, from: [1, 2], to: [3, 4],
+        rgba: [19, 42, 73, 200], erase: false,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.summary().revision, 4);
+}
+
+#[test]
+fn paint_rectangle_refuses_invalid_coordinates_imported_assets_and_partial_batch() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Rectangle", "rectangle").unwrap()
+    ).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: "00000000-0000-4000-8000-000000000139".into(),
+        name: "rectangle.png".into(),
+    }]).unwrap();
+    let unchanged = session.document().clone();
+    assert_eq!(session.apply(1, &[EditOperation::PaintTextureRectangle {
+        texture_index: 0, from: [0, 0], to: [u32::MAX, 3],
+        rgba: [10, 10, 10, 255], erase: false,
+    }]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.apply(1, &[
+        EditOperation::PaintTextureRectangle { texture_index: 0,
+            from: [0, 0], to: [2, 2], rgba: [10, 10, 10, 255], erase: false },
+        EditOperation::PaintTextureRectangle { texture_index: 0,
+            from: [0, 0], to: [0, u32::MAX], rgba: [0, 0, 0, 0], erase: true },
+    ]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.document(), &unchanged);
+    assert_eq!(session.summary().revision, 1);
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = imported.document().clone();
+    assert_eq!(imported.apply(0, &[EditOperation::PaintTextureRectangle {
+        texture_index: 0, from: [0, 0], to: [2, 2],
+        rgba: [10, 10, 10, 255], erase: false,
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(imported.document(), &original);
+}
+
+#[test]
 fn paint_brush_circle_and_eraser_preserve_one_undo_per_gesture() {
     let mut session = EditorSession::from_document(
         AuthoringDocument::new_bedrock("Brush", "brush").unwrap()
