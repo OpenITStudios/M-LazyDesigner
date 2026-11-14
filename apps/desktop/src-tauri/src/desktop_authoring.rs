@@ -332,6 +332,22 @@ pub fn rust_editor_apply(
     current(&guard)
 }
 
+// Pinned Blockbench 5.2.1 Cube.init assigns the default texture UUID to
+// newly created faces in a single-texture format. Preserve UUID-less legacy
+// assets without synthesizing IDs or mutating imported texture data.
+fn new_cube_faces(textures: &[Value]) -> Map<String, Value> {
+    let texture = textures.first()
+        .and_then(|asset| asset.get("uuid"))
+        .and_then(Value::as_str)
+        .map(|uuid| Value::String(uuid.to_owned()))
+        .unwrap_or(Value::Bool(false));
+    ["north", "east", "south", "west", "up", "down"].into_iter()
+        .map(|name| (name.to_owned(), json!({
+            "uv": [0.0, 0.0, 2.0, 2.0], "texture": texture
+        })))
+        .collect()
+}
+
 #[tauri::command]
 pub fn rust_editor_add_cube(
     state: State<'_, EditorState>,
@@ -364,10 +380,7 @@ pub fn rust_editor_add_cube(
             }
         }
     };
-    let mut faces = Map::new();
-    for name in ["north", "east", "south", "west", "up", "down"] {
-        faces.insert(name.to_owned(), json!({"uv":[0.0,0.0,2.0,2.0]}));
-    }
+    let faces = new_cube_faces(&active.session.document().texture_assets);
     operations.push(EditOperation::AddCube {
         cube: Cube {
             uuid: create_uuid(), kind: "cube".into(), name: Some("cube".into()),
@@ -566,6 +579,36 @@ mod tests {
         injected["vendor_extension"] = json!({"preserve":true});
         assert!(!paint_texture_editable(&injected));
         assert!(!paint_texture_editable(&json!({"paint_owner":"lazydesigner-rgba8-v1"})));
+    }
+
+    #[test]
+    fn new_cube_faces_bind_the_first_bedrock_texture_uuid() {
+        let textures = vec![
+            json!({"uuid":"00000000-0000-4000-8000-000000000101","name":"first.png"}),
+            json!({"uuid":"00000000-0000-4000-8000-000000000102","name":"second.png"}),
+        ];
+        let unchanged = textures.clone();
+        let faces = new_cube_faces(&textures);
+        assert_eq!(faces.len(), 6);
+        for face in faces.values() {
+            assert_eq!(face["texture"], textures[0]["uuid"]);
+            assert_eq!(face["uv"], json!([0.0, 0.0, 2.0, 2.0]));
+        }
+        assert_eq!(textures, unchanged);
+    }
+
+    #[test]
+    fn new_cube_faces_do_not_invent_missing_texture_uuids() {
+        let no_textures = new_cube_faces(&[]);
+        let legacy = new_cube_faces(&[json!({"name":"legacy.png"})]);
+        for face in no_textures.values().chain(legacy.values()) {
+            assert_eq!(face["texture"], json!(false));
+        }
+        let legacy_with_second_uuid = new_cube_faces(&[
+            json!({"name":"legacy.png"}),
+            json!({"uuid":"00000000-0000-4000-8000-000000000102"}),
+        ]);
+        assert_eq!(legacy_with_second_uuid["north"]["texture"], json!(false));
     }
 
     #[test]
