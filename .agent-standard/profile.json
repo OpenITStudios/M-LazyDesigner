@@ -1,10 +1,9 @@
 {
   "schemaVersion": 1,
   "repository": "OpenITStudios/M-LazyDesigner",
-  "activeBranch": "Local",
+  "activeBranch": "Rust",
   "branchPolicy": {
     "writableBranches": [
-      "Local",
       "Rust"
     ],
     "allowAutoBranch": false,
@@ -34,7 +33,7 @@
     }
   ],
   "dataPolicy": "confidential-project",
-  "note": "Read .agent-standard/project-policy.md after shared root/profile. Local retains the existing Blockbench runtime source work; Rust is the explicitly authorized Rust-native editor planning/development branch (not an auto-created branch). No CI/localtest. Existing 12 LazyDesigner Skills and nearest mcp/AGENTS.md remain authoritative.",
+  "note": "Read .agent-standard/project-policy.md after shared root/profile. This Rust branch is explicitly authorized for standalone Rust-native editor planning and subsequent scoped source work; Local remains the separate Blockbench-hosted line. No automatic branches, CI or localtest. Preserve all 12 LazyDesigner domain Skills, mcp/AGENTS.md, existing assets and safety holds.",
   "workflowPolicy": {
     "sourceSurface": "CHATGPT_GITHUB",
     "localValidationSurface": "LOCAL_PC_AGENT",
