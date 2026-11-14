@@ -190,10 +190,10 @@ fn has_per_texture_uv_rules(doc: &AuthoringDocument) -> bool {
         doc.extensions.get("per_texture_uv_size") == Some(&Value::Bool(true)) {
         return true;
     }
+    // Bedrock's format-level per_texture_uv_size depends on the project
+    // ruleset string. Unknown types must not mean the empty ruleset.
     doc.extensions.get("multi_file_ruleset").is_some_and(|value| match value {
-        Value::Null | Value::Bool(false) => false,
         Value::String(name) => !name.is_empty(),
-        Value::Number(number) => number.as_f64() != Some(0.0),
         _ => true,
     })
 }
@@ -452,7 +452,7 @@ impl AuthoringDocument {
         let document = Self {
             meta: ProjectMeta {
                 format_version: "5.0".into(), model_format: "bedrock".into(),
-                box_uv: Some(false), extra: Map::new(),
+                box_uv: Some(true), extra: Map::new(),
             },
             resolution: TextureResolution { width: 128, height: 128, extra: Map::new() },
             cubes: Vec::new(), bones: Vec::new(), hierarchy: Vec::new(),
@@ -565,11 +565,16 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                doc.bones.iter().any(|g| g.uuid == cube.uuid) {
                 return Err(fail("CUBE_UUID_CONFLICT"));
             }
-            validate_cube(cube, doc.texture_assets.len())?;
+            let mut prepared = cube.clone();
+            validate_cube(&prepared, doc.texture_assets.len())?;
+            // A newly added Box UV Cube needs derived rectangles immediately.
+            if cube_box_uv(&prepared, doc.meta.box_uv.unwrap_or(false)) {
+                refresh_box_uv(&mut prepared)?;
+            }
             if !append_child(&mut doc.hierarchy, bone_uuid, &OutlinerNode::Cube(cube.uuid.clone())) {
                 return Err(fail("CUBE_BONE_NOT_FOUND"));
             }
-            doc.cubes.push(cube.clone());
+            doc.cubes.push(prepared);
             Ok(cube.uuid.clone())
         }
 

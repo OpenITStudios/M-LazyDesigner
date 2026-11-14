@@ -56,7 +56,9 @@ fn v5_0_preserves_extensions_texture_references_and_animation_bytes_semantically
 
 #[test]
 fn new_bone_cube_uv_batch_roundtrip_and_history() {
-    let initial = AuthoringDocument::new_bedrock("Example", "example").unwrap();
+    let mut initial = AuthoringDocument::new_bedrock("Example", "example").unwrap();
+    // The manual face UV test deliberately opts out of the Box UV default.
+    initial.meta.box_uv = Some(false);
     let mut session = EditorSession::from_document(initial.clone()).unwrap();
     let bone: Bone = serde_json::from_value(json!({
         "uuid": BONE, "name": "body", "origin": [0,0,0], "children": []
@@ -80,6 +82,63 @@ fn new_bone_cube_uv_batch_roundtrip_and_history() {
     assert_eq!(session.document(), &initial);
     session.redo(2).unwrap();
     assert_eq!(session.document(), &reimported);
+}
+
+
+#[test]
+fn new_bedrock_box_uv_default_and_initial_cube_face_rectangles() {
+    let doc = AuthoringDocument::new_bedrock("Example", "example").unwrap();
+    assert_eq!(doc.meta.box_uv, Some(true));
+    let wire: Value = serde_json::from_slice(&doc.export_bbmodel().unwrap()).unwrap();
+    assert_eq!(wire["meta"]["box_uv"], json!(true));
+    let mut session = EditorSession::from_document(doc.clone()).unwrap();
+    let bone: Bone = serde_json::from_value(json!({"uuid": BONE, "name": "body"})).unwrap();
+    session.apply(0, &[
+        EditOperation::AddBone { bone, parent_uuid: None },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+    ]).unwrap();
+    let cube = &session.document().cubes[0];
+    assert_eq!(cube.faces["north"]["uv"], json!([4.0, 4.0, 8.0, 8.0]));
+    assert_eq!(cube.faces["east"]["uv"], json!([0.0, 4.0, 4.0, 8.0]));
+    assert_eq!(cube.faces["up"]["uv"], json!([8.0, 4.0, 4.0, 0.0]));
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &doc);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn explicit_face_uv_new_project_remains_editable() {
+    let mut doc = AuthoringDocument::new_bedrock("Face UV", "face_uv").unwrap();
+    doc.meta.box_uv = Some(false);
+    let mut session = EditorSession::from_document(doc).unwrap();
+    let bone: Bone = serde_json::from_value(json!({"uuid": BONE, "name": "body"})).unwrap();
+    session.apply(0, &[
+        EditOperation::AddBone { bone, parent_uuid: None },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+        EditOperation::SetFaceUv {
+            uuid: CUBE.into(), face: "north".into(), uv: [3.0, 4.0, 7.0, 8.0],
+        },
+    ]).unwrap();
+    assert_eq!(session.document().cubes[0].faces["north"]["uv"], json!([3.0, 4.0, 7.0, 8.0]));
+}
+
+#[test]
+fn malformed_multifile_ruleset_refuses_auto_uv_remap_atomically() {
+    for invalid in [json!(false), json!(null), json!(0), json!({})] {
+        let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+        wire["multi_file_ruleset"] = invalid;
+        wire["elements"][0]["autouv"] = json!(2);
+        let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+        let original = session.document().clone();
+        assert_eq!(session.apply(0, &[EditOperation::TranslateCube {
+            uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+        }]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.summary().revision, 0);
+    }
 }
 
 #[test]

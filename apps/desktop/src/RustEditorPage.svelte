@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
+  import { parseFiniteEditorNumber } from './rustNumericInput';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
@@ -256,24 +257,25 @@
   }
   function position(axis: number, text: string) {
     if (!selectedCube) return;
-    const value = Number(text);
-    if (!Number.isFinite(value)) { error = 'Enter a finite coordinate.'; return; }
+    const value = parseFiniteEditorNumber(text);
+    if (value === null) { error = 'Enter a finite decimal coordinate.'; return; }
     const delta: Vec3 = [0, 0, 0];
     delta[axis] = value - selectedCube.from[axis];
     if (delta[axis] !== 0) apply([{ op: 'translate_cube', uuid: selectedCube.uuid, delta }]);
   }
   function size(axis: number, text: string) {
     if (!selectedCube) return;
-    const value = Number(text);
-    if (!Number.isFinite(value) || value <= 0) { error = 'Size must be greater than zero.'; return; }
+    const value = parseFiniteEditorNumber(text);
+    if (value === null || value <= 0) { error = 'Size must be a positive finite decimal number.'; return; }
+    if (value === selectedCube.to[axis] - selectedCube.from[axis]) return;
     const to = [...selectedCube.to] as Vec3;
     to[axis] = selectedCube.from[axis] + value;
     apply([{ op: 'set_cube_bounds', uuid: selectedCube.uuid, from: selectedCube.from, to }]);
   }
   function rotation(axis: number, text: string) {
     if (!selectedCube) return;
-    const value = Number(text);
-    if (!Number.isFinite(value)) { error = 'Enter a finite rotation angle.'; return; }
+    const value = parseFiniteEditorNumber(text);
+    if (value === null) { error = 'Enter a finite decimal rotation angle.'; return; }
     const angles = [...selectedCube.rotation] as Vec3;
     angles[axis] = value;
     if (angles[axis] !== selectedCube.rotation[axis]) {
@@ -283,8 +285,8 @@
 
   function uvEdit(index: number, text: string) {
     if (!selectedCube || selectedCube.boxUv) return;
-    const value = Number(text);
-    if (!Number.isFinite(value)) { error = 'Enter a finite UV coordinate.'; return; }
+    const value = parseFiniteEditorNumber(text);
+    if (value === null) { error = 'Enter a finite decimal UV coordinate.'; return; }
     const uv = [...faceUv] as Vec4; uv[index] = value;
     if (uv[index] !== faceUv[index]) apply([{ op: 'set_face_uv', uuid: selectedCube.uuid, face: selectedFace, uv }]);
   }

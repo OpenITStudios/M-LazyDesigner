@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Post-audit Rust Edit corrections (SOURCE_ONLY)
+
+Review of 12 Rust development commits and pinned Blockbench v5.2.1 project/Bedrock/Cube source established input coercion and Box UV default mismatches. Svelte inspector numeric fields now share a finite decimal parser, preventing blank, partial and nonfinite values from entering Rust commands. The native Bedrock Entity project defaults to Box UV, and the shared Rust AddCube transaction calculates initial Box UV face rectangles. Explicit Face UV remains writable. Non-string multi_file_ruleset values fail closed during Auto UV remapping, rather than being interpreted as absent rules. Regression source is authored NOT_EXECUTED; native Cargo/TypeScript, CLI/Windows/WebView2 and actual editable Blockbench round trip remain UNVERIFIED.
+
 ## 2026-11-14 — Explicit per-texture UV remap guard (source-only)
 
 The pinned Blockbench v5.2.1 `js/io/project.ts` `getUVWidth/Height(texture)` selects per-texture UV dimensions when its format enables `per_texture_uv_size`. The current Rust authoring subset only has project-wide UV resolution; Auto UV Move/Resize therefore now fails closed when imported project root or meta explicitly declares `per_texture_uv_size: true`, in addition to existing multi-file ruleset protection. Negative regression source covers both locations, atomic revision refusal and export preservation. This does not prove the flag exhaustively detects every Blockbench format rule, and does not implement per-texture mapping. SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; native Blockbench/Cargo/WebView2 NOT_EXECUTED.
