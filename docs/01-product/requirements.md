@@ -5,6 +5,12 @@
 **Updated:** 2026-09-18  
 **Primary Output:** editable Minecraft Bedrock Entity `.bbmodel`
 
+## Rust-native Editor Target — branch `Rust` (approved design, NOT_IMPLEMENTED)
+
+The user-approved `Rust` direction replaces Blockbench as the **execution engine**, not the familiar editor experience: a Svelte/Three.js interface must match the pinned Blockbench 5.2.1 Default Dark visual and behavioral UI for supported Bedrock Entity Edit, Paint and Animate workflows. One authoritative Rust document engine serves GUI, direct headless CLI and optional MCP. Editable `.bbmodel` export to and import from Blockbench must preserve all supported geometry, bone/pivot/UV, texture and animation data without silent loss. Required Bedrock visual-asset export remains supported. This is the [Phase 0 architecture and acceptance contract](../04-system/rust-native-editor-plan.md).
+
+The numbered sections below still describe the existing Blockbench-hosted **Local implementation** until a Rust feature has source and native acceptance. They do not prove native editor functionality. Existing user-approved reference, dimensions, quality, final approval and non-gameplay scope continue to apply.
+
 ## 1. Product Objective
 
 A user can hand an original source image directly to Codex, or create an approved Minecraft/Blockbench reference board in ChatGPT for stronger coverage, then have LazyDesigner create or revise a clean Bedrock model through explicit stage approval without requiring the user to specify MCP/tool details.

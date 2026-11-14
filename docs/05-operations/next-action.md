@@ -3,7 +3,15 @@
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
 
-## Active focus — dual reasoning effectiveness (2026-11-11)
+## Active Rust-native editor track — Phase 0 contract (2026-11-14)
+
+- **Branch:** `Rust` explicitly created from `Local@2fb3b2f2a9f37649c927886122e9442d9f84b7c7` after an authorized, narrowly scoped branch policy change; this branch's profile selects only `Rust` as writable. `Local` continues the existing Blockbench product and `main` remains stable.
+- **Accepted goal:** Blockbench 5.2.1 Default Dark **1:1 supported-workflow UI/interaction** with an independent single Rust engine, direct CLI, optional MCP and editable bidirectional `.bbmodel` interoperability. No runtime implementation or visual/format acceptance is claimed.
+- **Phase 0 source outcome:** [Rust-native Editor Architecture and Acceptance Contract](../04-system/rust-native-editor-plan.md) states source owners, UI parity, format round-trip gates, transaction/renderer boundaries, migration, licensing, quality/efficiency measures and held-proof limits. Review current branch HEAD before future work; the founding source hashes in the plan are provenance, not a perpetual HEAD.
+- **Next separately scoped Phase 1:** one complete headless Rust Bedrock Entity import/edit/export vertical slice through the canonical Rust API and CLI; retain current Blockbench source and all user assets, with written regressions only until native validation is separately authorized. Do **not** start a second runtime/AI router, delete previous tools or claim cost savings from fewer calls.
+- **Proof:** SOURCE_REVIEWED / SOURCE_COMMITTED for planning only. Rust code compilation, Codex, actual UI renders, live Blockbench import/export, PNG/animation fidelity, measured token savings and Windows installation are **NOT_EXECUTED / UNVERIFIED** under the original hold.
+
+## Legacy Local-track focus — dual reasoning effectiveness (2026-11-11)
 
 - **First-party read-only Animation CLI analysis (14 Nov 2026; SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN):** Added `analyze:animation` on the existing Bun and managed executable command surfaces for bounded caller-declared Animation tracks. It reuses canonical numeric quality/dynamics, native keyframe replacement tolerance, planted contact evidence and temporal image-time candidate planning. Source-only negative/positive regressions and a future compiled-binary JSON smoke are authored, NOT_EXECUTED. Results explicitly distinguish caller-supplied keyframes/contact, suspected loop/key collision/contact errors, candidate still-image times, and unavailable native/continuous playback evidence; no engine, extra Gateway tool, automatic IK, asset mutation, CI or model/effort switch. Real Codex/Blockbench quality, speed and accepted-result gains remain UNVERIFIED.
 

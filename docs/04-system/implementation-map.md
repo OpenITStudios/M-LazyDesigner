@@ -2,7 +2,7 @@
 
 Updated: 2026-10-20
 
-This file maps **current source ownership only**. Product workflow belongs in `docs/01-product/flow.md`; AI context loading in `docs/04-system/ai-context-loading.md`; continuation/proof in `docs/05-operations/`.
+This file maps **current source ownership only**. The user-approved standalone Rust editor is **not yet implemented**; its target ownership, migration and gate matrix are separately recorded in [rust-native-editor-plan.md](rust-native-editor-plan.md). Existing Blockbench-native owners below remain the actual source authority until changed with evidence. Product workflow belongs in `docs/01-product/flow.md`; AI context loading in `docs/04-system/ai-context-loading.md`; continuation/proof in `docs/05-operations/`.
 
 ## Architecture
 

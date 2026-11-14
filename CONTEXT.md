@@ -16,6 +16,8 @@ Routing             → AGENTS.md
 
 ## Product
 
+**Rust-branch approved target (2026-11-14; not implemented):** develop a standalone Rust-native Bedrock Entity authoring engine with Blockbench v5.2.1 Default Dark 1:1 supported-workflow UI and bidirectional editable `.bbmodel` compatibility. This is separate from the currently implemented Blockbench-hosted product described below; design, current proof and continuation are owned by `docs/04-system/rust-native-editor-plan.md` and `docs/05-operations/`.
+
 LazyDesigner is a local MCP workflow for AI-assisted **Minecraft Bedrock Entity** authoring in desktop Blockbench. Normal AI-client boundary is the stable Gateway; the Blockbench plugin is the execution Runtime behind it.
 
 LazyDesigner also has a separate optional **Desktop machine control plane** under `apps/desktop/`. Desktop owns installation/runtime health presentation, Blockbench discovery/launch, compatibility projection, and explicit managed maintenance actions. It is not part of the authoring execution chain and does not own Control context, Gateway protocol behavior, Blockbench authored state, update/package semantics, or Runtime tools.

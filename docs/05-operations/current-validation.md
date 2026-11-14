@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Rust-native editor Phase 0 plan (source-only)
+
+The maintainer approved a new `Rust` development branch for a standalone Rust/Tauri/Svelte Bedrock Entity editor, with Blockbench v5.2.1 Default Dark 1:1 supported-workflow UI and mandatory editable, bidirectional `.bbmodel` compatibility. The `Local` branch governance explicitly allowed the named branch without changing the current CI/test/release holds. On `Rust`, the branch-local profile selects only `Rust` as writable. The Phase 0 architecture document is a source specification, not executable Rust engine code. It explicitly preserves current Blockbench-based runtime, existing project Skills, media, installed behavior and bounded evidence policies until a tested replacement exists. No native UI screen, headless model write, Rust compilation, installed CLI, visual parity, Blockbench round trip, token saving or quality gain was executed or established. State: SOURCE_REVIEWED / SOURCE_COMMITTED for plan; execution NOT_EXECUTED.
+
 ## 2026-11-14 — Optional Animation CLI diagnosis (source-only)
 
 Bun `analyze:animation` and the existing managed executable source

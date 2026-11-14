@@ -2,7 +2,7 @@
 
 This is the single entry point for AI and human documentation discovery.
 
-For asset work, start with product (01), reference preparation (02) or authoring (03). For product/MCP development and maintenance, select the system owner (04) and current operations (05) only as needed. The [Repository Root Policy](../README.md#repository-root-policy) defines the shared repository layout; executable Control source stays in mcp/, while Skills and working guidance stay in .agents/ and docs/.
+For asset work, start with product (01), reference preparation (02) or authoring (03). For product/MCP development and maintenance, select the system owner (04) and current operations (05) only as needed. On the `Rust` development branch, the approved standalone-editor target is [Rust-native Editor Plan](04-system/rust-native-editor-plan.md); legacy Blockbench-hosted source remains a separate existing implementation. The [Repository Root Policy](../README.md#repository-root-policy) defines the shared repository layout; executable Control source stays in mcp/, while Skills and working guidance stay in .agents/ and docs/.
 
 ## Load Rule
 

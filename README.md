@@ -9,15 +9,16 @@ LazyDesigner is an AI-assisted **Minecraft Bedrock Entity** authoring workspace 
 ## Branch Model
 
 ```text
-Local  → active development / working authority
+Local  → existing Blockbench-hosted development line
+Rust   → user-authorized Rust-native editor development line (target; not yet implemented)
 main   → stable / release authority; changes only by explicit promotion
 ```
 
-Routine repository development uses `Local`. Repository behavior is routed by `AGENTS.md`; GitHub execution/history/CI rules are owned by `GITHUB_RULES.md`.
+Legacy Blockbench-hosted development uses `Local`; the standalone Rust-native editor is developed on `Rust` under its own branch-local profile and [Phase 0 contract](docs/04-system/rust-native-editor-plan.md). The new editor is a **source plan**, not an installed feature. Repository behavior is routed by `AGENTS.md`; GitHub execution/history/CI rules are owned by `GITHUB_RULES.md`.
 
-For a new ChatGPT repository chat, provide this `Local` URL and intended task. ChatGPT follows current root rules, works GitHub/cloud-first without requiring the user's PC, and treats `amati` as read-only. Continuity comes from current source and relevant work commits, not chat titles.
+For a new ChatGPT repository chat, provide the selected `Local` or `Rust` URL and intended task. ChatGPT follows current root rules, works GitHub/cloud-first without requiring the user's PC, and treats `amati` as read-only. Continuity comes from current source and relevant work commits, not chat titles.
 
-## Canonical Product Flow
+## Existing Blockbench-hosted Product Flow (Local implementation baseline)
 
 ```text
 User request
