@@ -807,7 +807,7 @@
   <section class="paint-workspace" aria-label="Paint workspace">
     <div class="paint-workspace-heading">
       <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
-      <span>RGBA8 · 256 × 256 maximum · 3D preview uses Bedrock default texture</span>
+      <span>RGBA8 · 256 × 256 maximum · 3D preview follows Paint texture selection</span>
     </div>
     {#if snapshot}
       <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
@@ -852,7 +852,7 @@
               onpointerup={finishPaintStroke}
               onpointercancel={(event) => finishPaintStroke(event, true)}
               onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
-            <p class="dock-note">Pencil and Eraser use circular strokes. Filled Rectangle uses two corners. Each completed gesture is one Rust Undo step.</p>
+            <p class="dock-note">Pencil and Eraser use circular strokes. Filled Rectangle uses two corners. Each completed gesture is one Rust Undo step. Atlas selection changes only the Paint preview, not saved model face references.</p>
           {:else}
             <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
           {/if}
@@ -1225,6 +1225,7 @@
           texturePreviewSources={snapshot.texturePreviewSources}
           texturePreviewSides={snapshot.texturePreviewSides}
           textureResolution={snapshot.textureResolution}
+          previewTextureIndex={workspaceMode === 'paint' ? paintTextureIndex : null}
           {selectedId} onSelect={selectCube}
           canMove={workspaceMode === 'edit' && moveTool && !busy && !loading && !newDialog && !confirmDiscard}
           onTranslate={moveFromViewport}/>

@@ -13,6 +13,26 @@ export function textureIndexForFace(face: CubeFace | undefined, textureCount: nu
   return face.texture === undefined || face.texture === false ? 0 : null;
 }
 
+// Bedrock Entity's pinned single_texture preview selects Texture.getDefault(),
+// which follows the active texture (falling back to the first one).
+// Selection here is an ephemeral view option, not a serialized face rewrite.
+export function bedrockDefaultTextureIndex(
+  selected: number | null, count: number,
+): number | null {
+  if (!Number.isInteger(count) || count < 1) return null;
+  if (selected !== null && Number.isInteger(selected) && selected >= 0 && selected < count) {
+    return selected;
+  }
+  return 0;
+}
+
+export function bedrockTextureForFace(
+  face: CubeFace | undefined, selected: number | null, count: number,
+): number | null {
+  if (!face || face.texture === null || face.enabled === false) return null;
+  return bedrockDefaultTextureIndex(selected, count);
+}
+
 // Read-only side selection from the Rust-vetted texture projection.
 // A missing or unsupported material uses the default double-sided fallback.
 export function previewRenderSide(side: 'front' | 'double' | null | undefined): 'front' | 'double' {

@@ -4,7 +4,7 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
   import { planCubeLocalTranslation } from './rustMoveGizmo';
-  import { faceUvCoordinates, textureIndexForFace, previewRenderSide } from './rustTextureProjection';
+  import { faceUvCoordinates, bedrockTextureForFace, previewRenderSide } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
   export let cubes: CubeView[] = [];
@@ -13,6 +13,8 @@
   export let texturePreviewSources: (string | null)[] = [];
   export let texturePreviewSides: ('front' | 'double' | null)[] = [];
   export let textureResolution: [number, number] = [16, 16];
+  // View-only selection: null means first available Bedrock texture.
+  export let previewTextureIndex: number | null = null;
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
   // Called once per completed gesture. Preview movement never writes the model.
@@ -122,6 +124,7 @@
     _sources: (string | null)[] = texturePreviewSources,
     _sides: ('front' | 'double' | null)[] = texturePreviewSides,
     _resolution: [number, number] = textureResolution,
+    _previewTextureIndex: number | null = previewTextureIndex,
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
     if (!modelRoot || drag || mutationPending) return;
@@ -160,7 +163,7 @@
           geometry.clearGroups();
           for (let faceIndex = 0; faceIndex < FACE_ORDER.length; faceIndex++) {
             const face = cube.faces[FACE_ORDER[faceIndex]];
-            const textureIndex = textureIndexForFace(face, texturePreviewSources.length);
+            const textureIndex = bedrockTextureForFace(face, previewTextureIndex, texturePreviewSources.length);
             const rectangle = faceUvCoordinates(face, textureResolution, cube.boxUv);
             const texture = textureIndex !== null && rectangle
               ? embeddedTexture(textureIndex) : null;
@@ -318,7 +321,7 @@
     onSelect(hits.length ? String(hits[0].object.userData.cubeUuid) : null);
   }
 
-  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, texturePreviewSides, textureResolution);
+  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, texturePreviewSides, textureResolution, previewTextureIndex);
   $: if (ready) syncGizmo(canMove);
 
   onMount(() => {

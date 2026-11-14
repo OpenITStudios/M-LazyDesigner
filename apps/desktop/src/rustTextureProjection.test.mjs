@@ -1,7 +1,7 @@
 // Node 24 source regression; NOT_EXECUTED under the repository hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { textureIndexForFace, faceUvCoordinates } from './rustTextureProjection.ts';
+import { textureIndexForFace, faceUvCoordinates, bedrockDefaultTextureIndex, bedrockTextureForFace } from './rustTextureProjection.ts';
 
 test('default Bedrock texture is index zero; null and disabled faces remain untextured', () => {
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4] }, 1), 0);
@@ -61,4 +61,26 @@ test('render-side projection defaults to double, with explicit front override', 
   assert.equal(previewRenderSide('double'), 'double');
   assert.equal(previewRenderSide(null), 'double');
   assert.equal(previewRenderSide(undefined), 'double');
+});
+
+test('Bedrock single-texture default follows a bounded view selection', () => {
+  assert.equal(bedrockDefaultTextureIndex(null, 2), 0);
+  assert.equal(bedrockDefaultTextureIndex(1, 2), 1);
+  assert.equal(bedrockDefaultTextureIndex(-1, 2), 0);
+  assert.equal(bedrockDefaultTextureIndex(9, 2), 0);
+  assert.equal(bedrockDefaultTextureIndex(0, 0), null);
+  assert.equal(bedrockDefaultTextureIndex(1.5, 2), 0);
+});
+
+test('Bedrock preview selects one material without rewriting saved face references', () => {
+  const indexedFace = { uv: [0, 0, 4, 4], texture: 0 };
+  const omittedFace = { uv: [0, 0, 4, 4] };
+  const nullFace = { uv: [0, 0, 4, 4], texture: null };
+  const before = JSON.stringify(indexedFace);
+  assert.equal(bedrockTextureForFace(indexedFace, 1, 2), 1);
+  assert.equal(bedrockTextureForFace(omittedFace, 1, 2), 1);
+  assert.equal(bedrockTextureForFace(nullFace, 1, 2), null);
+  assert.equal(bedrockTextureForFace({ ...indexedFace, enabled: false }, 1, 2), null);
+  assert.equal(bedrockTextureForFace(indexedFace, 0, 2), 0);
+  assert.equal(JSON.stringify(indexedFace), before);
 });
