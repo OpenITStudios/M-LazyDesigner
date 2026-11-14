@@ -123,6 +123,19 @@ export function recoveryForGatewayError(
     };
   }
 
+  if (code === "COHORT_TASK_CONTEXT_REQUIRED") {
+    // The Gateway rejected the request before the executor/native mutation.
+    // Retry only after obtaining the *current* Control task identity.
+    return {
+      category: "CAPABILITY",
+      safe_to_retry: true,
+      state_uncertain: false,
+      requires_status_refresh: true,
+      requires_user_action: false,
+      action: "call status with the current Reference Package, Workspace and latest user correction; copy control.task_context_id to the outer invoke_capability.task_context_id, or use COMPLETE for a standalone call",
+    };
+  }
+
   if (code.startsWith("REFERENCE_")) {
     return {
       category: "REFERENCE",

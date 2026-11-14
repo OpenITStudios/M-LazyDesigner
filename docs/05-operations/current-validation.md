@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Daily-use cohort identity and reference orientation (source-only)
+
+The Gateway rejects an explicit `CONTINUE` without a nonblank outer `task_context_id` before invoking any native capability, reports `COHORT_TASK_CONTEXT_REQUIRED` with a non-uncertain recovery route, and retains standalone `COMPLETE` compatibility. The `status` text distinguishes unbound approved reference from a bound task context; the distributed agent instruction keeps the user's chosen Low Thinking model/effort fixed and instructs relevant Reference/Workspace/user-delta reorientation. Focused handler/response regression AUTHORED_NOT_RUN. Current behavior under Codex and installed Blockbench, actual reference consumption, stale-but-nonblank client IDs, model compliance, visual similarity, generator/build checks and quality improvement remain **NOT_EXECUTED / UNVERIFIED**. No new public tool, new persistent owner, localtest, CI or release.
+
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
 ## 2026-11-07 — Visual-asset source focus-switch closure (not executed)

@@ -317,19 +317,26 @@ export function registerCoreGatewayTools(
           referenceEvidence = await readReferenceImageEvidence(source, ids);
         }
 
+        // An explicit Control orientation is a client-facing decision, not
+        // proof that the client saw the approved reference pixels.
+        const authoringContextCue = task_mode !== "ASSET_AUTHORING" ? "" :
+          !control.reference.available
+            ? " REFERENCE_UNBOUND: for reference-driven decisions, bind the approved reference_package_path and review its actual images before visual claims."
+            : ` For a deferred cohort, copy current control.task_context_id=${control.task_context_id} into the outer invoke_capability.task_context_id; reorient after a changed intent, reference or project.`;
         const registeredExperimentalTools = experimentalTools();
         const response = {
           content: [
             {
               type: "text" as const,
-              text:
+              text: (
                 task_mode === "SYSTEM_DEVELOPMENT"
                   ? "Development routing ready."
                   : !status.runtime.online
                     ? "Control ready; Runtime offline."
                     : control.system === "DEGRADED"
                       ? "Control status degraded; inspect blockers."
-                      : "Control status ready.",
+                      : "Control status ready."
+              ) + authoringContextCue,
             },
             ...(referenceEvidence ?? []).flatMap((image) => [
               {
@@ -603,8 +610,19 @@ export function registerCoreGatewayTools(
           task_context_id,
           cohort_boundary,
         } = invokeInput.parse(rawArgs);
+        const taskContextId = task_context_id?.trim() || null;
+        if (cohort_boundary === "CONTINUE" && !taskContextId) {
+          // An invalid deferred cohort must not perform a native mutation
+          // and then appear to have postponed its verification.
+          return gatewayErrorResult({
+            code: "COHORT_TASK_CONTEXT_REQUIRED",
+            message: "No native call was made. Call status with the current Reference Package, Workspace and latest user correction; pass its control.task_context_id as the outer invoke_capability.task_context_id for CONTINUE. Use COMPLETE for a standalone call.",
+            safeToRetry: true,
+            details: { executed: false },
+          });
+        }
         return invoke(capability, args, context, {
-          taskContextId: task_context_id,
+          taskContextId,
           cohortBoundary: cohort_boundary,
         });
       } catch (error) {

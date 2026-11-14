@@ -206,6 +206,14 @@ stale evidence and partial view coverage are never upgraded to PASS.
 
 ## Scoped Texture Image Delivery
 
+A deferred cohort requires the current `control.task_context_id` returned by
+`status` to be passed as the **outer** `invoke_capability.task_context_id`.
+A `CONTINUE` call without a non-blank ID returns
+`COHORT_TASK_CONTEXT_REQUIRED` **before** native execution, with
+`state_uncertain=false` and a recovery instruction to obtain the current
+Control context. Do not guess an old ID; standalone calls retain the default
+`COMPLETE` behavior and do not need a task ID.
+
 Within an explicit `invoke_capability` task cohort, a successful
 `paint_texture_transaction` with `cohort_boundary=CONTINUE` may omit
 its **verified inline PNG** from the AI-facing response. The native

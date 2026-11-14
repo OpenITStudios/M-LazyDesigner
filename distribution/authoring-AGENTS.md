@@ -22,6 +22,10 @@ Animation / motion                  → lazydesigner-animation
 
 No mutation until Control orientation is current, the matching specialist is loaded, and prerequisite gates are satisfied.
 
+For reference-driven decisions, call `status` with the actual approved `reference_package_path`, current `workspace_path` when available, and latest `current_user_delta`. After compaction, asset/reference changes or a new material correction, reorient only the affected decision; a cached handle is not proof that image pixels or Skill contents remain loaded. If the approved source is unavailable, do not claim visual fidelity.
+
+For multi-call mutation cohorts, reuse the **current** `control.task_context_id` from `status` as the outer `invoke_capability.task_context_id`; use `CONTINUE` only for planned intermediate edits and `COMPLETE` for the last. Missing identity must not be invented or silently reused from a different task. Use standalone `COMPLETE` when no verified cohort exists. Keep the user's configured agent and reasoning effort; do not switch models or thinking levels automatically.
+
 ## New Model Intake
 
 Require:
