@@ -118,20 +118,70 @@
 .rust-editor .tool-spacer { flex: 1; }
 .rust-editor .editor-body {
   display: grid;
-  grid-template-columns: 210px minmax(0,1fr) 288px;
+  min-width: 0;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
-.rust-editor .left-dock,
-.rust-editor .right-dock { display: flex; flex-direction: column; min-width: 0; background: var(--rust-ui); }
-.rust-editor .left-dock { border-right: 1px solid var(--rust-dark); }
-.rust-editor .right-dock { border-left: 1px solid var(--rust-dark); }
+.rust-editor .dock-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--rust-ui);
+}
+.rust-editor .dock-column[data-side="left"] { border-right: 1px solid var(--rust-dark); }
+.rust-editor .dock-column[data-side="right"] { border-left: 1px solid var(--rust-dark); }
+.rust-editor .dock-edge {
+  width: 6px;
+  min-width: 6px;
+  height: 100%;
+  background: #101316;
+  border-inline: 1px solid #303640;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.rust-editor .dock-edge:not(.inactive):hover,
+.rust-editor .dock-edge:focus-visible {
+  background: #3e90ff;
+  outline: 2px solid #8cc5ff;
+  outline-offset: -2px;
+}
+.rust-editor .dock-edge.inactive { cursor: default; opacity: .55; }
+.rust-editor .dock-rail {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0;
+  border: 0;
+  background: #272b34;
+  color: #c0cbd9;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: .02em;
+}
+.rust-editor .dock-rail:hover { background: var(--rust-selected); }
+.rust-editor .dock-controls { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.rust-editor .dock-controls button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #bbc3cf;
+  padding: 3px 4px;
+  font-size: 10px;
+  border-radius: 2px;
+}
+.rust-editor .dock-controls button:hover { background: var(--rust-selected); border-color: #4b586a; }
 .rust-editor .dock-title {
   flex: none;
   display: flex;
   align-items: center;
+  gap: 5px;
   height: 32px;
-  padding: 0 11px;
+  padding: 0 7px 0 11px;
   background: #272b34;
   border-bottom: 1px solid var(--rust-dark);
   font-size: 11px;
@@ -185,8 +235,24 @@
   border-radius: 3px;
 }
 .rust-editor .dock-panel { min-height: 0; display: flex; flex-direction: column; }
-.rust-editor .dock-panel.outliner { flex: 0 1 52%; border-bottom: 5px solid var(--rust-dark); }
-.rust-editor .dock-panel.properties { flex: 1 1 48%; }
+.rust-editor .dock-panel.outliner { flex: 0 0 auto; overflow: hidden; }
+.rust-editor .dock-splitter-horizontal {
+  flex: none;
+  min-height: 6px;
+  height: 6px;
+  background: #101316;
+  border-block: 1px solid #303640;
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+}
+.rust-editor .dock-splitter-horizontal:hover,
+.rust-editor .dock-splitter-horizontal:focus-visible {
+  background: #3e90ff;
+  outline: 2px solid #8cc5ff;
+  outline-offset: -2px;
+}
+.rust-editor .dock-panel.properties { flex: 1 1 0; overflow: hidden; }
 .rust-editor .outliner-list { overflow: auto; min-height: 0; }
 .rust-editor .outliner-row {
   min-width: 0;
@@ -313,15 +379,12 @@
 .rust-editor-dialog .dialog-buttons button.primary { background: #3e90ff; color: #081321; }
 .rust-editor-dialog .dialog-buttons button.danger { background: #733737; color: #fff; }
 @media(max-width: 980px) {
-  .rust-editor .editor-body { grid-template-columns: 158px minmax(0,1fr) 230px; }
   .rust-editor .rust-titlebar { gap: 4px; }
   .rust-editor .mode { min-width: 53px; padding: 0 7px; }
   .rust-editor .editor-toolbar { gap: 2px; }
   .rust-editor .editor-toolbar button { padding: 5px 7px; }
 }
 @media(max-width: 760px) {
-  .rust-editor .editor-body { grid-template-columns: minmax(0,1fr) 210px; }
-  .rust-editor .left-dock { display: none; }
   .rust-editor .status-middle { display: none; }
   .rust-editor .document-name { max-width: 140px; }
 }
