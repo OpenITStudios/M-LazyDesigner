@@ -129,7 +129,7 @@ fn texture_preview_side(texture: &Value) -> Option<&'static str> {
 // Never resolve project-relative paths or arbitrary URLs inside the WebView.
 // Embedded PNG candidates remain subject to the browser's image decoder.
 // A bounded WebView preview candidate. This never changes Rust-owned assets.
-fn embedded_png_preview_candidate(texture: &Value) -> Option<(String, u64)> {
+fn embedded_png_preview_candidate(texture: &Value) -> Option<(String, u32, u32)> {
     const PREFIX: &str = "data:image/png;base64,";
     const MAX_BASE64: usize = 2 * 1024 * 1024;
     const MAX_DIMENSION: u32 = 2048;
@@ -156,11 +156,11 @@ fn embedded_png_preview_candidate(texture: &Value) -> Option<(String, u64)> {
         return None;
     }
     // The browser still checks full PNG integrity and rejects invalid decode.
-    Some((source.to_owned(), pixels))
+    Some((source.to_owned(), width, height))
 }
 
 fn embedded_png_preview_source(texture: &Value) -> Option<String> {
-    embedded_png_preview_candidate(texture).map(|(source, _)| source)
+    embedded_png_preview_candidate(texture).map(|(source, _, _)| source)
 }
 
 fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
@@ -176,10 +176,21 @@ fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
         doc.meta.extra.get("per_texture_uv_size") == Some(&Value::Bool(true));
     let mut remaining_source_bytes = 4 * 1024 * 1024;
     let mut remaining_pixels = MAX_PROJECTED_PIXELS;
+    let expected_width = doc.resolution.width;
+    let expected_height = doc.resolution.height;
     let mut admitted = 0usize;
     doc.texture_assets.iter().map(|texture| {
         if per_texture || admitted >= MAX_TEXTURES { return None; }
-        let (source, pixels) = embedded_png_preview_candidate(texture)?;
+        let (source, width, height) = embedded_png_preview_candidate(texture)?;
+        // This renderer uses project-level UV coordinates. If the PNG has
+        // another size or declares another UV grid, showing it would imply
+        // false UV correspondence. Preserve the asset; omit only its preview.
+        if width != expected_width || height != expected_height ||
+            texture.get("uv_width").is_some_and(|value| value.as_u64() != Some(u64::from(expected_width))) ||
+            texture.get("uv_height").is_some_and(|value| value.as_u64() != Some(u64::from(expected_height))) {
+            return None;
+        }
+        let pixels = u64::from(width) * u64::from(height);
         if source.len() > remaining_source_bytes || pixels > remaining_pixels { return None; }
         remaining_source_bytes -= source.len();
         remaining_pixels -= pixels;
@@ -524,6 +535,8 @@ mod tests {
             "source": format!("data:image/png;base64,{}", STANDARD.encode(&bytes))
         })).is_none());
         let mut doc = AuthoringDocument::new_bedrock("Synthetic", "synthetic").unwrap();
+        doc.resolution.width = 2;
+        doc.resolution.height = 2;
         doc.texture_assets.push(json!({"source":candidate}));
         assert_eq!(texture_preview_sources(&doc), vec![Some(candidate.clone())]);
         doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
@@ -531,15 +544,40 @@ mod tests {
     }
 
     #[test]
+    fn texture_projection_refuses_mismatched_png_and_uv_grid_without_mutating_model() {
+        let mut doc = AuthoringDocument::new_bedrock("UV", "uv").unwrap();
+        doc.resolution.width = 16;
+        doc.resolution.height = 16;
+        let mismatched = png_candidate(8, 16);
+        doc.texture_assets.push(json!({"source":mismatched}));
+        let before = doc.texture_assets.clone();
+        assert_eq!(texture_preview_sources(&doc), vec![None]);
+        assert_eq!(doc.texture_assets, before);
+
+        let matching = png_candidate(16, 16);
+        doc.texture_assets[0] = json!({"source":matching, "uv_width":8, "uv_height":16});
+        assert_eq!(texture_preview_sources(&doc), vec![None]);
+        doc.texture_assets[0]["uv_width"] = json!(16);
+        doc.texture_assets[0]["uv_height"] = json!(32);
+        assert_eq!(texture_preview_sources(&doc), vec![None]);
+        doc.texture_assets[0]["uv_height"] = json!(16);
+        assert_eq!(texture_preview_sources(&doc), vec![Some(matching)]);
+    }
+
+    #[test]
     fn texture_projection_bounds_total_decoded_pixels_and_texture_count() {
         let candidate = png_candidate(2048, 2048);
         let mut doc = AuthoringDocument::new_bedrock("Bounded", "bounded").unwrap();
+        doc.resolution.width = 2048;
+        doc.resolution.height = 2048;
         doc.texture_assets.push(json!({"source":candidate}));
         doc.texture_assets.push(json!({"source":candidate}));
         let projected = texture_preview_sources(&doc);
         assert!(projected[0].is_some());
         assert!(projected[1].is_none());
         let small = png_candidate(1, 1);
+        doc.resolution.width = 1;
+        doc.resolution.height = 1;
         doc.texture_assets = (0..18).map(|_| json!({"source":small})).collect();
         let projected = texture_preview_sources(&doc);
         assert_eq!(projected.iter().filter(|source| source.is_some()).count(), 16);
