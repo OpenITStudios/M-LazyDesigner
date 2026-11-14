@@ -129,6 +129,37 @@ integrity, not an actual loaded Blockbench project or camera calibration.
 The output is a **diagnostic, not an artistic PASS** or automatic geometry
 repair. Prefer existing matched captures; never screenshot per Cube.
 
+## Diagnose authored Animation timing and contact (read-only)
+
+```bash
+bun run analyze:animation -- --input ./animation.json --json
+# Matching verified managed Windows build:
+# lazydesigner.exe analyze-animation --input animation.json --json
+```
+
+The bounded `lazydesigner-animation-analysis-input-v1` JSON manifest
+declares `animation_uuid`, `duration_seconds`, `loop_mode` and up to
+128 track objects with `group_uuid`, `group_name`, `is_root`, `channel`
+(position/rotation/scale), and numeric or explicitly nonnumeric
+`keyframes` (`time`, `value`, optional `interpolation`,
+`data_point_count`). Optional `contact_constraints` use the existing
+world-marker `pair|fixed|planted` sample contract, bounded to 64
+constraints and 2048 samples. Optional `max_review_frames` (2..5) and
+`focus_bone_uuid` / `focus_time_range` constrain candidate review
+times.
+
+It reuses canonical `lib/animation/quality.ts`,
+`motionDynamics.ts`, `batchPlanning.ts`, `contactEvidence.ts` and
+`temporalEvidenceSampling.ts`. The CLI detects source-declared
+near-coincident key times, loop-seam concerns, contact drift and
+incomplete sample windows. Any proposed still-image times are
+**candidates only**; the CLI does not sample native Timeline, solve IK,
+observe playback, or certify visual PASS. Input state and contact
+markers must come from a real, current inspected clip when used to
+guide a correction; no native provenance follows automatically from
+JSON or a clean report. Use on consequential animation decisions,
+never after every keyframe.
+
 ## Narrow command namespaces
 
 ```text

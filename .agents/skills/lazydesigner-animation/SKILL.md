@@ -31,6 +31,21 @@ Keep only motion-relevant context: current animation request, approved checkpoin
 
 If a decision-critical motion relationship is missing, request only that exact context through Control. Never broaden into full-profile discovery as reassurance.
 
+**Optional deterministic Animation CLI:** Only when a material timing,
+loop-seam, keyframe replacement, planted-foot or grip problem remains
+unresolved *and* current clip-key/marker data is already available,
+`lazydesigner.exe analyze-animation --input animation.json --json`
+(or `bun run analyze:animation -- --input animation.json --json`
+in a source checkout) reuses the existing Animation Quality, Dynamics,
+Native Timing, Contact Evidence and Temporal Sampling owners as a
+read-only diagnosis. It never edits Blockbench or automatically samples
+playback. World-space contact markers and key times remain
+caller-supplied until matched native evidence is observed. Candidate
+review times do not certify interpolated poses, motion continuity or
+visual approval; use the original playback/reference gate when relevant.
+Do not run the CLI for every keyframe, replace direct known-key routing
+or switch the user's selected model/thinking effort.
+
 **Knowledge focus (only when present):** `decision_packet.knowledge_focus` may identify `VC-MOTION` for one explicitly supported motion `source_fact_id`. If the artistic motion choice is unresolved, consult the matching *Artist-Craft Motion Decisions* row in the existing Animation Standard, then compare the approved motion/poses, attachment and contact evidence with representative native preview times before editing. A reference-package claim does not prove an observed gait, exact timing, playback or animation quality. Prefer the known direct keyframe path when motion is already specified; never preload AK research or invent a universal speed/phase. At correction review, judge pose/contact/loop fidelity and new regressions, not clip count or keyframe density.
 
 ## Boundary

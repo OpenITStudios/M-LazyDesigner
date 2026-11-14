@@ -148,6 +148,35 @@ async function main(): Promise<void> {
       !silhouetteHelp.includes("does not attest camera alignment")) {
     throw new Error("Compiled manager visual silhouette CLI route smoke failed.");
   }
+  // Check the actual compiled executable's read-only Animation route.
+  // This is NOT a native Blockbench/continuous-motion acceptance test.
+  const animationFixture = join(output, "smoke-animation-cli.json");
+  await writeFile(animationFixture, JSON.stringify({
+    schema: "lazydesigner-animation-analysis-input-v1",
+    animation_uuid: "smoke-walk", duration_seconds: 1, loop_mode: "loop",
+    tracks: [{
+      group_uuid: "leg", group_name: "Leg",
+      is_root: false, channel: "rotation",
+      keyframes: [
+        { time: 0, value: [0, 0, 0], data_point_count: 1 },
+        { time: 0.5, value: [20, 0, 0], data_point_count: 1 },
+        { time: 1, value: [0, 0, 0], data_point_count: 1 },
+      ],
+    }],
+    max_review_frames: 3,
+  }));
+  const animationSmoke = JSON.parse(await run([
+    join(packageDir, "lazydesigner.exe"), "analyze-animation",
+    "--input", animationFixture, "--json",
+  ]));
+  if (animationSmoke.schema !== "lazydesigner-animation-cli-v1" ||
+      animationSmoke.source_timing?.evaluated_tracks !== 1 ||
+      animationSmoke.native_origin_verified !== false ||
+      animationSmoke.native_playback_observed !== false ||
+      animationSmoke.visual_verdict !== "UNVERIFIED" ||
+      animationSmoke.temporal_frame_hints?.visual_pass_authorized !== false) {
+    throw new Error("Compiled manager read-only Animation analysis smoke failed.");
+  }
   await writeFile(join(packageDir, MCP_BUNDLE_FILENAME), plugin);
   for (const path of PACKAGE_SOURCE_PATHS) { await mkdir(dirname(join(packageDir, path)), { recursive: true }); await cp(join(repo, path), join(packageDir, path)); }
   await cp(join(repo, "distribution/authoring-AGENTS.md"), join(packageDir, "AGENTS.md"));

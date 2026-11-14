@@ -60,7 +60,7 @@ Normal operation has exactly one LazyDesigner managed root, one configured LazyD
 
 ## Read-only Texture planning CLI (source-wired, not installed acceptance)
 
-The same versioned `lazydesigner.exe` source includes five optional
+The same versioned `lazydesigner.exe` source includes six optional
 read-only offline authoring commands:
 
 - `plan-texture-treatment --input plan.json --json` delegates to
@@ -87,11 +87,17 @@ read-only offline authoring commands:
   only, never native-origin/camera/visual approval. Missing or opaque
   alpha, unavailable capture identity and unreviewed framing remain
   UNVERIFIED.
+- `analyze-animation --input animation.json --json` runs the existing
+  source-level animation quality, motion-dynamics, contact-marker
+  and temporal image-time planners on bounded caller-declared authored
+  tracks. It can find keyframe-time collision risks, loop-seam concerns,
+  foot sliding or incomplete contact sampling, but cannot attest
+  real native keyframes, continuous playback or approved motion.
 It must not launch Gateway, mutate a Blockbench project, write an output
 .bbmodel, bypass Undo, or claim artistic approval. The Windows package
 procedure includes disposable **compiled executable** smoke cases for the
-original three read-only routes and command-dispatch smoke checks for both
-PNG analysis routes; these are AUTHORED_NOT_RUN until PC-local packaging
+original three read-only routes, command-dispatch smoke checks for both
+PNG analysis routes, and a compiled-executable JSON smoke for Animation; these are AUTHORED_NOT_RUN until PC-local packaging
 is authorized.
 A historical installed `lazydesigner.exe` does not inherit a new source
 subcommand. Use the matching installed source SHA before asserting availability.

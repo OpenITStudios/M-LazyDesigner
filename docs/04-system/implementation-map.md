@@ -209,6 +209,18 @@ no CLI diagnostic can grant visual approval or mutation authority.
 Reuse the existing managed executable dispatch and one Control/Gateway
 native state owner; never produce a competing visual grader.
 
+The optional read-only `analyze:animation` CLI delegates source-declared
+clip-key analysis to the original `lib/animation/quality.ts` and
+`motionDynamics.ts` owners; native replacement tolerance stays defined
+in `batchPlanning.ts`, explicit world-marker contact review stays in
+`contactEvidence.ts`, and still-frame candidate timing stays in
+`temporalEvidenceSampling.ts`. The Bun and managed executable entries
+share the same pure analyst. Caller-supplied JSON is not native
+inspection or playback evidence; this CLI never creates/modifies
+keyframes, solves contact/IK, generates images or replaces the existing
+Animation specialist and Control/Gateway Runtime. It is conditional
+on a genuine unresolved timing/contact decision, not per-key ceremony.
+
 ## Gateway Execution
 
 Canonical source: `mcp/gateway/execution/`.

@@ -1,5 +1,22 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Optional Animation CLI diagnosis (source-only)
+
+Bun `analyze:animation` and the existing managed executable source
+now route a bounded `lazydesigner-animation-analysis-input-v1` JSON
+manifest to the original Animation Quality, Motion Dynamics, native
+keyframe replacement-tolerance, world-marker Contact Evidence and
+Temporal Evidence Sampling functions. The output highlights
+caller-declared near-coincident times, loop-seam review, planted marker
+drift/penetration and missing sampling windows; still image times are
+candidate-only, not rendered or observed frames. The embedded source
+does not sample Blockbench, move keyframes, apply IK, attest original
+motion/marker provenance, or grant artistic or continuous-playback
+approval. A compiled Windows executable JSON smoke and ten focused
+positive/negative regressions have been authored but NOT_EXECUTED.
+Sol 6.1 Low Thinking remains fixed. Actual local CLI behavior, native
+preview, animation quality and correction reductions remain UNVERIFIED.
+
 ## 2026-11-14 — Read-only visual silhouette CLI (source-only)
 
 The Bun `analyze:visual-silhouette` and existing managed-executable source

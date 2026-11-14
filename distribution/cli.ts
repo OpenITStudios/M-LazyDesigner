@@ -25,7 +25,8 @@ const readOnlyAuthoringPlan =
   command === "plan-appearance-variant" ||
   command === "analyze-geometry" ||
   command === "analyze-texture-pair" ||
-  command === "analyze-visual-silhouette";
+  command === "analyze-visual-silhouette" ||
+  command === "analyze-animation";
 if (!readOnlyAuthoringPlan) for (let i = 0; i < raw.length; i++) {
   const flag = raw[i]!;
   if (!["--root", "--workspace", "--workspace-mode", "--plugin-path", "--config", "--package", "--tag", "--expected-source-sha", "--desktop-contract", "--migrate-legacy", "--adopt", "--preview", "--progress-json"].includes(flag) || flags.has(flag)) throw new Error(`Unknown or repeated option: ${flag}`);
@@ -312,7 +313,7 @@ async function fetchRelease(): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  if (command === "help") { console.log("LazyDesigner: install [--workspace PATH] [--plugin-path EXISTING_FILE] [--adopt] | check-update [--tag lazydesigner-vX.Y.Z] [--preview] | update [--tag lazydesigner-vX.Y.Z] [--preview] | rollback | recover | repair | setup-tls | status | mcp | plan-texture-treatment --input PATH [--json] | plan-appearance-variant --input PATH [--json] | analyze-geometry --input PATH [--json] | analyze-texture-pair --input PATH [--json] | analyze-visual-silhouette --input PATH [--json] (read-only). No app, user build, or manual file replacement."); return; }
+  if (command === "help") { console.log("LazyDesigner: install [--workspace PATH] [--plugin-path EXISTING_FILE] [--adopt] | check-update [--tag lazydesigner-vX.Y.Z] [--preview] | update [--tag lazydesigner-vX.Y.Z] [--preview] | rollback | recover | repair | setup-tls | status | mcp | plan-texture-treatment --input PATH [--json] | plan-appearance-variant --input PATH [--json] | analyze-geometry --input PATH [--json] | analyze-texture-pair --input PATH [--json] | analyze-visual-silhouette --input PATH [--json] | analyze-animation --input PATH [--json] (read-only). No app, user build, or manual file replacement."); return; }
   if (command === "self-test") { receipt({ status: "PASS", platform: process.platform, arch: process.arch, repository: REPOSITORY }); return; }
   if (command === "plan-texture-treatment") {
     // Pure offline planning: no install lock, Gateway process, native state,
@@ -359,6 +360,16 @@ async function main(): Promise<void> {
     const { runVisualSilhouetteCli } =
       await import("../mcp/scripts/authoring/analyze-visual-silhouette");
     const result = await runVisualSilhouetteCli(raw);
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    process.exitCode = result.exitCode;
+    return;
+  }
+  if (command === "analyze-animation") {
+    // Source-declared numeric diagnostics only; no native timeline mutation.
+    const { runAnimationCli } =
+      await import("../mcp/scripts/authoring/analyze-animation");
+    const result = await runAnimationCli(raw);
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
     process.exitCode = result.exitCode;

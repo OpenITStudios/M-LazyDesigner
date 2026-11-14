@@ -98,6 +98,17 @@ differences but does not establish native provenance, material style,
 actual camera calibration, or visual PASS. Do not generate extra
 captures per Cube or invent a missing reference/capture handle.
 
+For a consequential Animation timing, loop-seam, planted-foot or grip
+correction, if current inspected clip keys and any actual world-marker
+samples are already available, `lazydesigner.exe analyze-animation
+--input animation.json --json` (or Bun `analyze:animation` from an
+authorized source checkout) can run read-only numeric diagnostics.
+Only one scoped CLI check at a decision boundary; keep direct
+`manage_animation_timeline` for known-safe edits. A proposed still-image
+time is not a captured image, interpolated pose or continuous playback
+receipt. JSON-supplied contact markers do not certify native origin.
+Never auto-apply contact offsets or treat a clean report as animation PASS.
+
 Geometry↔Texturing stays on shared AUTHORING. AUTHORING↔Animation uses `switch_authoring_phase` through Gateway and continues the same task/chat.
 
 ## Evidence / Safety
