@@ -7,8 +7,11 @@
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
     measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
-    RUST_DOCK_LAYOUT_KEY, DOCK_SPLITTER, MIN_DOCK, MAX_DOCK,
-    type DockLayout, type DockPanel, type DockSide,
+    measureFloatRect, floatDock, dockPanel, dockSide, moveFloat, resizeFloat,
+    dropSideForPointer, crossedDragThreshold,
+    RUST_DOCK_LAYOUT_KEY, LEGACY_DOCK_LAYOUT_KEY,
+    DOCK_SPLITTER, MIN_DOCK, MAX_DOCK,
+    type DockLayout, type DockPanel, type DockSide, type FloatRect,
   } from './rustDockLayout';
 
   export let onLegacy: () => void = () => {};
@@ -36,7 +39,21 @@
   let viewport: { frameModel: () => void } | undefined;
   let editorBody: HTMLDivElement;
   let editorWidth = 980;
+  let editorHeight = 550;
   let dockLayout: DockLayout = defaultDockLayout();
+  type FloatingGesture = {
+    panel: DockPanel;
+    pointerId: number;
+    kind: 'move' | 'resize';
+    startX: number;
+    startY: number;
+    original: FloatRect;
+    baseline: DockLayout;
+    moved: boolean;
+  };
+  let floatingGesture: FloatingGesture | null = null;
+  let floatingOnTop: DockPanel | null = null;
+  let pendingDockSide: DockSide | null = null;
   let dockPersistenceError = false;
   type DockResize = {
     side: DockSide; pointerId: number; startX: number;
@@ -54,6 +71,10 @@
     measuredDocks.leftWidth + 'px', DOCK_SPLITTER + 'px', 'minmax(0, 1fr)',
     DOCK_SPLITTER + 'px', measuredDocks.rightWidth + 'px',
   ].join(' ');
+  $: floatingTextures = dockLayout.floating.textures
+    ? measureFloatRect(dockLayout.floating.textures, editorWidth, editorHeight) : null;
+  $: floatingInspector = dockLayout.floating.inspector
+    ? measureFloatRect(dockLayout.floating.inspector, editorWidth, editorHeight) : null;
 
   const AXES = ['X', 'Y', 'Z'] as const;
   const FACES = ['north', 'east', 'south', 'west', 'up', 'down'] as const;
@@ -256,6 +277,14 @@
     apply([{ op: 'set_face_uv', uuid: selectedCube.uuid, face: selectedFace, uv }]);
   }
   function hotkeys(event: KeyboardEvent) {
+    if (event.key === 'Escape' && floatingGesture) {
+      const gesture = floatingGesture;
+      floatingGesture = null;
+      pendingDockSide = null;
+      dockLayout = gesture.baseline;
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape') {
       if (confirmDiscard) confirmDiscard = null;
       else if (newDialog) newDialog = false;
@@ -302,6 +331,127 @@
     persistDocks();
     closeMenus();
   }
+  function floatPanel(panel: DockPanel) {
+    floatingGesture = null;
+    pendingDockSide = null;
+    floatingOnTop = panel;
+    setLayout(floatDock(dockLayout, panel, editorWidth, editorHeight));
+    void tick().then(() => {
+      document.querySelector<HTMLElement>(
+        '.rust-editor .rust-floating-window[data-panel="' + panel + '"] .floating-title'
+      )?.focus();
+    });
+  }
+
+  function attachPanel(panel: DockPanel, side: DockSide) {
+    floatingGesture = null;
+    pendingDockSide = null;
+    setLayout(dockPanel(dockLayout, panel, side));
+    void tick().then(() => {
+      const owner = document.querySelector<HTMLElement>(
+        '.rust-editor .' + (panel === 'textures' ? 'textures-dock' : 'inspector-dock')
+      );
+      owner?.querySelector<HTMLElement>('.dock-controls button')?.focus();
+    });
+  }
+
+  function returnPanel(panel: DockPanel) {
+    attachPanel(panel, dockSide(dockLayout, panel));
+  }
+
+  function startFloating(panel: DockPanel, kind: 'move' | 'resize', event: PointerEvent) {
+    if (event.button !== 0 || floatingGesture || dockResize || inspectorResize ||
+        (kind === 'move' && event.target instanceof Element &&
+          !!event.target.closest('button'))) return;
+    const original = dockLayout.floating[panel];
+    if (!original) return;
+    floatingGesture = {
+      panel, kind, pointerId: event.pointerId,
+      startX: event.clientX, startY: event.clientY,
+      original: measureFloatRect(original, editorWidth, editorHeight),
+      baseline: dockLayout, moved: false,
+    };
+    pendingDockSide = null;
+    floatingOnTop = panel;
+    const target = event.currentTarget as HTMLElement;
+    try {
+      target.setPointerCapture(event.pointerId);
+    } catch {
+      floatingGesture = null;
+      return;
+    }
+    event.preventDefault();
+  }
+
+  function moveFloating(event: PointerEvent) {
+    const state = floatingGesture;
+    if (!state || state.pointerId !== event.pointerId) return;
+    const x = event.clientX - state.startX;
+    const y = event.clientY - state.startY;
+    if (crossedDragThreshold(x, y)) state.moved = true;
+    if (!state.moved) return;
+    if (state.kind === 'move') {
+      dockLayout = moveFloat(
+        state.baseline, state.panel, state.original.x + x, state.original.y + y,
+        editorWidth, editorHeight,
+      );
+      const rect = editorBody.getBoundingClientRect();
+      pendingDockSide = dropSideForPointer(event.clientX - rect.left, editorWidth);
+    } else {
+      dockLayout = resizeFloat(
+        state.baseline, state.panel,
+        state.original.width + x, state.original.height + y,
+        editorWidth, editorHeight,
+      );
+    }
+  }
+
+  function finishFloating(event: PointerEvent, cancelled = false) {
+    const gesture = floatingGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const rect = editorBody.getBoundingClientRect();
+    const side = !cancelled && gesture.kind === 'move' && gesture.moved
+      ? dropSideForPointer(event.clientX - rect.left, editorWidth) : null;
+    floatingGesture = null;
+    pendingDockSide = null;
+    if (cancelled) dockLayout = gesture.baseline;
+    else if (side) attachPanel(gesture.panel, side);
+    else persistDocks();
+  }
+
+  function keyFloatingMove(panel: DockPanel, event: KeyboardEvent) {
+    const arrows: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+      ArrowUp: [0, -1], ArrowDown: [0, 1],
+    };
+    const axis = arrows[event.key];
+    const rect = dockLayout.floating[panel];
+    if (!axis || !rect) return;
+    const step = event.shiftKey ? 25 : 10;
+    setLayout(moveFloat(
+      dockLayout, panel, rect.x + axis[0] * step, rect.y + axis[1] * step,
+      editorWidth, editorHeight,
+    ));
+    event.preventDefault();
+  }
+
+  function keyFloatingSize(panel: DockPanel, event: KeyboardEvent) {
+    const arrows: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+      ArrowUp: [0, -1], ArrowDown: [0, 1],
+    };
+    const axis = arrows[event.key];
+    const rect = dockLayout.floating[panel];
+    if (!axis || !rect) return;
+    const step = event.shiftKey ? 25 : 10;
+    setLayout(resizeFloat(
+      dockLayout, panel,
+      rect.width + axis[0] * step, rect.height + axis[1] * step,
+      editorWidth, editorHeight,
+    ));
+    event.preventDefault();
+  }
+
   function hideDock(panel: DockPanel, hidden: boolean) {
     setLayout(setDockHidden(dockLayout, panel, hidden));
     // The initiating button is unmounted on fold/restore. Preserve keyboard focus
@@ -406,14 +556,18 @@
 
   onMount(() => {
     try {
-      const stored = restoreDockLayout(window.localStorage.getItem(RUST_DOCK_LAYOUT_KEY));
+      const current = window.localStorage.getItem(RUST_DOCK_LAYOUT_KEY);
+      const previous = window.localStorage.getItem(LEGACY_DOCK_LAYOUT_KEY);
+      const stored = restoreDockLayout(current) ?? restoreDockLayout(previous);
       if (stored) dockLayout = stored;
     } catch {
       dockPersistenceError = true;
     }
     const observer = new ResizeObserver((records) => {
       const width = records[0]?.contentRect.width;
+      const height = records[0]?.contentRect.height;
       if (width && Number.isFinite(width)) editorWidth = width;
+      if (height && Number.isFinite(height)) editorHeight = height;
     });
     observer.observe(editorBody);
     void load();
@@ -421,20 +575,29 @@
   });
 </script>
 
-{#snippet textureDock(side: DockSide)}
-  <aside class="dock-column textures-dock" id={'dock-' + side} data-side={side} aria-label="Textures panel">
-    {#if dockLayout.hidden.textures}
-      <button type="button" class="dock-rail" title="Restore Textures panel"
-        onclick={() => hideDock('textures', false)}>Show Textures</button>
+{#snippet textureDock(side: DockSide | 'float')}
+  <aside class="dock-column textures-dock"
+    id={side === 'float' ? 'float-textures' : 'dock-' + side}
+    data-side={side} aria-label="Textures panel">
+    {#if side !== 'float' && (dockLayout.hidden.textures || dockLayout.floating.textures)}
+      <button type="button" class="dock-rail" title="Restore Textures to this side"
+        onclick={() => dockLayout.floating.textures
+          ? returnPanel('textures') : hideDock('textures', false)}>
+        {dockLayout.floating.textures ? 'Dock Textures' : 'Show Textures'}
+      </button>
     {:else}
       <div class="dock-title">
         <span>TEXTURES</span>
-        <div class="dock-controls">
-          <button type="button" title="Move Textures to the opposite side"
-            onclick={swapDocks}>Move</button>
-          <button type="button" title="Fold Textures panel"
-            onclick={() => hideDock('textures', true)}>Fold</button>
-        </div>
+        {#if side !== 'float'}
+          <div class="dock-controls">
+            <button type="button" title="Move Textures to the opposite side"
+              onclick={swapDocks}>Move</button>
+            <button type="button" title="Float Textures in the editor"
+              onclick={() => floatPanel('textures')}>Float</button>
+            <button type="button" title="Fold Textures panel"
+              onclick={() => hideDock('textures', true)}>Fold</button>
+          </div>
+        {/if}
       </div>
 
       {#if snapshot?.textureNames.length}
@@ -451,23 +614,31 @@
   </aside>
 {/snippet}
 
-{#snippet inspectorDock(side: DockSide)}
-  <aside class="dock-column inspector-dock" id={'dock-' + side} data-side={side}
-    aria-label="Outliner and properties panels">
-    {#if dockLayout.hidden.inspector}
-      <button type="button" class="dock-rail" title="Restore Outliner and Properties"
-        onclick={() => hideDock('inspector', false)}>Show Outliner</button>
+{#snippet inspectorDock(side: DockSide | 'float')}
+  <aside class="dock-column inspector-dock"
+    id={side === 'float' ? 'float-inspector' : 'dock-' + side}
+    data-side={side} aria-label="Outliner and properties panels">
+    {#if side !== 'float' && (dockLayout.hidden.inspector || dockLayout.floating.inspector)}
+      <button type="button" class="dock-rail" title="Restore Outliner and Properties to this side"
+        onclick={() => dockLayout.floating.inspector
+          ? returnPanel('inspector') : hideDock('inspector', false)}>
+        {dockLayout.floating.inspector ? 'Dock Outliner' : 'Show Outliner'}
+      </button>
     {:else}
 
       <section class="dock-panel outliner" style:flex-basis={dockLayout.inspectorSplit + '%'}>
         <div class="dock-title">
           <span>OUTLINER</span>
-          <div class="dock-controls">
-            <button type="button" title="Move Outliner and Properties to the opposite side"
-              onclick={swapDocks}>Move</button>
-            <button type="button" title="Fold Outliner and Properties"
-              onclick={() => hideDock('inspector', true)}>Fold</button>
-          </div>
+          {#if side !== 'float'}
+            <div class="dock-controls">
+              <button type="button" title="Move Outliner and Properties to the opposite side"
+                onclick={swapDocks}>Move</button>
+              <button type="button" title="Float Outliner and Properties in the editor"
+                onclick={() => floatPanel('inspector')}>Float</button>
+              <button type="button" title="Fold Outliner and Properties"
+                onclick={() => hideDock('inspector', true)}>Fold</button>
+            </div>
+          {/if}
         </div>
         {#if rows.length}
           <div class="outliner-list" role="tree" aria-label="Model hierarchy">
@@ -563,6 +734,47 @@
 {/snippet}
 
 
+{#snippet floatingPanel(panel: DockPanel)}
+  {#if dockLayout.floating[panel]}
+    {@const rect = panel === 'textures' ? floatingTextures : floatingInspector}
+    {#if rect}
+      <section class="rust-floating-window" class:front={floatingOnTop === panel} data-panel={panel}
+        aria-label={panel === 'textures' ? 'Floating Textures' : 'Floating Outliner and Properties'}
+        style:left={rect.x + 'px'} style:top={rect.y + 'px'}
+        style:width={rect.width + 'px'} style:height={rect.height + 'px'}
+        onfocusin={() => floatingOnTop = panel}>
+        <div class="floating-title" tabindex="0" role="group"
+          aria-label={'Move floating ' + panel + ' panel with arrow keys, or drag it to a dock edge'}
+          onpointerdown={(event) => startFloating(panel, 'move', event)}
+          onpointermove={moveFloating}
+          onpointerup={finishFloating}
+          onpointercancel={(event) => finishFloating(event, true)}
+          onlostpointercapture={(event) => finishFloating(event, true)}
+          onkeydown={(event) => keyFloatingMove(panel, event)}>
+          <strong>{panel === 'textures' ? 'Textures' : 'Outliner / Properties'}</strong>
+          <div class="floating-actions">
+            <button type="button" onclick={() => attachPanel(panel, 'left')}>Dock Left</button>
+            <button type="button" onclick={() => attachPanel(panel, 'right')}>Dock Right</button>
+            <button type="button" onclick={() => hideDock(panel, true)}>Fold</button>
+          </div>
+        </div>
+        {#if panel === 'textures'}
+          {@render textureDock('float')}
+        {:else}
+          {@render inspectorDock('float')}
+        {/if}
+        <button type="button" class="floating-resize-handle"
+          aria-label={'Resize floating ' + panel + ' panel with arrow keys or drag'}
+          onpointerdown={(event) => startFloating(panel, 'resize', event)}
+          onpointermove={moveFloating}
+          onpointerup={finishFloating}
+          onpointercancel={(event) => finishFloating(event, true)}
+          onlostpointercapture={(event) => finishFloating(event, true)}
+          onkeydown={(event) => keyFloatingSize(panel, event)}></button>
+      </section>
+    {/if}
+  {/if}
+{/snippet}
 
 <svelte:window onkeydown={hotkeys} onclick={outsideClick}/>
 
@@ -598,6 +810,14 @@
                   {dockLayout.hidden.inspector ? 'Show Outliner / Properties' : 'Fold Outliner / Properties'}
                 </button>
                 <button role="menuitem" onclick={swapDocks}>Swap Left / Right Docks</button>
+                <button role="menuitem" onclick={() => dockLayout.floating.textures
+                  ? returnPanel('textures') : floatPanel('textures')}>
+                  {dockLayout.floating.textures ? 'Dock Textures' : 'Float Textures'}
+                </button>
+                <button role="menuitem" onclick={() => dockLayout.floating.inspector
+                  ? returnPanel('inspector') : floatPanel('inspector')}>
+                  {dockLayout.floating.inspector ? 'Dock Outliner / Properties' : 'Float Outliner / Properties'}
+                </button>
                 <button role="menuitem" onclick={resetDocks}>Reset Dock Layout</button>
               {/if}
             </div>
@@ -690,6 +910,12 @@
     {:else}
       {@render textureDock('right')}
     {/if}
+    {#if floatingGesture?.kind === 'move'}
+      <div class="floating-drop-zone left" class:active={pendingDockSide === 'left'} aria-hidden="true">Dock Left</div>
+      <div class="floating-drop-zone right" class:active={pendingDockSide === 'right'} aria-hidden="true">Dock Right</div>
+    {/if}
+    {@render floatingPanel('textures')}
+    {@render floatingPanel('inspector')}
   </div>
 
   <footer class="editor-statusbar" aria-live="polite">

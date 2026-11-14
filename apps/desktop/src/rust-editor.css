@@ -118,11 +118,127 @@
 .rust-editor .tool-spacer { flex: 1; }
 .rust-editor .editor-body {
   display: grid;
+  position: relative;
   min-width: 0;
   min-height: 0;
   flex: 1;
   overflow: hidden;
 }
+
+/* In-window floating panels, derived from the same real dock content.
+   These are not native detached windows or complete Blockbench slots. */
+.rust-editor .rust-floating-window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+  min-width: 220px;
+  min-height: 160px;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--rust-ui);
+  border: 1px solid #485361;
+  box-shadow: 0 8px 28px #0009;
+}
+.rust-editor .rust-floating-window.front {
+  z-index: 25;
+  border-color: #6b829e;
+}
+.rust-editor .floating-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0 5px 0 10px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+  background: #29303b;
+  color: #d9e3f0;
+  border-bottom: 1px solid #101316;
+}
+.rust-editor .floating-title:focus-visible {
+  outline: 2px solid #3e90ff;
+  outline-offset: -2px;
+}
+.rust-editor .floating-title strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 650;
+}
+.rust-editor .floating-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+.rust-editor .floating-actions button {
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: #c9d4e5;
+  font-size: 10px;
+}
+.rust-editor .floating-actions button:hover {
+  background: #3b4657;
+  border-color: #576b88;
+}
+.rust-editor .rust-floating-window .dock-column[data-side="float"] {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+}
+.rust-editor .floating-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  z-index: 2;
+  background: transparent;
+  border: 0;
+  border-right: 3px solid #91a4bc;
+  border-bottom: 3px solid #91a4bc;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.rust-editor .floating-resize-handle:focus-visible {
+  outline: 2px solid #3e90ff;
+  outline-offset: -2px;
+}
+.rust-editor .floating-drop-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 84px;
+  z-index: 16;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  background: #34465b55;
+  border: 1px dashed #7297c7;
+  color: #c9dcf7;
+  font-size: 11px;
+  writing-mode: vertical-rl;
+  opacity: .6;
+}
+.rust-editor .floating-drop-zone.left { left: 0; }
+.rust-editor .floating-drop-zone.right { right: 0; }
+.rust-editor .floating-drop-zone.active {
+  background: #2d5b96aa;
+  outline: 2px solid #80bdff;
+  outline-offset: -2px;
+  opacity: 1;
+}
+
 .rust-editor .dock-column {
   display: flex;
   flex-direction: column;
