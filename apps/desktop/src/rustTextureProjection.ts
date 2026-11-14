@@ -2,8 +2,14 @@
 // This never owns, writes or normalizes authoritative Rust model data.
 import type { CubeFace } from './rustEditorTypes';
 
+// Blockbench v5.2.1 Cube.updateFaces excludes a face only when its
+// texture is null. The saved `enabled` metadata is not a geometry switch.
+export function isCubeFacePresent(face: CubeFace | undefined): boolean {
+  return Boolean(face && face.texture !== null);
+}
+
 export function textureIndexForFace(face: CubeFace | undefined, textureCount: number): number | null {
-  if (!face || face.enabled === false || face.texture === null || textureCount < 1) return null;
+  if (!isCubeFacePresent(face) || textureCount < 1) return null;
   if (typeof face.texture === 'number') {
     return Number.isInteger(face.texture) && face.texture >= 0 && face.texture < textureCount
       ? face.texture : null;
@@ -29,7 +35,7 @@ export function bedrockDefaultTextureIndex(
 export function bedrockTextureForFace(
   face: CubeFace | undefined, selected: number | null, count: number,
 ): number | null {
-  if (!face || face.texture === null || face.enabled === false) return null;
+  if (!isCubeFacePresent(face)) return null;
   return bedrockDefaultTextureIndex(selected, count);
 }
 

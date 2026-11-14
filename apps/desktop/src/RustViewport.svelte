@@ -6,7 +6,7 @@
   import { planCubeLocalTranslation } from './rustMoveGizmo';
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
-  import { faceUvCoordinates, bedrockTextureForFace, previewRenderSide } from './rustTextureProjection';
+  import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
   export let cubes: CubeView[] = [];
@@ -170,7 +170,7 @@
             const rectangle = faceUvCoordinates(face, textureResolution, cube.boxUv);
             const texture = textureIndex !== null && rectangle
               ? embeddedTexture(textureIndex) : null;
-            if (face?.texture !== null && face?.enabled !== false) {
+            if (isCubeFacePresent(face)) {
               geometry.addGroup(faceIndex * 6, 6, faceIndex);
             }
             if (texture && rectangle) {

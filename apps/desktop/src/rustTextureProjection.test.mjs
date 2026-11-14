@@ -1,14 +1,19 @@
 // Node 24 source regression; NOT_EXECUTED under the repository hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { textureIndexForFace, faceUvCoordinates, bedrockDefaultTextureIndex, bedrockTextureForFace } from './rustTextureProjection.ts';
+import { isCubeFacePresent, textureIndexForFace, faceUvCoordinates, bedrockDefaultTextureIndex, bedrockTextureForFace } from './rustTextureProjection.ts';
 
-test('default Bedrock texture is index zero; null and disabled faces remain untextured', () => {
+test('only null face references remove geometry; enabled metadata does not', () => {
+  assert.equal(isCubeFacePresent(undefined), false);
+  assert.equal(isCubeFacePresent({ uv: [0, 0, 4, 4], texture: null }), false);
+  assert.equal(isCubeFacePresent({ uv: [0, 0, 4, 4], texture: false }), true);
+  assert.equal(isCubeFacePresent({ uv: [0, 0, 4, 4], texture: 0, enabled: false }), true);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4] }, 1), 0);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], texture: false }, 1), 0);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], texture: 1 }, 2), 1);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], texture: null }, 1), null);
-  assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], enabled: false }, 1), null);
+  assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], enabled: false }, 1), 0);
+  assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], texture: null, enabled: true }, 1), null);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], texture: 2 }, 2), null);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4], texture: -1 }, 2), null);
   assert.equal(textureIndexForFace({ uv: [0, 0, 4, 4] }, 0), null);
@@ -80,7 +85,8 @@ test('Bedrock preview selects one material without rewriting saved face referenc
   assert.equal(bedrockTextureForFace(indexedFace, 1, 2), 1);
   assert.equal(bedrockTextureForFace(omittedFace, 1, 2), 1);
   assert.equal(bedrockTextureForFace(nullFace, 1, 2), null);
-  assert.equal(bedrockTextureForFace({ ...indexedFace, enabled: false }, 1, 2), null);
+  assert.equal(bedrockTextureForFace({ ...indexedFace, enabled: false }, 1, 2), 1);
+  assert.equal(bedrockTextureForFace({ ...nullFace, enabled: true }, 1, 2), null);
   assert.equal(bedrockTextureForFace(indexedFace, 0, 2), 0);
   assert.equal(JSON.stringify(indexedFace), before);
 });
