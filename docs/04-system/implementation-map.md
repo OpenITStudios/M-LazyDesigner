@@ -197,6 +197,18 @@ mutation executor, renderer, Undo owner or quality scorer. Use the original
 publisher's documented read-only planning and real-backend verification
 principles only where they match existing LazyDesigner contracts.
 
+The fifth optional CLI, `analyze:visual-silhouette`, uses the existing
+`lib/reference/pngAlphaEvidence.ts` and
+`lib/reference/silhouetteEvidence.ts` owners to compare
+SHA-256-identified, approved-source and model-capture PNG alpha
+masks. Only explicitly reviewed matching view/framing declarations
+can yield bounded diagnostic overlap. File hashes do not authenticate
+the producing native Runtime, and a caller-supplied
+`modelcapture:` handle does not establish current project identity;
+no CLI diagnostic can grant visual approval or mutation authority.
+Reuse the existing managed executable dispatch and one Control/Gateway
+native state owner; never produce a competing visual grader.
+
 ## Gateway Execution
 
 Canonical source: `mcp/gateway/execution/`.

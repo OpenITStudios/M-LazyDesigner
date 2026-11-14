@@ -1,11 +1,10 @@
-import { lstat, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { decodeVerifiedPngRgba } from "../../lib/reference/pngAlphaEvidence";
 import { diffTextureRegion } from "../../lib/texture/regionDiff";
 import { computeTextureRevision } from "../../lib/texture/revision";
 import {
   authoringPlanError, parseAuthoringPlanFlags, readAuthoringPlanJson,
-  type ReadOnlyAuthoringCliResponse,
+  readBoundedSiblingPng, type ReadOnlyAuthoringCliResponse,
 } from "./cliInput";
 
 export const TEXTURE_PAIR_MAX_MANIFEST_BYTES = 16_384;
@@ -95,21 +94,10 @@ export function parseTexturePairInput(value: unknown): TexturePairInput {
   };
 }
 
-/** Never accept absolute/parent paths, symlinks, or oversize PNG input. */
+/** Reuse the common sibling PNG read contract without changing behavior. */
 async function readPng(directory: string, entry: PngEntry): Promise<Uint8Array> {
-  const path = join(directory, entry.png_file);
-  let info;
-  try { info = await lstat(path); }
-  catch { throw new Error("TEXTURE_PAIR_PNG_UNAVAILABLE"); }
-  if (!info.isFile() || info.isSymbolicLink() ||
-      info.size < 45 || info.size > TEXTURE_PAIR_MAX_PNG_BYTES) {
-    throw new Error("TEXTURE_PAIR_PNG_FILE_INVALID");
-  }
-  const bytes = await readFile(path);
-  if (bytes.byteLength > TEXTURE_PAIR_MAX_PNG_BYTES) {
-    throw new Error("TEXTURE_PAIR_PNG_TOO_LARGE");
-  }
-  return bytes;
+  return readBoundedSiblingPng(directory, entry.png_file, "TEXTURE_PAIR",
+    TEXTURE_PAIR_MAX_PNG_BYTES);
 }
 
 /** Inspect PNG bytes only; a client-side file cannot attest native provenance. */

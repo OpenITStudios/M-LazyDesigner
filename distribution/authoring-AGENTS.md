@@ -86,6 +86,18 @@ A clean diff does not replace current mapped native views or user review,
 and cannot justify restoring pixels reverted by Undo. Do not export/reload
 every pixel solely to call this CLI.
 
+Only at an actual Geometry reference-review boundary, if an APPROVED
+transparent PNG reference and a fresh SHA-identified model capture with
+a valid `modelcapture:` handle already exist, optionally run
+`lazydesigner.exe analyze-visual-silhouette --input visual.json --json`
+(or Bun `analyze:visual-silhouette` in a source checkout). A
+`REVIEWED_SAME_FRAME` declaration must follow real camera/framing review;
+it is not inferred from matching `front`/other labels. This command
+reuses the existing PNG/alpha overlap analysis and may identify silhouette
+differences but does not establish native provenance, material style,
+actual camera calibration, or visual PASS. Do not generate extra
+captures per Cube or invent a missing reference/capture handle.
+
 Geometry↔Texturing stays on shared AUTHORING. AUTHORING↔Animation uses `switch_authoring_phase` through Gateway and continues the same task/chat.
 
 ## Evidence / Safety

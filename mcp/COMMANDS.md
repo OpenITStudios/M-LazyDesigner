@@ -104,6 +104,31 @@ coherent review boundaries, not per paint transaction. The compiled
 route smoke checks help/dispatch only; full input checks are
 `TEST_AUTHORED_NOT_RUN` until local validation is permitted.
 
+## Compare a source and current model alpha silhouette (read-only)
+
+```bash
+bun run analyze:visual-silhouette -- --input ./visual.json --json
+# On a matching, verified managed Windows build:
+# lazydesigner.exe analyze-visual-silhouette --input visual.json --json
+```
+
+The bounded `lazydesigner-visual-silhouette-input-v1` JSON manifest
+contains `reference` (approved source image ID, canonical view, SHA-256,
+integrity/status/mime_type and a sibling `png_file`), `capture` (current
+project UUID, `modelcapture:` evidence handle, view, PNG SHA-256,
+width/height and sibling `png_file`) and explicit `pairing`.
+Both PNG files must use the strict supported non-interlaced 8-bit RGBA
+format and be small, regular sibling files. The existing
+`compareBoundPngAlphaEvidence` computes bounded overlap metrics only
+when approved alpha and model images have comparable dimensions/view and
+the caller has explicitly declared `REVIEWED_SAME_FRAME`. Otherwise the
+result remains `UNVERIFIED` with a specific reason. The capture handle is
+available only on relevant stable native correspondence observations; do
+not invent it if unavailable. Matching SHA-256 demonstrates file-byte
+integrity, not an actual loaded Blockbench project or camera calibration.
+The output is a **diagnostic, not an artistic PASS** or automatic geometry
+repair. Prefer existing matched captures; never screenshot per Cube.
+
 ## Narrow command namespaces
 
 ```text

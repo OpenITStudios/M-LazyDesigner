@@ -37,6 +37,17 @@ Accept `selected_profile` from Control, sourced from the current Reference Packa
 
 **Optional offline Geometry CLI:** When current native bounds, rig groups or bounded surface warnings have already been obtained and a real structural decision is still unresolved, `lazydesigner.exe analyze-geometry --input geometry.json --json` (or `bun run analyze:geometry -- --input geometry.json --json` in an actual source checkout) provides coarse projected-envelope, rig graph and surface-warning analysis through the existing `modelQuality` owner. It is read-only and optional; do not introduce an inspection or command per Cube, invent missing reference bounds, or treat a clear envelope/rig as reference-fidelity PASS. A source-image/current-model-view pair remains required at the visual gate.
 
+**Optional bounded silhouette CLI:** At the actual visual gate, when an
+APPROVED alpha-bearing reference PNG and a current model PNG are already
+captured with matching, reviewed camera framing and a real
+`modelcapture:` evidence handle, `lazydesigner.exe
+analyze-visual-silhouette --input visual.json --json` (or the Bun
+`analyze:visual-silhouette` command in an authorized source checkout)
+reuses the canonical PNG alpha comparator. Missing alpha, inconsistent
+views or unreviewed framing must remain `UNVERIFIED`; diagnostic IoU
+does not prove geometry quality, correct native pose, texture fidelity
+or user acceptance. This is not required for every model or mutation.
+
 ## Reference Grounding
 
 Use the actual approved reference image in active multimodal context; path/prose/memory is not visual evidence. Missing approved evidence blocks dependent Geometry. The approved image owns appearance; exact user dimensions own numeric scale.

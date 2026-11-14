@@ -1,5 +1,22 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Read-only visual silhouette CLI (source-only)
+
+The Bun `analyze:visual-silhouette` and existing managed-executable source
+now route two caller-saved PNG files through the canonical
+`compareBoundPngAlphaEvidence` implementation with strict SHA-256,
+alpha-mask, approved-reference and capture-binding checks. Numerical
+silhouette overlap is emitted only when a caller explicitly declares a
+reviewed same-frame pairing; unknown framing, opaque source pixels, stale
+hashes or missing capture evidence remain UNVERIFIED. The existing
+`analyze:texture-pair` uses the shared bounded regular-PNG file reader.
+The managed compiled help dispatch and focused negative/positive fixtures
+are AUTHORED_NOT_RUN. Claims about actual native origin, current
+Blockbench pose, camera calibration, Codex Skill uptake or model quality
+are not established at this source proof level; Sol 6.1 Low Thinking
+remains fixed and localtest is still held.
+
+
 ## 2026-11-14 — Pinned CLI-Anything vendor and Bun Texture planner (source-only)
 
 Both source-level Texture and appearance-variant planners are connected to the existing managed `lazydesigner.exe` as read-only subcommands. Its actual compiled-binary smoke check is authored in the existing packaging procedure but has not run; an already installed older binary has no proven new CLI command. Upstream HKUDS/CLI-Anything Codex Skill/methodology was copied at revision `34f519533bc175d2fe287ab8316b0dd99bb9cc43` with Apache-2.0 license, without installing/activating an external Skill or script. Read-only Bun `plan:texture-treatment` and `plan:appearance-variant` commands wrap the canonical Texture treatment and appearance-variant continuity owners with shared bounded JSON input parsing. They report declared face/variant blockers, never native mutation, actual RGBA parity, visual PASS or user acceptance. Positive/negative CLI source regressions AUTHORED_NOT_RUN. No Bun execution, installed Codex invocation, source build, real Blockbench operation or accepted visual improvement has been measured. Do not infer speed/cost savings or quality change from source code.

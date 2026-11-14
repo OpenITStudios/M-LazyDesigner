@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 
 export type ReadOnlyAuthoringCliResponse = {
   exitCode: number;
@@ -63,4 +64,33 @@ export function authoringPlanError(
     ? /^([A-Z][A-Z0-9_]{2,95})(?::|$)/.exec(error.message)?.[1]
     : null;
   return (code ?? fallback) + "\n";
+}
+
+/**
+ * Read an explicit regular sibling PNG. Shared by read-only CLI image probes.
+ * This verifies bytes supplied by the caller, not their native origin.
+ */
+export async function readBoundedSiblingPng(
+  directory: string,
+  filename: string,
+  errorPrefix: string,
+  maxBytes: number
+): Promise<Uint8Array> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,126}\.png$/.test(filename) ||
+      filename.includes("..")) {
+    throw new Error(errorPrefix + "_PNG_FILE_INVALID");
+  }
+  const path = join(directory, filename);
+  let info;
+  try { info = await lstat(path); }
+  catch { throw new Error(errorPrefix + "_PNG_UNAVAILABLE"); }
+  if (!info.isFile() || info.isSymbolicLink() ||
+      info.size < 45 || info.size > maxBytes) {
+    throw new Error(errorPrefix + "_PNG_FILE_INVALID");
+  }
+  const bytes = await readFile(path);
+  if (bytes.byteLength > maxBytes) {
+    throw new Error(errorPrefix + "_PNG_TOO_LARGE");
+  }
+  return bytes;
 }

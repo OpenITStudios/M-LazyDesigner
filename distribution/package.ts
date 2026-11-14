@@ -137,6 +137,17 @@ async function main(): Promise<void> {
       !pairHelp.includes("do not attest native origin")) {
     throw new Error("Compiled manager texture pair route smoke failed.");
   }
+  // Prove only that the compiled command is included and its help
+  // preserves the no-native/no-visual-PASS boundary. Real PNG checks
+  // belong to focused tests in the later authorized PC-local phase.
+  const silhouetteHelp = await run([
+    join(packageDir, "lazydesigner.exe"), "analyze-visual-silhouette", "--help",
+  ]);
+  if (!silhouetteHelp.includes("lazydesigner-visual-silhouette-input-v1") ||
+      !silhouetteHelp.includes("REVIEWED_SAME_FRAME") ||
+      !silhouetteHelp.includes("does not attest camera alignment")) {
+    throw new Error("Compiled manager visual silhouette CLI route smoke failed.");
+  }
   await writeFile(join(packageDir, MCP_BUNDLE_FILENAME), plugin);
   for (const path of PACKAGE_SOURCE_PATHS) { await mkdir(dirname(join(packageDir, path)), { recursive: true }); await cp(join(repo, path), join(packageDir, path)); }
   await cp(join(repo, "distribution/authoring-AGENTS.md"), join(packageDir, "AGENTS.md"));

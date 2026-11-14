@@ -133,7 +133,8 @@
     "plan:texture-treatment": "bun run ./scripts/authoring/plan-texture-treatment.ts",
     "plan:appearance-variant": "bun run ./scripts/authoring/plan-appearance-variant.ts",
     "analyze:geometry": "bun run ./scripts/authoring/analyze-geometry.ts",
-    "analyze:texture-pair": "bun run ./scripts/authoring/analyze-texture-pair.ts"
+    "analyze:texture-pair": "bun run ./scripts/authoring/analyze-texture-pair.ts",
+    "analyze:visual-silhouette": "bun run ./scripts/authoring/analyze-visual-silhouette.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.3.1",

@@ -60,7 +60,7 @@ Normal operation has exactly one LazyDesigner managed root, one configured LazyD
 
 ## Read-only Texture planning CLI (source-wired, not installed acceptance)
 
-The same versioned `lazydesigner.exe` source includes four optional
+The same versioned `lazydesigner.exe` source includes five optional
 read-only offline authoring commands:
 
 - `plan-texture-treatment --input plan.json --json` delegates to
@@ -80,11 +80,19 @@ read-only offline authoring commands:
   outside an explicitly declared edit region or unintended alpha changes,
   but cannot prove file origin, current native project binding, approval
   of the mask, or visual fidelity.
+- `analyze-visual-silhouette --input visual.json --json` uses the existing
+  PNG alpha comparator to assess a claimed approved source and captured
+  model image when both PNG SHA-256 values match. A matching view and an
+  explicit reviewed same-frame pairing can produce numeric alpha overlap
+  only, never native-origin/camera/visual approval. Missing or opaque
+  alpha, unavailable capture identity and unreviewed framing remain
+  UNVERIFIED.
 It must not launch Gateway, mutate a Blockbench project, write an output
 .bbmodel, bypass Undo, or claim artistic approval. The Windows package
 procedure includes disposable **compiled executable** smoke cases for the
-original three read-only routes and a command-dispatch smoke for the Texture
-PNG pair route; these are AUTHORED_NOT_RUN until PC-local packaging is authorized.
+original three read-only routes and command-dispatch smoke checks for both
+PNG analysis routes; these are AUTHORED_NOT_RUN until PC-local packaging
+is authorized.
 A historical installed `lazydesigner.exe` does not inherit a new source
 subcommand. Use the matching installed source SHA before asserting availability.
 This is not the third-party Python CLI-Anything runtime or a new MCP tool.
