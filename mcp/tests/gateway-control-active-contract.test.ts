@@ -99,6 +99,19 @@ describe("LazyDesigner Control active contract", () => {
     }
     expect(calls).toHaveLength(0);
 
+    const beforeOrientation = await invokeTool({
+      capability: "manage_cubes", arguments: {},
+    }) as { isError: boolean; structuredContent: Record<string, unknown> };
+    expect(beforeOrientation.structuredContent).toMatchObject({
+      code: "AUTHORING_CONTROL_ORIENTATION_REQUIRED",
+      executed: false,
+      recovery: {
+        requires_status_refresh: true,
+        state_uncertain: false,
+      },
+    });
+    expect(calls).toHaveLength(0);
+
     const statusTool = handlers.get(GATEWAY_TOOLS.status)!;
     const orientation = await statusTool({}) as {
       content: Array<{ text: string }>;
@@ -107,6 +120,19 @@ describe("LazyDesigner Control active contract", () => {
     expect(orientation.content[0].text).toContain("REFERENCE_UNBOUND");
     const currentId = orientation.structuredContent.control.task_context_id;
     expect(currentId).toMatch(/^task:[a-f0-9]{20}$/);
+    const context = (orientation.structuredContent.control as unknown as {
+      context: { required: Array<{ id: string; sha256: string }> };
+    }).context.required[0]!;
+    const delivered = orientation.content.find((part) =>
+      part.text?.includes("AUTHORING_CONTEXT_BEGIN"));
+    expect(delivered?.text).toContain("name: lazydesigner-modelling");
+    expect(delivered?.text).toContain(context.sha256);
+    expect(delivered?.text).toContain("AUTHORING_CONTEXT_END");
+    const acknowledged = await statusTool({
+      known_context_ids: [context.id],
+    }) as { content: Array<{ text: string }> };
+    expect(acknowledged.content.some((part) =>
+      part.text?.includes("AUTHORING_CONTEXT_BEGIN"))).toBe(false);
 
     const stale = await invokeTool({
       capability: "paint_texture_transaction", arguments: {},
@@ -152,6 +178,21 @@ describe("LazyDesigner Control active contract", () => {
     expect(calls[2]).toEqual({
       taskContextId: correctedId, cohortBoundary: "COMPLETE",
     });
+
+    const development = await statusTool({
+      task_mode: "SYSTEM_DEVELOPMENT",
+      task_intent: "review a source-level geometry bug",
+    }) as { content: Array<{ text: string }> };
+    expect(development.content.some((part) =>
+      part.text?.includes("AUTHORING_CONTEXT_BEGIN"))).toBe(false);
+    const devBlocked = await invokeTool({
+      capability: "manage_cubes", arguments: {},
+    }) as { structuredContent: Record<string, unknown> };
+    expect(devBlocked.structuredContent).toMatchObject({
+      code: "AUTHORING_CONTROL_ORIENTATION_REQUIRED",
+      executed: false,
+    });
+    expect(calls).toHaveLength(3);
   });
 
   test("authoring domain and source owner are distinct canonical concepts", () => {

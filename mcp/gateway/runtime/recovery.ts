@@ -123,6 +123,17 @@ export function recoveryForGatewayError(
     };
   }
 
+  if (code === "AUTHORING_CONTROL_ORIENTATION_REQUIRED") {
+    return {
+      category: "CAPABILITY",
+      safe_to_retry: true,
+      state_uncertain: false,
+      requires_status_refresh: true,
+      requires_user_action: false,
+      action: "obtain current ASSET_AUTHORING status and required specialist/reference evidence before retrying the unexecuted mutation",
+    };
+  }
+
   if (code === "COHORT_TASK_CONTEXT_REQUIRED" || code === "COHORT_TASK_CONTEXT_STALE") {
     // The Gateway rejected the request before the executor/native mutation.
     // Retry only after obtaining the *current* Control task identity.

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { contentHandle, contextFileSignature, contextForAuthoringDomain, PROFILE_PATHS } from "./contexts";
+import { contentHandle, contextFileSignature, contextForAuthoringDomain, readRequiredAuthoringContext, PROFILE_PATHS } from "./contexts";
+import { createHash } from "node:crypto";
 import { MODELLING_PATH, TEXTURING_PATH } from "../context/authoring";
 import { mkdtemp, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,6 +22,33 @@ function systemError(code: string): Error {
 }
 
 describe("required authoring context resolution", () => {
+  test("status context delivery reads canonical source bytes with exact handle integrity", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lazydesigner-context-delivery-"));
+    const file = pathToFileURL(join(directory, "SKILL.md"));
+    const text = "---\\nname: lazydesigner-texturing\\n---\\nRead this actual source.";
+    const sha256 = createHash("sha256").update(text).digest("hex");
+    const current: ControlContextHandle = {
+      ...handle(TEXTURING_PATH),
+      id: `ctx:skill/texturing@${sha256.slice(0, 12)}.revision`,
+      sha256,
+    };
+    try {
+      await writeFile(file, text);
+      expect(await readRequiredAuthoringContext(current, file)).toBe(text);
+      await expect(readRequiredAuthoringContext({
+        ...current, path: "../../other-system/AGENTS.md",
+      }, file)).rejects.toThrow("CONTEXT_DELIVERY_PATH_NOT_ALLOWED");
+      await writeFile(file, text + "\\nA stale, unseen instruction.");
+      await expect(readRequiredAuthoringContext(current, file))
+        .rejects.toThrow("CONTEXT_DELIVERY_SOURCE_CHANGED");
+      await writeFile(file, "x".repeat(48_001));
+      await expect(readRequiredAuthoringContext(current, file))
+        .rejects.toThrow("CONTEXT_DELIVERY_SOURCE_TOO_LARGE");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("cache metadata rejects same-size same-mtime context rewrites", () => {
     const before = { dev: 7, ino: 11, size: 4, mtimeMs: 1700000000000, ctimeMs: 1700000000000 };
     const rewritten = { ...before, ctimeMs: before.ctimeMs + 1 };

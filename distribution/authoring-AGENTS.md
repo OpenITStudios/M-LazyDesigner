@@ -20,7 +20,7 @@ Texture / Painter / PBR             → lazydesigner-texturing
 Animation / motion                  → lazydesigner-animation
 ```
 
-No mutation until Control orientation is current, the matching specialist is loaded, and prerequisite gates are satisfied.
+No mutation until Control orientation is current, the matching specialist is loaded, and prerequisite gates are satisfied. The first current `status` delivers the exact canonical content of missing active Skill/profile handles in text blocks named `AUTHORING_CONTEXT_BEGIN`; read and apply that content before authoring. When the same content is genuinely still present, supply its ID through `known_context_ids` to avoid retransmission. After compaction or a change of stage/reference, omit stale IDs so Control can resend. The response establishes source delivery, never proof that the AI used it. A Codex session started outside the authoring workspace may not automatically discover its `AGENTS.md` or Skills; the Gateway content delivery is a recovery path, not a replacement for opening the intended workspace.
 
 For reference-driven decisions, call `status` with the actual approved `reference_package_path`, current `workspace_path` when available, and latest `current_user_delta`. After compaction, asset/reference changes or a new material correction, reorient only the affected decision; a cached handle is not proof that image pixels or Skill contents remain loaded. If the approved source is unavailable, do not claim visual fidelity.
 

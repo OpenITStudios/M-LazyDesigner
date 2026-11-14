@@ -75,6 +75,41 @@ function repoFile(path: string): URL {
   return new URL(`../../../${path}`, import.meta.url);
 }
 
+// Only the canonical packaged authoring specialist and selected profile can
+// enter the client-facing status content. Never read a caller-provided path.
+const DELIVERABLE_AUTHORING_CONTEXT_PATHS = new Set([
+  MODELLING_PATH, TEXTURING_PATH, ANIMATION_PATH, ...Object.values(PROFILE_PATHS),
+]);
+const MAX_AUTHORING_CONTEXT_FILE_BYTES = 48_000;
+
+/**
+ * Deliver the actual selected source bytes, not only their path/handle.
+ * Read the same file location as contentHandle and require exact SHA parity
+ * before placing it into an MCP response. This attests source delivery, not
+ * model attention, instruction compliance or permission to mutate.
+ */
+export async function readRequiredAuthoringContext(
+  handle: ControlContextHandle,
+  file: URL = repoFile(handle.path)
+): Promise<string> {
+  if (!DELIVERABLE_AUTHORING_CONTEXT_PATHS.has(handle.path)) {
+    throw new Error("CONTEXT_DELIVERY_PATH_NOT_ALLOWED");
+  }
+  if (!/^[a-f0-9]{64}$/.test(handle.sha256) ||
+      !handle.id.includes(`@${handle.sha256.slice(0, 12)}.`)) {
+    throw new Error("CONTEXT_DELIVERY_HANDLE_INVALID");
+  }
+  const bytes = await readFile(file);
+  if (bytes.byteLength > MAX_AUTHORING_CONTEXT_FILE_BYTES) {
+    throw new Error("CONTEXT_DELIVERY_SOURCE_TOO_LARGE");
+  }
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (digest !== handle.sha256) {
+    throw new Error("CONTEXT_DELIVERY_SOURCE_CHANGED");
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
 export async function contentHandle(
   path: string,
   // Internal regression seam: normal Control callers use only repoFile(path).

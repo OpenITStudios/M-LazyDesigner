@@ -55,6 +55,25 @@ ANIMATION_CONTEXT
 
 Geometry receives the Modelling Skill plus exactly one selected profile when available. Texturing and Animation do not reload the full modelling profile by default.
 
+**Active instruction delivery:** For an online authoring `status`, the existing
+`context.required` handles trigger delivery of the exact current Skill and
+selected profile source as separate `AUTHORING_CONTEXT_BEGIN/END` text items,
+verified against the source SHA-256 from Control. This is not a new tool,
+schema, or persistent instruction store. A client can acknowledge context
+already present using `known_context_ids`; after compaction it must omit
+lost IDs so the source is retransmitted. No source body is repeated in
+`structuredContent.control`. Developer routing, unsupported paths, oversized
+files, and changed source hashes do not silently become authoring instructions.
+The AI receiving the text and actually following it still require host evidence.
+
+**First mutation admission:** Existing authoring-state mutations require
+one valid `ASSET_AUTHORING` status orientation per current project/Stage/
+Runtime lease. Calls before that return
+`AUTHORING_CONTROL_ORIENTATION_REQUIRED` without a native effect. Follow-up
+known mutations do not need a new status unless authority changes; read-only
+queries remain direct. A standalone `COMPLETE` still does not require a
+cohort ID after initial orientation.
+
 For LazyDesigner source/product development:
 
 ```text

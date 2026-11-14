@@ -6,6 +6,9 @@ import {
   type JsonRecord,
 } from "../contracts/protocol";
 import { projectCapabilityInputSchema } from "../capabilities/schemaProjection";
+import { nestedOperationClassForArguments } from "../capabilities/manifest";
+import { STATE_MUTATIONS } from "../control/delta/policy";
+import { readRequiredAuthoringContext } from "../control/contexts";
 import {
   buildControlPacket,
   projectControlPacketForGateway,
@@ -258,6 +261,21 @@ export function registerCoreGatewayTools(
           taskMode: task_mode,
           taskIntent: task_intent,
         });
+        // Transport the exact active Skill/profile bytes when the client has
+        // not acknowledged still-loaded content. A path or SHA alone is not
+        // instruction delivery. Keep these out of the compact Control packet.
+        const neededContext = task_mode === "ASSET_AUTHORING" &&
+          status.runtime.mcp_client_ready ? control.context.required : [];
+        if (neededContext.length > 2) {
+          throw new Error("CONTEXT_DELIVERY_SCOPE_UNBOUNDED");
+        }
+        const deliveredContext = await Promise.all(
+          neededContext.map(async (handle) => ({
+            handle,
+            source: await readRequiredAuthoringContext(handle),
+          }))
+        );
+
         // Keep binary evidence out of Control's compact status context.
         // Deliver it only after explicit request, using IDs selected by the
         // existing stage projection. A later model capture uses those same
@@ -338,6 +356,10 @@ export function registerCoreGatewayTools(
                       : "Control status ready."
               ) + authoringContextCue,
             },
+            ...deliveredContext.map(({ handle, source }) => ({
+              type: "text" as const,
+              text: `AUTHORING_CONTEXT_BEGIN id=${handle.id} path=${handle.path} sha256=${handle.sha256}\n${source}\nAUTHORING_CONTEXT_END id=${handle.id}\nThis is source delivery, not proof that the client applied the instructions. Acknowledge this ID in known_context_ids only while these exact instructions remain loaded.`,
+            })),
             ...(referenceEvidence ?? []).flatMap((image) => [
               {
                 type: "text" as const,
@@ -398,7 +420,8 @@ export function registerCoreGatewayTools(
         // Only a completed status response issues a new client cohort identity.
         // A failed image/fact read or offline Runtime cannot authorize reuse.
         session.recordIssuedControlTaskId(
-          status.runtime.mcp_client_ready ? control.task_context_id : null
+          status.runtime.mcp_client_ready ? control.task_context_id : null,
+          task_mode
         );
         trace?.record({ startedAt, traceparent, kind: "inspect",
           capability: "status", success: true, result: response,
@@ -632,6 +655,19 @@ export function registerCoreGatewayTools(
           return gatewayErrorResult({
             code: "COHORT_TASK_CONTEXT_STALE",
             message: "No native call was made. This task_context_id was not issued by the most recent valid Control status. Reorient with the current Reference Package, Workspace and user correction; use that ID, or omit it for standalone COMPLETE.",
+            safeToRetry: true,
+            details: { executed: false },
+          });
+        }
+        // A first authoring mutation needs one valid Control orientation.
+        // Reuse it for later known capabilities; never require status per edit.
+        // QUERY branches remain available without a prior authoring status.
+        if (STATE_MUTATIONS.has(capability) &&
+            nestedOperationClassForArguments(capability, args) !== "QUERY" &&
+            !session.hasAuthoringOrientation) {
+          return gatewayErrorResult({
+            code: "AUTHORING_CONTROL_ORIENTATION_REQUIRED",
+            message: "No native call was made. Call status in ASSET_AUTHORING mode to receive the active Skill/Reference/Workspace context before an authoring mutation. Reuse that orientation for subsequent known operations.",
             safeToRetry: true,
             details: { executed: false },
           });

@@ -53,6 +53,19 @@ source before dependent work when it was lost. If required-on-trigger content
 is missing, keep only that dependent decision unverified while independent
 safe work can proceed.
 
+For normal authoring, the stable Gateway `status` now projects actual bytes
+of only the current required specialist and selected Geometry profile as MCP
+text when their content handles have not been acknowledged. The source is
+read from the same canonical package resolver used for the handles and must
+match its SHA-256; the compact Control packet still carries only handles.
+This avoids depending exclusively on Codex's local working directory or
+implicit Skill activation. `known_context_ids` is a client claim that exact
+contents are still loaded, not a server-verifiable proof of model attention.
+Missing, stale, malformed or unsupported source content is not silently
+replaced by a summary. Routine subsequent operations reuse the issued
+orientation; a new stage, project or Runtime requires reorientation. The
+normal fast path does not add a status call per Cube, pixel or keyframe.
+
 Skill quality evaluation separates (a) static structure/source integrity,
 (b) positive and negative module retrieval/activation cases, (c) procedural
 safety compliance, and (d) **quality of the accepted outcome**. Measure

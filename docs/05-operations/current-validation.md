@@ -6,6 +6,10 @@ The Gateway rejects an explicit `CONTINUE` without a nonblank outer `task_contex
 
 The installed-authoring instruction source and the current Texturing specialist now state one reference-grounded representative-patch/cohort/scoped-review cycle, hold partial back/side coverage at UNVERIFIED, and preserve the latest user correction. The existing Golden comparison contract freezes Codex Sol 6.1 Low Thinking. A distribution/Skill/benchmark source regression was authored but NOT_EXECUTED. No real model uptake, rendered art improvement, native build, user approval or cost improvement is claimed.
 
+## 2026-11-14 — Exact active Skill delivery through existing Gateway status (source-only)
+
+Online authoring `status` is now source-wired to include the exact SHA-matched bytes of the required active Skill/profile handles in the MCP text result, without copying the instructions into Control structured state. A bounded authoring mutation without a previously issued authoring orientation is rejected before native execution, while direct read-only queries and subsequent known authoring operations retain their normal paths. The existing `known_context_ids` contract suppresses retransmission only when the client claims the exact content remains loaded. Focused positive/negative source regressions are AUTHORED_NOT_RUN. Actual Codex instruction ingestion/decisions, workspace launch CWD, installed binary parity, native use and accepted artistic quality remain NOT_EXECUTED / UNVERIFIED.
+
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
 ## 2026-11-07 — Visual-asset source focus-switch closure (not executed)
