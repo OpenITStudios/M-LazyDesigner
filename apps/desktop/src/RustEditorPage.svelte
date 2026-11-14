@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
   import { parseFiniteEditorNumber } from './rustNumericInput';
+  import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, Vec3, Vec4 } from './rustEditorTypes';
@@ -142,7 +143,11 @@
     else error = 'The native authoring operation could not be completed.';
   }
   function accept(next: EditorSnapshot) {
-    if (paintTextureIndex >= next.textureNames.length) paintTextureIndex = 0;
+    // The index identifies an atlas only within its owning Rust session.
+    // A new model can have the same texture count but different texture data.
+    paintTextureIndex = reconcilePaintTextureSelection(
+      snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
+    );
     snapshot = next;
     if (selectedId && !next.cubes.some((cube) => cube.uuid === selectedId)) selectedId = null;
     if (selectedBoneId && !next.bones.some((bone) => bone.uuid === selectedBoneId)) selectedBoneId = null;
