@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Cube UV rotation and texture decode fallback (SOURCE_ONLY)
+
+Against pinned Blockbench 5.2.1 `js/outliner/types/cube.js` `updateUV`, the read-only Three.js projection now handles face rotation 0/90/180/270 by permuting the same four UV corners. For Box UV it applies the source's signed 1/64 atlas-unit inset to reduce texture bleeding; unsupported rotation values return no texture UV projection. A failed embedded PNG browser load is marked in the local GPU cache and the viewport rebuilds a colored fallback rather than repeatedly requesting the same invalid image. Source-only Node regression cases cover rotations, signed/mirrored Box UV and refusal of invalid rotations; NOT_EXECUTED. Rust asset/texture authority, CLI, file codec and native test holds are unchanged; real texture/alpha accuracy, animated frames, external paths, Cargo/TypeScript/WebView2 and Blockbench visual parity remain UNVERIFIED.
+
 ## 2026-11-14 — Bounded embedded PNG derived viewport (SOURCE_ONLY)
 
 The native Rust/Tauri snapshot now projects only bounded inline PNG base64 candidates (2 MiB per candidate; 4 MiB aggregate), retaining the original opaque texture assets in Rust. External relative/absolute paths and network schemes are not accessed by the WebView. Multi-file/per-texture resolution and non-limited wrap modes fail closed to an untextured fallback. The existing Svelte/Three.js viewport derives six-face UV rectangles from Rust Cube snapshots and normalized project texture resolution for unrotated faces, with nearest-neighbor embedded PNG materials when browser decode succeeds. Face rotation, animated textures, source/PNG validation, per-texture dimensions, full Blockbench alpha/wrap parity and native 1:1 visual behavior remain unsupported or UNVERIFIED. Source-authored Rust and Node regressions; no Cargo, browser, native Blockbench or Windows tests executed.

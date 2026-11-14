@@ -30,6 +30,7 @@
   let modelRoot: THREE.Group | null = null;
   let pickMeshes: THREE.Mesh[] = [];
   const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
+  const failedTextureSources = new Set<string>();
   const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
   let pivots = new Map<string, THREE.Group>();
   let drag: { uuid: string; pivot: THREE.Group; start: THREE.Vector3 } | null = null;
@@ -61,11 +62,22 @@
   // GPU textures are derived render resources only; never edit a bitmap here.
   function embeddedTexture(index: number): THREE.Texture | null {
     const source = texturePreviewSources[index];
-    if (!source) return null;
+    if (!source || failedTextureSources.has(source)) return null;
     const cached = textureCache.get(index);
     if (cached?.source === source) return cached.texture;
     if (cached) { cached.texture.dispose(); textureCache.delete(index); }
-    const texture = new THREE.TextureLoader().load(source, scheduleRender, undefined, scheduleRender);
+    const texture = new THREE.TextureLoader().load(
+      source,
+      scheduleRender,
+      undefined,
+      () => {
+        if (textureCache.get(index)?.source !== source) return;
+        textureCache.delete(index);
+        failedTextureSources.add(source);
+        texture.dispose();
+        rebuild(cubes, bones, hierarchy, selectedId);
+      },
+    );
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
@@ -76,6 +88,9 @@
   }
 
   function reconcileTextures() {
+    for (const source of failedTextureSources) {
+      if (!texturePreviewSources.includes(source)) failedTextureSources.delete(source);
+    }
     for (const [index, cached] of textureCache) {
       if (texturePreviewSources[index] !== cached.source) {
         cached.texture.dispose();
@@ -144,9 +159,7 @@
           for (let faceIndex = 0; faceIndex < FACE_ORDER.length; faceIndex++) {
             const face = cube.faces[FACE_ORDER[faceIndex]];
             const textureIndex = textureIndexForFace(face, texturePreviewSources.length);
-            // Face rotations are excluded until their exact native mapping is validated.
-            const rectangle = face?.rotation === undefined || face.rotation === 0
-              ? faceUvCoordinates(face, textureResolution) : null;
+            const rectangle = faceUvCoordinates(face, textureResolution, cube.boxUv);
             const texture = textureIndex !== null && rectangle
               ? embeddedTexture(textureIndex) : null;
             if (face?.texture !== null && face?.enabled !== false) {
@@ -363,6 +376,7 @@
       }
       for (const { texture } of textureCache.values()) texture.dispose();
       textureCache.clear();
+      failedTextureSources.clear();
       renderer?.dispose();
       renderer = null;
       scene = null;

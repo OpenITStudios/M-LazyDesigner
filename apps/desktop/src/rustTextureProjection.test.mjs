@@ -29,3 +29,28 @@ test('incomplete UV or invalid atlas resolution is not projected', () => {
   assert.equal(faceUvCoordinates({ uv: [0, 0, 4, 4] }, [0, 32]), null);
   assert.equal(faceUvCoordinates({ uv: [0, Infinity, 4, 4] }, [64, 32]), null);
 });
+
+test('quarter-turn face rotations follow Blockbench Cube.updateUV corner permutation', () => {
+  const base = { uv: [8, 4, 12, 8] };
+  const resolution = [64, 32];
+  const uv = faceUvCoordinates(base, resolution);
+  assert.deepEqual(faceUvCoordinates({ ...base, rotation: 90 }, resolution),
+    [uv[4], uv[5], uv[0], uv[1], uv[6], uv[7], uv[2], uv[3]]);
+  assert.deepEqual(faceUvCoordinates({ ...base, rotation: 180 }, resolution),
+    [uv[6], uv[7], uv[4], uv[5], uv[2], uv[3], uv[0], uv[1]]);
+  assert.deepEqual(faceUvCoordinates({ ...base, rotation: 270 }, resolution),
+    [uv[2], uv[3], uv[6], uv[7], uv[0], uv[1], uv[4], uv[5]]);
+  assert.deepEqual(faceUvCoordinates({ ...base, rotation: 0 }, resolution), uv);
+  assert.equal(faceUvCoordinates({ ...base, rotation: 45 }, resolution), null);
+  assert.equal(faceUvCoordinates({ ...base, rotation: '90' }, resolution), null);
+});
+
+test('Box UV applies the pinned 1/64 atlas-unit inset with mirrored orientation', () => {
+  const inset = 1 / 64;
+  assert.deepEqual(faceUvCoordinates({ uv: [0, 0, 4, 4] }, [16, 16], true),
+    [inset/16, 1-inset/16, (4-inset)/16, 1-inset/16,
+      inset/16, 1-(4-inset)/16, (4-inset)/16, 1-(4-inset)/16]);
+  assert.deepEqual(faceUvCoordinates({ uv: [4, 4, 0, 0] }, [16, 16], true),
+    [(4-inset)/16, 1-(4-inset)/16, inset/16, 1-(4-inset)/16,
+      (4-inset)/16, 1-inset/16, inset/16, 1-inset/16]);
+});
