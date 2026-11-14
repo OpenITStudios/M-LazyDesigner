@@ -123,7 +123,7 @@ export function recoveryForGatewayError(
     };
   }
 
-  if (code === "COHORT_TASK_CONTEXT_REQUIRED") {
+  if (code === "COHORT_TASK_CONTEXT_REQUIRED" || code === "COHORT_TASK_CONTEXT_STALE") {
     // The Gateway rejected the request before the executor/native mutation.
     // Retry only after obtaining the *current* Control task identity.
     return {

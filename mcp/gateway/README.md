@@ -209,10 +209,16 @@ stale evidence and partial view coverage are never upgraded to PASS.
 A deferred cohort requires the current `control.task_context_id` returned by
 `status` to be passed as the **outer** `invoke_capability.task_context_id`.
 A `CONTINUE` call without a non-blank ID returns
-`COHORT_TASK_CONTEXT_REQUIRED` **before** native execution, with
-`state_uncertain=false` and a recovery instruction to obtain the current
-Control context. Do not guess an old ID; standalone calls retain the default
-`COMPLETE` behavior and do not need a task ID.
+`COHORT_TASK_CONTEXT_REQUIRED` **before** native execution. A non-empty
+ID that does not match the last successfully issued online Control `status`
+returns `COHORT_TASK_CONTEXT_STALE` before native execution (including a
+stale `COMPLETE` call that supplied an ID). Both have
+`state_uncertain=false` and recovery guidance to obtain current orientation.
+The Gateway invalidates this ephemeral issued-ID lease on verified project,
+Runtime generation, stage or connectivity changes. This does not prove client
+Skill/image ingestion or detect a changed user intent never submitted to
+`status`. Do not guess an old ID; standalone `COMPLETE` without an ID
+remains compatible.
 
 Within an explicit `invoke_capability` task cohort, a successful
 `paint_texture_transaction` with `cohort_boundary=CONTINUE` may omit

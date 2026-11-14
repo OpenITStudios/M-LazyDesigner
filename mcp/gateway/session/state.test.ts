@@ -3,6 +3,34 @@ import { GatewaySessionState } from "./state";
 import { gatewayOrchestrationRecoveryState } from "./orchestrationRecoveryState";
 
 describe("Gateway Runtime-generation session recovery", () => {
+  test("issued Control task identity is ephemeral across stage, project and Runtime changes", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("id-project", "geometry");
+    session.recordIssuedControlTaskId("task-a");
+    expect(session.currentIssuedControlTaskId).toBe("task-a");
+
+    // An unchanged status may retain the issued ID; a new status packet can
+    // supersede it when reference or user intent changes.
+    session.onVerifiedRuntimeStatus("id-project", "geometry");
+    expect(session.currentIssuedControlTaskId).toBe("task-a");
+    session.recordIssuedControlTaskId("task-b");
+    expect(session.currentIssuedControlTaskId).toBe("task-b");
+
+    session.onVerifiedPhaseReceipt("geometry", "texturing");
+    expect(session.currentIssuedControlTaskId).toBeNull();
+    session.recordIssuedControlTaskId("task-c");
+    session.onVerifiedRuntimeStatus("another-project", "texturing");
+    expect(session.currentIssuedControlTaskId).toBeNull();
+
+    session.recordIssuedControlTaskId("task-d");
+    session.onRuntimeUnavailable();
+    expect(session.currentIssuedControlTaskId).toBeNull();
+    session.onVerifiedRuntimeStatus("another-project", "texturing");
+    session.recordIssuedControlTaskId("task-e");
+    session.onRuntimeGenerationChange("another-project");
+    expect(session.currentIssuedControlTaskId).toBeNull();
+  });
+
   test("observed Runtime loss revokes facts and pending Control execution only once", () => {
     const session = new GatewaySessionState();
     session.synchronizeProject("project-a");

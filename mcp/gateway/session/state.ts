@@ -8,6 +8,9 @@ import { gatewayOrchestrationRecoveryState } from "./orchestrationRecoveryState"
 
 export class GatewaySessionState {
   private executionState: ControlExecutionState | null = null;
+  // Last task ID actually issued by a successful status response. This is
+  // ephemeral caller-cohort admission, not asset truth or a context store.
+  private issuedControlTaskId: string | null = null;
   private capabilityFacts: CapabilityFactState = seedCapabilityFacts({});
   private capabilityFactsProjectUuid: string | null = null;
   private verifiedAuthoringPhase: BlockitAuthoringPhaseAffinity | null = null;
@@ -25,6 +28,14 @@ export class GatewaySessionState {
     return this.executionState;
   }
 
+  get currentIssuedControlTaskId(): string | null {
+    return this.issuedControlTaskId;
+  }
+
+  recordIssuedControlTaskId(value: string | null): void {
+    this.issuedControlTaskId = value;
+  }
+
   set controlExecutionState(value: ControlExecutionState | null) {
     this.executionState = value;
   }
@@ -32,6 +43,7 @@ export class GatewaySessionState {
   onRuntimeUnavailable(): void {
     // An outage revokes the phase baseline even on repeated notices.
     this.verifiedAuthoringPhase = null;
+    this.issuedControlTaskId = null;
     // The first handshake can succeed after an unverified status without a
     // generation-change event. New facts may then be written while this flag
     // is still set; a later outage must invalidate those facts again.
@@ -63,6 +75,7 @@ export class GatewaySessionState {
     if (changed) {
       gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
       this.executionState = null;
+      this.issuedControlTaskId = null;
       // A handoff verifies the Stage, never old model/texture/UV facts.
       this.capabilityFacts = seedCapabilityFacts({
         projectBound: this.capabilityFactsProjectUuid === null ? null : true,
@@ -96,6 +109,7 @@ export class GatewaySessionState {
     this.runtimeUnavailable = false;
     // Recovery has already retired the former stage; do not retire twice.
     this.verifiedAuthoringPhase = null;
+    this.issuedControlTaskId = null;
     // The replacement Runtime already proved its project affinity before
     // this callback. Do not keep an outdated Control UUID if that binding
     // was retired, and do not assume a previously unbound project was adopted.
@@ -114,10 +128,12 @@ export class GatewaySessionState {
       gatewayOrchestrationRecoveryState.synchronizeProjectAffinity(projectUuid);
     if (orchestrationProjectChanged) {
       this.executionState = null;
+      this.issuedControlTaskId = null;
     }
 
     if (projectUuid !== this.capabilityFactsProjectUuid) {
       this.verifiedAuthoringPhase = null;
+      this.issuedControlTaskId = null;
       this.capabilityFactsProjectUuid = projectUuid;
       this.capabilityFacts = seedCapabilityFacts({
         projectBound: projectUuid !== null,

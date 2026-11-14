@@ -395,6 +395,11 @@ export function registerCoreGatewayTools(
             } : {}),
           },
         };
+        // Only a completed status response issues a new client cohort identity.
+        // A failed image/fact read or offline Runtime cannot authorize reuse.
+        session.recordIssuedControlTaskId(
+          status.runtime.mcp_client_ready ? control.task_context_id : null
+        );
         trace?.record({ startedAt, traceparent, kind: "inspect",
           capability: "status", success: true, result: response,
           readOnly: true, verificationClass: null });
@@ -617,6 +622,16 @@ export function registerCoreGatewayTools(
           return gatewayErrorResult({
             code: "COHORT_TASK_CONTEXT_REQUIRED",
             message: "No native call was made. Call status with the current Reference Package, Workspace and latest user correction; pass its control.task_context_id as the outer invoke_capability.task_context_id for CONTINUE. Use COMPLETE for a standalone call.",
+            safeToRetry: true,
+            details: { executed: false },
+          });
+        }
+        if (taskContextId && taskContextId !== session.currentIssuedControlTaskId) {
+          // A stale/non-issued ID must not merge verification across a new
+          // status, project, Runtime or authoring Stage.
+          return gatewayErrorResult({
+            code: "COHORT_TASK_CONTEXT_STALE",
+            message: "No native call was made. This task_context_id was not issued by the most recent valid Control status. Reorient with the current Reference Package, Workspace and user correction; use that ID, or omit it for standalone COMPLETE.",
             safeToRetry: true,
             details: { executed: false },
           });

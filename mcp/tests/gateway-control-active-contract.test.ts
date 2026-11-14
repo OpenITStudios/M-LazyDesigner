@@ -1,6 +1,7 @@
 import { GatewayOperationQueue } from "@/gateway/runtime/operationQueue";
 import { registerCoreGatewayTools, type CoreGatewayRegistrationDeps } from "@/gateway/handlers/registerCoreTools";
 import { GATEWAY_TOOLS } from "@/gateway/contracts/protocol";
+import { GatewaySessionState } from "@/gateway/session/state";
 import { describe, expect, test } from "bun:test";
 import {
   CONTROL_ROUTING_POLICY,
@@ -67,10 +68,7 @@ describe("LazyDesigner Control active contract", () => {
       server: server as unknown as CoreGatewayRegistrationDeps["server"],
       backend: { getStatus: async () => status } as unknown as CoreGatewayRegistrationDeps["backend"],
       localCapabilities: {} as CoreGatewayRegistrationDeps["localCapabilities"],
-      session: {
-        onVerifiedRuntimeStatus: () => undefined,
-        onRuntimeUnavailable: () => undefined,
-      } as unknown as CoreGatewayRegistrationDeps["session"],
+      session: new GatewaySessionState(),
       surfaceProfile: "stable" as CoreGatewayRegistrationDeps["surfaceProfile"],
       experimentalTools: () => [],
       invoke: async (_capability, _args, _context, options) => {
@@ -101,21 +99,59 @@ describe("LazyDesigner Control active contract", () => {
     }
     expect(calls).toHaveLength(0);
 
+    const statusTool = handlers.get(GATEWAY_TOOLS.status)!;
+    const orientation = await statusTool({}) as {
+      content: Array<{ text: string }>;
+      structuredContent: { control: { task_context_id: string } };
+    };
+    expect(orientation.content[0].text).toContain("REFERENCE_UNBOUND");
+    const currentId = orientation.structuredContent.control.task_context_id;
+    expect(currentId).toMatch(/^task:[a-f0-9]{20}$/);
+
+    const stale = await invokeTool({
+      capability: "paint_texture_transaction", arguments: {},
+      cohort_boundary: "CONTINUE", task_context_id: "old-task-id",
+    }) as { structuredContent: Record<string, unknown> };
+    expect(stale.structuredContent).toMatchObject({
+      code: "COHORT_TASK_CONTEXT_STALE",
+      executed: false,
+      recovery: { state_uncertain: false, requires_status_refresh: true },
+    });
+    expect(calls).toHaveLength(0);
+
     await invokeTool({
       capability: "paint_texture_transaction",
       arguments: {},
       cohort_boundary: "CONTINUE",
-      task_context_id: " task-current ",
+      task_context_id: ` ${currentId} `,
     });
     await invokeTool({ capability: "manage_cubes", arguments: {} });
     expect(calls).toEqual([
-      { taskContextId: "task-current", cohortBoundary: "CONTINUE" },
+      { taskContextId: currentId, cohortBoundary: "CONTINUE" },
       { taskContextId: null, cohortBoundary: "COMPLETE" },
     ]);
 
-    const statusTool = handlers.get(GATEWAY_TOOLS.status)!;
-    const orientation = await statusTool({}) as { content: Array<{ text: string }> };
-    expect(orientation.content[0].text).toContain("REFERENCE_UNBOUND");
+    const corrected = await statusTool({
+      current_user_delta: "new approved correction",
+    }) as { structuredContent: { control: { task_context_id: string } } };
+    const correctedId = corrected.structuredContent.control.task_context_id;
+    expect(correctedId).not.toBe(currentId);
+    const staleFinal = await invokeTool({
+      capability: "paint_texture_transaction", arguments: {},
+      task_context_id: currentId, cohort_boundary: "COMPLETE",
+    }) as { structuredContent: Record<string, unknown> };
+    expect(staleFinal.structuredContent).toMatchObject({
+      code: "COHORT_TASK_CONTEXT_STALE",
+      executed: false,
+    });
+    expect(calls).toHaveLength(2);
+    await invokeTool({
+      capability: "paint_texture_transaction", arguments: {},
+      task_context_id: correctedId, cohort_boundary: "COMPLETE",
+    });
+    expect(calls[2]).toEqual({
+      taskContextId: correctedId, cohortBoundary: "COMPLETE",
+    });
   });
 
   test("authoring domain and source owner are distinct canonical concepts", () => {
