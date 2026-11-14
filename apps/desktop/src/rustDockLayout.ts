@@ -1,17 +1,19 @@
 // Rust Edit panel layout: UI-only preference, never an asset state owner.
 // Blockbench v5.2.1 includes further slots/attachments; the implemented
-// subset is left/right grouping plus in-window floating and reattachment.
+// subset is left/right grouping, attached tabs, and in-window floating.
 export type DockPanel = 'textures' | 'inspector';
 export type DockSide = 'left' | 'right';
 export type FloatRect = { x: number; y: number; width: number; height: number };
 export type DockLayout = {
-  version: 2;
+  version: 3;
   leftPanel: DockPanel;
   leftWidth: number;
   rightWidth: number;
   hidden: { textures: boolean; inspector: boolean };
   inspectorSplit: number;
   floating: { textures: FloatRect | null; inspector: FloatRect | null };
+  attachedSide: DockSide | null;
+  activeAttached: DockPanel;
 };
 export type MeasuredDocks = {
   leftPanel: DockPanel;
@@ -23,7 +25,8 @@ export type MeasuredDocks = {
   centerMin: number;
 };
 
-export const RUST_DOCK_LAYOUT_KEY = 'lazydesigner.rust.edit.docks.v2';
+export const RUST_DOCK_LAYOUT_KEY = 'lazydesigner.rust.edit.docks.v3';
+export const LEGACY_DOCK_LAYOUT_V2_KEY = 'lazydesigner.rust.edit.docks.v2';
 export const LEGACY_DOCK_LAYOUT_KEY = 'lazydesigner.rust.edit.docks.v1';
 export const DOCK_SPLITTER = 6;
 export const DOCK_RAIL = 30;
@@ -46,11 +49,12 @@ const clamp = (n: number, lo: number, hi: number) =>
 
 export function defaultDockLayout(): DockLayout {
   return {
-    version: 2, leftPanel: 'textures',
+    version: 3, leftPanel: 'textures',
     leftWidth: 210, rightWidth: 288,
     hidden: { textures: false, inspector: false },
     inspectorSplit: 52,
     floating: { textures: null, inspector: null },
+    attachedSide: null, activeAttached: 'textures',
   };
 }
 export function oppositePanel(panel: DockPanel): DockPanel {
@@ -76,7 +80,7 @@ export function restoreDockLayout(text: string | null): DockLayout | null {
   if (!text || text.length > MAX_PREFERENCE_BYTES) return null;
   try {
     const raw: unknown = JSON.parse(text);
-    if (!isRecord(raw) || (raw.version !== 1 && raw.version !== 2) ||
+    if (!isRecord(raw) || (raw.version !== 1 && raw.version !== 2 && raw.version !== 3) ||
         (raw.leftPanel !== 'textures' && raw.leftPanel !== 'inspector') ||
         !finite(raw.leftWidth, MIN_DOCK, MAX_DOCK) ||
         !finite(raw.rightWidth, MIN_DOCK, MAX_DOCK) ||
@@ -85,7 +89,7 @@ export function restoreDockLayout(text: string | null): DockLayout | null {
         typeof raw.hidden.textures !== 'boolean' ||
         typeof raw.hidden.inspector !== 'boolean') return null;
     let floating: DockLayout['floating'] = { textures: null, inspector: null };
-    if (raw.version === 2) {
+    if (raw.version === 2 || raw.version === 3) {
       if (!isRecord(raw.floating)) return null;
       const textures = parseFloatRect(raw.floating.textures);
       const inspector = parseFloatRect(raw.floating.inspector);
@@ -94,12 +98,26 @@ export function restoreDockLayout(text: string | null): DockLayout | null {
       if ((raw.hidden.textures && textures !== null) ||
           (raw.hidden.inspector && inspector !== null)) return null;
     }
+    let attachedSide: DockSide | null = null;
+    let activeAttached: DockPanel = 'textures';
+    if (raw.version === 3) {
+      if (raw.attachedSide !== null &&
+          raw.attachedSide !== 'left' && raw.attachedSide !== 'right') return null;
+      if (raw.activeAttached !== 'textures' && raw.activeAttached !== 'inspector') return null;
+      attachedSide = raw.attachedSide;
+      activeAttached = raw.activeAttached;
+      // A panel cannot be attached, folded, and floating at the same time.
+      if (attachedSide !== null &&
+          (raw.hidden.textures || raw.hidden.inspector ||
+            floating.textures !== null || floating.inspector !== null)) return null;
+    }
     return {
-      version: 2, leftPanel: raw.leftPanel,
+      version: 3, leftPanel: raw.leftPanel,
       leftWidth: Math.round(raw.leftWidth),
       rightWidth: Math.round(raw.rightWidth),
       hidden: { textures: raw.hidden.textures, inspector: raw.hidden.inspector },
       inspectorSplit: Math.round(raw.inspectorSplit), floating,
+      attachedSide, activeAttached,
     };
   } catch { return null; }
 }
@@ -107,7 +125,7 @@ export function restoreDockLayout(text: string | null): DockLayout | null {
 export function serializeDockLayout(layout: DockLayout): string {
   // Whitelist the only UI preferences, never spread unknown object fields.
   return JSON.stringify({
-    version: 2, leftPanel: layout.leftPanel,
+    version: 3, leftPanel: layout.leftPanel,
     leftWidth: layout.leftWidth, rightWidth: layout.rightWidth,
     hidden: { textures: layout.hidden.textures, inspector: layout.hidden.inspector },
     inspectorSplit: layout.inspectorSplit,
@@ -115,16 +133,48 @@ export function serializeDockLayout(layout: DockLayout): string {
       textures: layout.floating.textures,
       inspector: layout.floating.inspector,
     },
+    attachedSide: layout.attachedSide,
+    activeAttached: layout.activeAttached,
   });
 }
+
+export function attachDockTabs(layout: DockLayout, side: DockSide): DockLayout {
+  const activeAttached = layout.attachedSide === side
+    ? layout.activeAttached
+    : side === 'left' ? layout.leftPanel : oppositePanel(layout.leftPanel);
+  return {
+    ...layout,
+    attachedSide: side,
+    activeAttached,
+    floating: { textures: null, inspector: null },
+    hidden: { textures: false, inspector: false },
+  };
+}
+
+export function detachDockTabs(layout: DockLayout): DockLayout {
+  if (layout.attachedSide === null) return layout;
+  return { ...layout, attachedSide: null };
+}
+
+export function selectDockTab(layout: DockLayout, panel: DockPanel): DockLayout {
+  if (layout.attachedSide === null || layout.activeAttached === panel) return layout;
+  return { ...layout, activeAttached: panel };
+}
+
 export function swapDockSides(layout: DockLayout): DockLayout {
-  return { ...layout, leftPanel: oppositePanel(layout.leftPanel) };
+  return {
+    ...layout,
+    leftPanel: oppositePanel(layout.leftPanel),
+    attachedSide: layout.attachedSide === null
+      ? null : layout.attachedSide === 'left' ? 'right' : 'left',
+  };
 }
 export function setDockHidden(layout: DockLayout, panel: DockPanel, hidden: boolean): DockLayout {
   return {
     ...layout,
     hidden: { ...layout.hidden, [panel]: hidden },
     floating: { ...layout.floating, [panel]: null },
+    attachedSide: null,
   };
 }
 export function setInspectorSplit(layout: DockLayout, percent: number): DockLayout {
@@ -134,8 +184,12 @@ export function setInspectorSplit(layout: DockLayout, percent: number): DockLayo
 
 export function measureDocks(layout: DockLayout, width: number): MeasuredDocks {
   const rightPanel = oppositePanel(layout.leftPanel);
-  const leftHidden = layout.hidden[layout.leftPanel] || layout.floating[layout.leftPanel] !== null;
-  const rightHidden = layout.hidden[rightPanel] || layout.floating[rightPanel] !== null;
+  const leftHidden = layout.attachedSide === null
+    ? layout.hidden[layout.leftPanel] || layout.floating[layout.leftPanel] !== null
+    : layout.attachedSide !== 'left';
+  const rightHidden = layout.attachedSide === null
+    ? layout.hidden[rightPanel] || layout.floating[rightPanel] !== null
+    : layout.attachedSide !== 'right';
   let leftWidth = leftHidden ? DOCK_RAIL : layout.leftWidth;
   let rightWidth = rightHidden ? DOCK_RAIL : layout.rightWidth;
   const available = Math.max(0, (Number.isFinite(width) ? width : 980) -
@@ -189,6 +243,7 @@ export function floatDock(
   return {
     ...layout, hidden: { ...layout.hidden, [panel]: false },
     floating: { ...layout.floating, [panel]: position },
+    attachedSide: null,
   };
 }
 export function dockPanel(layout: DockLayout, panel: DockPanel, side: DockSide): DockLayout {
@@ -197,6 +252,7 @@ export function dockPanel(layout: DockLayout, panel: DockPanel, side: DockSide):
     leftPanel: side === 'left' ? panel : oppositePanel(panel),
     hidden: { ...layout.hidden, [panel]: false },
     floating: { ...layout.floating, [panel]: null },
+    attachedSide: null,
   };
 }
 export function moveFloat(

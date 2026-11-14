@@ -281,6 +281,76 @@
   letter-spacing: .02em;
 }
 .rust-editor .dock-rail:hover { background: var(--rust-selected); }
+/* Attached tabs retain one live panel instance and a reachable return rail.
+   The structure follows upstream Blockbench panel tab semantics, not a
+   native-tested pixel-identical implementation. */
+.rust-editor .attached-toolbar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 40px;
+  background: #272a31;
+  border-bottom: 1px solid #101316;
+}
+.rust-editor .attached-tablist {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.rust-editor .attached-tab {
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #aeb4c1;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rust-editor .attached-tab:hover {
+  background: #353b45;
+  color: #e1e8f3;
+}
+.rust-editor .attached-tab[aria-selected="true"] {
+  background: #3b3e49;
+  border-bottom-color: #3e90ff;
+  color: #eef2fb;
+}
+.rust-editor .attached-tab:focus-visible {
+  outline: 2px solid #3e90ff;
+  outline-offset: -2px;
+}
+.rust-editor .attached-separate {
+  flex: none;
+  border: 0;
+  border-left: 1px solid #101316;
+  padding: 0 7px;
+  background: #272a31;
+  color: #c7ccda;
+  font-size: 10px;
+}
+.rust-editor .attached-separate:hover { background: #3b3e49; }
+.rust-editor .attached-panel-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.rust-editor .attached-panel-host > .dock-column {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+}
 .rust-editor .dock-controls { margin-left: auto; display: flex; align-items: center; gap: 2px; }
 .rust-editor .dock-controls button {
   border: 1px solid transparent;

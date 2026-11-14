@@ -7,9 +7,10 @@
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
     measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
+    attachDockTabs, detachDockTabs, selectDockTab,
     measureFloatRect, floatDock, dockPanel, dockSide, moveFloat, resizeFloat,
     dropSideForPointer, crossedDragThreshold,
-    RUST_DOCK_LAYOUT_KEY, LEGACY_DOCK_LAYOUT_KEY,
+    RUST_DOCK_LAYOUT_KEY, LEGACY_DOCK_LAYOUT_V2_KEY, LEGACY_DOCK_LAYOUT_KEY,
     DOCK_SPLITTER, MIN_DOCK, MAX_DOCK,
     type DockLayout, type DockPanel, type DockSide, type FloatRect,
   } from './rustDockLayout';
@@ -472,6 +473,46 @@
   function resetDocks() {
     setLayout(defaultDockLayout());
   }
+
+  function focusActiveTab() {
+    void tick().then(() => {
+      document.querySelector<HTMLElement>('.rust-editor .attached-tab[aria-selected="true"]')?.focus();
+    });
+  }
+
+  function attachTabs(side: DockSide) {
+    floatingGesture = null;
+    pendingDockSide = null;
+    setLayout(attachDockTabs(dockLayout, side));
+    focusActiveTab();
+  }
+
+  function separateTabs() {
+    if (dockLayout.attachedSide === null) return;
+    const panel = dockLayout.activeAttached;
+    setLayout(detachDockTabs(dockLayout));
+    void tick().then(() => {
+      const slot = document.querySelector<HTMLElement>(
+        '.rust-editor .' + (panel === 'textures' ? 'textures-dock' : 'inspector-dock')
+      );
+      slot?.querySelector<HTMLElement>('.dock-controls button')?.focus();
+    });
+  }
+
+  function activateAttachedTab(panel: DockPanel) {
+    if (dockLayout.attachedSide === null) return;
+    setLayout(selectDockTab(dockLayout, panel));
+  }
+
+  function keyAttachedTab(event: KeyboardEvent, panel: DockPanel) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const next: DockPanel = event.key === 'Home' ? 'textures'
+      : event.key === 'End' ? 'inspector'
+      : panel === 'textures' ? 'inspector' : 'textures';
+    event.preventDefault();
+    activateAttachedTab(next);
+    focusActiveTab();
+  }
   function startDockResize(side: DockSide, event: PointerEvent) {
     if (event.button !== 0 || dockResize || inspectorResize ||
         (side === 'left' ? measuredDocks.leftHidden : measuredDocks.rightHidden)) return;
@@ -557,8 +598,11 @@
   onMount(() => {
     try {
       const current = window.localStorage.getItem(RUST_DOCK_LAYOUT_KEY);
-      const previous = window.localStorage.getItem(LEGACY_DOCK_LAYOUT_KEY);
-      const stored = restoreDockLayout(current) ?? restoreDockLayout(previous);
+      const previous = window.localStorage.getItem(LEGACY_DOCK_LAYOUT_V2_KEY);
+      const original = window.localStorage.getItem(LEGACY_DOCK_LAYOUT_KEY);
+      const stored = restoreDockLayout(current)
+        ?? restoreDockLayout(previous)
+        ?? restoreDockLayout(original);
       if (stored) dockLayout = stored;
     } catch {
       dockPersistenceError = true;
@@ -575,17 +619,19 @@
   });
 </script>
 
-{#snippet textureDock(side: DockSide | 'float')}
+{#snippet textureDock(side: DockSide | 'float' | 'tabs')}
   <aside class="dock-column textures-dock"
-    id={side === 'float' ? 'float-textures' : 'dock-' + side}
+    id={side === 'float' ? 'float-textures' : side === 'tabs' ? 'tab-content-textures' : 'dock-' + side}
     data-side={side} aria-label="Textures panel">
-    {#if side !== 'float' && (dockLayout.hidden.textures || dockLayout.floating.textures)}
+    {#if side !== 'float' && side !== 'tabs' &&
+      (dockLayout.hidden.textures || dockLayout.floating.textures)}
       <button type="button" class="dock-rail" title="Restore Textures to this side"
         onclick={() => dockLayout.floating.textures
           ? returnPanel('textures') : hideDock('textures', false)}>
         {dockLayout.floating.textures ? 'Dock Textures' : 'Show Textures'}
       </button>
     {:else}
+      {#if side !== 'tabs'}
       <div class="dock-title">
         <span>TEXTURES</span>
         {#if side !== 'float'}
@@ -599,6 +645,7 @@
           </div>
         {/if}
       </div>
+      {/if}
 
       {#if snapshot?.textureNames.length}
         <div class="texture-list">
@@ -614,11 +661,12 @@
   </aside>
 {/snippet}
 
-{#snippet inspectorDock(side: DockSide | 'float')}
+{#snippet inspectorDock(side: DockSide | 'float' | 'tabs')}
   <aside class="dock-column inspector-dock"
-    id={side === 'float' ? 'float-inspector' : 'dock-' + side}
+    id={side === 'float' ? 'float-inspector' : side === 'tabs' ? 'tab-content-inspector' : 'dock-' + side}
     data-side={side} aria-label="Outliner and properties panels">
-    {#if side !== 'float' && (dockLayout.hidden.inspector || dockLayout.floating.inspector)}
+    {#if side !== 'float' && side !== 'tabs' &&
+      (dockLayout.hidden.inspector || dockLayout.floating.inspector)}
       <button type="button" class="dock-rail" title="Restore Outliner and Properties to this side"
         onclick={() => dockLayout.floating.inspector
           ? returnPanel('inspector') : hideDock('inspector', false)}>
@@ -629,7 +677,7 @@
       <section class="dock-panel outliner" style:flex-basis={dockLayout.inspectorSplit + '%'}>
         <div class="dock-title">
           <span>OUTLINER</span>
-          {#if side !== 'float'}
+          {#if side !== 'float' && side !== 'tabs'}
             <div class="dock-controls">
               <button type="button" title="Move Outliner and Properties to the opposite side"
                 onclick={swapDocks}>Move</button>
@@ -734,6 +782,46 @@
 {/snippet}
 
 
+{#snippet attachedDock(side: DockSide)}
+  <aside class="dock-column attached-dock" id={'dock-' + side} data-side={side}
+    aria-label="Attached editor panels">
+    <div class="attached-toolbar">
+      <div class="attached-tablist" role="tablist" aria-label="Attached panel tabs">
+        <button type="button" class="attached-tab" role="tab" id="attached-tab-textures"
+          aria-controls="attached-panel-content"
+          aria-selected={dockLayout.activeAttached === 'textures'}
+          tabindex={dockLayout.activeAttached === 'textures' ? 0 : -1}
+          onclick={() => activateAttachedTab('textures')}
+          onkeydown={(event) => keyAttachedTab(event, 'textures')}>Textures</button>
+        <button type="button" class="attached-tab" role="tab" id="attached-tab-inspector"
+          aria-controls="attached-panel-content"
+          aria-selected={dockLayout.activeAttached === 'inspector'}
+          tabindex={dockLayout.activeAttached === 'inspector' ? 0 : -1}
+          onclick={() => activateAttachedTab('inspector')}
+          onkeydown={(event) => keyAttachedTab(event, 'inspector')}>Outliner / Properties</button>
+      </div>
+      <button type="button" class="attached-separate" onclick={separateTabs}
+        title="Separate attached panels into left and right docks">Separate</button>
+    </div>
+    <div class="attached-panel-host" role="tabpanel" id="attached-panel-content" tabindex="0"
+      aria-labelledby={'attached-tab-' + dockLayout.activeAttached}>
+      {#if dockLayout.activeAttached === 'textures'}
+        {@render textureDock('tabs')}
+      {:else}
+        {@render inspectorDock('tabs')}
+      {/if}
+    </div>
+  </aside>
+{/snippet}
+
+{#snippet attachedReturnRail(side: DockSide)}
+  <aside class="dock-column attached-return-rail" id={'dock-' + side} data-side={side}
+    aria-label="Separated panel docking location">
+    <button type="button" class="dock-rail" onclick={separateTabs}
+      title="Separate attached panels back into left and right docks">Separate Panels</button>
+  </aside>
+{/snippet}
+
 {#snippet floatingPanel(panel: DockPanel)}
   {#if dockLayout.floating[panel]}
     {@const rect = panel === 'textures' ? floatingTextures : floatingInspector}
@@ -810,6 +898,10 @@
                   {dockLayout.hidden.inspector ? 'Show Outliner / Properties' : 'Fold Outliner / Properties'}
                 </button>
                 <button role="menuitem" onclick={swapDocks}>Swap Left / Right Docks</button>
+                <button role="menuitem" onclick={() => attachTabs('left')}>Attach Panels as Tabs — Left</button>
+                <button role="menuitem" onclick={() => attachTabs('right')}>Attach Panels as Tabs — Right</button>
+                <button role="menuitem" disabled={dockLayout.attachedSide === null}
+                  onclick={separateTabs}>Separate Attached Panels</button>
                 <button role="menuitem" onclick={() => dockLayout.floating.textures
                   ? returnPanel('textures') : floatPanel('textures')}>
                   {dockLayout.floating.textures ? 'Dock Textures' : 'Float Textures'}
@@ -859,7 +951,11 @@
   </div>
 
   <div class="editor-body" bind:this={editorBody} style:grid-template-columns={gridTemplate}>
-    {#if dockLayout.leftPanel === 'textures'}
+    {#if dockLayout.attachedSide === 'left'}
+      {@render attachedDock('left')}
+    {:else if dockLayout.attachedSide === 'right'}
+      {@render attachedReturnRail('left')}
+    {:else if dockLayout.leftPanel === 'textures'}
       {@render textureDock('left')}
     {:else}
       {@render inspectorDock('left')}
@@ -905,7 +1001,11 @@
       onpointercancel={(event) => finishDockResize(event, true)}
       onlostpointercapture={(event) => finishDockResize(event, true)}
       onkeydown={(event) => keyDockResize('right', event)}></div>
-    {#if dockLayout.leftPanel === 'textures'}
+    {#if dockLayout.attachedSide === 'right'}
+      {@render attachedDock('right')}
+    {:else if dockLayout.attachedSide === 'left'}
+      {@render attachedReturnRail('right')}
+    {:else if dockLayout.leftPanel === 'textures'}
       {@render inspectorDock('right')}
     {:else}
       {@render textureDock('right')}

@@ -5,7 +5,8 @@ import {
   defaultDockLayout, restoreDockLayout, serializeDockLayout,
   swapDockSides, setDockHidden, setInspectorSplit, measureDocks, resizeDock,
   DOCK_RAIL, MIN_VIEWPORT, DOCK_SPLITTER,
-  LEGACY_DOCK_LAYOUT_KEY, RUST_DOCK_LAYOUT_KEY, floatDock, dockPanel,
+  LEGACY_DOCK_LAYOUT_KEY, LEGACY_DOCK_LAYOUT_V2_KEY, RUST_DOCK_LAYOUT_KEY,
+  attachDockTabs, detachDockTabs, selectDockTab, floatDock, dockPanel,
   moveFloat, resizeFloat, measureFloatRect, dropSideForPointer, dockSide,
   crossedDragThreshold,
 } from './rustDockLayout.ts';
@@ -66,18 +67,20 @@ test('hidden dock cannot be resized accidentally', () => {
 });
 
 
-test('legacy v1 layout migrates to v2 without losing dock order or sizes', () => {
+test('legacy v1 layout migrates to v3 without losing dock order or sizes', () => {
   const legacy = {
     version: 1, leftPanel: 'inspector', leftWidth: 230, rightWidth: 260,
     hidden: { textures: true, inspector: false }, inspectorSplit: 64,
   };
   const migrated = restoreDockLayout(JSON.stringify(legacy));
-  assert.equal(migrated?.version, 2);
+  assert.equal(migrated?.version, 3);
   assert.equal(migrated?.leftPanel, 'inspector');
   assert.equal(migrated?.rightWidth, 260);
   assert.equal(migrated?.hidden.textures, true);
   assert.equal(migrated?.floating.textures, null);
   assert.equal(migrated?.inspectorSplit, 64);
+  assert.equal(migrated?.attachedSide, null);
+  assert.equal(migrated?.activeAttached, 'textures');
   assert.notEqual(LEGACY_DOCK_LAYOUT_KEY, RUST_DOCK_LAYOUT_KEY);
 });
 
@@ -128,11 +131,11 @@ test('dock drop targets require a real bounded pointer inside the editor', () =>
   assert.equal(dropSideForPointer(100, Number.POSITIVE_INFINITY), null);
 });
 
-test('untrusted v2 persistence rejects future versions and malformed float geometry', () => {
+test('untrusted v3 persistence rejects future versions and malformed float geometry', () => {
   const base = defaultDockLayout();
   const floated = floatDock(base, 'inspector', 980, 600);
   const invalid = [
-    { ...floated, version: 3 },
+    { ...floated, version: 4 },
     { ...floated, floating: { ...floated.floating, inspector: { x: -3, y: 0, width: 300, height: 250 } } },
     { ...floated, floating: { ...floated.floating, inspector: { x: 0, y: 0, width: 99999, height: 250 } } },
     { ...floated, hidden: { ...floated.hidden, inspector: true } },
@@ -155,4 +158,82 @@ test('a plain title click and incidental pointer noise never docks a floating pa
   assert.equal(crossedDragThreshold(8, 0), true);
   assert.equal(crossedDragThreshold(Number.NaN, 9), false);
   assert.equal(crossedDragThreshold(0, Infinity), false);
+});
+
+
+test('legacy v2 floating preferences migrate to v3 without discarding geometry', () => {
+  const v2 = {
+    version: 2, leftPanel: 'inspector', leftWidth: 230, rightWidth: 270,
+    hidden: { textures: false, inspector: false }, inspectorSplit: 35,
+    floating: { textures: { x: 20, y: 12, width: 280, height: 340 }, inspector: null },
+  };
+  const migrated = restoreDockLayout(JSON.stringify(v2));
+  assert.equal(migrated?.version, 3);
+  assert.equal(migrated?.attachedSide, null);
+  assert.equal(migrated?.floating.textures.width, 280);
+  assert.equal(migrated?.inspectorSplit, 35);
+  assert.deepEqual(restoreDockLayout(serializeDockLayout(migrated)), migrated);
+  assert.notEqual(LEGACY_DOCK_LAYOUT_V2_KEY, RUST_DOCK_LAYOUT_KEY);
+});
+
+test('attached tabs keep one active panel and free the opposite dock slot', () => {
+  const original = defaultDockLayout();
+  const tabs = attachDockTabs(original, 'right');
+  assert.equal(tabs.attachedSide, 'right');
+  assert.equal(tabs.activeAttached, 'inspector');
+  assert.equal(measureDocks(tabs, 1100).leftWidth, DOCK_RAIL);
+  assert.ok(measureDocks(tabs, 1100).rightWidth >= 160);
+  assert.equal(measureDocks(tabs, 1100).rightHidden, false);
+  assert.equal(tabs.floating.textures, null);
+  assert.equal(tabs.floating.inspector, null);
+  assert.deepEqual(restoreDockLayout(serializeDockLayout(tabs)), tabs);
+  assert.equal(original.attachedSide, null);
+});
+
+test('tab selection changes only layout and reverses cleanly', () => {
+  const original = defaultDockLayout();
+  const tabs = attachDockTabs(original, 'left');
+  const selected = selectDockTab(tabs, 'inspector');
+  assert.equal(selected.activeAttached, 'inspector');
+  assert.equal(selected.attachedSide, 'left');
+  assert.equal(selectDockTab(selected, 'inspector'), selected);
+  assert.equal(detachDockTabs(selected).leftPanel, 'textures');
+  assert.equal(detachDockTabs(selected).attachedSide, null);
+  assert.deepEqual(detachDockTabs(original), original);
+  assert.deepEqual(selectDockTab(original, 'inspector'), original);
+});
+
+test('attaching from float and fold explicitly restores both real panels', () => {
+  let layout = setDockHidden(defaultDockLayout(), 'inspector', true);
+  layout = floatDock(layout, 'textures', 1050, 650);
+  const tabs = attachDockTabs(layout, 'left');
+  assert.equal(tabs.hidden.inspector, false);
+  assert.equal(tabs.hidden.textures, false);
+  assert.equal(tabs.floating.textures, null);
+  assert.equal(tabs.attachedSide, 'left');
+  assert.equal(setDockHidden(tabs, 'textures', true).attachedSide, null);
+  assert.equal(floatDock(tabs, 'textures', 1050, 650).attachedSide, null);
+  assert.equal(dockPanel(tabs, 'textures', 'right').attachedSide, null);
+});
+
+test('swapping attached dock side preserves tab selection and model-free widths', () => {
+  const tabs = selectDockTab(attachDockTabs(defaultDockLayout(), 'right'), 'textures');
+  const swapped = swapDockSides(tabs);
+  assert.equal(swapped.attachedSide, 'left');
+  assert.equal(swapped.activeAttached, 'textures');
+  assert.equal(swapped.leftWidth, tabs.leftWidth);
+  assert.deepEqual(swapDockSides(swapped), tabs);
+});
+
+test('malformed attached tab storage fails closed', () => {
+  const tabs = attachDockTabs(defaultDockLayout(), 'left');
+  const invalid = [
+    { ...tabs, attachedSide: 'bottom' },
+    { ...tabs, activeAttached: 'unknown' },
+    { ...tabs, hidden: { textures: true, inspector: false } },
+    { ...tabs, floating: { textures: {x: 0, y: 0, width: 230, height: 220}, inspector: null } },
+    { ...tabs, attachedSide: undefined },
+    { ...tabs, version: 5 },
+  ];
+  for (const value of invalid) assert.equal(restoreDockLayout(JSON.stringify(value)), null);
 });
