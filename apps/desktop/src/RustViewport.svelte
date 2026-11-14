@@ -4,6 +4,7 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
   import { planCubeLocalTranslation } from './rustMoveGizmo';
+  import { isActiveTextureRequest } from './rustTextureCache';
   import { faceUvCoordinates, bedrockTextureForFace, previewRenderSide } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
@@ -69,24 +70,28 @@
     const cached = textureCache.get(index);
     if (cached?.source === source) return cached.texture;
     if (cached) { cached.texture.dispose(); textureCache.delete(index); }
+    // Distinguish this request from an older load of the exact same URI.
+    // A stale image callback must not invalidate a newer GPU texture.
+    const entry = { source, texture: null as THREE.Texture | null };
     const texture = new THREE.TextureLoader().load(
       source,
       scheduleRender,
       undefined,
       () => {
-        if (textureCache.get(index)?.source !== source) return;
+        if (!isActiveTextureRequest(textureCache, index, entry)) return;
         textureCache.delete(index);
         failedTextureSources.add(source);
-        texture.dispose();
+        entry.texture?.dispose();
         rebuild(cubes, bones, hierarchy, selectedId);
       },
     );
+    entry.texture = texture;
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
-    textureCache.set(index, { source, texture });
+    textureCache.set(index, entry as { source: string; texture: THREE.Texture });
     return texture;
   }
 
