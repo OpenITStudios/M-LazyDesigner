@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "format_version": "5.0",
+    "model_format": "bedrock",
+    "box_uv": false,
+    "vendor_meta": {"keep": ["texture", "roundtrip"]}
+  },
+  "name": "Synthetic textured Bedrock Entity",
+  "model_identifier": "synthetic_texture_roundtrip",
+  "resolution": {"width": 64, "height": 32},
+  "multi_file_ruleset": "",
+  "textures": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000101",
+      "name": "atlas.png",
+      "source": "data:image/png;base64,AAAA",
+      "internal": true,
+      "uv_width": 64,
+      "uv_height": 32,
+      "wrap_mode": "limited",
+      "texture_set": {"color": {"keep": true}}
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000102",
+      "name": "external.png",
+      "relative_path": "textures/entity/external.png",
+      "uv_width": 64,
+      "uv_height": 32,
+      "wrap_mode": "repeat",
+      "custom": {"preserve": [1, 2]}
+    }
+  ],
+  "elements": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "type": "cube",
+      "name": "textured_cube",
+      "from": [0, 0, 0],
+      "to": [4, 4, 4],
+      "origin": [0, 0, 0],
+      "autouv": 0,
+      "faces": {
+        "north": {"uv": [1, 2, 5, 6], "texture": 0, "rotation": 90, "custom": {"untouched": "north"}},
+        "east": {"uv": [5, 2, 9, 6], "texture": 0},
+        "south": {"uv": [0, 0, 4, 4], "texture": null},
+        "west": {"uv": [9, 2, 13, 6], "texture": 0},
+        "up": {"uv": [1, 6, 5, 10], "texture": 0},
+        "down": {"uv": [5, 6, 9, 10], "texture": 0}
+      },
+      "extra_geometry": {"preserve": true}
+    }
+  ],
+  "groups": [
+    {"uuid": "00000000-0000-4000-8000-000000000001", "name": "root_bone", "origin": [0, 0, 0], "rotation": [0, 0, 0]},
+    {"uuid": "00000000-0000-4000-8000-000000000003", "name": "child_bone", "origin": [0, 2, 0], "rotation": [0, 15, 0]}
+  ],
+  "outliner": [
+    {"uuid": "00000000-0000-4000-8000-000000000001", "isOpen": true, "children": [
+      {"uuid": "00000000-0000-4000-8000-000000000003", "isOpen": true, "children": [
+        "00000000-0000-4000-8000-000000000002"
+      ]}
+    ]}
+  ],
+  "animations": [
+    {"uuid": "00000000-0000-4000-8000-000000000201", "name": "idle", "length": 1, "animators": {
+      "00000000-0000-4000-8000-000000000003": {"keyframes": [{"time": 0, "data_points": [{"x": 0, "y": 0, "z": 0}]}]}
+    }}
+  ],
+  "animation_controllers": [{"uuid": "00000000-0000-4000-8000-000000000202", "states": {"idle": {"transitions": []}}}],
+  "texture_groups": [{"uuid": "00000000-0000-4000-8000-000000000301", "name": "Grouped textures"}],
+  "vendor_extension": {"preserve": {"deep": ["a", 2, false]}}
+}

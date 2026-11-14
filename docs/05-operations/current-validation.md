@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Texture-bearing `.bbmodel` interchange fixture (SOURCE_ONLY)
+
+Created a synthetic format-5.0 Bedrock Entity fixture with two texture metadata entries (one placeholder embedded data URL and one external relative path), referenced and untextured Cube faces, UV rotation, nested bones/outliner, Animation, texture groups and opaque extensions. Focused Rust regression source checks that face/rotation and Box UV offset edits do not drop the texture objects, relative path, face reference, null texture face, animation, hierarchy or project extension data across export/reimport and Undo/Redo. The embedded base64 is intentionally a placeholder and is NOT a decoded or image-valid PNG. No real Blockbench-generated model or native asset has been opened. Evidence: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN; Cargo, Blockbench, WebView2 and native visual interoperability remain NOT_EXECUTED/UNVERIFIED.
+
 ## 2026-11-14 — Box UV inspector offsets (SOURCE_ONLY)
 
 Source review of pinned Blockbench 5.2.1 `js/uv/uv.js` `slidePos` and Cube face layout informed a bounded integer Box UV offset editor. The existing Rust `EditOperation` now accepts `set_box_uv_offset`; Svelte exposes two numeric Box UV Inspector fields from the Tauri `uvOffset` projection. Rust checks finite integer values, Box UV mode, and no-op, then updates the offset and derived rectangles in a single revision-guarded transaction. Null-texture face UVs and opaque fields are preserved. Regression tests are authored NOT_EXECUTED; native Blockbench/CLI/Cargo/Windows/visual acceptance is UNVERIFIED. This does not implement complete Blockbench Box UV dragging/clamping or Paint.

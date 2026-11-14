@@ -4,6 +4,7 @@ use super::*;
 use serde_json::{json, Value};
 
 const SAMPLE: &str = include_str!("../../fixtures/bedrock-basic.bbmodel");
+const TEXTURED: &str = include_str!("../../fixtures/bedrock-texture-interchange.bbmodel");
 const BONE: &str = "00000000-0000-4000-8000-000000000001";
 const CUBE: &str = "00000000-0000-4000-8000-000000000002";
 
@@ -54,6 +55,67 @@ fn v5_0_preserves_extensions_texture_references_and_animation_bytes_semantically
     assert_eq!(exported["outliner"], input["outliner"]);
 }
 
+#[test]
+fn textured_fixture_preserves_references_paths_animation_and_hierarchy() {
+    // Synthetic metadata fixture; its placeholder embedded image is not a
+    // decodable PNG or a native Blockbench compatibility receipt.
+    let input: Value = serde_json::from_str(TEXTURED).unwrap();
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let initial = session.document().clone();
+    assert_eq!(initial.texture_assets.len(), 2);
+    assert_eq!(initial.animation_assets.len(), 1);
+    session.apply(0, &[
+        EditOperation::SetCubeRotation {
+            uuid: CUBE.into(), rotation: [0.0, 22.5, 0.0],
+        },
+        EditOperation::SetFaceUv {
+            uuid: CUBE.into(), face: "north".into(), uv: [2.0, 3.0, 6.0, 7.0],
+        },
+    ]).unwrap();
+    let bytes = session.export().unwrap();
+    let saved: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(saved["textures"], input["textures"]);
+    assert_eq!(saved["texture_groups"], input["texture_groups"]);
+    assert_eq!(saved["animations"], input["animations"]);
+    assert_eq!(saved["animation_controllers"], input["animation_controllers"]);
+    assert_eq!(saved["vendor_extension"], input["vendor_extension"]);
+    assert_eq!(saved["outliner"], input["outliner"]);
+    assert_eq!(saved["groups"], input["groups"]);
+    assert_eq!(saved["elements"][0]["faces"]["south"], input["elements"][0]["faces"]["south"]);
+    assert_eq!(saved["elements"][0]["faces"]["north"]["texture"], json!(0));
+    assert_eq!(saved["elements"][0]["faces"]["north"]["rotation"], json!(90));
+    assert_eq!(saved["elements"][0]["faces"]["north"]["custom"],
+        input["elements"][0]["faces"]["north"]["custom"]);
+    assert_eq!(saved["elements"][0]["faces"]["north"]["uv"], json!([2.0, 3.0, 6.0, 7.0]));
+    assert_eq!(saved["elements"][0]["rotation"], json!([0.0, 22.5, 0.0]));
+    assert_eq!(saved["textures"][1]["relative_path"],
+        json!("textures/entity/external.png"));
+    let reopened = AuthoringDocument::import_bbmodel(&bytes).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &initial);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn textured_fixture_box_uv_mutation_preserves_null_face_and_asset_metadata() {
+    let mut input: Value = serde_json::from_str(TEXTURED).unwrap();
+    input["meta"]["box_uv"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&input).unwrap()).unwrap();
+    session.apply(0, &[EditOperation::SetBoxUvOffset {
+        uuid: CUBE.into(), offset: [3.0, 5.0],
+    }]).unwrap();
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["textures"], input["textures"]);
+    assert_eq!(saved["animations"], input["animations"]);
+    assert_eq!(saved["texture_groups"], input["texture_groups"]);
+    assert_eq!(saved["elements"][0]["faces"]["south"], input["elements"][0]["faces"]["south"]);
+    assert_eq!(saved["elements"][0]["faces"]["north"]["texture"], json!(0));
+    assert_eq!(saved["elements"][0]["faces"]["north"]["uv"], json!([7.0, 9.0, 11.0, 13.0]));
+    assert_eq!(saved["elements"][0]["uv_offset"], json!([3.0, 5.0]));
+}
+ 
 #[test]
 fn new_bone_cube_uv_batch_roundtrip_and_history() {
     let mut initial = AuthoringDocument::new_bedrock("Example", "example").unwrap();
