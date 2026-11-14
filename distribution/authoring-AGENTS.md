@@ -56,6 +56,12 @@ Geometry↔Texturing stays on shared AUTHORING. AUTHORING↔Animation uses `swit
 
 ## Evidence / Safety
 
+At each material review boundary (not after every Cube, pixel or keyframe):
+
+1. Before broad geometry, material or motion propagation, compare the smallest judgeable change with the current approved reference and latest explicit user correction. Preserve unrelated approved regions and user Undo/reversals. If the required image or matching current state is missing, leave that decision UNVERIFIED; continue independent safe work.
+2. After a coherent cohort, use its fresh receipt and the smallest necessary source/model views, texture coverage or relevant motion playback evidence. An omitted face, missing rear/side view or stale capture stays UNVERIFIED; `varied`, technical READY and mutation success are not artistic PASS.
+3. At review/exit, report only the verified scope and concrete remaining differences as `PASS | FAIL | UNVERIFIED`. Internal PASS means `READY_FOR_USER_REVIEW`, not user approval. Never claim the entire asset is finished from partial evidence, and never silently repeat a failed correction direction without new evidence.
+
 - Actual approved image is required for reference-driven visual PASS.
 - Dimensions are numeric authority (`1 block = 16 Blockbench units`).
 - Tool success is not visual approval.

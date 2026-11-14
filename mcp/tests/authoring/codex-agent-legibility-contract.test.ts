@@ -94,6 +94,31 @@ describe("Codex Bedrock agent legibility contract", () => {
     expect(texturing).toMatch(/`gradient_tool`.*reference-supported continuous transition/);
   });
 
+  test("distributed low-thinking authoring boot preserves current context and scoped quality claims", async () => {
+    const [bootstrap, texturing, benchmark, packageSource] = await Promise.all([
+      source("../distribution/authoring-AGENTS.md"),
+      source("../.agents/skills/lazydesigner-texturing/SKILL.md"),
+      source("docs/QUALITY_BENCHMARK.md"),
+      source("../distribution/package.ts"),
+    ]);
+    // These are source contracts only: they cannot certify Codex loaded any
+    // instructions or that the output visually matches its approved reference.
+    expect(packageSource).toContain('join(packageDir, "AGENTS.md")');
+    expect(bootstrap).toContain("reference_package_path");
+    expect(bootstrap).toContain("current_user_delta");
+    expect(bootstrap).toContain("invoke_capability.task_context_id");
+    expect(bootstrap).toContain("do not switch models or thinking levels automatically");
+    expect(bootstrap).toContain("At each material review boundary");
+    expect(bootstrap).toContain("PASS | FAIL | UNVERIFIED");
+    expect(bootstrap).toContain("READY_FOR_USER_REVIEW");
+    expect(bootstrap).toContain("user Undo/reversals");
+    expect(texturing).toContain("Low-thinking hot-path decision");
+    expect(texturing).toContain("relevant back/side faces");
+    expect(texturing).toContain("not finished");
+    expect(benchmark).toContain("Codex Sol 6.1 Low Thinking");
+    expect(benchmark).toContain("Do not switch reasoning effort, models or agent hosts");
+  });
+
   test("persistent workspace preserves resume-critical UV gate, scale, front orientation, and Control resume route", async () => {
     const workspace = await source("../workspace/README.md");
     expect(workspace).toContain("UV Layout:");
