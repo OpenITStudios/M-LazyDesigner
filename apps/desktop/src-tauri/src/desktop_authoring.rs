@@ -458,13 +458,33 @@ mod tests {
         assert!(embedded_png_preview_source(&json!({"source":"https://example.test/texture.png"})).is_none());
         assert!(embedded_png_preview_source(&json!({"relative_path":"textures/entity/atlas.png"})).is_none());
         assert!(embedded_png_preview_source(&json!({"source":"data:image/png;base64,AAAA"})).is_none());
-        let candidate = "data:image/png;base64,iVBORw0KGgoAAAABAAAAAA==";
-        assert_eq!(embedded_png_preview_source(&json!({"source":candidate})), Some(candidate.to_owned()));
+        // The old signature-only placeholder must never enter the WebView.
+        assert!(embedded_png_preview_source(&json!({
+            "source":"data:image/png;base64,iVBORw0KGgoAAAABAAAAAA=="
+        })).is_none());
+        let mut png_bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut png_bytes, 2, 2);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&[0; 16]).unwrap();
+        }
+        let candidate = format!("data:image/png;base64,{}", STANDARD.encode(&png_bytes));
+        assert_eq!(embedded_png_preview_source(&json!({"source":candidate})), Some(candidate.clone()));
         assert!(embedded_png_preview_source(&json!({"source":
             format!("data:image/png;base64,iVBORw0KGgo{}", "A".repeat(2 * 1024 * 1024))})).is_none());
+        let mut oversized = png_bytes.clone();
+        oversized[16..20].copy_from_slice(&4096u32.to_be_bytes());
+        let oversized = format!("data:image/png;base64,{}", STANDARD.encode(oversized));
+        assert!(embedded_png_preview_source(&json!({"source":oversized})).is_none());
+        let mut empty = png_bytes;
+        empty[20..24].copy_from_slice(&0u32.to_be_bytes());
+        let empty = format!("data:image/png;base64,{}", STANDARD.encode(empty));
+        assert!(embedded_png_preview_source(&json!({"source":empty})).is_none());
         let mut doc = AuthoringDocument::new_bedrock("Synthetic", "synthetic").unwrap();
         doc.texture_assets.push(json!({"source": candidate}));
-        assert_eq!(texture_preview_sources(&doc), vec![Some(candidate.to_owned())]);
+        assert_eq!(texture_preview_sources(&doc), vec![Some(candidate.clone())]);
         doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
         assert_eq!(texture_preview_sources(&doc), vec![None]);
     }
