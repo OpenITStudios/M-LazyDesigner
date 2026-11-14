@@ -6,6 +6,7 @@ use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES,
 };
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rand::RngCore;
 use rfd::FileDialog;
 use serde::Serialize;
@@ -127,38 +128,62 @@ fn texture_preview_side(texture: &Value) -> Option<&'static str> {
 
 // Never resolve project-relative paths or arbitrary URLs inside the WebView.
 // Embedded PNG candidates remain subject to the browser's image decoder.
-fn embedded_png_preview_source(texture: &Value) -> Option<String> {
-    texture_preview_side(texture)?;
+// A bounded WebView preview candidate. This never changes Rust-owned assets.
+fn embedded_png_preview_candidate(texture: &Value) -> Option<(String, u64)> {
     const PREFIX: &str = "data:image/png;base64,";
     const MAX_BASE64: usize = 2 * 1024 * 1024;
+    const MAX_DIMENSION: u32 = 2048;
+    const MAX_PIXELS_PER_IMAGE: u64 = 4 * 1024 * 1024;
+    texture_preview_side(texture)?;
     if texture.get("wrap_mode").and_then(Value::as_str).is_some_and(|mode| mode != "limited") {
         return None;
     }
     let source = texture.get("source")?.as_str()?;
-    let data = source.strip_prefix(PREFIX)?;
-    if data.len() < 16 || data.len() > MAX_BASE64 ||
-        !data.starts_with("iVBORw0KGgo") ||
-        !data.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'=')) {
+    let encoded = source.strip_prefix(PREFIX)?;
+    if encoded.len() < 44 || encoded.len() > MAX_BASE64 { return None; }
+    let bytes = STANDARD.decode(encoded).ok()?;
+    if bytes.len() < 33 ||
+        bytes.get(0..8)? != b"\x89PNG\r\n\x1a\n" ||
+        bytes.get(8..12)? != [0, 0, 0, 13] ||
+        bytes.get(12..16)? != b"IHDR" {
         return None;
     }
-    Some(source.to_owned())
+    let width = u32::from_be_bytes(bytes.get(16..20)?.try_into().ok()?);
+    let height = u32::from_be_bytes(bytes.get(20..24)?.try_into().ok()?);
+    let pixels = u64::from(width) * u64::from(height);
+    if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION ||
+        pixels > MAX_PIXELS_PER_IMAGE {
+        return None;
+    }
+    // The browser still checks full PNG integrity and rejects invalid decode.
+    Some((source.to_owned(), pixels))
+}
+
+fn embedded_png_preview_source(texture: &Value) -> Option<String> {
+    embedded_png_preview_candidate(texture).map(|(source, _)| source)
 }
 
 fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
-    // Blockbench Bedrock's multi-file ruleset changes per-face UV resolution.
-    // Do not display atlas UV against the wrong texture resolution.
+    // Bound *decoded* aggregate exposure as well as the encoded data URI.
+    // Compression alone cannot authorize dozens of large GPU textures.
+    const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
+    const MAX_TEXTURES: usize = 16;
     let ruleset = doc.extensions.get("multi_file_ruleset");
     let per_texture = ruleset.is_some_and(|value| match value {
         Value::String(name) => !name.is_empty(),
         _ => true,
     }) || doc.extensions.get("per_texture_uv_size") == Some(&Value::Bool(true)) ||
         doc.meta.extra.get("per_texture_uv_size") == Some(&Value::Bool(true));
-    let mut remaining = 4 * 1024 * 1024;
+    let mut remaining_source_bytes = 4 * 1024 * 1024;
+    let mut remaining_pixels = MAX_PROJECTED_PIXELS;
+    let mut admitted = 0usize;
     doc.texture_assets.iter().map(|texture| {
-        if per_texture { return None; }
-        let source = embedded_png_preview_source(texture)?;
-        if source.len() > remaining { return None; }
-        remaining -= source.len();
+        if per_texture || admitted >= MAX_TEXTURES { return None; }
+        let (source, pixels) = embedded_png_preview_candidate(texture)?;
+        if source.len() > remaining_source_bytes || pixels > remaining_pixels { return None; }
+        remaining_source_bytes -= source.len();
+        remaining_pixels -= pixels;
+        admitted += 1;
         Some(source)
     }).collect()
 }
@@ -453,45 +478,64 @@ mod tests {
         assert_eq!(store.epoch, 0);
     }
 
-    #[test]
-    fn texture_projection_excludes_external_malformed_and_multifile_sources() {
-        assert!(embedded_png_preview_source(&json!({"source":"https://example.test/texture.png"})).is_none());
-        assert!(embedded_png_preview_source(&json!({"relative_path":"textures/entity/atlas.png"})).is_none());
-        assert!(embedded_png_preview_source(&json!({"source":"data:image/png;base64,AAAA"})).is_none());
-        // The old signature-only placeholder must never enter the WebView.
-        assert!(embedded_png_preview_source(&json!({
-            "source":"data:image/png;base64,iVBORw0KGgoAAAABAAAAAA=="
-        })).is_none());
-        let mut png_bytes = Vec::new();
+    fn png_candidate(width: u32, height: u32) -> String {
+        let mut bytes = Vec::new();
         {
-            let mut encoder = png::Encoder::new(&mut png_bytes, 2, 2);
+            let mut encoder = png::Encoder::new(&mut bytes, width, height);
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_depth(png::BitDepth::Eight);
             let mut writer = encoder.write_header().unwrap();
-            writer.write_image_data(&[0; 16]).unwrap();
+            writer.write_image_data(&vec![0; width as usize * height as usize * 4]).unwrap();
         }
-        let candidate = format!("data:image/png;base64,{}", STANDARD.encode(&png_bytes));
+        format!("data:image/png;base64,{}", STANDARD.encode(&bytes))
+    }
+
+    #[test]
+    fn texture_projection_checks_png_header_and_rejects_unsupported_sources() {
+        let candidate = png_candidate(2, 2);
         assert_eq!(embedded_png_preview_source(&json!({"source":candidate})), Some(candidate.clone()));
-        assert!(embedded_png_preview_source(&json!({"source":
-            format!("data:image/png;base64,iVBORw0KGgo{}", "A".repeat(2 * 1024 * 1024))})).is_none());
-        let mut oversized = png_bytes.clone();
-        oversized[16..20].copy_from_slice(&4096u32.to_be_bytes());
-        let oversized = format!("data:image/png;base64,{}", STANDARD.encode(oversized));
-        assert!(embedded_png_preview_source(&json!({"source":oversized})).is_none());
-        let mut empty = png_bytes;
-        empty[20..24].copy_from_slice(&0u32.to_be_bytes());
-        let empty = format!("data:image/png;base64,{}", STANDARD.encode(empty));
-        assert!(embedded_png_preview_source(&json!({"source":empty})).is_none());
+        assert!(embedded_png_preview_source(&json!({"source":"https://example.test/atlas.png"})).is_none());
+        assert!(embedded_png_preview_source(&json!({"relative_path":"textures/entity/atlas.png"})).is_none());
+        assert!(embedded_png_preview_source(&json!({"source":"data:image/png;base64,iVBORw0KGgoAAAABAAAAAA=="})).is_none());
+        assert!(embedded_png_preview_source(&json!({"source":"data:image/png;base64,AAAA"})).is_none());
+        let oversized_source = format!("data:image/png;base64,iVBORw0KGgo{}", "A".repeat(2 * 1024 * 1024));
+        assert!(embedded_png_preview_source(&json!({"source":oversized_source})).is_none());
+        let mut bytes = STANDARD.decode(candidate.strip_prefix("data:image/png;base64,").unwrap()).unwrap();
+        bytes[16..20].copy_from_slice(&4096u32.to_be_bytes());
+        assert!(embedded_png_preview_source(&json!({
+            "source": format!("data:image/png;base64,{}", STANDARD.encode(&bytes))
+        })).is_none());
+        bytes[16..20].copy_from_slice(&2u32.to_be_bytes());
+        bytes[20..24].copy_from_slice(&0u32.to_be_bytes());
+        assert!(embedded_png_preview_source(&json!({
+            "source": format!("data:image/png;base64,{}", STANDARD.encode(&bytes))
+        })).is_none());
         let mut doc = AuthoringDocument::new_bedrock("Synthetic", "synthetic").unwrap();
-        doc.texture_assets.push(json!({"source": candidate}));
+        doc.texture_assets.push(json!({"source":candidate}));
         assert_eq!(texture_preview_sources(&doc), vec![Some(candidate.clone())]);
         doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
         assert_eq!(texture_preview_sources(&doc), vec![None]);
     }
 
     #[test]
+    fn texture_projection_bounds_total_decoded_pixels_and_texture_count() {
+        let candidate = png_candidate(2048, 2048);
+        let mut doc = AuthoringDocument::new_bedrock("Bounded", "bounded").unwrap();
+        doc.texture_assets.push(json!({"source":candidate}));
+        doc.texture_assets.push(json!({"source":candidate}));
+        let projected = texture_preview_sources(&doc);
+        assert!(projected[0].is_some());
+        assert!(projected[1].is_none());
+        let small = png_candidate(1, 1);
+        doc.texture_assets = (0..18).map(|_| json!({"source":small})).collect();
+        let projected = texture_preview_sources(&doc);
+        assert_eq!(projected.iter().filter(|source| source.is_some()).count(), 16);
+        assert!(projected[16].is_none() && projected[17].is_none());
+    }
+
+    #[test]
     fn texture_preview_limits_modes_and_preserves_render_sides() {
-        let candidate = "data:image/png;base64,iVBORw0KGgoAAAABAAAAAA==";
+        let candidate = png_candidate(2, 2);
         let standard = json!({"source":candidate});
         assert_eq!(texture_preview_side(&standard), Some("double"));
         assert_eq!(texture_preview_side(&json!({"render_sides":"auto"})), Some("double"));
