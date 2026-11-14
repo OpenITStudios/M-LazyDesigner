@@ -129,7 +129,8 @@
     "audit:semantic-collisions": "bun run ./scripts/audit/audit-capability-collisions.ts",
     "audit:data": "bun run ./scripts/development/audit-data-inventory.ts",
     "audit:tests": "bun run ./scripts/development/audit-test-inventory.ts",
-    "analyze:documentation-graph": "bun run ./scripts/development/explain-documentation-graph.ts"
+    "analyze:documentation-graph": "bun run ./scripts/development/explain-documentation-graph.ts",
+    "plan:texture-treatment": "bun run ./scripts/authoring/plan-texture-treatment.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.3.1",

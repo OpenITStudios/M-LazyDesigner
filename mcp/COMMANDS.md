@@ -31,6 +31,24 @@ bun run verify:affected -- <changed-path> [...]
 
 This resolves canonical source ownership, anchor tests, shared contracts, project-graph checks, and domain invalidation from the changed paths. Use `verify`/full verification only when the planner requires it or for explicit final acceptance.
 
+## Deterministic authoring plan (read-only)
+
+```bash
+bun run plan:texture-treatment -- --input ./plan.json --json
+```
+
+This accepts a `TextureTreatmentPlanInput` JSON document with explicit
+`regions` and, for complete bounded face accounting, `required_faces`.
+It calls the existing `lib/texture/treatmentPlan.ts` planner and returns
+a source-declaration-only plan. `ready` means planning prerequisites,
+**not** native mutability, approved source-image comparison, completed
+texture, or user acceptance. The command neither starts the Gateway nor
+writes a .bbmodel. Local host/Bun execution remains on hold.
+
+Copied upstream CLI-Anything method (Apache-2.0, source only):
+`third_party/cli-anything/README.md`; it does not install or activate
+a new Skill, MCP server or external Python runtime.
+
 ## Narrow command namespaces
 
 ```text

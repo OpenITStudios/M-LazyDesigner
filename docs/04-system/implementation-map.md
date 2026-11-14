@@ -168,6 +168,21 @@ For a capability without an exact source mapping, Development Intelligence falls
 
 The canonical `affectedExecution.ts` turns changed source paths into a bounded verifier plan. Agent permissions, repository governance, system-document routing, knowledge indexing and developer source ownership require repository contract checks; changed knowledge/context and source-owner implementations also select their concrete developer regression tests. Unknown and toolchain changes still fail safe to full verification. No automatic CI is triggered. New Development consumers import `gateway/development/sourceOwners.ts` directly; `gateway/control/sourceOwners.ts` is a compatibility-only re-export.
 
+## Deterministic CLI and native Runtime boundary
+
+The selected CLI-Anything method is copied with provenance to
+`mcp/third_party/cli-anything/` but is not an active authoring Skill.
+For a bounded Texture treatment plan, `bun run plan:texture-treatment`
+invokes the existing pure `lib/texture/treatmentPlan.ts` owner using
+caller-supplied JSON and can produce a machine-readable plan without any
+Blockbench state change. Its `ready` flag is **planning readiness only**.
+Codex must obtain the actual approved reference, fresh native mapping and
+visual evidence through Control and Gateway before authoring or judging art.
+Do not treat the CLI as a second asset database, MCP transport, native
+mutation executor, renderer, Undo owner or quality scorer. Use the original
+publisher's documented read-only planning and real-backend verification
+principles only where they match existing LazyDesigner contracts.
+
 ## Gateway Execution
 
 Canonical source: `mcp/gateway/execution/`.

@@ -1,5 +1,10 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Pinned CLI-Anything vendor and Bun Texture planner (source-only)
+
+Upstream HKUDS/CLI-Anything Codex Skill/methodology was copied at revision `34f519533bc175d2fe287ab8316b0dd99bb9cc43` with Apache-2.0 license, without installing/activating an external Skill or script. A new read-only Bun `plan:texture-treatment` developer command wraps canonical `planTextureTreatment` and exposes bounded JSON plan/face-coverage/blockers, never native mutation, visual PASS or user acceptance. Positive/negative CLI source regressions AUTHORED_NOT_RUN. No Bun execution, installed Codex invocation, source build, real Blockbench operation or accepted visual improvement has been measured. Do not infer speed/cost savings or quality change from source code.
+
+
 ## 2026-11-14 — Daily-use cohort identity and reference orientation (source-only)
 
 The Gateway rejects an explicit `CONTINUE` without a nonblank outer `task_context_id` before invoking any native capability, reports `COHORT_TASK_CONTEXT_REQUIRED` with a non-uncertain recovery route, and retains standalone `COMPLETE` compatibility. The `status` text distinguishes unbound approved reference from a bound task context; the distributed agent instruction keeps the user's chosen Low Thinking model/effort fixed and instructs relevant Reference/Workspace/user-delta reorientation. The same Gateway now requires supplied non-empty cohort IDs to match the last issued online Control task identity; stale IDs fail before native execution with `COHORT_TASK_CONTEXT_STALE`, and the existing ephemeral Gateway session revokes them on verified project/Stage/Runtime loss. Focused handler/session/response regressions AUTHORED_NOT_RUN. Current behavior under Codex and installed Blockbench, actual reference consumption, stale-but-nonblank client IDs, model compliance, visual similarity, generator/build checks and quality improvement remain **NOT_EXECUTED / UNVERIFIED**. No new public tool, new persistent owner, localtest, CI or release.
