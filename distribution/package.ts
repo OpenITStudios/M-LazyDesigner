@@ -126,6 +126,17 @@ async function main(): Promise<void> {
       geometrySmoke.rig?.state !== "valid_graph") {
     throw new Error("Compiled manager read-only Geometry triage smoke failed.");
   }
+  // The compiled route must be callable without starting Gateway or
+  // opening Blockbench. Full PNG bytes/identity are covered in the focused
+  // source tests; this smoke confirms only executable command reachability.
+  const pairHelp = await run([
+    join(packageDir, "lazydesigner.exe"), "analyze-texture-pair", "--help",
+  ]);
+  if (!pairHelp.includes("lazydesigner-texture-pair-input-v1") ||
+      !pairHelp.includes("REVISION compares one texture") ||
+      !pairHelp.includes("do not attest native origin")) {
+    throw new Error("Compiled manager texture pair route smoke failed.");
+  }
   await writeFile(join(packageDir, MCP_BUNDLE_FILENAME), plugin);
   for (const path of PACKAGE_SOURCE_PATHS) { await mkdir(dirname(join(packageDir, path)), { recursive: true }); await cp(join(repo, path), join(packageDir, path)); }
   await cp(join(repo, "distribution/authoring-AGENTS.md"), join(packageDir, "AGENTS.md"));

@@ -76,6 +76,16 @@ declared continuity conflicts before a costly native variant change.
 Source fingerprints from JSON do not prove fresh native data or actual
 blue/red pixel equality; required native visual review stays unchanged.
 
+When comparing a completed Texture cohort or a blue/red variant, the optional
+`lazydesigner.exe analyze-texture-pair --input pair.json --json` (or Bun
+`analyze:texture-pair` in a checkout) can inspect already saved
+`get_texture` PNG bytes at a review boundary. Use only real source/target
+PNG bytes with checked SHA-256 and any available full RGBA revisions; the
+explicit allowed-change mask is a client declaration, not approved authority.
+A clean diff does not replace current mapped native views or user review,
+and cannot justify restoring pixels reverted by Undo. Do not export/reload
+every pixel solely to call this CLI.
+
 Geometry↔Texturing stays on shared AUTHORING. AUTHORING↔Animation uses `switch_authoring_phase` through Gateway and continues the same task/chat.
 
 ## Evidence / Safety

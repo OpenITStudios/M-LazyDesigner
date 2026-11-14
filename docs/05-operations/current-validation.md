@@ -19,6 +19,19 @@ Normal authoring guidance now allows the bounded first-party read-only Texture C
 
 A third first-party read-only route `analyze:geometry` now reuses the existing projected envelope, rig graph, and surface quality warning analyzers on caller-supplied JSON without native changes. Focused source regressions and a future managed compiled-executable smoke are AUTHORED_NOT_RUN. The reported numeric agreement, source-declared rig state and warnings are not evidence of a real model capture or accepted geometry. The actual Codex use, native Blockbench build and quality improvements remain UNVERIFIED.
 
+## 2026-11-14 — Read-only Texture PNG pair CLI (source-only)
+
+The CLI `analyze:texture-pair` is source-authored to compare two bounded
+SHA-checked 8-bit RGBA PNG files using the original strict PNG decoder,
+full-pixel revision function and region diff; optional client-declared
+allowed-change regions and alpha identity mark potential violations.
+The managed Windows binary routes to the same CLI and its existing packaging
+procedure includes a dispatch smoke, while focused PNG/integrity/mask
+regressions are AUTHORED_NOT_RUN. Input file SHA parity does not establish
+the original native producer, active project binding, approved change scope
+or visual PASS. Bun, compiled Windows build, Codex and Blockbench are
+NOT_EXECUTED / UNVERIFIED; fixed Low Thinking remains unchanged.
+
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
 ## 2026-11-07 — Visual-asset source focus-switch closure (not executed)

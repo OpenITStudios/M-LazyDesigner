@@ -60,8 +60,8 @@ Normal operation has exactly one LazyDesigner managed root, one configured LazyD
 
 ## Read-only Texture planning CLI (source-wired, not installed acceptance)
 
-The same versioned `lazydesigner.exe` source includes two optional
-read-only offline authoring plans:
+The same versioned `lazydesigner.exe` source includes four optional
+read-only offline authoring commands:
 
 - `plan-texture-treatment --input plan.json --json` delegates to
   `mcp/lib/texture/treatmentPlan.ts` for declared face/material/seam planning.
@@ -73,10 +73,18 @@ read-only offline authoring plans:
   `mcp/lib/geometry/modelQuality.ts` projected-envelope, rig graph, and
   bounded surface-warning analyzers. Numeric agreement is not silhouette,
   valid pivots, real native scans or visual acceptance.
+- `analyze-texture-pair --input pair.json --json` compares two local
+  8-bit RGBA PNGs saved from actual Texture reads (when available) and
+  declared in a bounded manifest. It reuses the canonical strict PNG/SHA,
+  RGBA revision and pixel-region diff owners. It can detect changed pixels
+  outside an explicitly declared edit region or unintended alpha changes,
+  but cannot prove file origin, current native project binding, approval
+  of the mask, or visual fidelity.
 It must not launch Gateway, mutate a Blockbench project, write an output
 .bbmodel, bypass Undo, or claim artistic approval. The Windows package
-procedure includes disposable **compiled executable** smoke cases for all three
-read-only routes; those cases are AUTHORED_NOT_RUN until PC-local packaging is authorized.
+procedure includes disposable **compiled executable** smoke cases for the
+original three read-only routes and a command-dispatch smoke for the Texture
+PNG pair route; these are AUTHORED_NOT_RUN until PC-local packaging is authorized.
 A historical installed `lazydesigner.exe` does not inherit a new source
 subcommand. Use the matching installed source SHA before asserting availability.
 This is not the third-party Python CLI-Anything runtime or a new MCP tool.

@@ -180,7 +180,15 @@ JSON, producing machine-readable reports without any Blockbench change.
 Both use the same bounded file/argument parser. The third first-party CLI,
 `bun run analyze:geometry`, reuses `lib/geometry/modelQuality.ts` for
 numeric projected-envelope, rig graph and source-declared surface warning
-triage, without making a silhouette or artistic verdict. The managed
+triage, without making a silhouette or artistic verdict. The fourth read-only command, `analyze:texture-pair`, combines two
+caller-saved PNG files with the existing strict
+`lib/reference/pngAlphaEvidence.ts` decoder,
+`lib/texture/revision.ts` RGBA revision and
+`lib/texture/regionDiff.ts` exact diff. Files must match their declared
+SHA-256 and (when supplied) RGBA revision. Its printed observations
+remain client-supplied evidence without native source/provenance
+attestation, fresh mapped-view visual approval or mutability.
+The managed
 `lazydesigner.exe` dispatch routes to these same implementations. Its `ready` flag is **planning readiness only**.
 Codex must obtain the actual approved reference, fresh native mapping and
 visual evidence through Control and Gateway before authoring or judging art.

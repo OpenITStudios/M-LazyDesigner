@@ -79,6 +79,31 @@ The same route is available on a matching compiled `lazydesigner.exe` as
 `analyze-geometry --input geometry.json --json`. Input may supply bounds,
 rig groups, and bounded surface warning text; missing inputs stay unverified.
 
+## Compare captured Texture PNG bytes (read-only)
+
+```bash
+bun run analyze:texture-pair -- --input ./pair.json --json
+# Matching future Windows managed build:
+# lazydesigner.exe analyze-texture-pair --input pair.json --json
+```
+
+The `lazydesigner-texture-pair-input-v1` manifest declares
+`mode: REVISION | VARIANT`, `source` and `candidate` entries, and optional
+`allowed_change_regions` / `require_alpha_identity`. Each entry supplies
+`png_file`, `png_sha256` (64 lowercase hex), `project_uuid`,
+`texture_uuid`, and optionally `full_rgba_revision` from a matching
+`get_texture` result. Save both real PNG image payloads as ordinary files
+beside the manifest. Only sibling regular PNGs are read; directory traversal,
+symbolic links, unsupported PNG layouts, incorrect SHA-256 and mismatched
+declared RGBA revisions fail closed. The report uses the existing
+`decodeVerifiedPngRgba`, `computeTextureRevision`, and `diffTextureRegion`
+owners, reporting changed pixels, alpha changes and declared-mask violations.
+It does **not** call Blockbench, prove native file origin, establish that a
+declared mask is approved, or make artistic/whole-model PASS claims. Use on
+coherent review boundaries, not per paint transaction. The compiled
+route smoke checks help/dispatch only; full input checks are
+`TEST_AUTHORED_NOT_RUN` until local validation is permitted.
+
 ## Narrow command namespaces
 
 ```text
