@@ -607,7 +607,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("CUBE_UUID_CONFLICT"));
             }
             let mut prepared = cube.clone();
-            validate_cube(&prepared, doc.texture_assets.len())?;
+            validate_cube(&prepared, &doc.texture_assets)?;
             // A newly added Box UV Cube needs derived rectangles immediately.
             if cube_box_uv(&prepared, doc.meta.box_uv.unwrap_or(false)) {
                 refresh_box_uv(&mut prepared)?;
