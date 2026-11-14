@@ -3,9 +3,13 @@
 **Scope:** local restrictions under the byte-identical shared AgentSkill root, current profile, and actual user authorization. It selects LazyDesigner product and domain owners; does not create an additional agent or automatically install any upstream original Skill.
 
 ## Current source work and held tests
-- `Local` is the GitHub development authority; `main` changes only through explicit separate release/promotion permission. Do not create branches, dispatch GitHub verification Actions, run hosted CI, cloud agent/sandbox or deploy as a substitute for user-PC native acceptance.
+- `Local` is the existing Blockbench-hosted GitHub development authority. The maintainer has explicitly authorized the named `Rust` branch for the native-editor project. `main` changes only through separate release/promotion approval. Do not automatically create further branches, dispatch GitHub verification Actions, run hosted CI, cloud agent/sandbox or deploy as a substitute for user-PC native acceptance.
 - **Codex/local/native validation currently on hold** by the maintainer (2026-11-05). Complete coherent source architecture/reviews through connected GitHub without asking for repetitive localtest; author tests as source only, label NOT_EXECUTED.
 - The mere presence of Blockbench, desktop control, Gateway or an MCP source does not prove a connected runtime or visual PASS. `LOCAL_PC_AGENT` requires genuine authorized execution against the user-PC checkout; `LIVE_BLOCKBENCH` needs connected native observation.
+
+## Explicit Rust-native development branch
+
+The maintainer explicitly authorized creating `Rust` as the separate branch for planning and later implementing a standalone Rust/Tauri/Svelte Bedrock Entity editor with Blockbench-equivalent UI and `.bbmodel` interoperability. `Local` retains the existing Blockbench-hosted implementation and normal development authority; `main` remains stable. This permission is scoped to the named `Rust` branch only: it does not enable arbitrary/automatic branch creation, promotion, merge, release, cross-repository writes, CI or tests. On `Rust`, set `activeBranch` to `Rust` before further product source changes. Existing `Local` Blockbench/companion contracts remain in force on `Local`; a `Rust`-specific product contract must name and bound each supersession without silently changing the installed legacy runtime. All current holds and domain Skills remain preserved.
 
 ## Domain Skill ownership
 - Preserve the existing **12** project Skills exactly: `lazydesigner-animation`, `lazydesigner-blockbench-development`, `lazydesigner-desktop-ui-design-development`, `lazydesigner-development-brief`, `lazydesigner-mcp-development`, `lazydesigner-modelling`, `lazydesigner-particle-reference-authoring`, `lazydesigner-pixel-art-authoring`, `lazydesigner-prompt-compiler`, `lazydesigner-reference-preparation`, `lazydesigner-skill-development`, and `lazydesigner-texturing`.

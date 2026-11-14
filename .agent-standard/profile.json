@@ -4,7 +4,8 @@
   "activeBranch": "Local",
   "branchPolicy": {
     "writableBranches": [
-      "Local"
+      "Local",
+      "Rust"
     ],
     "allowAutoBranch": false,
     "allowAutoPromotion": false
@@ -33,7 +34,7 @@
     }
   ],
   "dataPolicy": "confidential-project",
-  "note": "Read .agent-standard/project-policy.md after shared root/profile. Local source branch, no CI or localtest. Existing 12 LazyDesigner domain Skills and nearest mcp/AGENTS.md remain authoritative in their domains. Historical original roots archived.",
+  "note": "Read .agent-standard/project-policy.md after shared root/profile. Local retains the existing Blockbench runtime source work; Rust is the explicitly authorized Rust-native editor planning/development branch (not an auto-created branch). No CI/localtest. Existing 12 LazyDesigner Skills and nearest mcp/AGENTS.md remain authoritative.",
   "workflowPolicy": {
     "sourceSurface": "CHATGPT_GITHUB",
     "localValidationSurface": "LOCAL_PC_AGENT",
