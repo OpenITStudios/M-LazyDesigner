@@ -654,12 +654,17 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             if cube_box_uv(cube, project_box_uv) {
                 return Err(fail("FACE_UV_BOX_MODE_UNSUPPORTED"));
             }
-            if cube_auto_uv(cube)? != 0 {
-                return Err(fail("CUBE_AUTO_UV_REMAP_REQUIRED"));
+            // Blockbench's manual face-UV editing disables Auto UV for the
+            // edited Cube. Keep this transition in the same Rust transaction.
+            let previous = face_uv(cube, face)?;
+            if previous != *uv {
+                let data = cube.faces.get_mut(face).and_then(Value::as_object_mut)
+                    .ok_or_else(|| fail("FACE_NOT_FOUND"))?;
+                data.insert("uv".into(), json!(uv));
+                if cube_auto_uv(cube)? != 0 {
+                    cube.extra.insert("autouv".into(), json!(0));
+                }
             }
-            let data = cube.faces.get_mut(face).and_then(Value::as_object_mut)
-                .ok_or_else(|| fail("FACE_NOT_FOUND"))?;
-            data.insert("uv".into(), json!(uv));
             Ok(uuid.clone())
         }
     }

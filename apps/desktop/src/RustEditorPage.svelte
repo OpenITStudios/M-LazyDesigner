@@ -282,11 +282,11 @@
   }
 
   function uvEdit(index: number, text: string) {
-    if (!selectedCube || selectedCube.boxUv || selectedCube.autoUv !== 0) return;
+    if (!selectedCube || selectedCube.boxUv) return;
     const value = Number(text);
     if (!Number.isFinite(value)) { error = 'Enter a finite UV coordinate.'; return; }
     const uv = [...faceUv] as Vec4; uv[index] = value;
-    apply([{ op: 'set_face_uv', uuid: selectedCube.uuid, face: selectedFace, uv }]);
+    if (uv[index] !== faceUv[index]) apply([{ op: 'set_face_uv', uuid: selectedCube.uuid, face: selectedFace, uv }]);
   }
   function hotkeys(event: KeyboardEvent) {
     if (event.key === 'Escape' && floatingGesture) {
@@ -779,12 +779,12 @@
             {#if selectedCube.boxUv}
               <p class="hint">Box UV remaps Size and preserves the box offset. Per-face UV editing remains unavailable.</p>
             {:else if selectedCube.autoUv !== 0}
-              <p class="hint">Auto UV mode {selectedCube.autoUv} remaps Move and single-edge Size in Rust. Manual face UV editing remains unavailable.</p>
+              <p class="hint">Auto UV mode {selectedCube.autoUv} remaps Move and single-edge Size in Rust. Manual face UV edits disable Auto UV for the selected Cube.</p>
             {/if}
             <div class="property-group">
               <label for="uv-face">UV Face</label>
               <select id="uv-face" bind:value={selectedFace}
-                disabled={busy || selectedCube.boxUv || selectedCube.autoUv !== 0}>
+                disabled={busy || selectedCube.boxUv}>
                 {#each FACES as face}
                   <option value={face}>{face}</option>
                 {/each}
@@ -796,7 +796,8 @@
                   {#each [0,1,2,3] as i}
                     <label><span>{['U1','V1','U2','V2'][i]}</span>
                       <input aria-label={'UV ' + (i + 1)} type="number" step="any"
-                        disabled={busy || selectedCube.autoUv !== 0}
+                        disabled={busy}
+                        title={selectedCube.autoUv !== 0 ? 'Manual UV edits disable Auto UV on this Cube' : 'Change face UV'}
                         value={faceUv[i] ?? 0}
                         onchange={(event) => uvEdit(i, event.currentTarget.value)}/>
                     </label>

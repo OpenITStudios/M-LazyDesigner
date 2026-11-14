@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Manual face UV exits Auto UV (source-only)
+
+The pinned Blockbench v5.2.1 `js/uv/uv.js` uses `disableAutoUV()` after manual UV editing. The Rust `SetFaceUv` operation now makes an actual changed face-UV rectangle and the Cube's `autouv=0` transition one revision-checked atomic edit, shared by Tauri and CLI. No-op edits leave the Auto UV mode unchanged. The Svelte face inspector enables manual UV for Auto UV cubes with an explicit mode-transition hint; Box UV face edits remain refused. Authored-only regression source covers Auto UV 1/2, opaque field preservation, Undo/Redo, no-op and invalid face refusal. Cargo, WebView2, native Blockbench two-way editability and visual parity remain NOT_EXECUTED / UNVERIFIED.
+
 ## 2026-11-14 — Rust Auto/Box UV source remapping (NOT_EXECUTED)
 
 The pinned Blockbench v5.2.1 Bedrock Cube rules were reviewed at `JannisX11/blockbench@e2ede0809ee6bc91f374ac7e00d34cffbdf86a14` in `js/outliner/types/cube.js` and its format/UV context. The existing authoritative Rust `EditOperation` path now remaps six faces on Auto UV mode 1/2 Move and one-edge Resize, and updates Box UV offsets and derived faces for one-edge Resize. The Svelte Position/Size and selected-Cube Move gizmo use the same revision-checked operation as the headless CLI. Non-UV payloads, opaque extensions and Undo/Redo remain Rust-owned. Multi-edge UV-sensitive Resize, manual Auto/Box per-face changes, unsupported rotation/wrap settings and multi-file per-texture UV mapping still fail closed rather than risk silent loss. Source regression cases cover mode 1/2, face rotation, Box offset and Undo/Redo, preserving fields and negative atomicity; **TEST_AUTHORED_NOT_RUN**. No Cargo, TypeScript, native WebView2/Blockbench round-trip, pixel/behavior parity, actual speed or token-cost claim has been executed. Proof ceiling: SOURCE_REVIEWED / SOURCE_COMMITTED; native/local **NOT_EXECUTED**.
