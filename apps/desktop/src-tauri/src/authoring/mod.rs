@@ -112,6 +112,7 @@ pub enum EditOperation {
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
     CreatePaintTexture { uuid: String, name: String },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
+    PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -676,6 +677,13 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             let texture = doc.texture_assets.get_mut(*texture_index)
                 .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
             paint::pixel(texture, doc.resolution.width, doc.resolution.height, *x, *y, *rgba)?;
+            Ok(texture.get("uuid").and_then(Value::as_str)
+                .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::PaintTextureStroke { texture_index, points, rgba } => {
+            let texture = doc.texture_assets.get_mut(*texture_index)
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::stroke(texture, doc.resolution.width, doc.resolution.height, points, *rgba)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
         }

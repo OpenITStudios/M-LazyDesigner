@@ -15,6 +15,71 @@ fn sample_cube(uuid: &str) -> Cube {
 }
 
 #[test]
+fn paint_stroke_is_one_revision_one_undo_and_roundtrips() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Stroke", "stroke").unwrap()
+    ).unwrap();
+    let uuid = "00000000-0000-4000-8000-000000000119";
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "stroke.png".into(),
+    }]).unwrap();
+    let blank = session.document().texture_assets[0].clone();
+    let points = vec![[2, 3], [3, 3], [4, 3], [4, 3], [5, 3]];
+    let receipt = session.apply(1, &[EditOperation::PaintTextureStroke {
+        texture_index: 0, points: points.clone(), rgba: [9, 18, 27, 128],
+    }]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.operation_count, 1);
+    let painted = session.document().texture_assets[0].clone();
+    assert_ne!(blank, painted);
+    let bytes = session.export().unwrap();
+    assert_eq!(AuthoringDocument::import_bbmodel(&bytes).unwrap(), *session.document());
+    session.undo(2).unwrap();
+    assert_eq!(session.document().texture_assets[0], blank);
+    session.redo(3).unwrap();
+    assert_eq!(session.document().texture_assets[0], painted);
+    assert_eq!(session.apply(4, &[EditOperation::PaintTextureStroke {
+        texture_index: 0, points, rgba: [9, 18, 27, 128],
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.summary().revision, 4);
+}
+
+#[test]
+fn paint_stroke_refuses_invalid_size_coordinates_or_imported_assets_atomically() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Stroke", "stroke").unwrap()
+    ).unwrap();
+    let uuid = "00000000-0000-4000-8000-000000000119";
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "stroke.png".into(),
+    }]).unwrap();
+    let prior = session.document().clone();
+    for points in [vec![], vec![[0, 0]; 4097]] {
+        assert_eq!(session.apply(1, &[EditOperation::PaintTextureStroke {
+            texture_index: 0, points, rgba: [1, 2, 3, 4],
+        }]).unwrap_err(), "PAINT_STROKE_SIZE_INVALID");
+    }
+    assert_eq!(session.apply(1, &[EditOperation::PaintTextureStroke {
+        texture_index: 0, points: vec![[0, 0], [128, 0]],
+        rgba: [1, 2, 3, 4],
+    }]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.apply(1, &[
+        EditOperation::PaintTextureStroke { texture_index: 0,
+            points: vec![[0, 0]], rgba: [1, 2, 3, 4] },
+        EditOperation::PaintTextureStroke { texture_index: 0,
+            points: vec![[0, 0], [128, 0]], rgba: [1, 2, 3, 4] },
+    ]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.document(), &prior);
+    assert_eq!(session.summary().revision, 1);
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = imported.document().clone();
+    assert_eq!(imported.apply(0, &[EditOperation::PaintTextureStroke {
+        texture_index: 0, points: vec![[0, 0]], rgba: [1, 2, 3, 4],
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(imported.document(), &original);
+}
+
+#[test]
 fn authored_rgba8_paint_texture_mutates_one_pixel_with_history() {
     let mut session = EditorSession::from_document(
         AuthoringDocument::new_bedrock("Paint", "paint").unwrap()

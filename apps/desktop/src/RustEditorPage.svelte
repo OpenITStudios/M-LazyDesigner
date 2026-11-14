@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
   import { parseFiniteEditorNumber } from './rustNumericInput';
+  import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
@@ -29,6 +30,7 @@
   let paintTextureIndex = 0;
   let paintColor = '#e53935';
   let paintAlpha = 255;
+  let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number] } | null = null;
   let menu: Menu = null;
   let loading = true;
   let busy = false;
@@ -317,25 +319,62 @@
     if (next) paintTextureIndex = before;
   }
 
-  function paintAt(event: PointerEvent) {
-    if (!snapshot || busy || event.button !== 0 ||
+  function paintPoint(event: PointerEvent, target: HTMLImageElement): PaintPoint | null {
+    if (!snapshot) return null;
+    const rect = target.getBoundingClientRect();
+    const [width, height] = snapshot.textureResolution;
+    if (!rect.width || !rect.height) return null;
+    const x = Math.floor((event.clientX - rect.left) / rect.width * width);
+    const y = Math.floor((event.clientY - rect.top) / rect.height * height);
+    return x >= 0 && y >= 0 && x < width && y < height ? [x, y] : null;
+  }
+
+  function startPaintStroke(event: PointerEvent) {
+    if (!snapshot || busy || paintStroke || event.button !== 0 ||
         !snapshot.paintEditableTextures[paintTextureIndex]) return;
     const target = event.currentTarget;
     if (!(target instanceof HTMLImageElement)) return;
-    const bounds = target.getBoundingClientRect();
-    const [width, height] = snapshot.textureResolution;
-    if (!bounds.width || !bounds.height) return;
-    const x = Math.floor((event.clientX - bounds.left) / bounds.width * width);
-    const y = Math.floor((event.clientY - bounds.top) / bounds.height * height);
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
-    const hex = paintColor;
-    if (!/^#[0-9a-fA-F]{6}$/.test(hex) || !Number.isInteger(paintAlpha) ||
-        paintAlpha < 0 || paintAlpha > 255) return;
+    const first = paintPoint(event, target);
+    if (!first || !/^#[0-9a-fA-F]{6}$/.test(paintColor) ||
+        !Number.isInteger(paintAlpha) || paintAlpha < 0 || paintAlpha > 255) return;
     const rgba: [number, number, number, number] = [
-      parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16),
-      parseInt(hex.slice(5, 7), 16), paintAlpha,
+      parseInt(paintColor.slice(1, 3), 16), parseInt(paintColor.slice(3, 5), 16),
+      parseInt(paintColor.slice(5, 7), 16), paintAlpha,
     ];
-    apply([{ op: 'paint_texture_pixel', texture_index: paintTextureIndex, x, y, rgba }]);
+    paintStroke = {
+      pointerId: event.pointerId, textureIndex: paintTextureIndex,
+      epoch: snapshot.epoch, revision: snapshot.revision, points: [first], rgba,
+    };
+    target.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function movePaintStroke(event: PointerEvent) {
+    const stroke = paintStroke;
+    if (!stroke || stroke.pointerId !== event.pointerId || !snapshot) return;
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLImageElement)) return;
+    const point = paintPoint(event, target);
+    // Outside the atlas: do not extrapolate or paint unintended edges.
+    if (!point) return;
+    const [width, height] = snapshot.textureResolution;
+    const next = extendPaintStroke(stroke.points, point, width, height);
+    if (next) paintStroke = { ...stroke, points: next };
+  }
+
+  function finishPaintStroke(event: PointerEvent, cancelled = false) {
+    const stroke = paintStroke;
+    if (!stroke || stroke.pointerId !== event.pointerId) return;
+    paintStroke = null;
+    const target = event.currentTarget;
+    if (target instanceof HTMLImageElement && target.hasPointerCapture(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
+    if (cancelled || !snapshot || busy ||
+        snapshot.epoch !== stroke.epoch || snapshot.revision !== stroke.revision ||
+        !snapshot.paintEditableTextures[stroke.textureIndex]) return;
+    apply([{ op: 'paint_texture_stroke', texture_index: stroke.textureIndex,
+      points: stroke.points, rgba: stroke.rgba }]);
     event.preventDefault();
   }
 
@@ -734,7 +773,7 @@
           </button>
           {#if snapshot.textureNames.length}
             <label>Texture
-              <select bind:value={paintTextureIndex} disabled={busy}>
+              <select bind:value={paintTextureIndex} disabled={busy || !!paintStroke}>
                 {#each snapshot.textureNames as name, i}
                   <option value={i}>{name}</option>
                 {/each}
@@ -743,15 +782,18 @@
           {/if}
           {#if snapshot.paintEditableTextures[paintTextureIndex] &&
             snapshot.texturePreviewSources[paintTextureIndex]}
-            <label>Color <input type="color" bind:value={paintColor} disabled={busy}/></label>
+            <label>Color <input type="color" bind:value={paintColor} disabled={busy || !!paintStroke}/></label>
             <label>Alpha
-              <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy}/>
+              <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
             <img class="paint-atlas" draggable="false"
               src={snapshot.texturePreviewSources[paintTextureIndex] ?? ''}
-              alt="Editable texture atlas; click a pixel to paint it in Rust"
-              onpointerdown={paintAt}/>
-            <p class="dock-note">Click the atlas to edit one pixel. Each change is one Rust Undo step.</p>
+              alt="Editable texture atlas; drag to paint one Rust-owned stroke"
+              onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
+              onpointerup={finishPaintStroke}
+              onpointercancel={(event) => finishPaintStroke(event, true)}
+              onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
+            <p class="dock-note">Drag the atlas to paint a stroke. Each completed stroke is one Rust Undo step.</p>
           {:else}
             <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
           {/if}

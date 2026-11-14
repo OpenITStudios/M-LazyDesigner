@@ -64,4 +64,5 @@ export type EditOperation =
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
   | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
   | { op: 'create_paint_texture'; uuid: string; name: string }
-  | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] };
+  | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
+  | { op: 'paint_texture_stroke'; texture_index: number; points: [number, number][]; rgba: [number, number, number, number] };

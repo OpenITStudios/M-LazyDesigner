@@ -93,16 +93,38 @@ fn decode(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
-pub(super) fn pixel(
-    texture: &mut Value, width: u32, height: u32, x: u32, y: u32, rgba: [u8; 4],
+pub(super) const MAX_STROKE_POINTS: usize = 4096;
+
+/// Apply one bounded stroke to one Rust-owned bitmap, decoding and encoding
+/// exactly once; EditorSession commits the complete result as one Undo step.
+pub(super) fn stroke(
+    texture: &mut Value, width: u32, height: u32,
+    points: &[[u32; 2]], rgba: [u8; 4],
 ) -> Result<()> {
-    if x >= width || y >= height { return Err("PAINT_COORDINATE_INVALID".into()); }
+    if points.is_empty() || points.len() > MAX_STROKE_POINTS {
+        return Err("PAINT_STROKE_SIZE_INVALID".into());
+    }
+    if points.iter().any(|[x, y]| *x >= width || *y >= height) {
+        return Err("PAINT_COORDINATE_INVALID".into());
+    }
     let mut pixels = decode(texture, width, height)?;
-    let offset = (y as usize * width as usize + x as usize) * 4;
-    if pixels[offset..offset + 4] == rgba { return Ok(()); }
-    pixels[offset..offset + 4].copy_from_slice(&rgba);
+    let mut changed = false;
+    for &[x, y] in points {
+        let offset = (y as usize * width as usize + x as usize) * 4;
+        if pixels[offset..offset + 4] != rgba {
+            pixels[offset..offset + 4].copy_from_slice(&rgba);
+            changed = true;
+        }
+    }
+    if !changed { return Ok(()); }
     let source = encode(width, height, &pixels)?;
     texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
         .insert("source".into(), Value::String(source));
     Ok(())
+}
+
+pub(super) fn pixel(
+    texture: &mut Value, width: u32, height: u32, x: u32, y: u32, rgba: [u8; 4],
+) -> Result<()> {
+    stroke(texture, width, height, &[[x, y]], rgba)
 }
