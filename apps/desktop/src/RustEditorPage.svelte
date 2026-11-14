@@ -1234,7 +1234,7 @@
           texturePreviewSources={snapshot.texturePreviewSources}
           texturePreviewSides={snapshot.texturePreviewSides}
           textureResolution={snapshot.textureResolution}
-          previewTextureIndex={workspaceMode === 'paint' ? paintTextureIndex : null}
+          previewTextureIndex={paintTextureIndex}
           {selectedId} onSelect={selectCube}
           canMove={workspaceMode === 'edit' && moveTool && !busy && !loading && !newDialog && !confirmDiscard}
           onTranslate={moveFromViewport}/>
