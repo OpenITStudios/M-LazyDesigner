@@ -106,6 +106,7 @@ pub enum EditOperation {
     AddCube { cube: Cube, bone_uuid: String },
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
+    SetCubeRotation { uuid: String, rotation: [f64; 3] },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
 }
 
@@ -150,8 +151,41 @@ fn valid_uv(v: &[f64]) -> bool {
     v.iter().all(|n| n.is_finite() && n.abs() <= LIMIT)
 }
 
+// Blockbench's saved extra fields affect actual geometry and UV behavior.
+// Refuse malformed values instead of preserving JSON that Blockbench would
+// silently ignore on reopen.
+fn optional_rotation(extra: &Map<String, Value>) -> Result<()> {
+    if let Some(rotation) = extra.get("rotation") {
+        let values = rotation.as_array().ok_or_else(|| fail("ROTATION_FORMAT_INVALID"))?;
+        if values.len() != 3 || !values.iter().all(|value|
+            value.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= LIMIT)) {
+            return Err(fail("ROTATION_FORMAT_INVALID"));
+        }
+    }
+    Ok(())
+}
+
+fn cube_auto_uv(cube: &Cube) -> Result<u8> {
+    match cube.extra.get("autouv") {
+        None => Ok(0),
+        Some(value) if value.as_f64() == Some(0.0) => Ok(0),
+        Some(value) if value.as_f64() == Some(1.0) => Ok(1),
+        Some(value) if value.as_f64() == Some(2.0) => Ok(2),
+        _ => Err(fail("CUBE_AUTO_UV_MODE_UNSUPPORTED")),
+    }
+}
+
+fn cube_box_uv(cube: &Cube, default: bool) -> bool {
+    cube.extra.get("box_uv").and_then(Value::as_bool).unwrap_or(default)
+}
+
 fn validate_cube(cube: &Cube, textures: usize) -> Result<()> {
     if cube.kind != "cube" { return Err(fail("ELEMENT_TYPE_UNSUPPORTED")); }
+    optional_rotation(&cube.extra)?;
+    cube_auto_uv(cube)?;
+    if cube.extra.get("box_uv").is_some_and(|v| !v.is_boolean()) {
+        return Err(fail("CUBE_BOX_UV_FLAG_INVALID"));
+    }
     if !valid_uuid(&cube.uuid) || !valid_bounds(cube.from, cube.to) {
         return Err(fail("CUBE_ID_OR_BOUNDS_INVALID"));
     }
@@ -258,6 +292,7 @@ impl AuthoringDocument {
                bone.name.chars().count() > 128 || bone.origin.is_some_and(|v| !valid_vec3(v)) {
                 return Err(fail("BONE_INVALID"));
             }
+            optional_rotation(&bone.extra)?;
             if bone.extra.get("children").is_some_and(|v| v.as_array().is_none_or(|children| !children.is_empty())) {
                 return Err(fail("BONE_CHILDREN_MUST_USE_OUTLINER"));
             }
@@ -343,6 +378,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             if !valid_vec3(*delta) { return Err(fail("CUBE_DELTA_INVALID")); }
             let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if cube_auto_uv(cube)? != 0 {
+                // Blockbench remaps UV on move in Auto UV modes.
+                return Err(fail("CUBE_AUTO_UV_REMAP_REQUIRED"));
+            }
             for axis in 0..3 {
                 cube.from[axis] += delta[axis];
                 cube.to[axis] += delta[axis];
@@ -353,10 +392,30 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
         }
         EditOperation::SetCubeBounds { uuid, from, to } => {
             if !valid_bounds(*from, *to) { return Err(fail("CUBE_BOUNDS_INVALID")); }
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
             let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if cube_auto_uv(cube)? != 0 {
+                return Err(fail("CUBE_AUTO_UV_REMAP_REQUIRED"));
+            }
+            if cube_box_uv(cube, project_box_uv) {
+                // Blockbench updates box-UV offsets when changing extents.
+                return Err(fail("CUBE_BOX_UV_RESIZE_UNSUPPORTED"));
+            }
             cube.from = *from;
             cube.to = *to;
+            Ok(uuid.clone())
+        }
+        EditOperation::SetCubeRotation { uuid, rotation } => {
+            if !valid_vec3(*rotation) { return Err(fail("CUBE_ROTATION_INVALID")); }
+            let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if rotation.iter().all(|value| *value == 0.0) {
+                // Blockbench omits the neutral cube rotation when saving.
+                cube.extra.remove("rotation");
+            } else {
+                cube.extra.insert("rotation".into(), json!(rotation));
+            }
             Ok(uuid.clone())
         }
         EditOperation::SetFaceUv { uuid, face, uv } => {
@@ -366,8 +425,11 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
             let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
-            if cube.extra.get("box_uv").and_then(Value::as_bool).unwrap_or(project_box_uv) {
+            if cube_box_uv(cube, project_box_uv) {
                 return Err(fail("FACE_UV_BOX_MODE_UNSUPPORTED"));
+            }
+            if cube_auto_uv(cube)? != 0 {
+                return Err(fail("CUBE_AUTO_UV_REMAP_REQUIRED"));
             }
             let data = cube.faces.get_mut(face).and_then(Value::as_object_mut)
                 .ok_or_else(|| fail("FACE_NOT_FOUND"))?;

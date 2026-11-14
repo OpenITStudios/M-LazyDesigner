@@ -18,6 +18,7 @@ export type CubeView = {
   rotation: Vec3;
   visible: boolean;
   boxUv: boolean;
+  autoUv: number;
   color: number;
   faces: Record<string, CubeFace>;
 };
@@ -54,4 +55,5 @@ export type EditorSnapshot = {
 export type EditOperation =
   | { op: 'translate_cube'; uuid: string; delta: Vec3 }
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
+  | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 };

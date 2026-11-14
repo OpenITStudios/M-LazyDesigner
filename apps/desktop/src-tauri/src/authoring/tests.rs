@@ -19,6 +19,10 @@ fn v5_0_preserves_extensions_texture_references_and_animation_bytes_semantically
     input["vendor"] = json!({"preserve": [1, 2]});
     input["groups"][0]["bone_extension"] = json!("untouched");
     input["elements"][0]["element_extension"] = json!({"opaque": true});
+    input["elements"][0]["rotation"] = json!([22.5, 0.0, -45.0]);
+    input["elements"][0]["autouv"] = json!(0);
+    input["elements"][0]["stretch"] = json!([1.25, 1.0, 0.75]);
+    input["groups"][0]["rotation"] = json!([0, 10, 0]);
     input["elements"][0]["faces"]["north"]["face_extension"] = json!("unchanged");
     input["textures"] = json!([{
         "uuid":"texture-1","name":"texture.png","source":"data:image/png;base64,AAAA",
@@ -129,5 +133,123 @@ fn box_uv_projects_refuse_inert_per_face_uv_edits() {
     assert_eq!(session.apply(0, &[EditOperation::SetFaceUv {
         uuid: CUBE.into(), face: "north".into(), uv: [2.0, 2.0, 6.0, 6.0]
     }]).unwrap_err(), "FACE_UV_BOX_MODE_UNSUPPORTED");
+    assert_eq!(session.summary().revision, 0);
+}
+
+
+#[test]
+fn authored_cube_rotation_round_trip_preserves_opaque_asset_fields_and_undo() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["textures"] = json!([{
+        "uuid":"embedded-texture",
+        "name":"body.png",
+        "source":"data:image/png;base64,AAAA",
+        "extension": {"keep": [1, 2, 3]}
+    }]);
+    model["elements"][0]["faces"]["north"]["texture"] = json!(0);
+    model["animations"] = json!([{
+        "uuid":"idle-clip", "name":"idle",
+        "animators": {BONE: {"keyframes": []}}
+    }]);
+    model["animation_controllers"] = json!([{"uuid":"controller","states": {"idle":{}}}]);
+    let bytes = serde_json::to_vec(&model).unwrap();
+    let mut session = EditorSession::open(&bytes).unwrap();
+    let receipt = session.apply(0, &[EditOperation::SetCubeRotation {
+        uuid: CUBE.into(), rotation: [22.5, -15.0, 0.0],
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["elements"][0]["rotation"], json!([22.5, -15.0, 0.0]));
+    assert_eq!(saved["textures"], model["textures"]);
+    assert_eq!(saved["animations"], model["animations"]);
+    assert_eq!(saved["animation_controllers"], model["animation_controllers"]);
+    assert_eq!(saved["groups"], model["groups"]);
+    assert_eq!(saved["outliner"], model["outliner"]);
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert!(session.document().cubes[0].extra.get("rotation").is_none());
+    session.redo(2).unwrap();
+    assert_eq!(*session.document(), reopened);
+    session.apply(3, &[EditOperation::SetCubeRotation {
+        uuid: CUBE.into(), rotation: [0.0, 0.0, 0.0],
+    }]).unwrap();
+    assert!(session.document().cubes[0].extra.get("rotation").is_none());
+}
+
+#[test]
+fn unsupported_auto_uv_mapping_fails_closed_without_partial_mutation() {
+    for mode in [1, 2] {
+        let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+        model["elements"][0]["autouv"] = json!(mode);
+        let bytes = serde_json::to_vec(&model).unwrap();
+        let mut session = EditorSession::open(&bytes).unwrap();
+        let original = session.document().clone();
+        let commands = [
+            EditOperation::TranslateCube { uuid: CUBE.into(), delta: [1.0, 0.0, 0.0] },
+            EditOperation::SetCubeBounds {
+                uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 4.0, 4.0],
+            },
+            EditOperation::SetFaceUv {
+                uuid: CUBE.into(), face: "north".into(), uv: [1.0, 0.0, 5.0, 4.0],
+            },
+        ];
+        for operation in commands {
+            assert_eq!(session.apply(0, &[operation]).unwrap_err(), "CUBE_AUTO_UV_REMAP_REQUIRED");
+            assert_eq!(session.document(), &original);
+            assert_eq!(session.summary().revision, 0);
+        }
+        assert_eq!(session.apply(0, &[
+            EditOperation::SetCubeRotation { uuid: CUBE.into(), rotation: [0.0, 12.0, 0.0] },
+            EditOperation::TranslateCube { uuid: CUBE.into(), delta: [1.0, 0.0, 0.0] },
+        ]).unwrap_err(), "CUBE_AUTO_UV_REMAP_REQUIRED");
+        assert_eq!(session.document(), &original);
+    }
+}
+
+#[test]
+fn box_uv_resize_refused_while_rotation_and_translation_remain_atomic() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["meta"]["box_uv"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    assert_eq!(session.apply(0, &[EditOperation::SetCubeBounds {
+        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [6.0, 4.0, 4.0],
+    }]).unwrap_err(), "CUBE_BOX_UV_RESIZE_UNSUPPORTED");
+    assert_eq!(session.summary().revision, 0);
+    session.apply(0, &[
+        EditOperation::TranslateCube { uuid: CUBE.into(), delta: [2.0, 0.0, 0.0] },
+        EditOperation::SetCubeRotation { uuid: CUBE.into(), rotation: [0.0, 22.5, 0.0] },
+    ]).unwrap();
+    assert_eq!(session.summary().revision, 1);
+}
+
+#[test]
+fn malformed_rotation_and_auto_uv_fields_reject_import_without_silent_coercion() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["elements"][0]["rotation"] = json!("90");
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap_err(),
+        "ROTATION_FORMAT_INVALID");
+    model["elements"][0]["rotation"] = json!([0, 0, 0]);
+    model["groups"][0]["rotation"] = json!([0, 0]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap_err(),
+        "ROTATION_FORMAT_INVALID");
+    model["groups"][0]["rotation"] = json!([0, 0, 0]);
+    model["elements"][0]["autouv"] = json!(3);
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap_err(),
+        "CUBE_AUTO_UV_MODE_UNSUPPORTED");
+    model["elements"][0]["autouv"] = json!(0);
+    model["elements"][0]["box_uv"] = json!("yes");
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap_err(),
+        "CUBE_BOX_UV_FLAG_INVALID");
+}
+
+#[test]
+fn invalid_rotation_edits_reject_and_keep_revision_stable() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::SetCubeRotation {
+        uuid: CUBE.into(), rotation: [0.0, f64::NAN, 0.0],
+    }]).unwrap_err(), "CUBE_ROTATION_INVALID");
+    assert_eq!(session.document(), &before);
     assert_eq!(session.summary().revision, 0);
 }

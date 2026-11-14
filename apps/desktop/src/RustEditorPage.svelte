@@ -227,7 +227,8 @@
   async function moveFromViewport(uuid: string, delta: Vec3): Promise<boolean> {
     // A pointer gesture may request one Rust edit. The viewport never mutates
     // the authored document and must restore its preview on any refusal.
-    if (!snapshot || !moveTool || busy || selectedId !== uuid) return false;
+    if (!snapshot || !moveTool || busy || selectedId !== uuid ||
+        snapshot.cubes.find((cube) => cube.uuid === uuid)?.autoUv !== 0) return false;
     const next = await command('rust_editor_apply', {
       expectedEpoch: snapshot.epoch,
       expectedRevision: snapshot.revision,
@@ -255,7 +256,7 @@
     });
   }
   function position(axis: number, text: string) {
-    if (!selectedCube) return;
+    if (!selectedCube || selectedCube.autoUv !== 0) return;
     const value = Number(text);
     if (!Number.isFinite(value)) { error = 'Enter a finite coordinate.'; return; }
     const delta: Vec3 = [0, 0, 0];
@@ -263,15 +264,26 @@
     if (delta[axis] !== 0) apply([{ op: 'translate_cube', uuid: selectedCube.uuid, delta }]);
   }
   function size(axis: number, text: string) {
-    if (!selectedCube) return;
+    if (!selectedCube || selectedCube.autoUv !== 0 || selectedCube.boxUv) return;
     const value = Number(text);
     if (!Number.isFinite(value) || value <= 0) { error = 'Size must be greater than zero.'; return; }
     const to = [...selectedCube.to] as Vec3;
     to[axis] = selectedCube.from[axis] + value;
     apply([{ op: 'set_cube_bounds', uuid: selectedCube.uuid, from: selectedCube.from, to }]);
   }
+  function rotation(axis: number, text: string) {
+    if (!selectedCube) return;
+    const value = Number(text);
+    if (!Number.isFinite(value)) { error = 'Enter a finite rotation angle.'; return; }
+    const angles = [...selectedCube.rotation] as Vec3;
+    angles[axis] = value;
+    if (angles[axis] !== selectedCube.rotation[axis]) {
+      apply([{ op: 'set_cube_rotation', uuid: selectedCube.uuid, rotation: angles }]);
+    }
+  }
+
   function uvEdit(index: number, text: string) {
-    if (!selectedCube || selectedCube.boxUv) return;
+    if (!selectedCube || selectedCube.boxUv || selectedCube.autoUv !== 0) return;
     const value = Number(text);
     if (!Number.isFinite(value)) { error = 'Enter a finite UV coordinate.'; return; }
     const uv = [...faceUv] as Vec4; uv[index] = value;
@@ -731,7 +743,9 @@
                 {#each [0,1,2] as axis}
                   <label class="axis-input"><span>{AXES[axis]}</span>
                     <input aria-label={'Position ' + AXES[axis]} type="number" step="any"
-                      disabled={busy} value={selectedCube.from[axis]}
+                      disabled={busy || selectedCube.autoUv !== 0}
+                      title={selectedCube.autoUv !== 0 ? 'Auto UV movement remapping is not supported yet' : 'Change Cube position'}
+                      value={selectedCube.from[axis]}
                       onchange={(event) => position(axis, event.currentTarget.value)}/>
                   </label>
                 {/each}
@@ -743,15 +757,36 @@
                 {#each [0,1,2] as axis}
                   <label class="axis-input"><span>{AXES[axis]}</span>
                     <input aria-label={'Size ' + AXES[axis]} type="number" step="any" min="0.001"
-                      disabled={busy} value={selectedCube.to[axis] - selectedCube.from[axis]}
+                      disabled={busy || selectedCube.autoUv !== 0 || selectedCube.boxUv}
+                      title={selectedCube.autoUv !== 0 || selectedCube.boxUv
+                        ? 'UV remapping on resize is not supported yet' : 'Change Cube size'}
+                      value={selectedCube.to[axis] - selectedCube.from[axis]}
                       onchange={(event) => size(axis, event.currentTarget.value)}/>
                   </label>
                 {/each}
               </div>
             </div>
             <div class="property-group">
+              <label>Rotation (degrees)</label>
+              <div class="xyz-fields">
+                {#each [0,1,2] as axis}
+                  <label class="axis-input"><span>{AXES[axis]}</span>
+                    <input aria-label={'Rotation ' + AXES[axis]} type="number" step="any"
+                      disabled={busy} value={selectedCube.rotation[axis]}
+                      onchange={(event) => rotation(axis, event.currentTarget.value)}/>
+                  </label>
+                {/each}
+              </div>
+            </div>
+            {#if selectedCube.autoUv !== 0}
+              <p class="hint">Auto UV mode {selectedCube.autoUv} is preserved. Move, resize, and manual face UV edits are disabled until automatic mapping is implemented.</p>
+            {:else if selectedCube.boxUv}
+              <p class="hint">Box UV is preserved. Size changes and per-face UV editing are disabled until box mapping is implemented.</p>
+            {/if}
+            <div class="property-group">
               <label for="uv-face">UV Face</label>
-              <select id="uv-face" bind:value={selectedFace} disabled={busy || selectedCube.boxUv}>
+              <select id="uv-face" bind:value={selectedFace}
+                disabled={busy || selectedCube.boxUv || selectedCube.autoUv !== 0}>
                 {#each FACES as face}
                   <option value={face}>{face}</option>
                 {/each}
@@ -762,7 +797,8 @@
                 <div class="uv-fields">
                   {#each [0,1,2,3] as i}
                     <label><span>{['U1','V1','U2','V2'][i]}</span>
-                      <input aria-label={'UV ' + (i + 1)} type="number" step="any" disabled={busy}
+                      <input aria-label={'UV ' + (i + 1)} type="number" step="any"
+                        disabled={busy || selectedCube.autoUv !== 0}
                         value={faceUv[i] ?? 0}
                         onchange={(event) => uvEdit(i, event.currentTarget.value)}/>
                     </label>
@@ -975,7 +1011,8 @@
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
           hierarchy={snapshot.hierarchy} {selectedId} onSelect={selectCube}
-          canMove={moveTool && !busy && !loading && !newDialog && !confirmDiscard}
+          canMove={moveTool && (!selectedCube || selectedCube.autoUv === 0) &&
+            !busy && !loading && !newDialog && !confirmDiscard}
           onTranslate={moveFromViewport}/>
       {:else}
         <div class="empty-editor">
