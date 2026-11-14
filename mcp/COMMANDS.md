@@ -45,6 +45,12 @@ a source-declaration-only plan. `ready` means planning prerequisites,
 texture, or user acceptance. The command neither starts the Gateway nor
 writes a .bbmodel. Local host/Bun execution remains on hold.
 
+The same source route is also wired into the existing managed executable as
+`lazydesigner.exe plan-texture-treatment --input plan.json --json`.
+This becomes available only in a matching future verified Windows build;
+source integration is **not** evidence that an older installed package
+provides it.
+
 Copied upstream CLI-Anything method (Apache-2.0, source only):
 `third_party/cli-anything/README.md`; it does not install or activate
 a new Skill, MCP server or external Python runtime.

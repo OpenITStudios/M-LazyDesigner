@@ -22,6 +22,21 @@ const baseInput = () => ({
 });
 
 describe("Read-only CLI-Anything-inspired Texture planning", () => {
+  test("managed executable source routes only read-only planning to the same owner", async () => {
+    const [manager, packageBuilder] = await Promise.all([
+      Bun.file("../distribution/cli.ts").text(),
+      Bun.file("../distribution/package.ts").text(),
+    ]);
+    expect(manager).toContain('command !== "plan-texture-treatment"');
+    expect(manager).toContain('command === "plan-texture-treatment"');
+    expect(manager).toContain('await import("../mcp/scripts/authoring/plan-texture-treatment")');
+    expect(manager).toContain("runTextureTreatmentCli(raw)");
+    expect(packageBuilder).toContain("Compiled manager read-only Texture planning smoke failed.");
+    expect(packageBuilder).toContain('"PLAN_NOT_APPLIED"');
+    // Static route assertion only: a compiled executable must later be run
+    // by an authorized PC-local agent at the matching source SHA.
+  });
+
   test("complete declared face inventory remains planning-only and visually UNVERIFIED", () => {
     const report = prepareTextureTreatmentReport(baseInput(), "a".repeat(64));
     expect(report.schema).toBe("lazydesigner-texture-treatment-cli-v1");

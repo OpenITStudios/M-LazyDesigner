@@ -58,6 +58,19 @@ The manager never kills applications, closes unsaved models, silently overwrites
 
 Normal operation has exactly one LazyDesigner managed root, one configured LazyDesigner MCP entry and one plugin in the selected Blockbench profile. Never launch an old BlockIT root, source command, environment fallback or plugin to recover a modern installation. Preserve legacy detection and negative tests so stale installations fail closed. Names in history, test fixtures and internal compatibility symbols are not permission to execute retired software. Retire only exact-owned processes after explicit user authorization; keep Codex itself open when requested. Do not delete asset folders or unrelated servers. Installation alignment and live Runtime readiness require separate evidence.
 
+## Read-only Texture planning CLI (source-wired, not installed acceptance)
+
+The same versioned `lazydesigner.exe` source now includes
+`plan-texture-treatment --input plan.json --json`: a bounded offline
+JSON facade over `mcp/lib/texture/treatmentPlan.ts`.
+It must not launch Gateway, mutate a Blockbench project, write an output
+.bbmodel, bypass Undo, or claim artistic approval. The Windows package
+procedure includes a disposable **compiled executable** smoke case for this
+route; that case is AUTHORED_NOT_RUN until PC-local packaging is authorized.
+A historical installed `lazydesigner.exe` does not inherit a new source
+subcommand. Use the matching installed source SHA before asserting availability.
+This is not the third-party Python CLI-Anything runtime or a new MCP tool.
+
 ## Codex configuration
 
 Only the LazyDesigner MCP entry is managed. Old BlockIT client entries are read-only migration evidence and block a second active server until explicitly resolved. Other servers, model/settings semantics, comments, explicit timeouts, disabled/remote entries, and unrelated configuration remain preserved or fail closed when safe preservation cannot be proven. If no explicit LazyDesigner timeout is configured, the managed entry sets `tool_timeout_sec` to 180 seconds so Codex does not hit its default 60-second timeout before the Gateway's normal 120-second native call budget. Existing explicit values, including shorter ones, remain untouched and must be reviewed for long-call local acceptance; this timeout does not guarantee that queued or interrupted native operations complete.

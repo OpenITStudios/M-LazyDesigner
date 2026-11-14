@@ -31,6 +31,29 @@ async function main(): Promise<void> {
   await run([process.execPath, "build", join(repo, "distribution/cli.ts"), "--compile", "--target=bun-windows-x64-baseline", "--outfile", join(packageDir, "lazydesigner.exe")]);
   const smoke = JSON.parse(await run([join(packageDir, "lazydesigner.exe"), "self-test"]));
   if (smoke.status !== "PASS" || smoke.platform !== "win32" || smoke.arch !== "x64") throw new Error("Compiled manager failed its platform smoke test.");
+  // Verify the actual compiled executable contains the new read-only CLI
+  // route, not just an unbundled developer-only script. This executes only
+  // during the separately authorized Windows package build/acceptance phase.
+  const planFixture = join(output, "smoke-texture-plan.json");
+  await writeFile(planFixture, JSON.stringify({
+    required_faces: [{ cube_uuid: "smoke-armor", face: "north" }],
+    regions: [{
+      region: "armor", evidence: "inferred",
+      surface_pattern: "painted_metal", render_profile: "opaque",
+      face_targets: [{ cube_uuid: "smoke-armor", face: "north", treatment: "PAINT" }],
+    }],
+  }));
+  const planSmoke = JSON.parse(await run([
+    join(packageDir, "lazydesigner.exe"), "plan-texture-treatment",
+    "--input", planFixture, "--json",
+  ]));
+  if (planSmoke.schema !== "lazydesigner-texture-treatment-cli-v1" ||
+      planSmoke.execution !== "PLAN_NOT_APPLIED" ||
+      planSmoke.native_mutation !== false ||
+      planSmoke.visual_verdict !== "UNVERIFIED" ||
+      planSmoke.planning_readiness?.state !== "ready") {
+    throw new Error("Compiled manager read-only Texture planning smoke failed.");
+  }
   await writeFile(join(packageDir, MCP_BUNDLE_FILENAME), plugin);
   for (const path of PACKAGE_SOURCE_PATHS) { await mkdir(dirname(join(packageDir, path)), { recursive: true }); await cp(join(repo, path), join(packageDir, path)); }
   await cp(join(repo, "distribution/authoring-AGENTS.md"), join(packageDir, "AGENTS.md"));
