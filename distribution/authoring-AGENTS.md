@@ -61,6 +61,13 @@ Blockbench state, certify quality, or replace the four-tool Gateway. Do not
 search for the third-party Python CLI-Anything harness during normal art work;
 its copied source is development reference only.
 
+For bounded Geometry analysis where native bounds, rig or surface warning
+evidence already exists, the optional `lazydesigner.exe analyze-geometry
+--input geometry.json --json` (or Bun `analyze:geometry` from a source
+checkout) may provide a read-only structural diagnosis. Do not add the CLI
+solely to recheck each Cube. Envelope scores are not source-matched image
+comparisons, and no numeric/rig finding permits a visual PASS.
+
 For a planned appearance variant with concrete, current source/proposed UV,
 rig, material and rendering declarations, the optional local
 `lazydesigner.exe plan-appearance-variant --input variant.json --json`

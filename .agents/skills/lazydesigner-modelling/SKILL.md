@@ -35,6 +35,8 @@ Accept `selected_profile` from Control, sourced from the current Reference Packa
 - `inspect_model_bounds` only for material envelope/scale/ground/displacement or bounded surface/contact questions; reuse fresh evidence.
 - `UNVERIFIED` is not a retry command; request only decision-changing evidence.
 
+**Optional offline Geometry CLI:** When current native bounds, rig groups or bounded surface warnings have already been obtained and a real structural decision is still unresolved, `lazydesigner.exe analyze-geometry --input geometry.json --json` (or `bun run analyze:geometry -- --input geometry.json --json` in an actual source checkout) provides coarse projected-envelope, rig graph and surface-warning analysis through the existing `modelQuality` owner. It is read-only and optional; do not introduce an inspection or command per Cube, invent missing reference bounds, or treat a clear envelope/rig as reference-fidelity PASS. A source-image/current-model-view pair remains required at the visual gate.
+
 ## Reference Grounding
 
 Use the actual approved reference image in active multimodal context; path/prose/memory is not visual evidence. Missing approved evidence blocks dependent Geometry. The approved image owns appearance; exact user dimensions own numeric scale.

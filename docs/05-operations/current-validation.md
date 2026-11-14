@@ -17,6 +17,8 @@ Online authoring `status` is now source-wired to include the exact SHA-matched b
 
 Normal authoring guidance now allows the bounded first-party read-only Texture CLI conditionally, without changing the primary Gateway route or claiming that a locally unavailable executable can be called. The actual Codex invocation and effect on user corrections remain UNVERIFIED. The third-party vendor source is not enabled as an agent Skill.
 
+A third first-party read-only route `analyze:geometry` now reuses the existing projected envelope, rig graph, and surface quality warning analyzers on caller-supplied JSON without native changes. Focused source regressions and a future managed compiled-executable smoke are AUTHORED_NOT_RUN. The reported numeric agreement, source-declared rig state and warnings are not evidence of a real model capture or accepted geometry. The actual Codex use, native Blockbench build and quality improvements remain UNVERIFIED.
+
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
 ## 2026-11-07 — Visual-asset source focus-switch closure (not executed)

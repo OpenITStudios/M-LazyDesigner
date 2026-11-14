@@ -104,6 +104,28 @@ async function main(): Promise<void> {
       variantSmoke.review?.state !== "SOURCE_REVIEW_REQUIRED_NATIVE_UNVERIFIED") {
     throw new Error("Compiled manager read-only appearance variant planning smoke failed.");
   }
+  const geometryFixture = join(output, "smoke-geometry-triage.json");
+  await writeFile(geometryFixture, JSON.stringify({
+    model_bounds: { min: [0, 0, 0], max: [16, 16, 16] },
+    reference_bounds: { min: [0, 0, 0], max: [16, 16, 16] },
+    rig_groups: [{
+      uuid: "root", name: "body", origin: [8, 8, 8],
+      parent_uuid: null, rotation: [0, 0, 0],
+    }],
+    surface_warnings: [],
+  }));
+  const geometrySmoke = JSON.parse(await run([
+    join(packageDir, "lazydesigner.exe"), "analyze-geometry",
+    "--input", geometryFixture, "--json",
+  ]));
+  if (geometrySmoke.schema !== "lazydesigner-geometry-triage-cli-v1" ||
+      geometrySmoke.execution !== "INSPECTION_NOT_MUTATION" ||
+      geometrySmoke.native_mutation !== false ||
+      geometrySmoke.visual_verdict !== "UNVERIFIED" ||
+      geometrySmoke.envelope?.state !== "available" ||
+      geometrySmoke.rig?.state !== "valid_graph") {
+    throw new Error("Compiled manager read-only Geometry triage smoke failed.");
+  }
   await writeFile(join(packageDir, MCP_BUNDLE_FILENAME), plugin);
   for (const path of PACKAGE_SOURCE_PATHS) { await mkdir(dirname(join(packageDir, path)), { recursive: true }); await cp(join(repo, path), join(packageDir, path)); }
   await cp(join(repo, "distribution/authoring-AGENTS.md"), join(packageDir, "AGENTS.md"));

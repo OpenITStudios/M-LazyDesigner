@@ -68,6 +68,17 @@ Copied upstream CLI-Anything method (Apache-2.0, source only):
 `third_party/cli-anything/README.md`; it does not install or activate
 a new Skill, MCP server or external Python runtime.
 
+Geometry diagnosis reuses canonical numeric and rig evidence owners. It does
+not render the model, infer artistic fidelity, or certify native revisions:
+
+```bash
+bun run analyze:geometry -- --input ./geometry.json --json
+```
+
+The same route is available on a matching compiled `lazydesigner.exe` as
+`analyze-geometry --input geometry.json --json`. Input may supply bounds,
+rig groups, and bounded surface warning text; missing inputs stay unverified.
+
 ## Narrow command namespaces
 
 ```text

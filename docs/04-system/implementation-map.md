@@ -177,8 +177,11 @@ For bounded Texture/appearance planning, the read-only
 commands delegate to the existing `lib/texture/treatmentPlan.ts` and
 `lib/texture/appearanceVariantContinuity.ts` owners using caller-supplied
 JSON, producing machine-readable reports without any Blockbench change.
-Both use the same bounded file/argument parser, and the managed
-`lazydesigner.exe` dispatch routes to those same implementations. Its `ready` flag is **planning readiness only**.
+Both use the same bounded file/argument parser. The third first-party CLI,
+`bun run analyze:geometry`, reuses `lib/geometry/modelQuality.ts` for
+numeric projected-envelope, rig graph and source-declared surface warning
+triage, without making a silhouette or artistic verdict. The managed
+`lazydesigner.exe` dispatch routes to these same implementations. Its `ready` flag is **planning readiness only**.
 Codex must obtain the actual approved reference, fresh native mapping and
 visual evidence through Control and Gateway before authoring or judging art.
 Do not treat the CLI as a second asset database, MCP transport, native

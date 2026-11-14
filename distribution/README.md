@@ -69,10 +69,14 @@ read-only offline authoring plans:
   `mcp/lib/texture/appearanceVariantContinuity.ts` for declared base atlas,
   Geometry/UV/rig/material/render continuity. It cannot compare actual RGBA
   or certify that the red/blue variant pixels match the approved master.
+- `analyze-geometry --input geometry.json --json` delegates to the original
+  `mcp/lib/geometry/modelQuality.ts` projected-envelope, rig graph, and
+  bounded surface-warning analyzers. Numeric agreement is not silhouette,
+  valid pivots, real native scans or visual acceptance.
 It must not launch Gateway, mutate a Blockbench project, write an output
 .bbmodel, bypass Undo, or claim artistic approval. The Windows package
-procedure includes disposable **compiled executable** smoke cases for both
-routes; those cases are AUTHORED_NOT_RUN until PC-local packaging is authorized.
+procedure includes disposable **compiled executable** smoke cases for all three
+read-only routes; those cases are AUTHORED_NOT_RUN until PC-local packaging is authorized.
 A historical installed `lazydesigner.exe` does not inherit a new source
 subcommand. Use the matching installed source SHA before asserting availability.
 This is not the third-party Python CLI-Anything runtime or a new MCP tool.
