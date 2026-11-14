@@ -1035,7 +1035,10 @@
     <main class="editor-viewport" aria-label="Model edit viewport">
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
-          hierarchy={snapshot.hierarchy} {selectedId} onSelect={selectCube}
+          hierarchy={snapshot.hierarchy}
+          texturePreviewSources={snapshot.texturePreviewSources}
+          textureResolution={snapshot.textureResolution}
+          {selectedId} onSelect={selectCube}
           canMove={moveTool && !busy && !loading && !newDialog && !confirmDiscard}
           onTranslate={moveFromViewport}/>
       {:else}
@@ -1086,7 +1089,7 @@
       : snapshot ? (
       selectedId && moveTool
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
-        : 'Untextured geometry preview · visual parity unverified'
+        : 'Embedded PNG preview subset · visual parity unverified'
     ) : 'Native Rust authoring core')}</span>
     <span>{snapshot ? 'Revision ' + snapshot.revision + (snapshot.dirty ? ' · Unsaved' : '') : 'Edit mode'}</span>
   </footer>

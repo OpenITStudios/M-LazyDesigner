@@ -49,8 +49,10 @@ export type EditorSnapshot = {
   bones: BoneView[];
   hierarchy: HierarchyNode[];
   textureNames: string[];
+  texturePreviewSources: (string | null)[];
+  textureResolution: [number, number];
   animationCount: number;
-  previewScope: 'UNVERIFIED_UNTEXTURED_GEOMETRY';
+  previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';
 };
 
 export type EditOperation =

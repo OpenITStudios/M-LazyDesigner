@@ -4,11 +4,14 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
   import { planCubeLocalTranslation } from './rustMoveGizmo';
+  import { faceUvCoordinates, textureIndexForFace } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
   export let hierarchy: HierarchyNode[] = [];
+  export let texturePreviewSources: (string | null)[] = [];
+  export let textureResolution: [number, number] = [16, 16];
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
   // Called once per completed gesture. Preview movement never writes the model.
@@ -26,6 +29,8 @@
   let gizmo: TransformControls | null = null;
   let modelRoot: THREE.Group | null = null;
   let pickMeshes: THREE.Mesh[] = [];
+  const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
+  const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
   let pivots = new Map<string, THREE.Group>();
   let drag: { uuid: string; pivot: THREE.Group; start: THREE.Vector3 } | null = null;
   let mutationPending = false;
@@ -53,6 +58,32 @@
     });
   }
 
+  // GPU textures are derived render resources only; never edit a bitmap here.
+  function embeddedTexture(index: number): THREE.Texture | null {
+    const source = texturePreviewSources[index];
+    if (!source) return null;
+    const cached = textureCache.get(index);
+    if (cached?.source === source) return cached.texture;
+    if (cached) { cached.texture.dispose(); textureCache.delete(index); }
+    const texture = new THREE.TextureLoader().load(source, scheduleRender, undefined, scheduleRender);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    textureCache.set(index, { source, texture });
+    return texture;
+  }
+
+  function reconcileTextures() {
+    for (const [index, cached] of textureCache) {
+      if (texturePreviewSources[index] !== cached.source) {
+        cached.texture.dispose();
+        textureCache.delete(index);
+      }
+    }
+  }
+
   function deg(value: number) { return THREE.MathUtils.degToRad(value); }
   function vector(v: Vec3) { return new THREE.Vector3(v[0], v[1], v[2]); }
 
@@ -72,10 +103,13 @@
   function rebuild(
     currentCubes: CubeView[], currentBones: BoneView[],
     currentHierarchy: HierarchyNode[], currentSelection: string | null,
+    _sources: (string | null)[] = texturePreviewSources,
+    _resolution: [number, number] = textureResolution,
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
     if (!modelRoot || drag || mutationPending) return;
     gizmo?.detach();
+    reconcileTextures();
     for (const child of [...modelRoot.children]) {
       modelRoot.remove(child);
       disposeNode(child);
@@ -104,12 +138,36 @@
           if (dimensions.some((side) => side <= 0)) continue;
           const geometry = new THREE.BoxGeometry(dimensions[0], dimensions[1], dimensions[2]);
           const active = currentSelection === cube.uuid;
-          const material = new THREE.MeshLambertMaterial({
-            color: active ? 0x80b8ef : COLORS[cube.color % COLORS.length],
-            transparent: true,
-            opacity: 0.94,
-          });
-          const mesh = new THREE.Mesh(geometry, material);
+          const uvAttribute = geometry.getAttribute('uv') as THREE.BufferAttribute;
+          const materials: THREE.MeshLambertMaterial[] = [];
+          geometry.clearGroups();
+          for (let faceIndex = 0; faceIndex < FACE_ORDER.length; faceIndex++) {
+            const face = cube.faces[FACE_ORDER[faceIndex]];
+            const textureIndex = textureIndexForFace(face, texturePreviewSources.length);
+            // Face rotations are excluded until their exact native mapping is validated.
+            const rectangle = face?.rotation === undefined || face.rotation === 0
+              ? faceUvCoordinates(face, textureResolution) : null;
+            const texture = textureIndex !== null && rectangle
+              ? embeddedTexture(textureIndex) : null;
+            if (face?.texture !== null && face?.enabled !== false) {
+              geometry.addGroup(faceIndex * 6, 6, faceIndex);
+            }
+            if (texture && rectangle) {
+              for (let vertex = 0; vertex < 4; vertex++) {
+                uvAttribute.setXY(faceIndex * 4 + vertex,
+                  rectangle[vertex * 2], rectangle[vertex * 2 + 1]);
+              }
+            }
+            materials.push(new THREE.MeshLambertMaterial({
+              map: texture,
+              color: texture ? 0xffffff : active ? 0x80b8ef : COLORS[cube.color % COLORS.length],
+              transparent: Boolean(texture),
+              opacity: texture ? 1 : 0.94,
+              side: THREE.FrontSide,
+            }));
+          }
+          uvAttribute.needsUpdate = true;
+          const mesh = new THREE.Mesh(geometry, materials);
           mesh.position.set(
             (cube.from[0] + cube.to[0]) / 2 - cube.origin[0],
             (cube.from[1] + cube.to[1]) / 2 - cube.origin[1],
@@ -242,7 +300,7 @@
     onSelect(hits.length ? String(hits[0].object.userData.cubeUuid) : null);
   }
 
-  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId);
+  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, textureResolution);
   $: if (ready) syncGizmo(canMove);
 
   onMount(() => {
@@ -303,6 +361,8 @@
         disposeNode(modelRoot);
         modelRoot.clear();
       }
+      for (const { texture } of textureCache.values()) texture.dispose();
+      textureCache.clear();
       renderer?.dispose();
       renderer = null;
       scene = null;
@@ -316,7 +376,7 @@
 
 <div class="view" bind:this={host} aria-label="3D model viewport">
   <canvas bind:this={canvas} tabindex="0" onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={pointerCancel}
-    aria-label="Untextured geometry preview. Select a Cube, drag its Move gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
+    aria-label="Geometry preview with supported embedded PNG textures. Select a Cube, drag its Move gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>
   {/if}

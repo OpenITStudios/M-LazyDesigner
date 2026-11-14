@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Bounded embedded PNG derived viewport (SOURCE_ONLY)
+
+The native Rust/Tauri snapshot now projects only bounded inline PNG base64 candidates (2 MiB per candidate; 4 MiB aggregate), retaining the original opaque texture assets in Rust. External relative/absolute paths and network schemes are not accessed by the WebView. Multi-file/per-texture resolution and non-limited wrap modes fail closed to an untextured fallback. The existing Svelte/Three.js viewport derives six-face UV rectangles from Rust Cube snapshots and normalized project texture resolution for unrotated faces, with nearest-neighbor embedded PNG materials when browser decode succeeds. Face rotation, animated textures, source/PNG validation, per-texture dimensions, full Blockbench alpha/wrap parity and native 1:1 visual behavior remain unsupported or UNVERIFIED. Source-authored Rust and Node regressions; no Cargo, browser, native Blockbench or Windows tests executed.
+
 ## 2026-11-14 — Texture-bearing `.bbmodel` interchange fixture (SOURCE_ONLY)
 
 Created a synthetic format-5.0 Bedrock Entity fixture with two texture metadata entries (one placeholder embedded data URL and one external relative path), referenced and untextured Cube faces, UV rotation, nested bones/outliner, Animation, texture groups and opaque extensions. Focused Rust regression source checks that face/rotation and Box UV offset edits do not drop the texture objects, relative path, face reference, null texture face, animation, hierarchy or project extension data across export/reimport and Undo/Redo. The embedded base64 is intentionally a placeholder and is NOT a decoded or image-valid PNG. No real Blockbench-generated model or native asset has been opened. Evidence: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN; Cargo, Blockbench, WebView2 and native visual interoperability remain NOT_EXECUTED/UNVERIFIED.

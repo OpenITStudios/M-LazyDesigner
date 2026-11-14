@@ -72,6 +72,8 @@ pub struct EditorSnapshot {
     bones: Vec<BoneView>,
     hierarchy: Vec<OutlinerNode>,
     texture_names: Vec<String>,
+    texture_preview_sources: Vec<Option<String>>,
+    texture_resolution: [u32; 2],
     animation_count: usize,
     preview_scope: &'static str,
 }
@@ -105,6 +107,43 @@ fn property_vec3(properties: &Map<String, Value>, key: &str) -> [f64; 3] {
         .and_then(|v| serde_json::from_value::<[f64; 3]>(v.clone()).ok())
         .filter(|v| v.iter().all(|n| n.is_finite()))
         .unwrap_or([0.0, 0.0, 0.0])
+}
+
+// Never resolve project-relative paths or arbitrary URLs inside the WebView.
+// Embedded PNG candidates remain subject to the browser's image decoder.
+fn embedded_png_preview_source(texture: &Value) -> Option<String> {
+    const PREFIX: &str = "data:image/png;base64,";
+    const MAX_BASE64: usize = 2 * 1024 * 1024;
+    if texture.get("wrap_mode").and_then(Value::as_str).is_some_and(|mode| mode != "limited") {
+        return None;
+    }
+    let source = texture.get("source")?.as_str()?;
+    let data = source.strip_prefix(PREFIX)?;
+    if data.len() < 16 || data.len() > MAX_BASE64 ||
+        !data.starts_with("iVBORw0KGgo") ||
+        !data.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'=')) {
+        return None;
+    }
+    Some(source.to_owned())
+}
+
+fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
+    // Blockbench Bedrock's multi-file ruleset changes per-face UV resolution.
+    // Do not display atlas UV against the wrong texture resolution.
+    let ruleset = doc.extensions.get("multi_file_ruleset");
+    let per_texture = ruleset.is_some_and(|value| match value {
+        Value::String(name) => !name.is_empty(),
+        _ => true,
+    }) || doc.extensions.get("per_texture_uv_size") == Some(&Value::Bool(true)) ||
+        doc.meta.extra.get("per_texture_uv_size") == Some(&Value::Bool(true));
+    let mut remaining = 4 * 1024 * 1024;
+    doc.texture_assets.iter().map(|texture| {
+        if per_texture { return None; }
+        let source = embedded_png_preview_source(texture)?;
+        if source.len() > remaining { return None; }
+        remaining -= source.len();
+        Some(source)
+    }).collect()
 }
 
 fn project(store: &EditorStore) -> Option<EditorSnapshot> {
@@ -146,8 +185,10 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             texture_names: doc.texture_assets.iter().map(|texture| {
                 texture.get("name").and_then(Value::as_str).unwrap_or("Unnamed texture").to_owned()
             }).collect(),
+            texture_preview_sources: texture_preview_sources(doc),
+            texture_resolution: [doc.resolution.width, doc.resolution.height],
             animation_count: doc.animation_assets.len(),
-            preview_scope: "UNVERIFIED_UNTEXTURED_GEOMETRY",
+            preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
         }
     })
 }
@@ -393,6 +434,22 @@ mod tests {
     }
 
     #[test]
+    fn texture_projection_excludes_external_malformed_and_multifile_sources() {
+        assert!(embedded_png_preview_source(&json!({"source":"https://example.test/texture.png"})).is_none());
+        assert!(embedded_png_preview_source(&json!({"relative_path":"textures/entity/atlas.png"})).is_none());
+        assert!(embedded_png_preview_source(&json!({"source":"data:image/png;base64,AAAA"})).is_none());
+        let candidate = "data:image/png;base64,iVBORw0KGgoAAAABAAAAAA==";
+        assert_eq!(embedded_png_preview_source(&json!({"source":candidate})), Some(candidate.to_owned()));
+        assert!(embedded_png_preview_source(&json!({"source":
+            format!("data:image/png;base64,iVBORw0KGgo{}", "A".repeat(2 * 1024 * 1024))})).is_none());
+        let mut doc = AuthoringDocument::new_bedrock("Synthetic", "synthetic").unwrap();
+        doc.texture_assets.push(json!({"source": candidate}));
+        assert_eq!(texture_preview_sources(&doc), vec![Some(candidate.to_owned())]);
+        doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
+        assert_eq!(texture_preview_sources(&doc), vec![None]);
+    }
+
+    #[test]
     fn source_projection_is_derived_from_the_single_rust_document() {
         let doc = AuthoringDocument::new_bedrock("Synthetic", "synthetic").unwrap();
         let session = EditorSession::from_document(doc).unwrap();
@@ -406,6 +463,6 @@ mod tests {
         assert_eq!(snapshot.epoch, 4);
         assert_eq!(snapshot.name, "Synthetic");
         assert_eq!(snapshot.cubes.len(), 0);
-        assert_eq!(snapshot.preview_scope, "UNVERIFIED_UNTEXTURED_GEOMETRY");
+        assert_eq!(snapshot.preview_scope, "UNVERIFIED_EMBEDDED_PNG_SUBSET");
     }
 }
