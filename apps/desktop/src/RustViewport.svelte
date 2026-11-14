@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { TransformControls } from 'three/addons/controls/TransformControls.js';
+  import { planCubeLocalTranslation } from './rustMoveGizmo';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
   export let cubes: CubeView[] = [];
@@ -9,6 +11,9 @@
   export let hierarchy: HierarchyNode[] = [];
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
+  // Called once per completed gesture. Preview movement never writes the model.
+  export let onTranslate: (uuid: string, delta: Vec3) => Promise<boolean> = async () => false;
+  export let canMove = false;
 
   let host: HTMLDivElement;
   let canvas: HTMLCanvasElement;
@@ -18,8 +23,13 @@
   let camera: THREE.PerspectiveCamera | null = null;
   let renderer: THREE.WebGLRenderer | null = null;
   let controls: OrbitControls | null = null;
+  let gizmo: TransformControls | null = null;
   let modelRoot: THREE.Group | null = null;
   let pickMeshes: THREE.Mesh[] = [];
+  let pivots = new Map<string, THREE.Group>();
+  let drag: { uuid: string; pivot: THREE.Group; start: THREE.Vector3 } | null = null;
+  let mutationPending = false;
+  let skipPick = false;
   let frameRequest = 0;
   let mouseStart: [number, number] | null = null;
 
@@ -46,16 +56,32 @@
   function deg(value: number) { return THREE.MathUtils.degToRad(value); }
   function vector(v: Vec3) { return new THREE.Vector3(v[0], v[1], v[2]); }
 
+  function syncGizmo(allowed: boolean) {
+    if (!gizmo) return;
+    const pivot = selectedId ? pivots.get(selectedId) : undefined;
+    if (pivot && allowed && !mutationPending && !drag) {
+      if (gizmo.object !== pivot) gizmo.attach(pivot);
+      gizmo.enabled = true;
+    } else {
+      if (gizmo.object) gizmo.detach();
+      gizmo.enabled = false;
+    }
+    scheduleRender();
+  }
+
   function rebuild(
     currentCubes: CubeView[], currentBones: BoneView[],
     currentHierarchy: HierarchyNode[], currentSelection: string | null,
   ) {
-    if (!modelRoot) return;
+    // Never destroy a manipulated object before its one Rust transaction ends.
+    if (!modelRoot || drag || mutationPending) return;
+    gizmo?.detach();
     for (const child of [...modelRoot.children]) {
       modelRoot.remove(child);
       disposeNode(child);
     }
     pickMeshes = [];
+    pivots = new Map();
     const cubesById = new Map(currentCubes.map((cube) => [cube.uuid, cube] as const));
     const bonesById = new Map(currentBones.map((bone) => [bone.uuid, bone] as const));
 
@@ -68,6 +94,7 @@
           pivot.position.copy(vector(cube.origin).sub(vector(parentOrigin)));
           pivot.rotation.set(deg(cube.rotation[0]), deg(cube.rotation[1]), deg(cube.rotation[2]), 'ZYX');
           parent.add(pivot);
+          pivots.set(cube.uuid, pivot);
           const dimensions = [
             cube.to[0] - cube.from[0],
             cube.to[1] - cube.from[1],
@@ -109,6 +136,7 @@
     };
 
     visit(currentHierarchy, modelRoot, [0, 0, 0]);
+    syncGizmo(canMove);
     scheduleRender();
   }
 
@@ -138,11 +166,66 @@
     scheduleRender();
   }
 
+  function onGizmoDown() {
+    const pivot = selectedId ? pivots.get(selectedId) : undefined;
+    if (!pivot || !gizmo || gizmo.object !== pivot || !canMove || mutationPending) return;
+    drag = { uuid: selectedId!, pivot, start: pivot.position.clone() };
+    skipPick = true;
+    mouseStart = null;
+    if (controls) controls.enabled = false;
+  }
+
+  function onGizmoUp() {
+    if (controls) controls.enabled = true;
+    const gesture = drag;
+    drag = null;
+    if (!gesture) return;
+    const edit = planCubeLocalTranslation(
+      gesture.uuid,
+      [gesture.start.x, gesture.start.y, gesture.start.z],
+      [gesture.pivot.position.x, gesture.pivot.position.y, gesture.pivot.position.z],
+    );
+    if (!edit || gesture.uuid !== selectedId || !canMove) {
+      rebuild(cubes, bones, hierarchy, selectedId);
+      return;
+    }
+    mutationPending = true;
+    if (gizmo) gizmo.enabled = false;
+    // The parent awaits the Rust receipt and the Svelte snapshot update.
+    // Any rejected/stale/failed edit restores the last authoritative view.
+    void (async () => {
+      try {
+        await onTranslate(edit.uuid, edit.delta);
+      } catch {
+        // No second write or automatic retry: restore the Rust projection.
+      } finally {
+        mutationPending = false;
+        rebuild(cubes, bones, hierarchy, selectedId);
+      }
+    })();
+  }
+
   function pointerDown(event: PointerEvent) {
+    if (!gizmo?.dragging) skipPick = false;
     mouseStart = event.button === 0 ? [event.clientX, event.clientY] : null;
   }
 
+  function pointerCancel() {
+    mouseStart = null;
+    if (drag) {
+      gizmo?.reset();
+      drag = null;
+      if (controls) controls.enabled = true;
+      rebuild(cubes, bones, hierarchy, selectedId);
+    }
+  }
+
   function pointerUp(event: PointerEvent) {
+    if (skipPick) {
+      skipPick = false;
+      mouseStart = null;
+      return;
+    }
     if (event.button !== 0 || !mouseStart || !camera || !renderer) return;
     const movement = Math.hypot(event.clientX - mouseStart[0], event.clientY - mouseStart[1]);
     mouseStart = null;
@@ -160,6 +243,7 @@
   }
 
   $: if (ready) rebuild(cubes, bones, hierarchy, selectedId);
+  $: if (ready) syncGizmo(canMove);
 
   onMount(() => {
     let observer: ResizeObserver | null = null;
@@ -178,6 +262,16 @@
       scene.add(sunlight);
       scene.add(new THREE.GridHelper(64, 64, 0x334155, 0x252d37));
       scene.add(new THREE.AxesHelper(3));
+      gizmo = new TransformControls(camera, canvas);
+      gizmo.setMode('translate');
+      gizmo.setSpace('world');
+      gizmo.setSize(0.85);
+      gizmo.enabled = false;
+      gizmo.addEventListener('change', scheduleRender);
+      gizmo.addEventListener('mouseDown', onGizmoDown);
+      gizmo.addEventListener('mouseUp', onGizmoUp);
+      // TransformControls r162 is an Object3D. Add it to the same scene.
+      scene.add(gizmo);
       controls = new OrbitControls(camera, canvas);
       controls.enableDamping = false;
       controls.target.set(0, 0, 0);
@@ -199,6 +293,12 @@
       if (frameRequest) window.cancelAnimationFrame(frameRequest);
       controls?.dispose();
       controls = null;
+      gizmo?.detach();
+      gizmo?.dispose();
+      gizmo?.removeFromParent();
+      gizmo = null;
+      drag = null;
+      mutationPending = false;
       if (modelRoot) {
         disposeNode(modelRoot);
         modelRoot.clear();
@@ -209,13 +309,14 @@
       camera = null;
       modelRoot = null;
       pickMeshes = [];
+      pivots.clear();
     };
   });
 </script>
 
 <div class="view" bind:this={host} aria-label="3D model viewport">
-  <canvas bind:this={canvas} tabindex="0" onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={() => mouseStart = null}
-    aria-label="Interactive untextured geometry preview. Drag to orbit, scroll to zoom, click to select Cube." />
+  <canvas bind:this={canvas} tabindex="0" onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={pointerCancel}
+    aria-label="Untextured geometry preview. Select a Cube, drag its Move gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>
   {/if}

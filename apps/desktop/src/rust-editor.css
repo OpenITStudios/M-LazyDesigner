@@ -109,6 +109,11 @@
   background: var(--rust-selected);
   border-color: #59616b;
 }
+.rust-editor .editor-toolbar button.active {
+  background: #303a49;
+  border-color: #4b78a9;
+  color: #e1e8f6;
+}
 .rust-editor .tool-separator { height: 22px; border-left: 1px solid #444c59; }
 .rust-editor .tool-spacer { flex: 1; }
 .rust-editor .editor-body {

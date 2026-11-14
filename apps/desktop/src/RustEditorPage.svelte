@@ -12,6 +12,8 @@
   let snapshot: EditorSnapshot | null = null;
   let selectedId: string | null = null;
   let selectedBoneId: string | null = null;
+  // Move is the only implemented viewport gizmo. No fabricated Rotate/Scale.
+  let moveTool = true;
   let selectedFace = 'north';
   let menu: Menu = null;
   let loading = true;
@@ -173,6 +175,19 @@
       expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision, operations,
     });
   }
+
+  async function moveFromViewport(uuid: string, delta: Vec3): Promise<boolean> {
+    // A pointer gesture may request one Rust edit. The viewport never mutates
+    // the authored document and must restore its preview on any refusal.
+    if (!snapshot || !moveTool || busy || selectedId !== uuid) return false;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch,
+      expectedRevision: snapshot.revision,
+      operations: [{ op: 'translate_cube', uuid, delta }],
+    });
+    await tick();
+    return next !== null;
+  }
   async function addCube() {
     if (!snapshot) return;
     const previous = new Set(snapshot.cubes.map((cube) => cube.uuid));
@@ -302,6 +317,13 @@
       <button disabled={!snapshot?.canUndo || busy} onclick={() => history('undo')}>Undo</button>
       <button disabled={!snapshot?.canRedo || busy} onclick={() => history('redo')}>Redo</button>
     </div>
+    <div class="tool-separator"></div>
+    <div class="tool-group" role="group" aria-label="Viewport transform tools">
+      <button class:active={moveTool} aria-pressed={moveTool}
+        title="Move the selected Cube with the 3D gizmo"
+        disabled={!snapshot || busy || loading}
+        onclick={() => moveTool = !moveTool}>Move</button>
+    </div>
     <div class="tool-spacer"></div>
     <button onclick={() => viewport?.frameModel()} disabled={!snapshot || busy}>Frame</button>
   </div>
@@ -324,7 +346,9 @@
     <main class="editor-viewport" aria-label="Model edit viewport">
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
-          hierarchy={snapshot.hierarchy} {selectedId} onSelect={selectCube}/>
+          hierarchy={snapshot.hierarchy} {selectedId} onSelect={selectCube}
+          canMove={moveTool && !busy && !loading && !newDialog && !confirmDiscard}
+          onTranslate={moveFromViewport}/>
       {:else}
         <div class="empty-editor">
           <h2>{loading ? 'Loading editor…' : 'No model open'}</h2>
@@ -426,7 +450,11 @@
 
   <footer class="editor-statusbar" aria-live="polite">
     <span>{snapshot ? snapshot.cubes.length + ' Cubes · ' + snapshot.bones.length + ' Bones' : 'No model'}</span>
-    <span class="status-middle">{notice || (snapshot ? 'Untextured geometry preview · Visual parity unverified' : 'Native Rust authoring core')}</span>
+    <span class="status-middle">{notice || (snapshot ? (
+      selectedId && moveTool
+        ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
+        : 'Untextured geometry preview · visual parity unverified'
+    ) : 'Native Rust authoring core')}</span>
     <span>{snapshot ? 'Revision ' + snapshot.revision + (snapshot.dirty ? ' · Unsaved' : '') : 'Edit mode'}</span>
   </footer>
 
