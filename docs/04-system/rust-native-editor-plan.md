@@ -1,6 +1,6 @@
 # Rust-native LazyDesigner — Architecture and Acceptance Contract
 
-**Status:** APPROVED PRODUCT DIRECTION; PHASE 0 SOURCE PLAN; NOT IMPLEMENTED.
+**Status:** APPROVED PRODUCT DIRECTION; PHASE 0 SOURCE CONTRACT; PHASE 1 HEADLESS SOURCE_AUTHORED / NOT_EXECUTED. The independent GUI and complete editor are NOT IMPLEMENTED.
 **Selected development branch:** `Rust`, created from `Local@2fb3b2f2a9f37649c927886122e9442d9f84b7c7`. The source integration parent for this plan is the branch-local profile commit `2260734f01a5803f6679aefb5f6bdf265cdba264`.
 **Upstream UI and file-format reference:** `JannisX11/blockbench@e2ede0809ee6bc91f374ac7e00d34cffbdf86a14` (tag `v5.2.1`, Default Dark).
 **Product:** Minecraft Bedrock Entity visual assets, not a general Blockbench clone or gameplay/add-on pack generator.
@@ -139,6 +139,8 @@ The first source implementation must demonstrate a complete **vertical slice**, 
 - Under the active policy, CI, cloud substitute validation, incremental Codex/local/native tests and releases remain on hold; source-only review is the proof ceiling. The later one-shot PC-local validation phase needs a separate user-selected transition.
 - Significant risks: format-version drift and unknown fields; advanced Paint/Animate parity; GPU/pixel and animation timing correctness; license/branding rights; Windows high-DPI/focus; native performance under large scenes; AI cost without changed quality. The corresponding gates above remain open until the actual evidence exists.
 
-**Phase 0 decision:** source baseline and target are approved; product implementation, migration, source build, real CLI execution, Blockbench round-trips, actual UI parity and efficiency gains are `NOT_EXECUTED / UNVERIFIED`.
+**Phase 1 headless source slice (2026-11-14):** A typed `AuthoringDocument` and `EditorSession`, versioned `BlockbenchV5` wire adapter, cube/bone/face-UV batch engine, SHA-guarded `new/inspect/apply` CLI and original synthetic fixture were authored in `apps/desktop/src-tauri/`. [The exact source owner and future commands](../../apps/desktop/src-tauri/src/authoring/README.md) describe the bounded format-5.0 geometry slice. Texture, animation and controller payloads are preserved opaquely; native editing/painting/playback and Blockbench compatibility are NOT proven. Do not treat Phase 1 as a complete editor or replace the legacy Runtime.
+
+**Phase 0 decision:** source baseline and target are approved; remaining GUI/runtime implementation, actual Cargo/CLI execution, editable Blockbench round-trips, UI parity and efficiency gains are `NOT_EXECUTED / UNVERIFIED`.
 
 **Next safe action (separately scoped Phase 1):** inspect the current Rust Cargo entrypoints and actual `.bbmodel` source/consumer contracts, then implement one small complete headless Rust edit/import/export vertical slice using the chosen branch, with authored regressions but no held test execution. Do not invent runtime evidence or build a parallel editor before the first slice is coherent.

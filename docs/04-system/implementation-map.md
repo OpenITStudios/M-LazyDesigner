@@ -2,7 +2,7 @@
 
 Updated: 2026-10-20
 
-This file maps **current source ownership only**. The user-approved standalone Rust editor is **not yet implemented**; its target ownership, migration and gate matrix are separately recorded in [rust-native-editor-plan.md](rust-native-editor-plan.md). Existing Blockbench-native owners below remain the actual source authority until changed with evidence. Product workflow belongs in `docs/01-product/flow.md`; AI context loading in `docs/04-system/ai-context-loading.md`; continuation/proof in `docs/05-operations/`.
+This file maps **current source ownership only**. The user-approved standalone Rust editor now has a **source-authored headless Rust Geometry/UV slice**, not a working Svelte editor or a native-accepted Blockbench replacement. `apps/desktop/src-tauri/src/authoring/mod.rs` owns the typed Rust model and transactions, `src/authoring/bbmodel.rs` the pinned editable format adapter, `src/lib.rs` the shared library entry, and `src/bin/lazydesigner-authoring.rs` the direct CLI. None is wired to the current Tauri UI, MCP Runtime or managed distribution. The target ownership and acceptance gates remain in [rust-native-editor-plan.md](rust-native-editor-plan.md). Existing Blockbench Runtime owners below remain the legacy implementation authority until replaced with evidence. Product workflow belongs in `docs/01-product/flow.md`; AI context loading in `docs/04-system/ai-context-loading.md`; continuation/proof in `docs/05-operations/`.
 
 ## Architecture
 

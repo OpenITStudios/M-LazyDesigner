@@ -1,5 +1,10 @@
 # LazyDesigner Desktop
 
+## Rust-branch headless authoring source (NOT_EXECUTED)
+
+The separately approved `Rust` branch now includes a **source-authored independent Rust Bedrock authoring library and headless CLI**, documented by [the Rust authoring source owner](src-tauri/src/authoring/README.md). It is **not yet connected** to Tauri UI commands, Svelte editing, MCP, the managed Windows installer or Blockbench. It does not change the existing companion behavior described below; native round-trip, Cargo build, CLI execution and visual quality remain UNVERIFIED. The [Rust target contract](../../docs/04-system/rust-native-editor-plan.md) owns acceptance.
+
+
 This directory owns the desktop **machine control plane** only. Cross-surface human navigation, labels and UX scenario acceptance are defined in the [Human Interface Contract](../../docs/01-product/interface-ux.md); this README remains the implementation-facing Desktop behavior owner.
 
 ## Responsibilities

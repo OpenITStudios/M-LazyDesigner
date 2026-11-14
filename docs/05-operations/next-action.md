@@ -3,13 +3,14 @@
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
 
-## Active Rust-native editor track — Phase 0 contract (2026-11-14)
+## Active Rust-native editor track — Phase 1 headless source (2026-11-14)
 
 - **Branch:** `Rust` explicitly created from `Local@2fb3b2f2a9f37649c927886122e9442d9f84b7c7` after an authorized, narrowly scoped branch policy change; this branch's profile selects only `Rust` as writable. `Local` continues the existing Blockbench product and `main` remains stable.
 - **Accepted goal:** Blockbench 5.2.1 Default Dark **1:1 supported-workflow UI/interaction** with an independent single Rust engine, direct CLI, optional MCP and editable bidirectional `.bbmodel` interoperability. No runtime implementation or visual/format acceptance is claimed.
 - **Phase 0 source outcome:** [Rust-native Editor Architecture and Acceptance Contract](../04-system/rust-native-editor-plan.md) states source owners, UI parity, format round-trip gates, transaction/renderer boundaries, migration, licensing, quality/efficiency measures and held-proof limits. Review current branch HEAD before future work; the founding source hashes in the plan are provenance, not a perpetual HEAD.
-- **Next separately scoped Phase 1:** one complete headless Rust Bedrock Entity import/edit/export vertical slice through the canonical Rust API and CLI; retain current Blockbench source and all user assets, with written regressions only until native validation is separately authorized. Do **not** start a second runtime/AI router, delete previous tools or claim cost savings from fewer calls.
-- **Proof:** SOURCE_REVIEWED / SOURCE_COMMITTED for planning only. Rust code compilation, Codex, actual UI renders, live Blockbench import/export, PNG/animation fidelity, measured token savings and Windows installation are **NOT_EXECUTED / UNVERIFIED** under the original hold.
+- **Phase 1 source outcome:** `apps/desktop/src-tauri/src/authoring/` contains a typed, single-authority Rust Bedrock document, separate format-5.0 Blockbench adapter, cube/group/outliner/UV validation, bounded atomic edit/Undo history and opaque texture/animation preservation. A shared-library headless `lazydesigner-authoring` CLI supports `new`, `inspect` and SHA/revision-guarded `apply` with new sibling output; original synthetic fixture and regression source are authored NOT_EXECUTED. No Tauri UI/MCP/installed integration, native asset round-trip, source build or visual claim exists.
+- **Remaining Phase 1 acceptance:** the actual compiled CLI, native Blockbench open/edit/reopen and source/consumer compatibility are UNVERIFIED under the existing hold. The next separately scoped source work, when authorized, is to connect the same Rust library to real Svelte/Tauri editing without creating another model engine; do not discard the legacy Runtime before replacement acceptance.
+- **Proof:** SOURCE_REVIEWED / SOURCE_COMMITTED for Phase 0 contract and Phase 1 headless source; Rust/CLI regression source AUTHORED_NOT_EXECUTED. Cargo build, native CLI use, Codex, Svelte/Windows, actual Blockbench open/export, PNG/animation fidelity and measured efficiency remain **NOT_EXECUTED / UNVERIFIED** under the original hold.
 
 ## Legacy Local-track focus — dual reasoning effectiveness (2026-11-11)
 

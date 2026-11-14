@@ -1,0 +1,35 @@
+{
+  "meta": {"format_version": "5.0", "model_format": "bedrock", "box_uv": false},
+  "name": "Rust synthetic cube",
+  "model_identifier": "rust_synthetic",
+  "resolution": {"width": 128, "height": 128},
+  "elements": [{
+    "uuid": "00000000-0000-4000-8000-000000000002",
+    "type": "cube",
+    "name": "test_cube",
+    "from": [0, 0, 0],
+    "to": [4, 4, 4],
+    "origin": [0, 0, 0],
+    "faces": {
+      "north": {"uv": [0, 0, 4, 4]},
+      "east": {"uv": [0, 0, 4, 4]},
+      "south": {"uv": [0, 0, 4, 4]},
+      "west": {"uv": [0, 0, 4, 4]},
+      "up": {"uv": [0, 0, 4, 4]},
+      "down": {"uv": [0, 0, 4, 4]}
+    }
+  }],
+  "groups": [{
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "name": "root_bone",
+    "origin": [0, 0, 0],
+    "children": []
+  }],
+  "outliner": [{
+    "uuid": "00000000-0000-4000-8000-000000000001",
+    "isOpen": true,
+    "children": ["00000000-0000-4000-8000-000000000002"]
+  }],
+  "textures": [],
+  "animations": []
+}
