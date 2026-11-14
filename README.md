@@ -36,6 +36,15 @@ ChatGPT owns **reference preparation**, not Blockbench execution. Control remain
 
 The approved image is visual authority. Requested dimensions are numeric authority. LazyDesigner has **one native modelling path**; the retired 3D-assisted/Hunyuan/PrimitiveAnything path is not part of current authoring.
 
+
+## Related Lazy-family handoff (source coordination only)
+
+LazyDesigner owns Blockbench-authored **Minecraft Bedrock Entity** visual assets (`.bbmodel`), not a packaged behavior/add-on or playable world. The related public projects have separate responsibilities: [Lazy-Developer](https://github.com/OpenITStudios/M-Lazy-Developer/tree/Local) audits explicitly selected Bedrock/Education `.mcworld` artifacts, while [LazyTester](https://github.com/OpenITStudios/M-Minecraft-Emulator/tree/Local) manages independent Minecraft Education runtime profiles and optional native evidence.
+
+A visual export becomes relevant to a gameplay audit **only after the authorized map owner has incorporated and packaged it** into the selected world. Carry the exact artifact SHA-256, relevant edition/version, repository source revision, owner authorization and evidence/proof tier with any reviewed handoff. An asset/viewport PASS, a map source finding, and a native Education observation are different results; none automatically certifies another.
+
+These relationships do **not** install a shared Gateway, package assets, transfer worlds, connect to another repository, dispatch tests, or grant native access. Each project keeps its own domain Skills, AgentSkill profile, working branch and held validation gates.
+
 ## Documentation
 
 Start from:
