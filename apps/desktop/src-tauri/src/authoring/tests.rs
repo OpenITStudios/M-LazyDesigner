@@ -15,6 +15,64 @@ fn sample_cube(uuid: &str) -> Cube {
 }
 
 #[test]
+fn authored_rgba8_paint_texture_mutates_one_pixel_with_history() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Paint", "paint").unwrap()
+    ).unwrap();
+    let uuid = "00000000-0000-4000-8000-000000000109";
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "atlas.png".into(),
+    }]).unwrap();
+    let before = session.document().texture_assets[0].clone();
+    assert_eq!(before["uuid"], json!(uuid));
+    assert_eq!(before["paint_owner"], json!("lazydesigner-rgba8-v1"));
+    assert_eq!(before["wrap_mode"], json!("limited"));
+    session.apply(1, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 3, y: 5, rgba: [120, 30, 200, 128],
+    }]).unwrap();
+    let after = session.document().texture_assets[0].clone();
+    assert_ne!(before["source"], after["source"]);
+    assert_eq!(before["uuid"], after["uuid"]);
+    assert_eq!(before["name"], after["name"]);
+    let saved = session.export().unwrap();
+    assert_eq!(AuthoringDocument::import_bbmodel(&saved).unwrap(), *session.document());
+    session.undo(2).unwrap();
+    assert_eq!(session.document().texture_assets[0], before);
+    session.redo(3).unwrap();
+    assert_eq!(session.document().texture_assets[0], after);
+    assert_eq!(session.apply(4, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 3, y: 5, rgba: [120, 30, 200, 128],
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.summary().revision, 4);
+}
+
+#[test]
+fn paint_refuses_imported_textures_oversized_canvas_and_partial_batches() {
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let prior = imported.document().clone();
+    assert_eq!(imported.apply(0, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 0, y: 0, rgba: [0, 0, 0, 0],
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(imported.document(), &prior);
+    let uuid = "00000000-0000-4000-8000-000000000109";
+    assert_eq!(imported.apply(0, &[
+        EditOperation::CreatePaintTexture { uuid: uuid.into(), name: "new.png".into() },
+        EditOperation::PaintTexturePixel {
+            texture_index: 2, x: 128, y: 0, rgba: [255, 0, 0, 255],
+        },
+    ]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(imported.document(), &prior);
+    assert_eq!(imported.summary().revision, 0);
+    let mut oversized = AuthoringDocument::new_bedrock("Large", "large").unwrap();
+    oversized.resolution.width = 512;
+    let mut session = EditorSession::from_document(oversized).unwrap();
+    assert_eq!(session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "new.png".into(),
+    }]).unwrap_err(), "PAINT_DIMENSIONS_UNSUPPORTED");
+    assert!(session.document().texture_assets.is_empty());
+}
+
+#[test]
 fn v5_0_preserves_extensions_texture_references_and_animation_bytes_semantically() {
     let mut input: Value = serde_json::from_str(SAMPLE).unwrap();
     input["vendor"] = json!({"preserve": [1, 2]});

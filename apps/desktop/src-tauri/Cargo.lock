@@ -1740,6 +1740,8 @@ dependencies = [
 name = "lazydesigner"
 version = "0.1.1"
 dependencies = [
+ "base64 0.22.1",
+ "png 0.17.16",
  "rand",
  "rfd",
  "serde",

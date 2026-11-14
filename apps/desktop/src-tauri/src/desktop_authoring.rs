@@ -74,6 +74,7 @@ pub struct EditorSnapshot {
     texture_names: Vec<String>,
     texture_preview_sources: Vec<Option<String>>,
     texture_preview_sides: Vec<Option<&'static str>>,
+    paint_editable_textures: Vec<bool>,
     texture_resolution: [u32; 2],
     animation_count: usize,
     preview_scope: &'static str,
@@ -203,6 +204,14 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             }).collect(),
             texture_preview_sources: texture_preview_sources(doc),
             texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
+            paint_editable_textures: doc.texture_assets.iter().map(|texture| {
+                texture.get("paint_owner").and_then(Value::as_str)
+                    == Some("lazydesigner-rgba8-v1") &&
+                texture.get("path").is_none() &&
+                texture.get("relative_path").is_none() &&
+                texture.get("layers_enabled").is_none() &&
+                texture.get("texture_layers").is_none()
+            }).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             animation_count: doc.animation_assets.len(),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",

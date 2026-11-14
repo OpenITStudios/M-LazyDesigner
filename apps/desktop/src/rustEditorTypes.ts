@@ -51,6 +51,7 @@ export type EditorSnapshot = {
   textureNames: string[];
   texturePreviewSources: (string | null)[];
   texturePreviewSides: ('front' | 'double' | null)[];
+  paintEditableTextures: boolean[];
   textureResolution: [number, number];
   animationCount: number;
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';
@@ -61,4 +62,6 @@ export type EditOperation =
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
-  | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] };
+  | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
+  | { op: 'create_paint_texture'; uuid: string; name: string }
+  | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] };

@@ -13,6 +13,8 @@ rust-version = "1.95"
 tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
+base64 = "=0.22.1"
+png = "=0.17.16"
 rand = "0.10.3"
 rfd = "0.17.2"
 serde = { version = "1", features = ["derive"] }

@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 mod bbmodel;
+mod paint;
 pub mod storage;
 
 pub const MAX_MODEL_BYTES: usize = 16 * 1024 * 1024;
@@ -109,6 +110,8 @@ pub enum EditOperation {
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
+    CreatePaintTexture { uuid: String, name: String },
+    PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -657,6 +660,24 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 cube.extra.insert("rotation".into(), json!(rotation));
             }
             Ok(uuid.clone())
+        }
+        EditOperation::CreatePaintTexture { uuid, name } => {
+            if !valid_uuid(uuid) || doc.texture_assets.len() >= MAX_ELEMENTS ||
+                doc.texture_assets.iter().any(|texture| texture.get("uuid").and_then(Value::as_str) == Some(uuid)) {
+                return Err(fail("PAINT_TEXTURE_ID_INVALID"));
+            }
+            // Bedrock project resolution is the atlas size for this initial
+            // single-texture Paint subset. The codec owns all PNG bytes.
+            let texture = paint::create(uuid, name, doc.resolution.width, doc.resolution.height)?;
+            doc.texture_assets.push(texture);
+            Ok(uuid.clone())
+        }
+        EditOperation::PaintTexturePixel { texture_index, x, y, rgba } => {
+            let texture = doc.texture_assets.get_mut(*texture_index)
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::pixel(texture, doc.resolution.width, doc.resolution.height, *x, *y, *rgba)?;
+            Ok(texture.get("uuid").and_then(Value::as_str)
+                .unwrap_or("paint-texture").to_owned())
         }
         EditOperation::SetBoxUvOffset { uuid, offset } => {
             // Blockbench's Box UV editor stores integer atlas offsets.

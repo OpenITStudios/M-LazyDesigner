@@ -26,6 +26,9 @@
   // Move is the only implemented viewport gizmo. No fabricated Rotate/Scale.
   let moveTool = true;
   let selectedFace = 'north';
+  let paintTextureIndex = 0;
+  let paintColor = '#e53935';
+  let paintAlpha = 255;
   let menu: Menu = null;
   let loading = true;
   let busy = false;
@@ -295,6 +298,45 @@
     if (offset[axis] !== selectedCube.uvOffset[axis]) {
       apply([{ op: 'set_box_uv_offset', uuid: selectedCube.uuid, offset }]);
     }
+  }
+
+  async function newPaintTexture() {
+    if (!snapshot || busy || snapshot.textureResolution.some(size => size > 256)) {
+      error = 'Paint supports new RGBA8 textures up to 256 × 256 pixels.';
+      return;
+    }
+    const before = snapshot.textureNames.length;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch,
+      expectedRevision: snapshot.revision,
+      operations: [{
+        op: 'create_paint_texture', uuid: crypto.randomUUID(),
+        name: 'paint_' + (before + 1) + '.png',
+      }],
+    });
+    if (next) paintTextureIndex = before;
+  }
+
+  function paintAt(event: PointerEvent) {
+    if (!snapshot || busy || event.button !== 0 ||
+        !snapshot.paintEditableTextures[paintTextureIndex]) return;
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLImageElement)) return;
+    const bounds = target.getBoundingClientRect();
+    const [width, height] = snapshot.textureResolution;
+    if (!bounds.width || !bounds.height) return;
+    const x = Math.floor((event.clientX - bounds.left) / bounds.width * width);
+    const y = Math.floor((event.clientY - bounds.top) / bounds.height * height);
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const hex = paintColor;
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex) || !Number.isInteger(paintAlpha) ||
+        paintAlpha < 0 || paintAlpha > 255) return;
+    const rgba: [number, number, number, number] = [
+      parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16),
+      parseInt(hex.slice(5, 7), 16), paintAlpha,
+    ];
+    apply([{ op: 'paint_texture_pixel', texture_index: paintTextureIndex, x, y, rgba }]);
+    event.preventDefault();
   }
 
   function uvEdit(index: number, text: string) {
@@ -683,7 +725,38 @@
       {:else}
         <p class="empty-label">No textures</p>
       {/if}
-      <p class="dock-note">Texture painting is not available in this Edit slice.</p>
+      {#if snapshot}
+        <section class="paint-starter" aria-label="Basic Rust-owned Paint">
+          <div class="dock-title"><span>PAINT · PIXEL</span></div>
+          <button type="button" onclick={() => void newPaintTexture()} disabled={busy || loading ||
+            snapshot.textureResolution.some(size => size > 256)}>
+            New RGBA8 Texture
+          </button>
+          {#if snapshot.textureNames.length}
+            <label>Texture
+              <select bind:value={paintTextureIndex} disabled={busy}>
+                {#each snapshot.textureNames as name, i}
+                  <option value={i}>{name}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+          {#if snapshot.paintEditableTextures[paintTextureIndex] &&
+            snapshot.texturePreviewSources[paintTextureIndex]}
+            <label>Color <input type="color" bind:value={paintColor} disabled={busy}/></label>
+            <label>Alpha
+              <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy}/>
+            </label>
+            <img class="paint-atlas" draggable="false"
+              src={snapshot.texturePreviewSources[paintTextureIndex] ?? ''}
+              alt="Editable texture atlas; click a pixel to paint it in Rust"
+              onpointerdown={paintAt}/>
+            <p class="dock-note">Click the atlas to edit one pixel. Each change is one Rust Undo step.</p>
+          {:else}
+            <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
+          {/if}
+        </section>
+      {/if}
     {/if}
   </aside>
 {/snippet}
@@ -1132,3 +1205,10 @@
     </section>
   </div>
 {/if}
+
+<style>
+  .paint-starter { display: grid; gap: 8px; padding: 10px; border-top: 1px solid #374151; }
+  .paint-starter label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .paint-starter select { min-width: 0; max-width: 100%; flex: 1; }
+  .paint-starter .paint-atlas { display: block; width: 100%; max-width: 256px; height: auto; aspect-ratio: auto; image-rendering: pixelated; touch-action: none; cursor: crosshair; border: 1px solid #475569; background-color: #4b5563; background-image: linear-gradient(45deg,#374151 25%,transparent 25%),linear-gradient(-45deg,#374151 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#374151 75%),linear-gradient(-45deg,transparent 75%,#374151 75%); background-size: 12px 12px; }
+</style>
