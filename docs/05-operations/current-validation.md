@@ -15,6 +15,8 @@ The installed-authoring instruction source and the current Texturing specialist 
 
 Online authoring `status` is now source-wired to include the exact SHA-matched bytes of the required active Skill/profile handles in the MCP text result, without copying the instructions into Control structured state. A bounded authoring mutation without a previously issued authoring orientation with resolvable specialist context is rejected before native execution, while direct read-only queries and subsequent known authoring operations retain their normal paths. The existing `known_context_ids` contract suppresses retransmission only when the client claims the exact content remains loaded. Focused positive/negative source regressions are AUTHORED_NOT_RUN. Actual Codex instruction ingestion/decisions, workspace launch CWD, installed binary parity, native use and accepted artistic quality remain NOT_EXECUTED / UNVERIFIED.
 
+Normal authoring guidance now allows the bounded first-party read-only Texture CLI conditionally, without changing the primary Gateway route or claiming that a locally unavailable executable can be called. The actual Codex invocation and effect on user corrections remain UNVERIFIED. The third-party vendor source is not enabled as an agent Skill.
+
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
 ## 2026-11-07 — Visual-asset source focus-switch closure (not executed)

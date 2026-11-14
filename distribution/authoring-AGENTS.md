@@ -52,6 +52,15 @@ invoke_capability
 
 Known capability → invoke directly. Unknown/stale → one bounded search; describe only when schema detail is needed. Reuse fresh mutation results instead of confirmation reads.
 
+For a complex, already scoped material/face treatment plan, the optional local
+`lazydesigner.exe plan-texture-treatment --input plan.json --json` (or Bun
+`plan:texture-treatment` in a source checkout) is a **read-only** preflight.
+Use it only when the current, matching CLI build is available and the plan
+can change a decision. It does not load approved image pixels, modify native
+Blockbench state, certify quality, or replace the four-tool Gateway. Do not
+search for the third-party Python CLI-Anything harness during normal art work;
+its copied source is development reference only.
+
 Geometry↔Texturing stays on shared AUTHORING. AUTHORING↔Animation uses `switch_authoring_phase` through Gateway and continues the same task/chat.
 
 ## Evidence / Safety
