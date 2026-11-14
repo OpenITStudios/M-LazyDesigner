@@ -617,6 +617,41 @@ fn auto_uv_resolves_uuid_texture_wrap_metadata_before_mutating() {
 }
 
 #[test]
+fn cube_inflate_and_stretch_validate_and_preserve_opaque_format_fields() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["elements"][0]["inflate"] = json!(1.25);
+    wire["elements"][0]["stretch"] = json!([2.0, 0.5, 1.5]);
+    let original = AuthoringDocument::import_bbmodel(
+        &serde_json::to_vec(&wire).unwrap()).unwrap();
+    let mut session = EditorSession::from_document(original.clone()).unwrap();
+    session.apply(0, &[EditOperation::TranslateCube {
+        uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+    }]).unwrap();
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["elements"][0]["inflate"], json!(1.25));
+    assert_eq!(saved["elements"][0]["stretch"], json!([2.0, 0.5, 1.5]));
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document().cubes[0].extra["stretch"], json!([2.0, 0.5, 1.5]));
+}
+
+#[test]
+fn invalid_cube_inflate_and_stretch_refuse_import() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["elements"][0]["inflate"] = json!("not a number");
+    assert_eq!(AuthoringDocument::import_bbmodel(
+        &serde_json::to_vec(&wire).unwrap()).unwrap_err(), "CUBE_INFLATE_INVALID");
+    wire["elements"][0]["inflate"] = json!(1.0);
+    wire["elements"][0]["stretch"] = json!([1.0, 2.0]);
+    assert_eq!(AuthoringDocument::import_bbmodel(
+        &serde_json::to_vec(&wire).unwrap()).unwrap_err(), "CUBE_STRETCH_INVALID");
+    wire["elements"][0]["stretch"] = json!([1.0, "invalid", 1.0]);
+    assert_eq!(AuthoringDocument::import_bbmodel(
+        &serde_json::to_vec(&wire).unwrap()).unwrap_err(), "CUBE_STRETCH_INVALID");
+}
+
+#[test]
 fn texture_index_must_be_valid_for_blockbench() {
     let mut value: Value = serde_json::from_str(SAMPLE).unwrap();
     value["elements"][0]["faces"]["north"]["texture"] = json!(9);

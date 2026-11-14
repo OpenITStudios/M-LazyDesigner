@@ -395,6 +395,20 @@ fn apply_box_resize_offset(cube: &mut Cube, axis: usize, direction: i8, old_size
 fn validate_cube(cube: &Cube, textures: &[Value]) -> Result<()> {
     if cube.kind != "cube" { return Err(fail("ELEMENT_TYPE_UNSUPPORTED")); }
     optional_rotation(&cube.extra)?;
+    // These saved geometry fields alter the 3D surface and must not be
+    // silently discarded or coerced by the derived preview projection.
+    if let Some(inflate) = cube.extra.get("inflate") {
+        if !inflate.as_f64().is_some_and(|v| v.is_finite() && v.abs() <= LIMIT) {
+            return Err(fail("CUBE_INFLATE_INVALID"));
+        }
+    }
+    if let Some(stretch) = cube.extra.get("stretch") {
+        if !stretch.as_array().is_some_and(|items|
+            items.len() == 3 && items.iter().all(|v|
+                v.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= LIMIT))) {
+            return Err(fail("CUBE_STRETCH_INVALID"));
+        }
+    }
     cube_auto_uv(cube)?;
     if cube.extra.get("box_uv").is_some_and(|v| !v.is_boolean()) {
         return Err(fail("CUBE_BOX_UV_FLAG_INVALID"));

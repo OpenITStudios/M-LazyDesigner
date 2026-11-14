@@ -4,6 +4,7 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
   import { planCubeLocalTranslation } from './rustMoveGizmo';
+  import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { faceUvCoordinates, bedrockTextureForFace, previewRenderSide } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
@@ -154,14 +155,11 @@
           pivot.rotation.set(deg(cube.rotation[0]), deg(cube.rotation[1]), deg(cube.rotation[2]), 'ZYX');
           parent.add(pivot);
           pivots.set(cube.uuid, pivot);
-          const dimensions = [
-            cube.to[0] - cube.from[0],
-            cube.to[1] - cube.from[1],
-            cube.to[2] - cube.from[2],
-          ];
-          // Zero-thickness cubes have no visible solid volume in this source slice.
-          if (dimensions.some((side) => side <= 0)) continue;
-          const geometry = new THREE.BoxGeometry(dimensions[0], dimensions[1], dimensions[2]);
+          const bounds = projectedCubeBounds(cube.from, cube.to, cube.inflate, cube.stretch);
+          // Do not show a false default-sized solid when an imported Cube
+          // has unsupported inverted/zero inflated or stretched dimensions.
+          if (!bounds) continue;
+          const geometry = new THREE.BoxGeometry(...bounds.size);
           const active = currentSelection === cube.uuid;
           const uvAttribute = geometry.getAttribute('uv') as THREE.BufferAttribute;
           const materials: THREE.MeshLambertMaterial[] = [];
@@ -195,9 +193,9 @@
           uvAttribute.needsUpdate = true;
           const mesh = new THREE.Mesh(geometry, materials);
           mesh.position.set(
-            (cube.from[0] + cube.to[0]) / 2 - cube.origin[0],
-            (cube.from[1] + cube.to[1]) / 2 - cube.origin[1],
-            (cube.from[2] + cube.to[2]) / 2 - cube.origin[2],
+            bounds.center[0] - cube.origin[0],
+            bounds.center[1] - cube.origin[1],
+            bounds.center[2] - cube.origin[2],
           );
           mesh.userData.cubeUuid = cube.uuid;
           pivot.add(mesh);

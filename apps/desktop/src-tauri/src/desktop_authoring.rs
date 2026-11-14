@@ -42,6 +42,8 @@ pub struct CubeView {
     to: [f64; 3],
     origin: [f64; 3],
     rotation: [f64; 3],
+    inflate: f64,
+    stretch: [f64; 3],
     visible: bool,
     box_uv: bool,
     uv_offset: [f64; 2],
@@ -220,6 +222,10 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 to: cube.to,
                 origin: cube.origin.unwrap_or([0.0, 0.0, 0.0]),
                 rotation: property_vec3(&cube.extra, "rotation"),
+                inflate: cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0),
+                stretch: cube.extra.get("stretch")
+                    .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok())
+                    .unwrap_or([1.0, 1.0, 1.0]),
                 visible: cube.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
                 box_uv: cube.extra.get("box_uv").and_then(Value::as_bool).unwrap_or(default_box_uv),
                 uv_offset: cube.uv_offset.unwrap_or([0.0, 0.0]),

@@ -18,6 +18,8 @@ export type CubeView = {
   to: Vec3;
   origin: Vec3;
   rotation: Vec3;
+  inflate: number;
+  stretch: Vec3;
   visible: boolean;
   boxUv: boolean;
   uvOffset: [number, number];
