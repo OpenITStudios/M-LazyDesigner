@@ -283,6 +283,20 @@
     }
   }
 
+  function boxOffset(axis: number, text: string) {
+    if (!selectedCube || !selectedCube.boxUv) return;
+    const value = parseFiniteEditorNumber(text);
+    if (value === null || !Number.isInteger(value)) {
+      error = 'Box UV offset must be a finite integer.';
+      return;
+    }
+    const offset: [number, number] = [...selectedCube.uvOffset];
+    offset[axis] = value;
+    if (offset[axis] !== selectedCube.uvOffset[axis]) {
+      apply([{ op: 'set_box_uv_offset', uuid: selectedCube.uuid, offset }]);
+    }
+  }
+
   function uvEdit(index: number, text: string) {
     if (!selectedCube || selectedCube.boxUv) return;
     const value = parseFiniteEditorNumber(text);
@@ -792,7 +806,17 @@
                 {/each}
               </select>
               {#if selectedCube.boxUv}
-                <p class="hint">Box UV face rectangles are derived from Cube bounds and offset.</p>
+                <p class="hint">Box UV face rectangles are derived from Cube bounds and atlas offset.</p>
+                <div class="uv-fields">
+                  {#each [0,1] as axis}
+                    <label><span>{axis === 0 ? 'U' : 'V'}</span>
+                      <input aria-label={'Box UV offset ' + (axis === 0 ? 'U' : 'V')}
+                        type="number" step="1" disabled={busy}
+                        value={selectedCube.uvOffset[axis]}
+                        onchange={(event) => boxOffset(axis, event.currentTarget.value)}/>
+                    </label>
+                  {/each}
+                </div>
               {:else}
                 <div class="uv-fields">
                   {#each [0,1,2,3] as i}

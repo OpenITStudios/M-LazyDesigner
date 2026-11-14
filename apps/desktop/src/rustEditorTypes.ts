@@ -18,6 +18,7 @@ export type CubeView = {
   rotation: Vec3;
   visible: boolean;
   boxUv: boolean;
+  uvOffset: [number, number];
   autoUv: number;
   color: number;
   faces: Record<string, CubeFace>;
@@ -56,4 +57,5 @@ export type EditOperation =
   | { op: 'translate_cube'; uuid: string; delta: Vec3 }
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
-  | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 };
+  | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
+  | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] };

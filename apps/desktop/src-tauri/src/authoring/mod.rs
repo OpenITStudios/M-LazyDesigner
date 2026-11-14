@@ -108,6 +108,7 @@ pub enum EditOperation {
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
+    SetBoxUvOffset { uuid: String, offset: [f64; 2] },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -655,6 +656,28 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             } else {
                 cube.extra.insert("rotation".into(), json!(rotation));
             }
+            Ok(uuid.clone())
+        }
+        EditOperation::SetBoxUvOffset { uuid, offset } => {
+            // Blockbench's Box UV editor stores integer atlas offsets.
+            if !valid_uv(offset) || !offset.iter().all(|value| value.fract() == 0.0) {
+                return Err(fail("BOX_UV_OFFSET_INVALID"));
+            }
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
+            let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if !cube_box_uv(cube, project_box_uv) {
+                return Err(fail("BOX_UV_MODE_REQUIRED"));
+            }
+            if cube.uv_offset.unwrap_or([0.0, 0.0]) == *offset {
+                return Ok(uuid.clone());
+            }
+            cube.uv_offset = if offset.iter().all(|value| *value == 0.0) {
+                None
+            } else {
+                Some(*offset)
+            };
+            refresh_box_uv(cube)?;
             Ok(uuid.clone())
         }
         EditOperation::SetFaceUv { uuid, face, uv } => {

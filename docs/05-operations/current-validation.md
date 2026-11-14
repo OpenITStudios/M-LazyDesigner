@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Box UV inspector offsets (SOURCE_ONLY)
+
+Source review of pinned Blockbench 5.2.1 `js/uv/uv.js` `slidePos` and Cube face layout informed a bounded integer Box UV offset editor. The existing Rust `EditOperation` now accepts `set_box_uv_offset`; Svelte exposes two numeric Box UV Inspector fields from the Tauri `uvOffset` projection. Rust checks finite integer values, Box UV mode, and no-op, then updates the offset and derived rectangles in a single revision-guarded transaction. Null-texture face UVs and opaque fields are preserved. Regression tests are authored NOT_EXECUTED; native Blockbench/CLI/Cargo/Windows/visual acceptance is UNVERIFIED. This does not implement complete Blockbench Box UV dragging/clamping or Paint.
+
 ## 2026-11-14 — Post-audit Rust Edit corrections (SOURCE_ONLY)
 
 Review of 12 Rust development commits and pinned Blockbench v5.2.1 project/Bedrock/Cube source established input coercion and Box UV default mismatches. Svelte inspector numeric fields now share a finite decimal parser, preventing blank, partial and nonfinite values from entering Rust commands. The native Bedrock Entity project defaults to Box UV, and the shared Rust AddCube transaction calculates initial Box UV face rectangles. Explicit Face UV remains writable. Non-string multi_file_ruleset values fail closed during Auto UV remapping, rather than being interpreted as absent rules. Regression source is authored NOT_EXECUTED; native Cargo/TypeScript, CLI/Windows/WebView2 and actual editable Blockbench round trip remain UNVERIFIED.

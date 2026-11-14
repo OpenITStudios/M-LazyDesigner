@@ -43,6 +43,7 @@ pub struct CubeView {
     rotation: [f64; 3],
     visible: bool,
     box_uv: bool,
+    uv_offset: [f64; 2],
     auto_uv: u8,
     color: usize,
     faces: Map<String, Value>,
@@ -129,6 +130,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 rotation: property_vec3(&cube.extra, "rotation"),
                 visible: cube.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
                 box_uv: cube.extra.get("box_uv").and_then(Value::as_bool).unwrap_or(default_box_uv),
+                uv_offset: cube.uv_offset.unwrap_or([0.0, 0.0]),
                 // Validated as 0/1/2 by the single Rust authoring engine.
                 auto_uv: cube.extra.get("autouv").and_then(Value::as_f64).unwrap_or(0.0) as u8,
                 color: cube.extra.get("color").and_then(Value::as_u64).unwrap_or(0) as usize,

@@ -279,6 +279,66 @@ fn auto_uv_size_mode_remaps_resized_face_and_rotated_face() {
     assert_eq!(session.document().cubes[0].faces["north"]["rotation"], json!(90));
 }
 
+
+#[test]
+fn box_uv_offset_edits_are_atomic_and_preserve_opaque_assets() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["meta"]["box_uv"] = json!(true);
+    wire["vendor"] = json!({"keep": [1, 2]});
+    wire["elements"][0]["faces"]["north"]["annotation"] = json!("preserve");
+    wire["elements"][0]["faces"]["south"]["texture"] = Value::Null;
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let previous = session.document().clone();
+    session.apply(0, &[EditOperation::SetBoxUvOffset {
+        uuid: CUBE.into(), offset: [2.0, 3.0],
+    }]).unwrap();
+    let cube = &session.document().cubes[0];
+    assert_eq!(cube.uv_offset, Some([2.0, 3.0]));
+    assert_eq!(cube.faces["north"]["uv"], json!([6.0, 7.0, 10.0, 11.0]));
+    assert_eq!(cube.faces["south"]["uv"], previous.cubes[0].faces["south"]["uv"]);
+    assert_eq!(cube.faces["north"]["annotation"], json!("preserve"));
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["vendor"], wire["vendor"]);
+    let again = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(again, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &previous);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &again);
+    session.apply(3, &[EditOperation::SetBoxUvOffset {
+        uuid: CUBE.into(), offset: [0.0, 0.0],
+    }]).unwrap();
+    assert_eq!(session.document().cubes[0].uv_offset, None);
+}
+
+#[test]
+fn box_uv_offset_rejects_invalid_mode_input_and_noop_without_revision() {
+    let mut face_session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    assert_eq!(face_session.apply(0, &[EditOperation::SetBoxUvOffset {
+        uuid: CUBE.into(), offset: [1.0, 2.0],
+    }]).unwrap_err(), "BOX_UV_MODE_REQUIRED");
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["meta"]["box_uv"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    for offset in [[f64::NAN, 0.0], [0.5, 2.0], [100_001.0, 0.0]] {
+        assert_eq!(session.apply(0, &[EditOperation::SetBoxUvOffset {
+            uuid: CUBE.into(), offset,
+        }]).unwrap_err(), "BOX_UV_OFFSET_INVALID");
+    }
+    assert_eq!(session.apply(0, &[EditOperation::SetBoxUvOffset {
+        uuid: CUBE.into(), offset: [0.0, 0.0],
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetBoxUvOffset { uuid: CUBE.into(), offset: [1.0, 1.0] },
+        EditOperation::SetFaceUv { uuid: CUBE.into(), face: "north".into(),
+            uv: [0.0, 0.0, 4.0, 4.0] },
+    ]).unwrap_err(), "FACE_UV_BOX_MODE_UNSUPPORTED");
+    assert_eq!(session.document(), &original);
+}
+
 #[test]
 fn box_uv_single_edge_resize_updates_offset_and_derived_faces() {
     let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
