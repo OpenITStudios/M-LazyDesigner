@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
   import { parseFiniteEditorNumber } from './rustNumericInput';
+  import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, Vec3, Vec4 } from './rustEditorTypes';
   import {
@@ -27,6 +28,7 @@
   // Move is the only implemented viewport gizmo. No fabricated Rotate/Scale.
   let moveTool = true;
   let selectedFace = 'north';
+  let workspaceMode: WorkspaceMode = 'edit';
   let paintTextureIndex = 0;
   let paintColor = '#e53935';
   let paintAlpha = 255;
@@ -110,6 +112,11 @@
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
 
+  function selectWorkspace(mode: WorkspaceMode) {
+    if (!canChangeWorkspace(Boolean(snapshot), busy, loading, Boolean(paintStroke))) return;
+    workspaceMode = mode;
+    closeMenus();
+  }
   function closeMenus() { menu = null; }
   function outsideClick(event: MouseEvent) {
     if (menu && event.target instanceof Element && !event.target.closest('.rust-menu-bar')) closeMenus();
@@ -135,6 +142,7 @@
     else error = 'The native authoring operation could not be completed.';
   }
   function accept(next: EditorSnapshot) {
+    if (paintTextureIndex >= next.textureNames.length) paintTextureIndex = 0;
     snapshot = next;
     if (selectedId && !next.cubes.some((cube) => cube.uuid === selectedId)) selectedId = null;
     if (selectedBoneId && !next.bones.some((bone) => bone.uuid === selectedBoneId)) selectedBoneId = null;
@@ -769,15 +777,30 @@
       {#if snapshot?.textureNames.length}
         <div class="texture-list">
           {#each snapshot.textureNames as name, index}
-            <div class="texture-item" title={name}><span class="texture-square"></span><span>{name}</span><small>{index + 1}</small></div>
+            <button type="button" class="texture-item" class:active={paintTextureIndex === index}
+              aria-pressed={paintTextureIndex === index} title={name}
+              disabled={!!paintStroke} onclick={() => paintTextureIndex = index}>
+              <span class="texture-square"></span><span>{name}</span><small>{index + 1}</small>
+            </button>
           {/each}
         </div>
       {:else}
         <p class="empty-label">No textures</p>
       {/if}
-      {#if snapshot}
-        <section class="paint-starter" aria-label="Basic Rust-owned Paint">
-          <div class="dock-title"><span>PAINT · PIXEL</span></div>
+      <p class="dock-note">Switch to Paint to edit a generated atlas. Imported textures remain read-only.</p>
+   {/if}
+  </aside>
+{/snippet}
+
+{#snippet paintWorkspace()}
+  <section class="paint-workspace" aria-label="Paint workspace">
+    <div class="paint-workspace-heading">
+      <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
+      <span>RGBA8 · 256 × 256 maximum</span>
+    </div>
+    {#if snapshot}
+      <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
+          <div class="dock-title"><span>ATLAS &amp; BRUSH</span></div>
           <button type="button" onclick={() => void newPaintTexture()} disabled={busy || loading ||
             snapshot.textureResolution.some(size => size > 256)}>
             New RGBA8 Texture
@@ -808,7 +831,7 @@
             <label>Alpha
               <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
-            <img class="paint-atlas" draggable="false"
+            <img class="paint-atlas paint-workspace-atlas" draggable="false"
               src={snapshot.texturePreviewSources[paintTextureIndex] ?? ''}
               alt="Editable texture atlas; drag to paint one Rust-owned stroke"
               onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
@@ -820,9 +843,8 @@
             <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
           {/if}
         </section>
-      {/if}
     {/if}
-  </aside>
+  </section>
 {/snippet}
 
 {#snippet inspectorDock(side: DockSide | 'float' | 'tabs')}
@@ -1119,8 +1141,12 @@
       {snapshot?.name ?? 'LazyDesigner'}{#if snapshot?.dirty}<span aria-label="Unsaved changes"> •</span>{/if}
     </div>
     <div class="mode-tabs" role="group" aria-label="Editor mode">
-      <span class="mode active" aria-current="page">Edit</span>
-      <button class="mode" disabled title="Paint mode is not implemented yet">Paint</button>
+      <button class="mode" class:active={workspaceMode === 'edit'}
+        aria-pressed={workspaceMode === 'edit'} disabled={!snapshot || busy || !!paintStroke}
+        onclick={() => selectWorkspace('edit')}>Edit</button>
+      <button class="mode" class:active={workspaceMode === 'paint'}
+        aria-pressed={workspaceMode === 'paint'} disabled={!snapshot || busy || !!paintStroke}
+        onclick={() => selectWorkspace('paint')}>Paint</button>
       <button class="mode" disabled title="Animate mode is not implemented yet">Animate</button>
     </div>
   </header>
@@ -1133,17 +1159,21 @@
     </div>
     <div class="tool-separator"></div>
     <div class="tool-group" role="group" aria-label="Edit operations">
-      <button disabled={!snapshot || busy} onclick={() => void addCube()}>Add Cube</button>
+      {#if workspaceMode === 'edit'}
+        <button disabled={!snapshot || busy} onclick={() => void addCube()}>Add Cube</button>
+      {/if}
       <button disabled={!snapshot?.canUndo || busy} onclick={() => history('undo')}>Undo</button>
       <button disabled={!snapshot?.canRedo || busy} onclick={() => history('redo')}>Redo</button>
     </div>
     <div class="tool-separator"></div>
-    <div class="tool-group" role="group" aria-label="Viewport transform tools">
-      <button class:active={moveTool} aria-pressed={moveTool}
-        title="Move the selected Cube with the 3D gizmo"
-        disabled={!snapshot || busy || loading}
-        onclick={() => moveTool = !moveTool}>Move</button>
-    </div>
+    {#if workspaceMode === 'edit'}
+      <div class="tool-group" role="group" aria-label="Viewport transform tools">
+        <button class:active={moveTool} aria-pressed={moveTool}
+          title="Move the selected Cube with the 3D gizmo"
+          disabled={!snapshot || busy || loading}
+          onclick={() => moveTool = !moveTool}>Move</button>
+      </div>
+    {/if}
     <div class="tool-spacer"></div>
     <button onclick={() => viewport?.frameModel()} disabled={!snapshot || busy}>Frame</button>
   </div>
@@ -1169,7 +1199,12 @@
       onpointercancel={(event) => finishDockResize(event, true)}
       onlostpointercapture={(event) => finishDockResize(event, true)}
       onkeydown={(event) => keyDockResize('left', event)}></div>
-    <main class="editor-viewport" aria-label="Model edit viewport">
+    <main class="editor-viewport" class:paint-mode={workspaceMode === 'paint'}
+      aria-label={workspaceMode === 'paint' ? 'Paint atlas and 3D model preview' : 'Model edit viewport'}>
+      {#if workspaceMode === 'paint'}
+        {@render paintWorkspace()}
+      {/if}
+      <div class="workspace-model-preview" class:paint-preview={workspaceMode === 'paint'}>
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
           hierarchy={snapshot.hierarchy}
@@ -1177,7 +1212,7 @@
           texturePreviewSides={snapshot.texturePreviewSides}
           textureResolution={snapshot.textureResolution}
           {selectedId} onSelect={selectCube}
-          canMove={moveTool && !busy && !loading && !newDialog && !confirmDiscard}
+          canMove={workspaceMode === 'edit' && moveTool && !busy && !loading && !newDialog && !confirmDiscard}
           onTranslate={moveFromViewport}/>
       {:else}
         <div class="empty-editor">
@@ -1189,6 +1224,7 @@
           </div>
         </div>
       {/if}
+      </div>
     </main>
 
 
@@ -1225,7 +1261,9 @@
     <span class="status-middle">{notice || (dockPersistenceError
       ? 'Dock layout is session-only; preferences cannot be saved'
       : snapshot ? (
-      selectedId && moveTool
+      workspaceMode === 'paint'
+        ? 'Paint atlas · one stroke per Rust Undo · visual parity unverified'
+        : selectedId && moveTool
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
         : 'Embedded PNG preview subset · visual parity unverified'
     ) : 'Native Rust authoring core')}</span>
