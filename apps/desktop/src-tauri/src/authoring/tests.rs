@@ -15,6 +15,99 @@ fn sample_cube(uuid: &str) -> Cube {
 }
 
 #[test]
+fn paint_brush_circle_and_eraser_preserve_one_undo_per_gesture() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Brush", "brush").unwrap()
+    ).unwrap();
+    let uuid = "00000000-0000-4000-8000-000000000129";
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "brush.png".into(),
+    }]).unwrap();
+    let blank = session.document().texture_assets[0].clone();
+    session.apply(1, &[EditOperation::PaintTextureBrush {
+        texture_index: 0, points: vec![[2, 2]], radius: 2,
+        rgba: [100, 50, 25, 255], erase: false,
+    }]).unwrap();
+    let painted = session.document().texture_assets[0].clone();
+    assert_ne!(blank, painted);
+    // Generated textures are the only supported ownership surface. Inspect
+    // source-only RGBA pixels through the same bounded Rust decoder helper.
+    let bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        painted["source"].as_str().unwrap()
+            .strip_prefix("data:image/png;base64,").unwrap(),
+    ).unwrap();
+    let mut reader = png::Decoder::new(std::io::Cursor::new(bytes)).read_info().unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut pixels).unwrap();
+    let w = session.document().resolution.width as usize;
+    let rgba_at = |x: usize, y: usize| -> &[u8] {
+        let start = (y * w + x) * 4;
+        &pixels[start..start + 4]
+    };
+    assert_eq!(rgba_at(2, 2), &[100, 50, 25, 255]);
+    assert_eq!(rgba_at(1, 2), &[100, 50, 25, 255]);
+    assert_eq!(rgba_at(2, 1), &[100, 50, 25, 255]);
+    assert_eq!(rgba_at(1, 1), &[0, 0, 0, 0]);
+    assert_eq!(rgba_at(4, 2), &[0, 0, 0, 0]);
+    session.apply(2, &[EditOperation::PaintTextureBrush {
+        texture_index: 0, points: vec![[2, 2]], radius: 1,
+        rgba: [255, 255, 255, 255], erase: true,
+    }]).unwrap();
+    let erased = session.document().texture_assets[0].clone();
+    assert_ne!(painted, erased);
+    session.undo(3).unwrap();
+    assert_eq!(session.document().texture_assets[0], painted);
+    session.undo(4).unwrap();
+    assert_eq!(session.document().texture_assets[0], blank);
+    session.redo(5).unwrap();
+    assert_eq!(session.document().texture_assets[0], painted);
+    session.redo(6).unwrap();
+    assert_eq!(session.document().texture_assets[0], erased);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+}
+
+#[test]
+fn paint_brush_invalid_radius_and_coordinates_refuse_atomically() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Brush", "brush").unwrap()
+    ).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: "00000000-0000-4000-8000-000000000129".into(),
+        name: "brush.png".into(),
+    }]).unwrap();
+    let original = session.document().clone();
+    for radius in [0, 9, 255] {
+        assert_eq!(session.apply(1, &[EditOperation::PaintTextureBrush {
+            texture_index: 0, points: vec![[2, 2]], radius,
+            rgba: [3, 4, 5, 255], erase: false,
+        }]).unwrap_err(), "PAINT_BRUSH_RADIUS_INVALID");
+    }
+    assert_eq!(session.apply(1, &[EditOperation::PaintTextureBrush {
+        texture_index: 0, points: vec![[0, 0], [128, 0]], radius: 8,
+        rgba: [3, 4, 5, 255], erase: false,
+    }]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.apply(1, &[
+        EditOperation::PaintTextureBrush {
+            texture_index: 0, points: vec![[1, 1]], radius: 8,
+            rgba: [3, 4, 5, 255], erase: false,
+        },
+        EditOperation::PaintTextureBrush {
+            texture_index: 0, points: vec![[128, 0]], radius: 1,
+            rgba: [3, 4, 5, 255], erase: true,
+        }
+    ]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 1);
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    assert_eq!(imported.apply(0, &[EditOperation::PaintTextureBrush {
+        texture_index: 0, points: vec![[0, 0]], radius: 2,
+        rgba: [0, 0, 0, 0], erase: true,
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+}
+
+#[test]
 fn paint_stroke_is_one_revision_one_undo_and_roundtrips() {
     let mut session = EditorSession::from_document(
         AuthoringDocument::new_bedrock("Stroke", "stroke").unwrap()

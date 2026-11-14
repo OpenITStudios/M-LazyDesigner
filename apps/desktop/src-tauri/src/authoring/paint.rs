@@ -123,6 +123,49 @@ pub(super) fn stroke(
     Ok(())
 }
 
+/// One circular pencil/eraser stroke. Radius 1 covers one pixel; radius 8
+/// covers at most a 15x15 neighborhood per path point. Clip at atlas edges.
+pub(super) fn brush(
+    texture: &mut Value, width: u32, height: u32,
+    points: &[[u32; 2]], radius: u8, rgba: [u8; 4], erase: bool,
+) -> Result<()> {
+    if radius == 0 || radius > 8 { return Err("PAINT_BRUSH_RADIUS_INVALID".into()); }
+    if points.is_empty() || points.len() > MAX_STROKE_POINTS {
+        return Err("PAINT_STROKE_SIZE_INVALID".into());
+    }
+    if points.iter().any(|[x, y]| *x >= width || *y >= height) {
+        return Err("PAINT_COORDINATE_INVALID".into());
+    }
+    let mut pixels = decode(texture, width, height)?;
+    let desired = if erase { [0, 0, 0, 0] } else { rgba };
+    let distance = i32::from(radius) - 1;
+    let mut changed = false;
+    for &[x, y] in points {
+        for offset_y in -distance..=distance {
+            for offset_x in -distance..=distance {
+                if offset_x * offset_x + offset_y * offset_y > distance * distance {
+                    continue;
+                }
+                let nx = i64::from(x) + i64::from(offset_x);
+                let ny = i64::from(y) + i64::from(offset_y);
+                if nx < 0 || ny < 0 || nx >= i64::from(width) || ny >= i64::from(height) {
+                    continue;
+                }
+                let start = (ny as usize * width as usize + nx as usize) * 4;
+                if pixels[start..start + 4] != desired {
+                    pixels[start..start + 4].copy_from_slice(&desired);
+                    changed = true;
+                }
+            }
+        }
+    }
+    if !changed { return Ok(()); }
+    let source = encode(width, height, &pixels)?;
+    texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
+        .insert("source".into(), Value::String(source));
+    Ok(())
+}
+
 pub(super) fn pixel(
     texture: &mut Value, width: u32, height: u32, x: u32, y: u32, rgba: [u8; 4],
 ) -> Result<()> {

@@ -30,7 +30,9 @@
   let paintTextureIndex = 0;
   let paintColor = '#e53935';
   let paintAlpha = 255;
-  let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number] } | null = null;
+  let paintTool: 'pencil' | 'eraser' = 'pencil';
+  let paintRadius = 1;
+  let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number]; radius: number; erase: boolean; overflow: boolean } | null = null;
   let menu: Menu = null;
   let loading = true;
   let busy = false;
@@ -336,7 +338,8 @@
     if (!(target instanceof HTMLImageElement)) return;
     const first = paintPoint(event, target);
     if (!first || !/^#[0-9a-fA-F]{6}$/.test(paintColor) ||
-        !Number.isInteger(paintAlpha) || paintAlpha < 0 || paintAlpha > 255) return;
+        !Number.isInteger(paintAlpha) || paintAlpha < 0 || paintAlpha > 255 ||
+        !Number.isInteger(paintRadius) || paintRadius < 1 || paintRadius > 8) return;
     const rgba: [number, number, number, number] = [
       parseInt(paintColor.slice(1, 3), 16), parseInt(paintColor.slice(3, 5), 16),
       parseInt(paintColor.slice(5, 7), 16), paintAlpha,
@@ -344,6 +347,7 @@
     paintStroke = {
       pointerId: event.pointerId, textureIndex: paintTextureIndex,
       epoch: snapshot.epoch, revision: snapshot.revision, points: [first], rgba,
+      radius: paintRadius, erase: paintTool === 'eraser', overflow: false,
     };
     target.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -351,7 +355,7 @@
 
   function movePaintStroke(event: PointerEvent) {
     const stroke = paintStroke;
-    if (!stroke || stroke.pointerId !== event.pointerId || !snapshot) return;
+    if (!stroke || stroke.pointerId !== event.pointerId || !snapshot || stroke.overflow) return;
     const target = event.currentTarget;
     if (!(target instanceof HTMLImageElement)) return;
     const point = paintPoint(event, target);
@@ -360,6 +364,7 @@
     const [width, height] = snapshot.textureResolution;
     const next = extendPaintStroke(stroke.points, point, width, height);
     if (next) paintStroke = { ...stroke, points: next };
+    else paintStroke = { ...stroke, overflow: true };
   }
 
   function finishPaintStroke(event: PointerEvent, cancelled = false) {
@@ -370,11 +375,17 @@
     if (target instanceof HTMLImageElement && target.hasPointerCapture(event.pointerId)) {
       target.releasePointerCapture(event.pointerId);
     }
-    if (cancelled || !snapshot || busy ||
+    if (cancelled) return;
+    if (stroke.overflow) {
+      error = 'Stroke exceeds the 4,096-point limit. No pixels were changed.';
+      return;
+    }
+    if (!snapshot || busy ||
         snapshot.epoch !== stroke.epoch || snapshot.revision !== stroke.revision ||
         !snapshot.paintEditableTextures[stroke.textureIndex]) return;
-    apply([{ op: 'paint_texture_stroke', texture_index: stroke.textureIndex,
-      points: stroke.points, rgba: stroke.rgba }]);
+    apply([{ op: 'paint_texture_brush', texture_index: stroke.textureIndex,
+      points: stroke.points, radius: stroke.radius,
+      rgba: stroke.rgba, erase: stroke.erase }]);
     event.preventDefault();
   }
 
@@ -782,7 +793,18 @@
           {/if}
           {#if snapshot.paintEditableTextures[paintTextureIndex] &&
             snapshot.texturePreviewSources[paintTextureIndex]}
-            <label>Color <input type="color" bind:value={paintColor} disabled={busy || !!paintStroke}/></label>
+            <label>Tool
+              <select bind:value={paintTool} disabled={busy || !!paintStroke}>
+                <option value="pencil">Pencil</option>
+                <option value="eraser">Eraser</option>
+              </select>
+            </label>
+            <label>Radius
+              <input type="number" min="1" max="8" step="1" bind:value={paintRadius}
+                disabled={busy || !!paintStroke}/>
+            </label>
+            <label>Color <input type="color" bind:value={paintColor}
+              disabled={busy || !!paintStroke || paintTool === 'eraser'}/></label>
             <label>Alpha
               <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
@@ -793,7 +815,7 @@
               onpointerup={finishPaintStroke}
               onpointercancel={(event) => finishPaintStroke(event, true)}
               onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
-            <p class="dock-note">Drag the atlas to paint a stroke. Each completed stroke is one Rust Undo step.</p>
+            <p class="dock-note">Pencil paints circular pixels; Eraser clears alpha. One stroke is one Rust Undo step. Maximum radius: 8.</p>
           {:else}
             <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
           {/if}
