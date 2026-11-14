@@ -5,6 +5,10 @@ import { gatewayOrchestrationRecoveryState } from "./orchestrationRecoveryState"
 describe("Gateway Runtime-generation session recovery", () => {
   test("issued Control task identity is ephemeral across stage, project and Runtime changes", () => {
     const session = new GatewaySessionState();
+    session.recordIssuedControlTaskId("dev-task", "SYSTEM_DEVELOPMENT");
+    expect(session.hasAuthoringOrientation).toBe(false);
+    session.recordIssuedControlTaskId("asset-task", "ASSET_AUTHORING");
+    expect(session.hasAuthoringOrientation).toBe(true);
     session.onVerifiedRuntimeStatus("id-project", "geometry");
     session.recordIssuedControlTaskId("task-a");
     expect(session.currentIssuedControlTaskId).toBe("task-a");

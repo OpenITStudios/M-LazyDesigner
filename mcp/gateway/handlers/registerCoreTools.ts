@@ -420,7 +420,10 @@ export function registerCoreGatewayTools(
         // Only a completed status response issues a new client cohort identity.
         // A failed image/fact read or offline Runtime cannot authorize reuse.
         session.recordIssuedControlTaskId(
-          status.runtime.mcp_client_ready ? control.task_context_id : null,
+          status.runtime.mcp_client_ready &&
+            control.readiness.context_ready &&
+            control.authoring.domain !== null
+            ? control.task_context_id : null,
           task_mode
         );
         trace?.record({ startedAt, traceparent, kind: "inspect",

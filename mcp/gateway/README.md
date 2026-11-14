@@ -68,7 +68,7 @@ The AI receiving the text and actually following it still require host evidence.
 
 **First mutation admission:** Existing authoring-state mutations require
 one valid `ASSET_AUTHORING` status orientation per current project/Stage/
-Runtime lease. Calls before that return
+Runtime lease, with its required specialist context resolvable. Calls before that return
 `AUTHORING_CONTROL_ORIENTATION_REQUIRED` without a native effect. Follow-up
 known mutations do not need a new status unless authority changes; read-only
 queries remain direct. A standalone `COMPLETE` still does not require a

@@ -193,6 +193,14 @@ describe("LazyDesigner Control active contract", () => {
       executed: false,
     });
     expect(calls).toHaveLength(3);
+
+    // A read-only inspection is not a native authoring mutation. It must
+    // remain direct after a development orientation invalidates authoring.
+    const query = await invokeTool({
+      capability: "inspect_elements", arguments: {},
+    }) as { structuredContent: { applied: boolean } };
+    expect(query.structuredContent.applied).toBe(true);
+    expect(calls).toHaveLength(4);
   });
 
   test("authoring domain and source owner are distinct canonical concepts", () => {

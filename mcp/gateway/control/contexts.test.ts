@@ -25,7 +25,7 @@ describe("required authoring context resolution", () => {
   test("status context delivery reads canonical source bytes with exact handle integrity", async () => {
     const directory = await mkdtemp(join(tmpdir(), "lazydesigner-context-delivery-"));
     const file = pathToFileURL(join(directory, "SKILL.md"));
-    const text = "---\\nname: lazydesigner-texturing\\n---\\nRead this actual source.";
+    const text = "---\nname: lazydesigner-texturing\n---\nRead this actual source.";
     const sha256 = createHash("sha256").update(text).digest("hex");
     const current: ControlContextHandle = {
       ...handle(TEXTURING_PATH),
