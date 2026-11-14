@@ -227,8 +227,7 @@
   async function moveFromViewport(uuid: string, delta: Vec3): Promise<boolean> {
     // A pointer gesture may request one Rust edit. The viewport never mutates
     // the authored document and must restore its preview on any refusal.
-    if (!snapshot || !moveTool || busy || selectedId !== uuid ||
-        snapshot.cubes.find((cube) => cube.uuid === uuid)?.autoUv !== 0) return false;
+    if (!snapshot || !moveTool || busy || selectedId !== uuid) return false;
     const next = await command('rust_editor_apply', {
       expectedEpoch: snapshot.epoch,
       expectedRevision: snapshot.revision,
@@ -256,7 +255,7 @@
     });
   }
   function position(axis: number, text: string) {
-    if (!selectedCube || selectedCube.autoUv !== 0) return;
+    if (!selectedCube) return;
     const value = Number(text);
     if (!Number.isFinite(value)) { error = 'Enter a finite coordinate.'; return; }
     const delta: Vec3 = [0, 0, 0];
@@ -264,7 +263,7 @@
     if (delta[axis] !== 0) apply([{ op: 'translate_cube', uuid: selectedCube.uuid, delta }]);
   }
   function size(axis: number, text: string) {
-    if (!selectedCube || selectedCube.autoUv !== 0 || selectedCube.boxUv) return;
+    if (!selectedCube) return;
     const value = Number(text);
     if (!Number.isFinite(value) || value <= 0) { error = 'Size must be greater than zero.'; return; }
     const to = [...selectedCube.to] as Vec3;
@@ -743,8 +742,8 @@
                 {#each [0,1,2] as axis}
                   <label class="axis-input"><span>{AXES[axis]}</span>
                     <input aria-label={'Position ' + AXES[axis]} type="number" step="any"
-                      disabled={busy || selectedCube.autoUv !== 0}
-                      title={selectedCube.autoUv !== 0 ? 'Auto UV movement remapping is not supported yet' : 'Change Cube position'}
+                      disabled={busy}
+                      title="Change Cube position (Auto UV remaps in Rust)"
                       value={selectedCube.from[axis]}
                       onchange={(event) => position(axis, event.currentTarget.value)}/>
                   </label>
@@ -757,9 +756,8 @@
                 {#each [0,1,2] as axis}
                   <label class="axis-input"><span>{AXES[axis]}</span>
                     <input aria-label={'Size ' + AXES[axis]} type="number" step="any" min="0.001"
-                      disabled={busy || selectedCube.autoUv !== 0 || selectedCube.boxUv}
-                      title={selectedCube.autoUv !== 0 || selectedCube.boxUv
-                        ? 'UV remapping on resize is not supported yet' : 'Change Cube size'}
+                      disabled={busy}
+                      title="Change Cube size (one edge at a time; UV remaps in Rust)"
                       value={selectedCube.to[axis] - selectedCube.from[axis]}
                       onchange={(event) => size(axis, event.currentTarget.value)}/>
                   </label>
@@ -778,10 +776,10 @@
                 {/each}
               </div>
             </div>
-            {#if selectedCube.autoUv !== 0}
-              <p class="hint">Auto UV mode {selectedCube.autoUv} is preserved. Move, resize, and manual face UV edits are disabled until automatic mapping is implemented.</p>
-            {:else if selectedCube.boxUv}
-              <p class="hint">Box UV is preserved. Size changes and per-face UV editing are disabled until box mapping is implemented.</p>
+            {#if selectedCube.boxUv}
+              <p class="hint">Box UV remaps Size and preserves the box offset. Per-face UV editing remains unavailable.</p>
+            {:else if selectedCube.autoUv !== 0}
+              <p class="hint">Auto UV mode {selectedCube.autoUv} remaps Move and single-edge Size in Rust. Manual face UV editing remains unavailable.</p>
             {/if}
             <div class="property-group">
               <label for="uv-face">UV Face</label>
@@ -792,7 +790,7 @@
                 {/each}
               </select>
               {#if selectedCube.boxUv}
-                <p class="hint">Box UV mode is read-only in this slice.</p>
+                <p class="hint">Box UV face rectangles are derived from Cube bounds and offset.</p>
               {:else}
                 <div class="uv-fields">
                   {#each [0,1,2,3] as i}
@@ -1011,8 +1009,7 @@
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
           hierarchy={snapshot.hierarchy} {selectedId} onSelect={selectCube}
-          canMove={moveTool && (!selectedCube || selectedCube.autoUv === 0) &&
-            !busy && !loading && !newDialog && !confirmDiscard}
+          canMove={moveTool && !busy && !loading && !newDialog && !confirmDiscard}
           onTranslate={moveFromViewport}/>
       {:else}
         <div class="empty-editor">

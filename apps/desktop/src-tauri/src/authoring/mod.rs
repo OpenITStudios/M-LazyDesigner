@@ -179,6 +179,196 @@ fn cube_box_uv(cube: &Cube, default: bool) -> bool {
     cube.extra.get("box_uv").and_then(Value::as_bool).unwrap_or(default)
 }
 
+
+/** UV changes are owned by Rust, not by the viewport or a second JS model. */
+fn has_per_texture_uv_rules(doc: &AuthoringDocument) -> bool {
+    doc.extensions.get("multi_file_ruleset").is_some_and(|value| match value {
+        Value::Null | Value::Bool(false) => false,
+        Value::String(name) => !name.is_empty(),
+        Value::Number(number) => number.as_f64() != Some(0.0),
+        _ => true,
+    })
+}
+
+fn face_uv(cube: &Cube, side: &str) -> Result<[f64; 4]> {
+    cube.faces.get(side)
+        .and_then(|face| face.get("uv"))
+        .and_then(|uv| serde_json::from_value::<[f64; 4]>(uv.clone()).ok())
+        .ok_or_else(|| fail("CUBE_FACE_UV_INVALID"))
+}
+
+fn write_face_uv(cube: &mut Cube, side: &str, uv: [f64; 4]) -> Result<()> {
+    cube.faces.get_mut(side).and_then(Value::as_object_mut)
+        .ok_or_else(|| fail("CUBE_FACE_INVALID"))?
+        .insert("uv".into(), json!(uv));
+    Ok(())
+}
+
+fn clamp_uv_pair(mut a: f64, mut b: f64, limit: f64) -> (f64, f64) {
+    if a.max(b) > limit {
+        let overshoot = a.max(b) - limit;
+        a -= overshoot;
+        b -= overshoot;
+    }
+    if a.min(b) < 0.0 {
+        let undershoot = a.min(b);
+        a = (a - undershoot).clamp(0.0, limit);
+        b = (b - undershoot).clamp(0.0, limit);
+    }
+    (a, b)
+}
+
+/** Derived from the observable Bedrock Cube Auto UV 1/2 contract in Blockbench 5.2.1. */
+fn refresh_auto_uv(
+    cube: &mut Cube,
+    mode: u8,
+    resolution: [f64; 2],
+    textures: &[Value],
+    resized: Option<(usize, i8)>,
+) -> Result<()> {
+    if mode == 0 { return Ok(()); }
+    let [width, height] = resolution;
+    for side in FACE_NAMES {
+        let old = face_uv(cube, side)?;
+        let uv = if mode == 2 {
+            // Bedrock's centered grid uses an 8-unit offset in world-relative UV.
+            let f = cube.from;
+            let t = cube.to;
+            let coords = match side {
+                "north" => [width - t[0] - 8.0, height - t[1], width - f[0] - 8.0, height - f[1]],
+                "south" => [f[0] + 8.0, height - t[1], t[0] + 8.0, height - f[1]],
+                "west" => [f[2] + 8.0, height - t[1], t[2] + 8.0, height - f[1]],
+                "east" => [width - t[2] - 8.0, height - t[1], width - f[2] - 8.0, height - f[1]],
+                "up" => [f[0] + 8.0, f[2] + 8.0, t[0] + 8.0, t[2] + 8.0],
+                "down" => [f[0] + 8.0, height - t[2] - 8.0, t[0] + 8.0, height - f[2] - 8.0],
+                _ => unreachable!(),
+            };
+            let (u0, u1) = clamp_uv_pair(coords[0], coords[2], width);
+            let (v0, v1) = clamp_uv_pair(coords[1], coords[3], height);
+            [u0, v0, u1, v1]
+        } else {
+            let (mut axes, mut directions): ([usize; 2], [i8; 2]) = match side {
+                "north" | "south" => ([0, 1], [if side == "north" { 1 } else { -1 }, 1]),
+                "east" | "west" => ([2, 1], [if side == "east" { 1 } else { -1 }, 1]),
+                "up" => ([0, 2], [-1, -1]),
+                "down" => ([0, 2], [-1, 1]),
+                _ => unreachable!(),
+            };
+            let face = cube.faces.get(side).ok_or_else(|| fail("CUBE_FACE_INVALID"))?;
+            let rotation = match face.get("rotation") {
+                None => 0.0,
+                Some(value) => value.as_f64().ok_or_else(|| fail("CUBE_AUTO_UV_FACE_ROTATION_UNSUPPORTED"))?,
+            };
+            if ![0.0, 90.0, 180.0, 270.0].contains(&rotation) {
+                return Err(fail("CUBE_AUTO_UV_FACE_ROTATION_UNSUPPORTED"));
+            }
+            let texture = face.get("texture").and_then(Value::as_u64)
+                .and_then(|index| textures.get(index as usize));
+            let wrap = match texture.and_then(|item| item.get("wrap_mode")) {
+                None => "limited",
+                Some(value) => value.as_str().ok_or_else(|| fail("CUBE_AUTO_UV_WRAP_MODE_UNSUPPORTED"))?,
+            };
+            if !["limited", "repeat", "clamp"].contains(&wrap) {
+                return Err(fail("CUBE_AUTO_UV_WRAP_MODE_UNSUPPORTED"));
+            }
+            let limited = wrap == "limited";
+            let mut size = [
+                ((cube.to[axes[0]] - cube.from[axes[0]]).abs() * 100.0).round() / 100.0,
+                ((cube.to[axes[1]] - cube.from[axes[1]]).abs() * 100.0).round() / 100.0,
+            ];
+            if rotation == 90.0 || rotation == 270.0 {
+                size.swap(0, 1);
+                axes.swap(0, 1);
+                directions.swap(0, 1);
+            }
+            if rotation == 180.0 || rotation == 270.0 {
+                for direction in &mut directions { *direction = -*direction; }
+            }
+            if rotation == 270.0 { directions[1] = -directions[1]; }
+            if limited {
+                size[0] = size[0].clamp(0.0, width);
+                size[1] = size[1].clamp(0.0, height);
+            }
+            let prior_size = [old[2] - old[0], old[3] - old[1]];
+            for index in 0..2 {
+                if prior_size[index] < 0.0 { size[index] = -size[index]; }
+            }
+            let mut start = [old[0], old[1]];
+            if let Some((axis, direction)) = resized {
+                for index in 0..2 {
+                    if axis == axes[index] {
+                        if direction == directions[index] {
+                            start[index] += prior_size[index] - size[index];
+                        } else if direction == 0 {
+                            start[index] += (prior_size[index] - size[index]) / 2.0;
+                        }
+                    }
+                }
+            }
+            if limited {
+                start[0] = start[0].max(0.0);
+                start[1] = start[1].max(0.0);
+            }
+            let mut end = [start[0] + size[0], start[1] + size[1]];
+            if limited {
+                if end[0] > width { start[0] = width - size[0]; end[0] = width; }
+                if end[1] > height { start[1] = height - size[1]; end[1] = height; }
+            }
+            [start[0], start[1], end[0], end[1]]
+        };
+        write_face_uv(cube, side, uv)?;
+    }
+    Ok(())
+}
+
+/** Box UV offsets and derived face rectangles use the pinned Bedrock layout. */
+fn refresh_box_uv(cube: &mut Cube) -> Result<()> {
+    let size = [0, 1, 2].map(|axis| (cube.to[axis] - cube.from[axis] + 0.0000001).floor());
+    let [x, y, z] = size;
+    let mut positions = [
+        ([0.0, z], [z, y]),         // east
+        ([z + x, z], [z, y]),       // west
+        ([z + x, z], [-x, -z]),     // up
+        ([z + 2.0 * x, 0.0], [-x, z]), // down
+        ([2.0 * z + x, z], [x, y]), // south
+        ([z, z], [x, y]),           // north
+    ];
+    if cube.extra.get("mirror_uv").and_then(Value::as_bool).unwrap_or(false) {
+        for position in &mut positions {
+            position.0[0] += position.1[0];
+            position.1[0] = -position.1[0];
+        }
+        positions.swap(0, 1);
+    }
+    let offset = cube.uv_offset.unwrap_or([0.0, 0.0]);
+    for (side, (start, extent)) in ["east", "west", "up", "down", "south", "north"].into_iter().zip(positions) {
+        // Native Blockbench leaves deliberately untextured (null) face data alone.
+        if cube.faces.get(side).and_then(|face| face.get("texture")).is_some_and(Value::is_null) {
+            continue;
+        }
+        write_face_uv(cube, side, [
+            start[0] + offset[0], start[1] + offset[1],
+            start[0] + extent[0] + offset[0], start[1] + extent[1] + offset[1],
+        ])?;
+    }
+    Ok(())
+}
+
+fn apply_box_resize_offset(cube: &mut Cube, axis: usize, direction: i8, old_size: f64) {
+    let new_size = cube.to[axis] - cube.from[axis];
+    let adjustment = (old_size - new_size).ceil(); // Bedrock box_uv_float_size defaults to false.
+    let mut offset = cube.uv_offset.unwrap_or([0.0, 0.0]);
+    if axis == 2 {
+        offset[0] += adjustment;
+        offset[1] += adjustment;
+    } else if axis == 0 && direction == 1 {
+        offset[0] += adjustment;
+    }
+    if cube.uv_offset.is_some() || offset != [0.0, 0.0] {
+        cube.uv_offset = Some(offset);
+    }
+}
+
 fn validate_cube(cube: &Cube, textures: usize) -> Result<()> {
     if cube.kind != "cube" { return Err(fail("ELEMENT_TYPE_UNSUPPORTED")); }
     optional_rotation(&cube.extra)?;
@@ -374,13 +564,20 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             doc.cubes.push(cube.clone());
             Ok(cube.uuid.clone())
         }
+
         EditOperation::TranslateCube { uuid, delta } => {
             if !valid_vec3(*delta) { return Err(fail("CUBE_DELTA_INVALID")); }
+            let per_texture = has_per_texture_uv_rules(doc);
+            let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
+            let textures = &doc.texture_assets;
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
             let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
-            if cube_auto_uv(cube)? != 0 {
-                // Blockbench remaps UV on move in Auto UV modes.
-                return Err(fail("CUBE_AUTO_UV_REMAP_REQUIRED"));
+            if delta.iter().all(|axis| *axis == 0.0) { return Ok(uuid.clone()); }
+            let auto_uv = cube_auto_uv(cube)?;
+            let box_uv = cube_box_uv(cube, project_box_uv);
+            if !box_uv && auto_uv != 0 && per_texture {
+                return Err(fail("CUBE_UV_TEXTURE_RULESET_UNSUPPORTED"));
             }
             for axis in 0..3 {
                 cube.from[axis] += delta[axis];
@@ -388,22 +585,51 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             }
             let origin = cube.origin.get_or_insert([0.0, 0.0, 0.0]);
             for axis in 0..3 { origin[axis] += delta[axis]; }
+            if !box_uv {
+                refresh_auto_uv(cube, auto_uv, resolution, textures, None)?;
+            }
             Ok(uuid.clone())
         }
         EditOperation::SetCubeBounds { uuid, from, to } => {
             if !valid_bounds(*from, *to) { return Err(fail("CUBE_BOUNDS_INVALID")); }
+            let per_texture = has_per_texture_uv_rules(doc);
+            let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
+            let textures = &doc.texture_assets;
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
             let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
-            if cube_auto_uv(cube)? != 0 {
-                return Err(fail("CUBE_AUTO_UV_REMAP_REQUIRED"));
+            let auto_uv = cube_auto_uv(cube)?;
+            let box_uv = cube_box_uv(cube, project_box_uv);
+            let refusal = if box_uv { "CUBE_BOX_UV_RESIZE_UNSUPPORTED" }
+                else { "CUBE_AUTO_UV_REMAP_REQUIRED" };
+            // The current operation has no transform direction. For UV-sensitive
+            // cubes, only a single moved edge has unambiguous native semantics.
+            let mut changed: Option<(usize, i8)> = None;
+            for axis in 0..3 {
+                let from_changed = cube.from[axis] != from[axis];
+                let to_changed = cube.to[axis] != to[axis];
+                if from_changed || to_changed {
+                    if (auto_uv != 0 || box_uv) &&
+                        (changed.is_some() || (from_changed && to_changed)) {
+                        return Err(fail(refusal));
+                    }
+                    changed = Some((axis, if from_changed { -1 } else { 1 }));
+                }
             }
-            if cube_box_uv(cube, project_box_uv) {
-                // Blockbench updates box-UV offsets when changing extents.
-                return Err(fail("CUBE_BOX_UV_RESIZE_UNSUPPORTED"));
+            if changed.is_none() { return Ok(uuid.clone()); }
+            if auto_uv != 0 && !box_uv && per_texture {
+                return Err(fail("CUBE_UV_TEXTURE_RULESET_UNSUPPORTED"));
             }
+            let (axis, direction) = changed.expect("a bound changed");
+            let prior_size = cube.to[axis] - cube.from[axis];
             cube.from = *from;
             cube.to = *to;
+            if box_uv {
+                apply_box_resize_offset(cube, axis, direction, prior_size);
+                refresh_box_uv(cube)?;
+            } else {
+                refresh_auto_uv(cube, auto_uv, resolution, textures, Some((axis, direction)))?;
+            }
             Ok(uuid.clone())
         }
         EditOperation::SetCubeRotation { uuid, rotation } => {

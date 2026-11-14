@@ -177,50 +177,132 @@ fn authored_cube_rotation_round_trip_preserves_opaque_asset_fields_and_undo() {
     assert!(session.document().cubes[0].extra.get("rotation").is_none());
 }
 
+
 #[test]
-fn unsupported_auto_uv_mapping_fails_closed_without_partial_mutation() {
-    for mode in [1, 2] {
-        let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
-        model["elements"][0]["autouv"] = json!(mode);
-        let bytes = serde_json::to_vec(&model).unwrap();
-        let mut session = EditorSession::open(&bytes).unwrap();
-        let original = session.document().clone();
-        let commands = [
-            EditOperation::TranslateCube { uuid: CUBE.into(), delta: [1.0, 0.0, 0.0] },
-            EditOperation::SetCubeBounds {
-                uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 4.0, 4.0],
-            },
-            EditOperation::SetFaceUv {
-                uuid: CUBE.into(), face: "north".into(), uv: [1.0, 0.0, 5.0, 4.0],
-            },
-        ];
-        for operation in commands {
-            assert_eq!(session.apply(0, &[operation]).unwrap_err(), "CUBE_AUTO_UV_REMAP_REQUIRED");
-            assert_eq!(session.document(), &original);
-            assert_eq!(session.summary().revision, 0);
-        }
-        assert_eq!(session.apply(0, &[
-            EditOperation::SetCubeRotation { uuid: CUBE.into(), rotation: [0.0, 12.0, 0.0] },
-            EditOperation::TranslateCube { uuid: CUBE.into(), delta: [1.0, 0.0, 0.0] },
-        ]).unwrap_err(), "CUBE_AUTO_UV_REMAP_REQUIRED");
-        assert_eq!(session.document(), &original);
-    }
+fn auto_uv_relative_move_remaps_all_six_faces_and_preserves_roundtrip() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["elements"][0]["autouv"] = json!(2);
+    model["elements"][0]["faces"]["north"]["texture"] = json!(false);
+    model["vendor"] = json!({"keep": [1, 2]});
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    session.apply(0, &[EditOperation::TranslateCube {
+        uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+    }]).unwrap();
+    let cube = &session.document().cubes[0];
+    assert_eq!(cube.faces["north"]["uv"], json!([115.0, 124.0, 119.0, 128.0]));
+    assert_eq!(cube.faces["south"]["uv"], json!([9.0, 124.0, 13.0, 128.0]));
+    assert_eq!(cube.faces["east"]["uv"], json!([116.0, 124.0, 120.0, 128.0]));
+    assert_eq!(cube.faces["west"]["uv"], json!([8.0, 124.0, 12.0, 128.0]));
+    assert_eq!(cube.faces["up"]["uv"], json!([9.0, 8.0, 13.0, 12.0]));
+    assert_eq!(cube.faces["down"]["uv"], json!([9.0, 116.0, 13.0, 120.0]));
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["vendor"], model["vendor"]);
+    assert_eq!(saved["elements"][0]["faces"]["north"]["texture"], json!(false));
+    let again = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(again, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document().cubes[0].from, [0.0, 0.0, 0.0]);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &again);
 }
 
 #[test]
-fn box_uv_resize_refused_while_rotation_and_translation_remain_atomic() {
+fn auto_uv_size_mode_remaps_resized_face_and_rotated_face() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["elements"][0]["autouv"] = json!(1);
+    model["elements"][0]["faces"]["north"]["rotation"] = json!(90);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    session.apply(0, &[EditOperation::SetCubeBounds {
+        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [6.0, 4.0, 4.0],
+    }]).unwrap();
+    assert_eq!(session.document().cubes[0].faces["north"]["uv"], json!([0.0, 0.0, 4.0, 6.0]));
+    assert_eq!(session.document().cubes[0].faces["south"]["uv"], json!([0.0, 0.0, 6.0, 4.0]));
+    assert_eq!(session.document().cubes[0].faces["north"]["rotation"], json!(90));
+}
+
+#[test]
+fn box_uv_single_edge_resize_updates_offset_and_derived_faces() {
     let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
     model["meta"]["box_uv"] = json!(true);
     let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
-    assert_eq!(session.apply(0, &[EditOperation::SetCubeBounds {
-        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [6.0, 4.0, 4.0],
-    }]).unwrap_err(), "CUBE_BOX_UV_RESIZE_UNSUPPORTED");
-    assert_eq!(session.summary().revision, 0);
-    session.apply(0, &[
+    session.apply(0, &[EditOperation::SetCubeBounds {
+        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [4.0, 4.0, 6.0],
+    }]).unwrap();
+    assert_eq!(session.document().cubes[0].uv_offset, Some([-2.0, -2.0]));
+    assert_eq!(session.document().cubes[0].faces["north"]["uv"], json!([4.0, 4.0, 8.0, 8.0]));
+    assert_eq!(session.document().cubes[0].faces["east"]["uv"], json!([-2.0, 4.0, 4.0, 8.0]));
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document().cubes[0].uv_offset, None);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+    session.apply(3, &[
         EditOperation::TranslateCube { uuid: CUBE.into(), delta: [2.0, 0.0, 0.0] },
         EditOperation::SetCubeRotation { uuid: CUBE.into(), rotation: [0.0, 22.5, 0.0] },
     ]).unwrap();
-    assert_eq!(session.summary().revision, 1);
+    assert_eq!(session.document().cubes[0].from, [2.0, 0.0, 0.0]);
+    assert_eq!(session.document().cubes[0].extra["rotation"], json!([0.0, 22.5, 0.0]));
+}
+
+#[test]
+fn auto_uv_mode_two_clamps_to_project_uv_resolution() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["elements"][0]["autouv"] = json!(2);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    session.apply(0, &[EditOperation::TranslateCube {
+        uuid: CUBE.into(), delta: [200.0, 0.0, 0.0],
+    }]).unwrap();
+    let cube = &session.document().cubes[0];
+    assert_eq!(cube.faces["south"]["uv"], json!([124.0, 124.0, 128.0, 128.0]));
+    assert_eq!(cube.faces["north"]["uv"], json!([0.0, 124.0, 4.0, 128.0]));
+}
+
+#[test]
+fn uv_sensitive_ambiguous_resize_and_multifile_rules_fail_atomically() {
+    for mode in [1, 2] {
+        let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+        model["elements"][0]["autouv"] = json!(mode);
+        let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+        let original = session.document().clone();
+        assert_eq!(session.apply(0, &[EditOperation::SetCubeBounds {
+            uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [6.0, 5.0, 4.0],
+        }]).unwrap_err(), "CUBE_AUTO_UV_REMAP_REQUIRED");
+        assert_eq!(session.apply(0, &[EditOperation::SetFaceUv {
+            uuid: CUBE.into(), face: "north".into(), uv: [1.0, 1.0, 5.0, 5.0],
+        }]).unwrap_err(), "CUBE_AUTO_UV_REMAP_REQUIRED");
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.summary().revision, 0);
+        model["multi_file_ruleset"] = json!("texture_set");
+        let mut multifile = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+        assert_eq!(multifile.apply(0, &[EditOperation::TranslateCube {
+            uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+        }]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
+        assert_eq!(multifile.summary().revision, 0);
+    }
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["meta"]["box_uv"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::SetCubeBounds {
+        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 5.0, 4.0],
+    }]).unwrap_err(), "CUBE_BOX_UV_RESIZE_UNSUPPORTED");
+    assert_eq!(session.document(), &original);
+}
+
+#[test]
+fn uv_sensitive_invalid_face_rotation_fails_without_partial_batch() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["elements"][0]["autouv"] = json!(1);
+    model["elements"][0]["faces"]["north"]["rotation"] = json!(45);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetCubeRotation { uuid: CUBE.into(), rotation: [0.0, 22.5, 0.0] },
+        EditOperation::TranslateCube { uuid: CUBE.into(), delta: [1.0, 0.0, 0.0] },
+    ]).unwrap_err(), "CUBE_AUTO_UV_FACE_ROTATION_UNSUPPORTED");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
 }
 
 #[test]
