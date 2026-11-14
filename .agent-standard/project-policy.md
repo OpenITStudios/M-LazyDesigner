@@ -18,5 +18,10 @@
 - Do not remove generated QA, face coverage, tool branches, sound/effect references, material fidelity or validation just to reduce tokens. Model visual and animation success require a matching native observation and user review or an explicitly approved alternative.
 - Existing `CONTEXT.md`, `docs/05-operations/next-action.md`, `docs/04-system/implementation-map.md`, current source and active workstream remain authoritative. Do not invent proof or promote historical CI/Next.
 
+
+## Related Lazy-family task routing
+
+When an explicitly authorized task involves another Lazy Minecraft product, consult this repository's `README.md` **Related Lazy-family handoff** section to locate the actual artifact and evidence owner. This is a navigation pointer, not another agent/router. Read the other repository's current selected ref and own local policy only when the handoff is genuinely required. Preserve exact asset/world identity, edition/version, user approval, evidence tier and every local test/CI hold. A relationship never grants automatic transfer, cross-repository writes, native host access or gameplay approval.
+
 ## Preservation
 Original root instructions remain byte-identical under `.agent-standard/history/` for focused preservation checks; they do not become automatically active duplicate roots. Retain all actual stricter project rules, domain Skills, nested instructions, test holds, product source and private model data. Disagreement between old domain restrictions and shared baseline is a blocker for the specific affected action, not a reason to erase project rules.
