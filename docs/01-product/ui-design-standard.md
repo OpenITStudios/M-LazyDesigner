@@ -5,7 +5,7 @@
 
 **Engineering implementation companion:** [UI Engineering Standard](ui-engineering-standard.md) defines SVG/icon rules, semantic token ownership, accessibility, responsive acceptance, component state matrices and a tracked blind-spot register. Both documents are mandatory for Desktop UI changes; neither overrides native safety rules.
 
-## Rust-native UI scope — branch `Rust` (approved target; not implemented)
+## Rust-native UI scope — branch `Rust` (Edit source authored, NOT_EXECUTED)
 
 For the separately authorized `Rust` development branch, the pinned Blockbench v5.2.1 Default Dark editor is the **1:1 visual and interaction target**. The [Rust-native Editor Plan](../04-system/rust-native-editor-plan.md) owns the explicit Edit/Paint/Animate parity matrix, window/panel behavior, upstream reference pins, source reuse and proof gates. Its Rust-native target **replaces only the legacy companion-specific rules** below that say the actual native Blockbench window must be the central editor, that only one companion right sidebar may exist, or that the viewport may not be implemented. Those rules still apply to the `Local` legacy implementation and preserved source until an accepted cutover. Accessibility, user-meaningful operations, safe recovery, styling provenance, permissions and no-false-proof rules are preserved for both.
 

@@ -1,13 +1,17 @@
-# Rust-native authoring core — Phase 1 source slice
+# Rust-native authoring core — Phase 1/2 source integration
 
-This folder owns the **headless Bedrock Entity Geometry/UV vertical slice** on the `Rust` branch. Nothing here is installed or executed in a native Blockbench/Windows environment. The existing Blockbench Runtime, Gateway, Desktop UI, 12 domain Skills, project assets and managed executable remain untouched.
+This folder owns the **single authoritative Bedrock Entity Geometry/UV model** shared by the headless CLI and the Rust-branch Tauri/Svelte Edit UI. Cargo, WebView2, Windows and native Blockbench have NOT_EXECUTED status. The legacy Runtime, Gateway, Desktop source, Skills and all user assets remain preserved.
 
 ## Source owners
 
 - `src/authoring/mod.rs` — typed authoritative Rust `AuthoringDocument`, pinned format-5.0 Bedrock codec, cube/group/outliner checks, bounded geometry/UV batch transactions, revision guards and in-memory Undo/Redo.
 - `src/authoring/bbmodel.rs` — isolated Blockbench v5.2.1 wire codec; the internal Rust model does not use the wire object's field names.
-- `src/lib.rs` — shared library entrypoint for CLI and future Tauri integration. The GUI does not yet invoke it.
-- `src/bin/lazydesigner-authoring.rs` — first-party headless CLI (`new`, `inspect`, `apply`) using the same Rust model API without a Blockbench or MCP process.
+- `src/authoring/storage.rs` — shared bounded project I/O and non-overwriting output publication for CLI and Tauri.
+- `src/lib.rs` — shared Rust library entrypoint for CLI and GUI.
+- `src/bin/lazydesigner-authoring.rs` — headless CLI (`new`, `inspect`, `apply`) using the same engine.
+- `src/desktop_authoring.rs` — Rust-owned Tauri editor session, explicit native file pickers and read-only UI projection.
+- `apps/desktop/src/RustEditorPage.svelte` — Edit mode operations (New/Open/Save Copy, Add Cube, Outliner, Position/Size/UV, Undo/Redo).
+- `apps/desktop/src/RustViewport.svelte` — Three.js derived untextured Geometry, selection, orbit/pan/zoom and framing.
 - `fixtures/bedrock-basic.bbmodel` — **synthetic** one-bone/one-cube data for authored regression intent, not native compatibility proof.
 - `src/authoring/tests.rs` — Rust source regressions, AUTHORED_NOT_EXECUTED.
 
@@ -54,4 +58,4 @@ The in-process `EditorSession` revision starts at 0 when opening a file. The CLI
 
 The admitted shape is `meta.model_format="bedrock"` with `meta.format_version="5.0"` from pinned Blockbench `v5.2.1`. This slice supports cubes, six face UV arrays, groups/bones, outliner identity and read-only preservation of opaque texture/animation/controller/custom JSON fields. It **does not** interpret/edit texture pixels, play animation, support mesh/locator variants, implement Paint/Animate UI, or export Bedrock geometry/animation files yet. Unsupported elements/versions, inconsistent outliner references and invalid texture indexes are rejected rather than silently flattened.
 
-The important remaining proof is the **real, editable Blockbench bidirectional round-trip** against the same target version plus native CLI/Tauri/visual integration. Cargo, Windows, Blockbench, visual fidelity and token savings remain NOT_EXECUTED / UNVERIFIED under the current hold. See [Rust-native Editor Plan](../../../../../docs/04-system/rust-native-editor-plan.md).
+The remaining proof is a **real editable Blockbench bidirectional round-trip** and actual Windows/Tauri/Svelte/Three.js acceptance. Source-authored Edit commands are integrated; Paint, Animate, texture rendering, floating panels, advanced edit gestures and full Blockbench 1:1 UI remain NOT_IMPLEMENTED. The Rust GUI is not an installed or proven editor. Cargo, Windows, Blockbench, visual fidelity and token savings remain NOT_EXECUTED / UNVERIFIED under the current hold. See [Rust-native Editor Plan](../../../../../docs/04-system/rust-native-editor-plan.md).

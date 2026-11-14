@@ -1,5 +1,6 @@
 import './styles.css';
-import App from './App.svelte';
+import RustEditorRoot from './RustEditorRoot.svelte';
 import { mount } from 'svelte';
 
-mount(App, { target: document.getElementById('app')! });
+// Rust is the independent editor entrypoint on the selected Rust branch.
+mount(RustEditorRoot, { target: document.getElementById('app')! });

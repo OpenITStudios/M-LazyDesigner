@@ -11,6 +11,7 @@ mod blockbench;
 mod blockbench_surface;
 mod desktop_error;
 mod desktop_instance;
+mod desktop_authoring;
 mod diagnostics;
 mod operation_log;
 mod metadata_io;
@@ -300,6 +301,7 @@ fn main() {
     }));
 
     tauri::Builder::default()
+        .manage(desktop_authoring::EditorState::default())
         .invoke_handler(tauri::generate_handler![
             system_status,
             connection_status,
@@ -323,7 +325,15 @@ fn main() {
             show_retired_plugin_file,
             export_diagnostics,
             analytics_overview,
-            export_analytics
+            export_analytics,
+            desktop_authoring::rust_editor_snapshot,
+            desktop_authoring::rust_editor_new,
+            desktop_authoring::rust_editor_open,
+            desktop_authoring::rust_editor_apply,
+            desktop_authoring::rust_editor_add_cube,
+            desktop_authoring::rust_editor_undo,
+            desktop_authoring::rust_editor_redo,
+            desktop_authoring::rust_editor_save_copy
         ])
         .build(tauri::generate_context!())
         .expect("error while building LazyDesigner Desktop")

@@ -2,9 +2,9 @@
 
 **Owner:** durable product UX across Desktop and the native Blockbench plugin. **Authority:** the existing Desktop and Blockbench source owns implemented behavior; this document specifies intended human experience, not a second status/router or a claim of tested screenshots. **Scope:** Bedrock visual asset workflows.
 
-## Rust-native Editor Target — `Rust` branch, design only
+## Rust-native Editor Target — `Rust` (Edit source authored, NOT_EXECUTED)
 
-On `Rust`, the approved human interface is the **Blockbench v5.2.1 Default Dark editor** in Svelte/Three.js, with matching Edit/Paint/Animate modes, panel positioning, gestures, keyboard shortcuts and real native handlers backed by one Rust authoring document. The user should not feel they changed editing systems. The external Blockbench process is **not** the editor host; bidirectional `.bbmodel` compatibility is mandatory. The precise target, parity matrix and proof gates live in [Rust-native Editor Plan](../04-system/rust-native-editor-plan.md).
+On `Rust`, the approved human interface is the **Blockbench v5.2.1 Default Dark editor** in Svelte/Three.js, with matching Edit/Paint/Animate modes, panel positioning, gestures, keyboard shortcuts and real native handlers backed by one Rust authoring document. The user should not feel they changed editing systems. The external Blockbench process is **not** the editor host; bidirectional `.bbmodel` compatibility is mandatory. The precise target, parity matrix and proof gates live in [Rust-native Editor Plan](../04-system/rust-native-editor-plan.md). On `Rust`, the first Svelte Edit screen now binds real Rust commands, but Paint/Animate, 1:1 docking/focus behavior and actual native visual output are unimplemented/unverified.
 
 The legacy companion shell, native HWND reservation, one-sidebar layout and related protection rules in the sections below describe the **current `Local`/inherited runtime only**. The user-approved `Rust` editor target supersedes those layout/host assumptions for future Rust implementation, **not** the existing legacy code, rollback protections or security/test/quality policy. Neither layout source nor a static preview establishes 1:1 UI acceptance.
 

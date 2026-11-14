@@ -4,78 +4,16 @@
 use lazydesigner::authoring::{
     sha256, AuthoringDocument, EditPlan, EditorSession, MAX_MODEL_BYTES, MAX_PLAN_BYTES,
 };
+use lazydesigner::authoring::storage::{bbmodel, publish_new, read_bounded, same_directory};
 use rand::RngCore;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+#[cfg(test)]
+use std::fs;
 use std::path::{Path, PathBuf};
 
 type Result<T> = std::result::Result<T, String>;
 fn fail(code: &str) -> String { code.into() }
-
-fn read_bounded(path: &Path, max: usize) -> Result<Vec<u8>> {
-    let stat = fs::symlink_metadata(path).map_err(|_| fail("INPUT_NOT_AVAILABLE"))?;
-    if !stat.file_type().is_file() || stat.len() > max as u64 {
-        return Err(fail("INPUT_TYPE_OR_SIZE_INVALID"));
-    }
-    let file = File::open(path).map_err(|_| fail("INPUT_OPEN_FAILED"))?;
-    let mut bytes = Vec::new();
-    file.take(max as u64 + 1).read_to_end(&mut bytes)
-        .map_err(|_| fail("INPUT_READ_FAILED"))?;
-    if bytes.is_empty() || bytes.len() > max { return Err(fail("INPUT_SIZE_INVALID")); }
-    Ok(bytes)
-}
-fn parent(path: &Path) -> &Path {
-    match path.parent() {
-        Some(p) if !p.as_os_str().is_empty() => p,
-        _ => Path::new("."),
-    }
-}
-fn bbmodel(path: &Path) -> Result<()> {
-    if path.extension().and_then(|s| s.to_str())
-        .is_some_and(|s| s.eq_ignore_ascii_case("bbmodel")) { Ok(()) }
-    else { Err(fail("BBMODEL_EXTENSION_REQUIRED")) }
-}
-
-/// An exclusive non-overwriting publish. Hard-link creation is atomic on
-/// supported filesystems; unsupported filesystems fail closed without damage.
-fn publish_new(path: &Path, content: &[u8]) -> Result<()> {
-    bbmodel(path)?;
-    if content.is_empty() || content.len() > MAX_MODEL_BYTES {
-        return Err(fail("OUTPUT_SIZE_INVALID"));
-    }
-    if fs::symlink_metadata(path).is_ok() { return Err(fail("OUTPUT_ALREADY_EXISTS")); }
-    let directory = parent(path);
-    if !directory.is_dir() { return Err(fail("OUTPUT_PARENT_UNAVAILABLE")); }
-    let filename = path.file_name().and_then(|v| v.to_str())
-        .ok_or_else(|| fail("OUTPUT_FILENAME_INVALID"))?;
-    for _ in 0..8 {
-        let temp = directory.join(format!(".{filename}.{:016x}.tmp", rand::rng().next_u64()));
-        let mut file = match OpenOptions::new().write(true).create_new(true).open(&temp) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(_) => return Err(fail("OUTPUT_STAGE_FAILED")),
-        };
-        let result = (|| -> Result<()> {
-            file.write_all(content).map_err(|_| fail("OUTPUT_WRITE_FAILED"))?;
-            file.sync_all().map_err(|_| fail("OUTPUT_SYNC_FAILED"))?;
-            drop(file);
-            fs::hard_link(&temp, path)
-                .map_err(|_| fail("OUTPUT_EXISTS_OR_HARDLINK_UNAVAILABLE"))?;
-            Ok(())
-        })();
-        let _ = fs::remove_file(&temp);
-        return result;
-    }
-    Err(fail("OUTPUT_STAGE_COLLISION"))
-}
-
-fn same_directory(input: &Path, output: &Path) -> Result<()> {
-    let left = fs::canonicalize(parent(input)).map_err(|_| fail("SOURCE_PARENT_UNAVAILABLE"))?;
-    let right = fs::canonicalize(parent(output)).map_err(|_| fail("OUTPUT_PARENT_UNAVAILABLE"))?;
-    if left != right { Err(fail("OUTPUT_MUST_BE_SOURCE_SIBLING")) } else { Ok(()) }
-}
 
 fn arguments() -> Result<(String, BTreeMap<String, String>)> {
     let mut args = std::env::args().skip(1);
@@ -110,7 +48,7 @@ fn execute() -> Result<Value> {
                 option(&options, "--name")?, option(&options, "--model-identifier")?
             )?;
             let data = doc.export_bbmodel()?;
-            publish_new(&path, &data)?;
+            publish_new(&path, &data, MAX_MODEL_BYTES)?;
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
@@ -148,7 +86,7 @@ fn execute() -> Result<Value> {
             if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != actual_sha {
                 return Err(fail("SOURCE_CHANGED_DURING_APPLY"));
             }
-            publish_new(&output, &out)?;
+            publish_new(&output, &out, MAX_MODEL_BYTES)?;
             Ok(json!({
                 "status":"OK","source_sha256":actual_sha,"output_sha256":sha256(&out),
                 "summary":session.summary(),"mutation":receipt
@@ -181,7 +119,7 @@ mod tests {
         fs::create_dir(&folder).unwrap();
         let target = folder.join("existing.bbmodel");
         fs::write(&target, b"original").unwrap();
-        assert_eq!(publish_new(&target, b"replacement").unwrap_err(), "OUTPUT_ALREADY_EXISTS");
+        assert_eq!(publish_new(&target, b"replacement", MAX_MODEL_BYTES).unwrap_err(), "OUTPUT_ALREADY_EXISTS");
         assert_eq!(fs::read(&target).unwrap(), b"original");
         fs::remove_file(target).unwrap();
         fs::remove_dir(folder).unwrap();

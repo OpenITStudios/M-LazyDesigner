@@ -1,11 +1,11 @@
 # LazyDesigner Desktop
 
-## Rust-branch headless authoring source (NOT_EXECUTED)
+## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
-The separately approved `Rust` branch now includes a **source-authored independent Rust Bedrock authoring library and headless CLI**, documented by [the Rust authoring source owner](src-tauri/src/authoring/README.md). It is **not yet connected** to Tauri UI commands, Svelte editing, MCP, the managed Windows installer or Blockbench. It does not change the existing companion behavior described below; native round-trip, Cargo build, CLI execution and visual quality remain UNVERIFIED. The [Rust target contract](../../docs/04-system/rust-native-editor-plan.md) owns acceptance.
+The `Rust` branch now includes a **source-authored Rust Bedrock Core, CLI and Tauri/Svelte Edit editor**. `src-tauri/src/desktop_authoring.rs` owns the Tauri session/IPC; `src/RustEditorPage.svelte` owns Edit controls; `src/RustViewport.svelte` derives an untextured Three.js geometry preview from Rust snapshots. `src/main.ts` selects the Rust editor by default on this development branch, with the previous companion accessible through an explicit legacy route. CLI and UI share the same Rust model, transactions, `.bbmodel` codec and `authoring/storage.rs`. Paint, Animate, full Blockbench UI parity, native/Windows builds, and real bidirectional Blockbench round-trip remain NOT_EXECUTED/UNVERIFIED. See [the source owner](src-tauri/src/authoring/README.md) and [Rust target](../../docs/04-system/rust-native-editor-plan.md).
 
 
-This directory owns the desktop **machine control plane** only. Cross-surface human navigation, labels and UX scenario acceptance are defined in the [Human Interface Contract](../../docs/01-product/interface-ux.md); this README remains the implementation-facing Desktop behavior owner.
+The **legacy Desktop implementation described below** owns the Blockbench machine control plane. On `Rust`, a separate native Edit-mode source now owns GUI presentation through the Rust Core. Cross-surface human navigation, labels and UX scenario acceptance are defined in the [Human Interface Contract](../../docs/01-product/interface-ux.md); this README remains the implementation-facing Desktop behavior owner.
 
 ## Responsibilities
 

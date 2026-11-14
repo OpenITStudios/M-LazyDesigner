@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 mod bbmodel;
+pub mod storage;
 
 pub const MAX_MODEL_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_PLAN_BYTES: usize = 64 * 1024;
@@ -394,6 +395,8 @@ impl EditorSession {
         Ok(Self { doc, revision: 0, undo: Vec::new(), redo: Vec::new() })
     }
     pub fn document(&self) -> &AuthoringDocument { &self.doc }
+    pub fn can_undo(&self) -> bool { !self.undo.is_empty() }
+    pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
     pub fn summary(&self) -> DocumentSummary { self.doc.summary(self.revision) }
     pub fn export(&self) -> Result<Vec<u8>> { self.doc.export_bbmodel() }
 
