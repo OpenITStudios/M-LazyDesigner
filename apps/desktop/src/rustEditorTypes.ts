@@ -5,7 +5,9 @@ export type Vec4 = [number, number, number, number];
 
 export type CubeFace = {
   uv: number[];
-  texture?: number | null | false;
+  // Format-5.0 Blockbench stores Cube face texture UUID strings; older
+  // imported numeric references remain represented without normalization.
+  texture?: number | string | null | false;
   [key: string]: unknown;
 };
 

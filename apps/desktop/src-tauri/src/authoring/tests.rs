@@ -535,6 +535,56 @@ fn invalid_version_element_or_outliner_fails_closed() {
 }
 
 #[test]
+fn blockbench_uuid_face_texture_refs_roundtrip_through_rust_edit_and_history() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    let texture_uuid = wire["textures"][0]["uuid"].as_str().unwrap().to_owned();
+    wire["elements"][0]["faces"]["north"]["texture"] = json!(texture_uuid);
+    wire["elements"][0]["faces"]["east"]["texture"] = json!(texture_uuid);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    session.apply(0, &[EditOperation::SetFaceUv {
+        uuid: CUBE.into(), face: "north".into(), uv: [2.0, 2.0, 6.0, 6.0],
+    }]).unwrap();
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["elements"][0]["faces"]["north"]["texture"], json!(texture_uuid));
+    assert_eq!(saved["elements"][0]["faces"]["east"]["texture"], json!(texture_uuid));
+    assert_eq!(saved["elements"][0]["faces"]["south"]["texture"], Value::Null);
+    assert_eq!(saved["textures"], wire["textures"]);
+    assert_eq!(saved["animations"], wire["animations"]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document().cubes[0].faces["north"]["texture"], json!(texture_uuid));
+}
+
+#[test]
+fn unresolved_uuid_face_texture_is_refused_without_rewriting_assets() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    wire["elements"][0]["faces"]["north"]["texture"] =
+        json!("ffffffff-ffff-4fff-8fff-ffffffffffff");
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&wire).unwrap()).unwrap_err(),
+        "CUBE_FACE_TEXTURE_UNSUPPORTED");
+}
+
+#[test]
+fn auto_uv_resolves_uuid_texture_wrap_metadata_before_mutating() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    let texture_uuid = wire["textures"][0]["uuid"].as_str().unwrap().to_owned();
+    wire["elements"][0]["faces"]["north"]["texture"] = json!(texture_uuid);
+    wire["elements"][0]["autouv"] = json!(1);
+    wire["textures"][0]["wrap_mode"] = json!("unsupported-unknown-wrap");
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::TranslateCube {
+        uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+    }]).unwrap_err(), "CUBE_AUTO_UV_WRAP_MODE_UNSUPPORTED");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+}
+
+#[test]
 fn texture_index_must_be_valid_for_blockbench() {
     let mut value: Value = serde_json::from_str(SAMPLE).unwrap();
     value["elements"][0]["faces"]["north"]["texture"] = json!(9);

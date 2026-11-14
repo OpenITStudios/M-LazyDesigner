@@ -280,8 +280,13 @@ fn refresh_auto_uv(
             if ![0.0, 90.0, 180.0, 270.0].contains(&rotation) {
                 return Err(fail("CUBE_AUTO_UV_FACE_ROTATION_UNSUPPORTED"));
             }
-            let texture = face.get("texture").and_then(Value::as_u64)
-                .and_then(|index| textures.get(index as usize));
+            let texture = match face.get("texture") {
+                Some(Value::Number(index)) => index.as_u64()
+                    .and_then(|index| textures.get(index as usize)),
+                Some(Value::String(uuid)) => textures.iter().find(|texture|
+                    texture.get("uuid").and_then(Value::as_str) == Some(uuid.as_str())),
+                _ => None,
+            };
             let wrap = match texture.and_then(|item| item.get("wrap_mode")) {
                 None => "limited",
                 Some(value) => value.as_str().ok_or_else(|| fail("CUBE_AUTO_UV_WRAP_MODE_UNSUPPORTED"))?,
@@ -387,7 +392,7 @@ fn apply_box_resize_offset(cube: &mut Cube, axis: usize, direction: i8, old_size
     }
 }
 
-fn validate_cube(cube: &Cube, textures: usize) -> Result<()> {
+fn validate_cube(cube: &Cube, textures: &[Value]) -> Result<()> {
     if cube.kind != "cube" { return Err(fail("ELEMENT_TYPE_UNSUPPORTED")); }
     optional_rotation(&cube.extra)?;
     cube_auto_uv(cube)?;
@@ -413,7 +418,9 @@ fn validate_cube(cube: &Cube, textures: usize) -> Result<()> {
         if let Some(reference) = face.get("texture") {
             match reference {
                 Value::Null | Value::Bool(false) => {},
-                Value::Number(index) if index.as_u64().is_some_and(|v| v < textures as u64) => {},
+                Value::Number(index) if index.as_u64().is_some_and(|v| v < textures.len() as u64) => {},
+                Value::String(uuid) if textures.iter().any(|texture|
+                    texture.get("uuid").and_then(Value::as_str) == Some(uuid.as_str())) => {},
                 _ => return Err(fail("CUBE_FACE_TEXTURE_UNSUPPORTED")),
             }
         }
@@ -491,7 +498,7 @@ impl AuthoringDocument {
         let mut cube_ids = HashSet::new();
         let mut bone_ids = HashSet::new();
         for cube in &self.cubes {
-            validate_cube(cube, self.texture_assets.len())?;
+            validate_cube(cube, &self.texture_assets)?;
             if !all_ids.insert(cube.uuid.clone()) { return Err(fail("DUPLICATE_UUID")); }
             cube_ids.insert(cube.uuid.clone());
         }
