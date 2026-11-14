@@ -27,7 +27,7 @@ describe("Read-only CLI-Anything-inspired Texture planning", () => {
       Bun.file("../distribution/cli.ts").text(),
       Bun.file("../distribution/package.ts").text(),
     ]);
-    expect(manager).toContain('command !== "plan-texture-treatment"');
+    expect(manager).toContain('const readOnlyAuthoringPlan =');
     expect(manager).toContain('command === "plan-texture-treatment"');
     expect(manager).toContain('await import("../mcp/scripts/authoring/plan-texture-treatment")');
     expect(manager).toContain("runTextureTreatmentCli(raw)");

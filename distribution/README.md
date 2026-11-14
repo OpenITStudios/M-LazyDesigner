@@ -60,13 +60,19 @@ Normal operation has exactly one LazyDesigner managed root, one configured LazyD
 
 ## Read-only Texture planning CLI (source-wired, not installed acceptance)
 
-The same versioned `lazydesigner.exe` source now includes
-`plan-texture-treatment --input plan.json --json`: a bounded offline
-JSON facade over `mcp/lib/texture/treatmentPlan.ts`.
+The same versioned `lazydesigner.exe` source includes two optional
+read-only offline authoring plans:
+
+- `plan-texture-treatment --input plan.json --json` delegates to
+  `mcp/lib/texture/treatmentPlan.ts` for declared face/material/seam planning.
+- `plan-appearance-variant --input variant.json --json` delegates to
+  `mcp/lib/texture/appearanceVariantContinuity.ts` for declared base atlas,
+  Geometry/UV/rig/material/render continuity. It cannot compare actual RGBA
+  or certify that the red/blue variant pixels match the approved master.
 It must not launch Gateway, mutate a Blockbench project, write an output
 .bbmodel, bypass Undo, or claim artistic approval. The Windows package
-procedure includes a disposable **compiled executable** smoke case for this
-route; that case is AUTHORED_NOT_RUN until PC-local packaging is authorized.
+procedure includes disposable **compiled executable** smoke cases for both
+routes; those cases are AUTHORED_NOT_RUN until PC-local packaging is authorized.
 A historical installed `lazydesigner.exe` does not inherit a new source
 subcommand. Use the matching installed source SHA before asserting availability.
 This is not the third-party Python CLI-Anything runtime or a new MCP tool.

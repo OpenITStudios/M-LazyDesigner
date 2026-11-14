@@ -61,6 +61,14 @@ Blockbench state, certify quality, or replace the four-tool Gateway. Do not
 search for the third-party Python CLI-Anything harness during normal art work;
 its copied source is development reference only.
 
+For a planned appearance variant with concrete, current source/proposed UV,
+rig, material and rendering declarations, the optional local
+`lazydesigner.exe plan-appearance-variant --input variant.json --json`
+(or Bun `plan:appearance-variant` from a source checkout) can detect
+declared continuity conflicts before a costly native variant change.
+Source fingerprints from JSON do not prove fresh native data or actual
+blue/red pixel equality; required native visual review stays unchanged.
+
 Geometry↔Texturing stays on shared AUTHORING. AUTHORING↔Animation uses `switch_authoring_phase` through Gateway and continues the same task/chat.
 
 ## Evidence / Safety

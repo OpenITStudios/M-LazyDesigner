@@ -16,6 +16,8 @@ describe("texturing hot-path routing", () => {
     expect(skill).toContain("Known exact-RGBA edits remain on the direct Gateway path");
     expect(boot).toContain("read-only");
     expect(boot).toContain("lazydesigner.exe plan-texture-treatment");
+    expect(boot).toContain("plan-appearance-variant");
+    expect(skill).toContain("plan-appearance-variant");
     expect(boot).toContain("four-tool Gateway");
     expect(planner).toContain('visual_verdict: "UNVERIFIED"');
     // Source guidance, not a Codex behavioral or native art-quality PASS.

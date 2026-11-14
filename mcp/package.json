@@ -130,7 +130,8 @@
     "audit:data": "bun run ./scripts/development/audit-data-inventory.ts",
     "audit:tests": "bun run ./scripts/development/audit-test-inventory.ts",
     "analyze:documentation-graph": "bun run ./scripts/development/explain-documentation-graph.ts",
-    "plan:texture-treatment": "bun run ./scripts/authoring/plan-texture-treatment.ts"
+    "plan:texture-treatment": "bun run ./scripts/authoring/plan-texture-treatment.ts",
+    "plan:appearance-variant": "bun run ./scripts/authoring/plan-appearance-variant.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.3.1",

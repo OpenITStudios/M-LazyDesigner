@@ -172,10 +172,13 @@ The canonical `affectedExecution.ts` turns changed source paths into a bounded v
 
 The selected CLI-Anything method is copied with provenance to
 `mcp/third_party/cli-anything/` but is not an active authoring Skill.
-For a bounded Texture treatment plan, `bun run plan:texture-treatment`
-invokes the existing pure `lib/texture/treatmentPlan.ts` owner using
-caller-supplied JSON and can produce a machine-readable plan without any
-Blockbench state change. Its `ready` flag is **planning readiness only**.
+For bounded Texture/appearance planning, the read-only
+`bun run plan:texture-treatment` and `bun run plan:appearance-variant`
+commands delegate to the existing `lib/texture/treatmentPlan.ts` and
+`lib/texture/appearanceVariantContinuity.ts` owners using caller-supplied
+JSON, producing machine-readable reports without any Blockbench change.
+Both use the same bounded file/argument parser, and the managed
+`lazydesigner.exe` dispatch routes to those same implementations. Its `ready` flag is **planning readiness only**.
 Codex must obtain the actual approved reference, fresh native mapping and
 visual evidence through Control and Gateway before authoring or judging art.
 Do not treat the CLI as a second asset database, MCP transport, native

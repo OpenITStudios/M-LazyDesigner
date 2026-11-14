@@ -54,6 +54,56 @@ async function main(): Promise<void> {
       planSmoke.planning_readiness?.state !== "ready") {
     throw new Error("Compiled manager read-only Texture planning smoke failed.");
   }
+  const variantFixture = join(output, "smoke-appearance-variant.json");
+  await writeFile(variantFixture, JSON.stringify({
+    expected_project_uuid: "smoke-project",
+    entity_identifier: "smoke:armor",
+    texture_create: {
+      source: {
+        uuid: "smoke-base", name: "base.png", width: 64, height: 64,
+        role: "base_color_candidate",
+      },
+      base_color_candidates: [{
+        uuid: "smoke-base", name: "base.png", width: 64, height: 64,
+        role: "base_color_candidate",
+      }],
+      target_group: {
+        uuid: "variants", name: "Variants", is_material: false,
+      },
+      requested_name: "red.png", existing_texture_names: ["base.png"],
+    },
+    mode: "TEXTURE_ONLY",
+    baseline: {
+      geometry_identifier: "geometry.smoke",
+      uv_mapping_sha256: "sha256:" + "a".repeat(64),
+      bones: [{ uuid: "root", name: "root", parent_uuid: null, pivot: [0, 0, 0] }],
+      material_code: "entity",
+    },
+    proposed: {
+      geometry_identifier: "geometry.smoke",
+      uv_mapping_sha256: "sha256:" + "a".repeat(64),
+      bones: [{ uuid: "root", name: "root", parent_uuid: null, pivot: [0, 0, 0] }],
+      material_code: "entity", bitmap_width: 64, bitmap_height: 64,
+    },
+    render: {
+      controller_identifier: "controller.render.smoke",
+      base_texture_slot: "default", variant_texture_slot: "red",
+      base_geometry_slot: "default", base_material_slot: "default",
+    },
+    source_refs: ["approved:smoke"],
+  }));
+  const variantSmoke = JSON.parse(await run([
+    join(packageDir, "lazydesigner.exe"), "plan-appearance-variant",
+    "--input", variantFixture, "--json",
+  ]));
+  if (variantSmoke.schema !== "lazydesigner-appearance-variant-cli-v1" ||
+      variantSmoke.execution !== "PLAN_NOT_APPLIED" ||
+      variantSmoke.native_mutation !== false ||
+      variantSmoke.visual_verdict !== "UNVERIFIED" ||
+      variantSmoke.review?.issues?.length !== 0 ||
+      variantSmoke.review?.state !== "SOURCE_REVIEW_REQUIRED_NATIVE_UNVERIFIED") {
+    throw new Error("Compiled manager read-only appearance variant planning smoke failed.");
+  }
   await writeFile(join(packageDir, MCP_BUNDLE_FILENAME), plugin);
   for (const path of PACKAGE_SOURCE_PATHS) { await mkdir(dirname(join(packageDir, path)), { recursive: true }); await cp(join(repo, path), join(packageDir, path)); }
   await cp(join(repo, "distribution/authoring-AGENTS.md"), join(packageDir, "AGENTS.md"));

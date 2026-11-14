@@ -19,8 +19,11 @@ const RELEASE_MANIFEST_ASSET = "lazydesigner-package.json";
 const raw = process.argv.slice(2).filter(a => a !== "--");
 const command = raw.shift() ?? "help";
 const flags = new Map<string, string>();
-// The read-only Texture planner has its own narrowly scoped parser.
-if (command !== "plan-texture-treatment") for (let i = 0; i < raw.length; i++) {
+// Read-only authoring plan commands have a separate narrow parser.
+const readOnlyAuthoringPlan =
+  command === "plan-texture-treatment" ||
+  command === "plan-appearance-variant";
+if (!readOnlyAuthoringPlan) for (let i = 0; i < raw.length; i++) {
   const flag = raw[i]!;
   if (!["--root", "--workspace", "--workspace-mode", "--plugin-path", "--config", "--package", "--tag", "--expected-source-sha", "--desktop-contract", "--migrate-legacy", "--adopt", "--preview", "--progress-json"].includes(flag) || flags.has(flag)) throw new Error(`Unknown or repeated option: ${flag}`);
   if (["--adopt", "--preview", "--progress-json", "--migrate-legacy"].includes(flag)) flags.set(flag, "true");
@@ -306,7 +309,7 @@ async function fetchRelease(): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  if (command === "help") { console.log("LazyDesigner: install [--workspace PATH] [--plugin-path EXISTING_FILE] [--adopt] | check-update [--tag lazydesigner-vX.Y.Z] [--preview] | update [--tag lazydesigner-vX.Y.Z] [--preview] | rollback | recover | repair | setup-tls | status | mcp | plan-texture-treatment --input PATH [--json] (read-only). No app, user build, or manual file replacement."); return; }
+  if (command === "help") { console.log("LazyDesigner: install [--workspace PATH] [--plugin-path EXISTING_FILE] [--adopt] | check-update [--tag lazydesigner-vX.Y.Z] [--preview] | update [--tag lazydesigner-vX.Y.Z] [--preview] | rollback | recover | repair | setup-tls | status | mcp | plan-texture-treatment --input PATH [--json] | plan-appearance-variant --input PATH [--json] (read-only). No app, user build, or manual file replacement."); return; }
   if (command === "self-test") { receipt({ status: "PASS", platform: process.platform, arch: process.arch, repository: REPOSITORY }); return; }
   if (command === "plan-texture-treatment") {
     // Pure offline planning: no install lock, Gateway process, native state,
@@ -314,6 +317,16 @@ async function main(): Promise<void> {
     const { runTextureTreatmentCli } =
       await import("../mcp/scripts/authoring/plan-texture-treatment");
     const result = await runTextureTreatmentCli(raw);
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    process.exitCode = result.exitCode;
+    return;
+  }
+  if (command === "plan-appearance-variant") {
+    // Pure source-declaration continuity review. No Gateway or native edits.
+    const { runAppearanceVariantCli } =
+      await import("../mcp/scripts/authoring/plan-appearance-variant");
+    const result = await runAppearanceVariantCli(raw);
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
     process.exitCode = result.exitCode;

@@ -1,5 +1,8 @@
-import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import {
+  parseAuthoringPlanFlags,
+  readAuthoringPlanJson,
+  authoringPlanError,
+} from "./cliInput";
 import {
   planTextureTreatment,
   type TextureTreatmentPlanInput,
@@ -59,55 +62,19 @@ const HELP =
   "Read-only. Input is a TextureTreatmentPlanInput JSON object.\n" +
   "Planning READY is not native execution, visual PASS, or user approval.\n";
 
-function flags(argv: readonly string[]): {
-  inputPath: string | null;
-  json: boolean;
-  help: boolean;
-} {
-  let inputPath: string | null = null;
-  let json = false;
-  let help = false;
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--help") {
-      help = true;
-    } else if (argv[i] === "--json") {
-      json = true;
-    } else if (argv[i] === "--input" && inputPath === null) {
-      inputPath = argv[++i] ?? null;
-    } else {
-      throw new Error("TEXTURE_TREATMENT_CLI_ARGUMENT_INVALID");
-    }
-  }
-  if (!help && (!inputPath || inputPath.startsWith("--"))) {
-    throw new Error("TEXTURE_TREATMENT_INPUT_PATH_REQUIRED");
-  }
-  return { inputPath, json, help };
-}
-
 /** Produces output without printing or writing; useful for focused regressions. */
 export async function runTextureTreatmentCli(
   argv: readonly string[]
 ): Promise<TextureTreatmentCliResponse> {
   try {
-    const { inputPath, json, help } = flags(argv);
-    if (help) return { exitCode: 0, stdout: HELP, stderr: "" };
-    let info;
-    try { info = await stat(inputPath!); }
-    catch { throw new Error("TEXTURE_TREATMENT_INPUT_UNAVAILABLE"); }
-    if (!info.isFile() || info.size < 2 ||
-        info.size > MAX_TREATMENT_PLAN_BYTES) {
-      throw new Error("TEXTURE_TREATMENT_INPUT_FILE_INVALID");
-    }
-    const bytes = await readFile(inputPath!);
-    if (bytes.byteLength > MAX_TREATMENT_PLAN_BYTES) {
-      throw new Error("TEXTURE_TREATMENT_INPUT_TOO_LARGE");
-    }
-    let value: unknown;
-    try { value = JSON.parse(bytes.toString("utf8")); }
-    catch { throw new Error("TEXTURE_TREATMENT_INPUT_JSON_INVALID"); }
-    const report = prepareTextureTreatmentReport(
-      value, createHash("sha256").update(bytes).digest("hex")
+    const { inputPath, json, help } = parseAuthoringPlanFlags(
+      argv, "TEXTURE_TREATMENT"
     );
+    if (help) return { exitCode: 0, stdout: HELP, stderr: "" };
+    const { value, sha256 } = await readAuthoringPlanJson(
+      inputPath!, "TEXTURE_TREATMENT", MAX_TREATMENT_PLAN_BYTES
+    );
+    const report = prepareTextureTreatmentReport(value, sha256);
     if (json) {
       return { exitCode: 0, stdout: JSON.stringify(report) + "\n", stderr: "" };
     }
@@ -124,13 +91,10 @@ export async function runTextureTreatmentCli(
       stderr: "",
     };
   } catch (error) {
-    // Prevent filesystem error messages from leaking arbitrary local paths
-    // or file contents into agent-visible CLI results.
-    const message = error instanceof Error &&
-      /^(TEXTURE_TREATMENT_|TEXTURE_|REFERENCE_|SURFACE_|SEAM_)/.test(error.message)
-        ? error.message.slice(0, 240)
-        : "TEXTURE_TREATMENT_PLAN_INVALID";
-    return { exitCode: 2, stdout: "", stderr: message + "\n" };
+    return {
+      exitCode: 2, stdout: "",
+      stderr: authoringPlanError(error, "TEXTURE_TREATMENT_PLAN_INVALID"),
+    };
   }
 }
 
