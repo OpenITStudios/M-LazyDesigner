@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-14 — Explicit per-texture UV remap guard (source-only)
+
+The pinned Blockbench v5.2.1 `js/io/project.ts` `getUVWidth/Height(texture)` selects per-texture UV dimensions when its format enables `per_texture_uv_size`. The current Rust authoring subset only has project-wide UV resolution; Auto UV Move/Resize therefore now fails closed when imported project root or meta explicitly declares `per_texture_uv_size: true`, in addition to existing multi-file ruleset protection. Negative regression source covers both locations, atomic revision refusal and export preservation. This does not prove the flag exhaustively detects every Blockbench format rule, and does not implement per-texture mapping. SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; native Blockbench/Cargo/WebView2 NOT_EXECUTED.
+
 ## 2026-11-14 — Manual face UV exits Auto UV (source-only)
 
 The pinned Blockbench v5.2.1 `js/uv/uv.js` uses `disableAutoUV()` after manual UV editing. The Rust `SetFaceUv` operation now makes an actual changed face-UV rectangle and the Cube's `autouv=0` transition one revision-checked atomic edit, shared by Tauri and CLI. No-op edits leave the Auto UV mode unchanged. The Svelte face inspector enables manual UV for Auto UV cubes with an explicit mode-transition hint; Box UV face edits remain refused. Authored-only regression source covers Auto UV 1/2, opaque field preservation, Undo/Redo, no-op and invalid face refusal. Cargo, WebView2, native Blockbench two-way editability and visual parity remain NOT_EXECUTED / UNVERIFIED.

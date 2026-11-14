@@ -182,6 +182,14 @@ fn cube_box_uv(cube: &Cube, default: bool) -> bool {
 
 /** UV changes are owned by Rust, not by the viewport or a second JS model. */
 fn has_per_texture_uv_rules(doc: &AuthoringDocument) -> bool {
+    // Project.getUVWidth/Height in Blockbench v5.2.1 can select a face's
+    // texture UV size when the format enables per_texture_uv_size. This
+    // bounded Bedrock authoring slice does not yet resolve that format rule.
+    // Refuse remapping if an imported project explicitly advertises it.
+    if doc.meta.extra.get("per_texture_uv_size") == Some(&Value::Bool(true)) ||
+        doc.extensions.get("per_texture_uv_size") == Some(&Value::Bool(true)) {
+        return true;
+    }
     doc.extensions.get("multi_file_ruleset").is_some_and(|value| match value {
         Value::Null | Value::Bool(false) => false,
         Value::String(name) => !name.is_empty(),
