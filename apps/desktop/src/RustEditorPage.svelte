@@ -381,8 +381,12 @@
   }
 
   function finishPaintStroke(event: PointerEvent, cancelled = false) {
-    const stroke = paintStroke;
-    if (!stroke || stroke.pointerId !== event.pointerId) return;
+    const captured = paintStroke;
+    if (!captured || captured.pointerId !== event.pointerId) return;
+    // A quick drag may have no final pointermove. Include its pointerup
+    // position before committing, but never sample on cancel/lost capture.
+    if (!cancelled) movePaintStroke(event);
+    const stroke = paintStroke ?? captured;
     paintStroke = null;
     const target = event.currentTarget;
     if (target instanceof HTMLImageElement && target.hasPointerCapture(event.pointerId)) {

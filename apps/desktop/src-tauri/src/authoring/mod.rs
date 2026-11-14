@@ -10,6 +10,9 @@ mod bbmodel;
 mod paint;
 pub mod storage;
 
+/// The exact generated-texture gate shared by Rust edits and Tauri UI projection.
+pub fn paint_texture_editable(texture: &Value) -> bool { paint::editable(texture) }
+
 pub const MAX_MODEL_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_PLAN_BYTES: usize = 64 * 1024;
 const MAX_ELEMENTS: usize = 65_536;

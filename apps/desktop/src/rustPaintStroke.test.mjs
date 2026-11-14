@@ -25,3 +25,10 @@ test('stroke sampling stops at the bounded Rust transaction limit', () => {
   const points = Array.from({ length: MAX_STROKE_POINTS }, () => [0, 0]);
   assert.equal(extendPaintStroke(points, [1, 0], 256, 256), null);
 });
+
+test('the final pointer position is a valid endpoint even without an intermediate move', () => {
+  const initial = [[1, 2]];
+  assert.deepEqual(extendPaintStroke(initial, [5, 2], 16, 16),
+    [[1, 2], [2, 2], [3, 2], [4, 2], [5, 2]]);
+  assert.deepEqual(extendPaintStroke(initial, [1, 2], 16, 16), initial);
+});

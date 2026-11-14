@@ -3,7 +3,7 @@
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
-    storage, sha256, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    storage, sha256, paint_texture_editable, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES,
 };
 use rand::RngCore;
@@ -204,14 +204,8 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             }).collect(),
             texture_preview_sources: texture_preview_sources(doc),
             texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
-            paint_editable_textures: doc.texture_assets.iter().map(|texture| {
-                texture.get("paint_owner").and_then(Value::as_str)
-                    == Some("lazydesigner-rgba8-v1") &&
-                texture.get("path").is_none() &&
-                texture.get("relative_path").is_none() &&
-                texture.get("layers_enabled").is_none() &&
-                texture.get("texture_layers").is_none()
-            }).collect(),
+            paint_editable_textures: doc.texture_assets.iter()
+                .map(paint_texture_editable).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             animation_count: doc.animation_assets.len(),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
@@ -492,6 +486,22 @@ mod tests {
             "render_mode":"emissive"})).is_none());
         assert!(embedded_png_preview_source(&json!({"source":candidate,
             "render_sides":"back"})).is_none());
+    }
+
+    #[test]
+    fn paint_editability_projection_matches_rust_generated_texture_gate() {
+        let candidate = json!({
+            "uuid":"test", "name":"paint.png",
+            "source":"data:image/png;base64,iVBORw0KGgoAAAABAAAAAA==",
+            "internal":true, "wrap_mode":"limited",
+            "render_mode":"default", "render_sides":"double",
+            "paint_owner":"lazydesigner-rgba8-v1"
+        });
+        assert!(paint_texture_editable(&candidate));
+        let mut injected = candidate;
+        injected["vendor_extension"] = json!({"preserve":true});
+        assert!(!paint_texture_editable(&injected));
+        assert!(!paint_texture_editable(&json!({"paint_owner":"lazydesigner-rgba8-v1"})));
     }
 
     #[test]
