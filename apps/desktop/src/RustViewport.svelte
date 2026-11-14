@@ -4,13 +4,14 @@
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
   import { planCubeLocalTranslation } from './rustMoveGizmo';
-  import { faceUvCoordinates, textureIndexForFace } from './rustTextureProjection';
+  import { faceUvCoordinates, textureIndexForFace, previewRenderSide } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
   export let hierarchy: HierarchyNode[] = [];
   export let texturePreviewSources: (string | null)[] = [];
+  export let texturePreviewSides: ('front' | 'double' | null)[] = [];
   export let textureResolution: [number, number] = [16, 16];
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
@@ -119,6 +120,7 @@
     currentCubes: CubeView[], currentBones: BoneView[],
     currentHierarchy: HierarchyNode[], currentSelection: string | null,
     _sources: (string | null)[] = texturePreviewSources,
+    _sides: ('front' | 'double' | null)[] = texturePreviewSides,
     _resolution: [number, number] = textureResolution,
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
@@ -176,7 +178,10 @@
               color: texture ? 0xffffff : active ? 0x80b8ef : COLORS[cube.color % COLORS.length],
               transparent: Boolean(texture),
               opacity: texture ? 1 : 0.94,
-              side: THREE.FrontSide,
+              // Respect the pinned default double-side texture preview,
+              // with explicit per-texture front-side overrides.
+              side: previewRenderSide(texture ? texturePreviewSides[textureIndex!] : null) === 'front'
+                ? THREE.FrontSide : THREE.DoubleSide,
             }));
           }
           uvAttribute.needsUpdate = true;
@@ -313,7 +318,7 @@
     onSelect(hits.length ? String(hits[0].object.userData.cubeUuid) : null);
   }
 
-  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, textureResolution);
+  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, texturePreviewSides, textureResolution);
   $: if (ready) syncGizmo(canMove);
 
   onMount(() => {

@@ -13,6 +13,12 @@ export function textureIndexForFace(face: CubeFace | undefined, textureCount: nu
   return face.texture === undefined || face.texture === false ? 0 : null;
 }
 
+// Read-only side selection from the Rust-vetted texture projection.
+// A missing or unsupported material uses the default double-sided fallback.
+export function previewRenderSide(side: 'front' | 'double' | null | undefined): 'front' | 'double' {
+  return side === 'front' ? 'front' : 'double';
+}
+
 // BoxGeometry order is east/west/up/down/south/north, four vertices per face.
 // Match Blockbench 5.2.1 Cube.updateUV's corner order and 90-degree permutation.
 // Texture animation, non-limited wrap and per-texture resolution are excluded.

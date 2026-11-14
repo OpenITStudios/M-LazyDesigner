@@ -50,6 +50,7 @@ export type EditorSnapshot = {
   hierarchy: HierarchyNode[];
   textureNames: string[];
   texturePreviewSources: (string | null)[];
+  texturePreviewSides: ('front' | 'double' | null)[];
   textureResolution: [number, number];
   animationCount: number;
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';

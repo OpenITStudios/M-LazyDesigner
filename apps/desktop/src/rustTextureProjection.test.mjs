@@ -54,3 +54,11 @@ test('Box UV applies the pinned 1/64 atlas-unit inset with mirrored orientation'
     [(4-inset)/16, 1-(4-inset)/16, inset/16, 1-(4-inset)/16,
       (4-inset)/16, 1-inset/16, inset/16, 1-inset/16]);
 });
+
+test('render-side projection defaults to double, with explicit front override', async () => {
+  const { previewRenderSide } = await import('./rustTextureProjection.ts');
+  assert.equal(previewRenderSide('front'), 'front');
+  assert.equal(previewRenderSide('double'), 'double');
+  assert.equal(previewRenderSide(null), 'double');
+  assert.equal(previewRenderSide(undefined), 'double');
+});

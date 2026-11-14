@@ -1037,6 +1037,7 @@
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
           hierarchy={snapshot.hierarchy}
           texturePreviewSources={snapshot.texturePreviewSources}
+          texturePreviewSides={snapshot.texturePreviewSides}
           textureResolution={snapshot.textureResolution}
           {selectedId} onSelect={selectCube}
           canMove={moveTool && !busy && !loading && !newDialog && !confirmDiscard}

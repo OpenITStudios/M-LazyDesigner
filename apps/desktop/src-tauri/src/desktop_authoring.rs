@@ -73,6 +73,7 @@ pub struct EditorSnapshot {
     hierarchy: Vec<OutlinerNode>,
     texture_names: Vec<String>,
     texture_preview_sources: Vec<Option<String>>,
+    texture_preview_sides: Vec<Option<&'static str>>,
     texture_resolution: [u32; 2],
     animation_count: usize,
     preview_scope: &'static str,
@@ -109,9 +110,24 @@ fn property_vec3(properties: &Map<String, Value>, key: &str) -> [f64; 3] {
         .unwrap_or([0.0, 0.0, 0.0])
 }
 
+// Only default texture materials can be approximated by this bounded renderer.
+// Blockbench's additive, emissive and layered modes use different shaders.
+fn texture_preview_side(texture: &Value) -> Option<&'static str> {
+    if let Some(mode) = texture.get("render_mode") {
+        if mode.as_str() != Some("default") { return None; }
+    }
+    match texture.get("render_sides") {
+        None => Some("double"),
+        Some(Value::String(side)) if side == "auto" || side == "double" => Some("double"),
+        Some(Value::String(side)) if side == "front" => Some("front"),
+        _ => None,
+    }
+}
+
 // Never resolve project-relative paths or arbitrary URLs inside the WebView.
 // Embedded PNG candidates remain subject to the browser's image decoder.
 fn embedded_png_preview_source(texture: &Value) -> Option<String> {
+    texture_preview_side(texture)?;
     const PREFIX: &str = "data:image/png;base64,";
     const MAX_BASE64: usize = 2 * 1024 * 1024;
     if texture.get("wrap_mode").and_then(Value::as_str).is_some_and(|mode| mode != "limited") {
@@ -186,6 +202,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 texture.get("name").and_then(Value::as_str).unwrap_or("Unnamed texture").to_owned()
             }).collect(),
             texture_preview_sources: texture_preview_sources(doc),
+            texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             animation_count: doc.animation_assets.len(),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
@@ -447,6 +464,25 @@ mod tests {
         assert_eq!(texture_preview_sources(&doc), vec![Some(candidate.to_owned())]);
         doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
         assert_eq!(texture_preview_sources(&doc), vec![None]);
+    }
+
+    #[test]
+    fn texture_preview_limits_modes_and_preserves_render_sides() {
+        let candidate = "data:image/png;base64,iVBORw0KGgoAAAABAAAAAA==";
+        let standard = json!({"source":candidate});
+        assert_eq!(texture_preview_side(&standard), Some("double"));
+        assert_eq!(texture_preview_side(&json!({"render_sides":"auto"})), Some("double"));
+        assert_eq!(texture_preview_side(&json!({"render_sides":"front"})), Some("front"));
+        assert_eq!(texture_preview_side(&json!({"render_sides":"double"})), Some("double"));
+        assert_eq!(texture_preview_side(&json!({"render_sides":"back"})), None);
+        assert_eq!(texture_preview_side(&json!({"render_mode":"emissive"})), None);
+        assert_eq!(texture_preview_side(&json!({"render_mode":"additive"})), None);
+        assert_eq!(texture_preview_side(&json!({"render_mode":"layered"})), None);
+        assert!(embedded_png_preview_source(&standard).is_some());
+        assert!(embedded_png_preview_source(&json!({"source":candidate,
+            "render_mode":"emissive"})).is_none());
+        assert!(embedded_png_preview_source(&json!({"source":candidate,
+            "render_sides":"back"})).is_none());
     }
 
     #[test]
