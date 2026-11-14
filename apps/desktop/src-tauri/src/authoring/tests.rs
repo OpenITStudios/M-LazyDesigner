@@ -560,6 +560,38 @@ fn blockbench_uuid_face_texture_refs_roundtrip_through_rust_edit_and_history() {
 }
 
 #[test]
+fn duplicate_texture_uuids_reject_ambiguous_face_references() {
+    let mut model: Value = serde_json::from_str(TEXTURED).unwrap();
+    let original_uuid = model["textures"][0]["uuid"].clone();
+    model["textures"][1]["uuid"] = original_uuid.clone();
+    model["elements"][0]["faces"]["north"]["texture"] = original_uuid;
+    let bytes = serde_json::to_vec(&model).unwrap();
+    assert_eq!(AuthoringDocument::import_bbmodel(&bytes).unwrap_err(),
+        "TEXTURE_UUID_DUPLICATE");
+}
+
+#[test]
+fn malformed_texture_uuid_refuses_import_without_normalization() {
+    let mut model: Value = serde_json::from_str(TEXTURED).unwrap();
+    model["textures"][0]["uuid"] = json!(42);
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap_err(),
+        "TEXTURE_UUID_INVALID");
+    model["textures"][0]["uuid"] = json!("");
+    assert_eq!(AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap_err(),
+        "TEXTURE_UUID_INVALID");
+}
+
+#[test]
+fn optional_texture_uuids_preserve_legacy_indexed_assets() {
+    let mut model: Value = serde_json::from_str(TEXTURED).unwrap();
+    model["textures"][0].as_object_mut().unwrap().remove("uuid");
+    let saved = AuthoringDocument::import_bbmodel(&serde_json::to_vec(&model).unwrap()).unwrap();
+    assert_eq!(saved.texture_assets[0].get("uuid"), None);
+    let again = AuthoringDocument::import_bbmodel(&saved.export_bbmodel().unwrap()).unwrap();
+    assert_eq!(again, saved);
+}
+
+#[test]
 fn unresolved_uuid_face_texture_is_refused_without_rewriting_assets() {
     let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
     wire["elements"][0]["faces"]["north"]["texture"] =

@@ -521,6 +521,16 @@ impl AuthoringDocument {
            self.animation_assets.iter().any(|v| !v.is_object()) {
             return Err(fail("BBMODEL_ASSET_ENTRY_INVALID"));
         }
+        // Blockbench stores per-face texture references by UUID. Ambiguous
+        // duplicate asset UUIDs must not choose the first matching texture.
+        let mut texture_ids = HashSet::new();
+        for texture in &self.texture_assets {
+            if let Some(uuid) = texture.get("uuid") {
+                let id = uuid.as_str().ok_or_else(|| fail("TEXTURE_UUID_INVALID"))?;
+                if !valid_uuid(id) { return Err(fail("TEXTURE_UUID_INVALID")); }
+                if !texture_ids.insert(id) { return Err(fail("TEXTURE_UUID_DUPLICATE")); }
+            }
+        }
         let mut seen_cubes = HashSet::new();
         let mut seen_bones = HashSet::new();
         validate_outliner(&self.hierarchy, &cube_ids, &bone_ids,
