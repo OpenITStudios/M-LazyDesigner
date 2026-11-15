@@ -40,7 +40,7 @@ Programmatic use does not imply a new model engine, second document registry, or
 | Domain | Source present | Remaining before Code Mode cutover |
 | --- | --- | --- |
 | Geometry | Rust typed Cube/Bone operations and focused read | Complete inspection/diff/diagnostics and native Blockbench interoperability |
-| UV/Texturing | Bounded PNG/face operations | Coverage proof for all visible/hidden sides, advanced texture consistency and pixel fidelity |
+| UV/Texturing | Bounded PNG/face edits plus Rust source-derived six-face Cube UV/texture-link inspection; default/multi-file effective materials remain unknown | Actual pixel coverage for visible/hidden sides, advanced texture consistency and native visual parity |
 | Animation | Rust rotation keyframe edits and bounded source-derived keyframe inspection for a recognized Bone track (unknown imported tracks fail closed) | Broader channels, actual playback/effects fidelity, safe export and native replay |
 | Quality | Existing Skills and inspection references preserved | Representative model tasks, 6-angle+close-up review, user acceptance |
 | Security | Typed CLI bridge, no in-process JS eval, Rust guards | Host sandbox/permission proof, cancellation and uncertain-outcome recovery |

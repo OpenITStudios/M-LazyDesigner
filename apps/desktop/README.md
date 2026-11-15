@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust Code Mode Cube surface links (2026-11-15; SOURCE_ONLY):** `inspect --surface-uuid` and the typed `inspectCubeSurfaces` SDK expose stored six-face UV/texture links with distinct null/false/unset/index/UUID semantics, resolved declared texture identity, and SHA-bound read consistency. The result is bounded and always flags effective material and visual coverage as `UNVERIFIED`; no PNG pixels/opaque metadata, host sandbox or native proof claimed. Node/Rust source regressions NOT_EXECUTED.
+
 **Code Mode host approval and static model audit (2026-11-15; SOURCE_ONLY):** The Rust-first Code Mode SDK now default-denies every write until a trusted host explicitly approves the exact file/output plan; `openRustCodeModeProject` binds source SHA and `inspect --audit model` returns limited structure statistics while leaving visual verdict `UNVERIFIED`. See [host acceptance contract](code-mode/HOST_INTEGRATION.md). This is not an installed code sandbox, native QA result or measured efficiency gain. Regression source AUTHORED_NOT_RUN.
 
 **Code Mode focused discovery (2026-11-15; SOURCE_ONLY):** The Rust-first JS SDK and CLI now provide 1–64-entry paged Cube/Bone/Texture/Animation IDs plus limited Texture/Animation metadata for AI reasoning without loading full `.bbmodel` or PNG/opaque animation bodies. Authored-only Rust/Node regressions, no executed local or runtime proof.

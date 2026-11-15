@@ -150,6 +150,47 @@ test('client can request a SHA-pinned read without changing legacy unpinned read
   assert.equal(calls.length, 1);
 });
 
+test('Code Mode reads six authored Cube face links using an exact SHA without inferring texture coverage', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      if (argv.includes('--surface-uuid')) {
+        return {
+          status: 'OK', sha256: SHA, summary: { revision: 0 },
+          surfaces: {
+            scope: 'saved_geometry_and_face_references',
+            cube_uuid: 'cube-1', visual_verdict: 'UNVERIFIED',
+            effective_material: 'UNVERIFIED',
+            faces: [
+              { side: 'north', reference_kind: 'index', texture_index: 0,
+                texture_uuid: 'texture-1', source_kind: 'embedded_png_declared' },
+              { side: 'south', reference_kind: 'null', texture_index: null,
+                texture_uuid: null, source_kind: null },
+            ],
+          },
+        };
+      }
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 } };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const result = await project.inspectCubeSurfaces('cube-1');
+  assert.deepEqual(calls[1], [
+    'inspect', '--input', '/abs/model.bbmodel',
+    '--surface-uuid', 'cube-1', '--expected-sha256', SHA,
+  ]);
+  assert.equal(result.surfaces.visual_verdict, 'UNVERIFIED');
+  assert.equal(result.surfaces.effective_material, 'UNVERIFIED');
+  assert.equal(result.surfaces.faces[0].reference_kind, 'index');
+  assert.equal(result.surfaces.faces[1].reference_kind, 'null');
+  await assert.rejects(client.inspectCubeSurfaces({
+    input: '/abs/model.bbmodel', cubeUuid: '',
+  }));
+  assert.equal(calls.length, 2);
+});
+
 test('Code Mode inspects bounded numeric Bone rotation frames without exposing opaque tracks', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

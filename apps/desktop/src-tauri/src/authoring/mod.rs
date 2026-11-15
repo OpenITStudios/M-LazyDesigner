@@ -816,6 +816,102 @@ fn editable_rotation_track(track: &Value) -> bool {
     track.get("keyframes").and_then(Value::as_array).is_some()
 }
 
+/// Describe saved Cube geometry and six Face UV/texture links for Code Mode.
+/// This is a bounded *source* diagnostic, not an evaluation of pixels, paint
+/// coverage, current Blockbench material selection or visual correctness.
+/// In particular Bedrock single-texture/multi-file rules can supersede stored
+/// references; do not pretend a declared texture ID is the rendered material.
+pub fn inspect_cube_surfaces(doc: &AuthoringDocument, cube_uuid: &str) -> Result<Value> {
+    doc.validate()?;
+    let cube = doc.cubes.iter().find(|cube| cube.uuid == cube_uuid)
+        .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+    let per_texture_uv_rules = has_per_texture_uv_rules(doc);
+    let mut faces = Vec::with_capacity(FACE_NAMES.len());
+    for name in FACE_NAMES {
+        let face = cube.faces.get(name).and_then(Value::as_object)
+            .ok_or_else(|| fail("CUBE_FACE_INVALID"))?;
+        let rect: [f64; 4] = serde_json::from_value(
+            face.get("uv").cloned().ok_or_else(|| fail("CUBE_FACE_UV_INVALID"))?
+        ).map_err(|_| fail("CUBE_FACE_UV_INVALID"))?;
+        let (reference_kind, texture_index) = match face.get("texture") {
+            None => ("unset", None),
+            Some(Value::Null) => ("null", None),
+            Some(Value::Bool(false)) => ("false", None),
+            Some(Value::Number(number)) => {
+                let index = number.as_u64()
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or_else(|| fail("CUBE_FACE_TEXTURE_UNSUPPORTED"))?;
+                if index >= doc.texture_assets.len() {
+                    return Err(fail("CUBE_FACE_TEXTURE_UNSUPPORTED"));
+                }
+                ("index", Some(index))
+            },
+            Some(Value::String(id)) => {
+                let index = doc.texture_assets.iter().position(|texture|
+                    texture.get("uuid").and_then(Value::as_str) == Some(id.as_str())
+                ).ok_or_else(|| fail("CUBE_FACE_TEXTURE_UNSUPPORTED"))?;
+                ("uuid", Some(index))
+            },
+            _ => return Err(fail("CUBE_FACE_TEXTURE_UNSUPPORTED")),
+        };
+        let texture = texture_index.and_then(|index| doc.texture_assets.get(index));
+        let source_kind = texture.map(|texture| {
+            if texture.get("source").and_then(Value::as_str)
+                .is_some_and(|source| source.starts_with("data:image/png;base64,")) {
+                "embedded_png_declared"
+            } else if texture.get("relative_path").and_then(Value::as_str).is_some() {
+                "relative_path_declared"
+            } else {
+                "other_or_unknown"
+            }
+        });
+        let rotation = match face.get("rotation") {
+            None => Some(0_u16),
+            Some(value) => value.as_f64()
+                .filter(|value| [0.0, 90.0, 180.0, 270.0].contains(value))
+                .map(|value| value as u16),
+        };
+        faces.push(json!({
+            "side":name,
+            "uv":rect,
+            "uv_rotation":rotation,
+            "uv_rotation_supported":rotation.is_some(),
+            "uv_zero_span":rect[0] == rect[2] || rect[1] == rect[3],
+            "reference_kind":reference_kind,
+            "texture_index":texture_index,
+            "texture_uuid":texture.and_then(|t| t.get("uuid")).and_then(Value::as_str),
+            "source_kind":source_kind,
+        }));
+    }
+    let size: [f64; 3] = std::array::from_fn(|axis| cube.to[axis] - cube.from[axis]);
+    let result = json!({
+        "scope":"saved_geometry_and_face_references",
+        "cube_uuid":cube.uuid,
+        "visual_verdict":"UNVERIFIED",
+        "effective_material":"UNVERIFIED",
+        "geometry":{
+            "from":cube.from, "to":cube.to, "size":size,
+            "origin":cube.origin,
+            "rotation":cube.extra.get("rotation")
+                .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok()),
+            "inflate":cube.extra.get("inflate").and_then(Value::as_f64),
+            "visibility_saved":cube.extra.get("visibility").and_then(Value::as_bool),
+        },
+        "uv":{
+            "project_resolution":[doc.resolution.width, doc.resolution.height],
+            "box_uv":cube_box_uv(cube, doc.meta.box_uv.unwrap_or(false)),
+            "auto_uv":cube_auto_uv(cube)?,
+            "per_texture_rules":per_texture_uv_rules
+        },
+        "faces":faces
+    });
+    if serde_json::to_vec(&result)
+        .map_err(|_| fail("CUBE_INSPECT_SERIALIZE_FAILED"))?.len() > 16 * 1024 {
+        return Err(fail("CUBE_INSPECT_TOO_LARGE"));
+    }
+    Ok(result)
+}
+
 /// Read-only Code Mode projection for one exact Bone rotation track.
 /// Shares the existing Rust editable-frame admission instead of interpreting
 /// imported Molang expressions, unknown channels or extended keyframe shapes.

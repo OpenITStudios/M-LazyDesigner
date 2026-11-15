@@ -91,6 +91,40 @@ export interface InspectAsset {
   source_kind?: "embedded_png" | "external_or_other" | "unavailable";
   [key: string]: unknown;
 }
+/** Saved link metadata, not confirmed material/texture pixels. */
+export interface CubeFaceSurface {
+  side: "north" | "east" | "south" | "west" | "up" | "down";
+  uv: Vec4;
+  uv_rotation: 0 | 90 | 180 | 270 | null;
+  uv_rotation_supported: boolean;
+  uv_zero_span: boolean;
+  reference_kind: "unset" | "null" | "false" | "index" | "uuid";
+  texture_index: number | null;
+  texture_uuid: string | null;
+  source_kind: "embedded_png_declared" | "relative_path_declared" | "other_or_unknown" | null;
+}
+export interface CubeSurfaceInspection {
+  scope: "saved_geometry_and_face_references";
+  cube_uuid: string;
+  visual_verdict: "UNVERIFIED";
+  effective_material: "UNVERIFIED";
+  geometry: {
+    from: Vec3;
+    to: Vec3;
+    size: Vec3;
+    origin: Vec3 | null;
+    rotation: Vec3 | null;
+    inflate: number | null;
+    visibility_saved: boolean | null;
+  };
+  uv: {
+    project_resolution: Vec2;
+    box_uv: boolean;
+    auto_uv: 0 | 1 | 2;
+    per_texture_rules: boolean;
+  };
+  faces: CubeFaceSurface[];
+}
 export interface RotationTrackInspection {
   scope: "linear_bone_rotation" | "unsupported_animation_track";
   recognized: boolean;
@@ -122,6 +156,7 @@ export interface InspectReceipt {
   sha256: string;
   summary: DocumentSummary;
   element?: FocusedElement;
+  surfaces?: CubeSurfaceInspection;
   catalog?: CatalogPage;
   asset?: InspectAsset;
   audit?: StaticModelAudit;
@@ -149,6 +184,9 @@ export interface OutputReceipt {
 export interface RustCodeModeClient {
   newModel(input: { output: string; name: string; modelIdentifier: string }): Promise<OutputReceipt>;
   inspect(input: { input: string; uuid?: string; expectedSha256?: string }): Promise<InspectReceipt>;
+  inspectCubeSurfaces(input: {
+    input: string; cubeUuid: string; expectedSha256?: string;
+  }): Promise<InspectReceipt & { surfaces: CubeSurfaceInspection }>;
   catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number; expectedSha256?: string }): Promise<InspectReceipt & { catalog: CatalogPage }>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectAnimation(input: { input: string; uuid: string; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
@@ -193,6 +231,7 @@ export interface RustCodeModeProject {
   expectedSha256: string;
   summary: DocumentSummary;
   inspect(uuid: string): Promise<InspectReceipt>;
+  inspectCubeSurfaces(cubeUuid: string): Promise<InspectReceipt & {surfaces: CubeSurfaceInspection}>;
   catalog(kind: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<InspectReceipt & {catalog: CatalogPage}>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;

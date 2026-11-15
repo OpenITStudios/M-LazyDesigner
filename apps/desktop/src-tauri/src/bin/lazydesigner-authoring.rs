@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_cube_surfaces, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -271,7 +271,7 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--audit", "--expected-sha256"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--surface-uuid", "--audit", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
@@ -280,7 +280,7 @@ fn execute() -> Result<Value> {
             if let Some(expected) = options.get("--expected-sha256") {
                 ensure_source_sha(&digest, expected)?;
             }
-            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--audit"]
+            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--surface-uuid", "--audit"]
                 .iter().filter(|key| options.contains_key(*key)).count();
             if query_count > 1 ||
                 (!options.contains_key("--list") &&
@@ -298,6 +298,10 @@ fn execute() -> Result<Value> {
                 let element = focused_element(session.document(), uuid)?;
                 Ok(json!({"status":"OK","sha256":digest,
                     "summary":session.summary(),"element":element}))
+            } else if let Some(uuid) = options.get("--surface-uuid") {
+                let surfaces = inspect_cube_surfaces(session.document(), uuid)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"surfaces":surfaces}))
             } else if let Some(kind) = options.get("--list") {
                 let offset = options.get("--offset").map(|s|s.parse::<usize>())
                     .transpose().map_err(|_| fail("INSPECT_OFFSET_INVALID"))?.unwrap_or(0);
@@ -457,6 +461,51 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Source-authored only: no Cargo, native app or model visual QA executed.
+    #[test]
+    fn code_mode_cube_surfaces_are_bounded_read_only_and_do_not_claim_visual_coverage() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")).unwrap();
+        let uuid = doc.cubes[0].uuid.clone();
+        let before = doc.clone();
+        let report = inspect_cube_surfaces(&doc, &uuid).unwrap();
+        assert_eq!(report["scope"], json!("saved_geometry_and_face_references"));
+        assert_eq!(report["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(report["effective_material"], json!("UNVERIFIED"));
+        assert_eq!(report["geometry"]["size"], json!([4.0, 4.0, 4.0]));
+        assert_eq!(report["faces"].as_array().unwrap().len(), 6);
+        assert_eq!(report["faces"][0]["side"], json!("north"));
+        assert_eq!(report["faces"][0]["reference_kind"], json!("index"));
+        assert_eq!(report["faces"][0]["texture_index"], json!(0));
+        assert_eq!(report["faces"][0]["texture_uuid"],
+            json!("00000000-0000-4000-8000-000000000101"));
+        assert_eq!(report["faces"][0]["source_kind"], json!("embedded_png_declared"));
+        assert_eq!(report["faces"][0]["uv_rotation"], json!(90));
+        assert_eq!(report["faces"][2]["reference_kind"], json!("null"));
+        assert!(report.to_string().find("data:image/png").is_none());
+        assert!(report.to_string().find("vendor_extension").is_none());
+        assert_eq!(doc, before);
+
+        let texture_id = doc.texture_assets[0]["uuid"].as_str().unwrap().to_owned();
+        doc.cubes[0].faces["east"]["texture"] = json!(texture_id);
+        let linked = inspect_cube_surfaces(&doc, &uuid).unwrap();
+        assert_eq!(linked["faces"][1]["reference_kind"], json!("uuid"));
+        assert_eq!(linked["faces"][1]["texture_index"], json!(0));
+        doc.cubes[0].faces["east"]["texture"] = json!(false);
+        let inherited = inspect_cube_surfaces(&doc, &uuid).unwrap();
+        assert_eq!(inherited["faces"][1]["reference_kind"], json!("false"));
+        doc.cubes[0].faces.get_mut("east").unwrap()
+            .as_object_mut().unwrap().remove("texture");
+        let unset = inspect_cube_surfaces(&doc, &uuid).unwrap();
+        assert_eq!(unset["faces"][1]["reference_kind"], json!("unset"));
+        doc.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+        let scoped = inspect_cube_surfaces(&doc, &uuid).unwrap();
+        assert_eq!(scoped["uv"]["per_texture_rules"], json!(true));
+        assert_eq!(scoped["effective_material"], json!("UNVERIFIED"));
+        assert_eq!(inspect_cube_surfaces(&doc, "missing-cube").unwrap_err(),
+            "CUBE_NOT_FOUND");
+    }
 
     // Source-authored only; Cargo/local execution remains on hold.
     #[test]
