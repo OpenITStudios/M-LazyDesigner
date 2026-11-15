@@ -1,6 +1,7 @@
 <script lang="ts">
   import './rust-editor.css';
-  import { invoke } from '@tauri-apps/api/core';
+  import { invoke, isTauri } from '@tauri-apps/api/core';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
   import { projectedBoneRotationPose } from './rustAnimationPose';
@@ -334,6 +335,16 @@
     const action = confirmDiscard; confirmDiscard = null;
     if (action === 'new') void beginNew(true);
     if (action === 'open') void openModel(true);
+  }
+  function openLegacyWorkspace() {
+    closeMenus();
+    // Legacy unmounts this native-close listener. Do not strand an unsaved
+    // Rust model in the background with no active close protection.
+    if (loading || busy || paintStroke || snapshot?.dirty) {
+      error = 'Save a new .bbmodel copy before switching to Legacy Workspace.';
+      return;
+    }
+    onLegacy();
   }
   async function saveCopy() {
     if (!snapshot || busy) return;
@@ -1198,8 +1209,39 @@
     observer.observe(editorBody);
     document.addEventListener('visibilitychange', onAnimationVisibilityChanged);
     window.addEventListener('blur', pauseAnimationPlayback);
+    // Protect the Rust model before a native window close. The document
+    // and its dirty flag remain owned by the same Rust/Tauri session.
+    let disposed = false;
+    let unlistenClose: (() => void) | null = null;
+    if (isTauri()) {
+      void getCurrentWindow().onCloseRequested((event) => {
+        if (loading || busy) {
+          // Never discard an active native save or edit transaction.
+          event.preventDefault();
+          return;
+        }
+        if (snapshot?.dirty || paintStroke) {
+          try {
+            const discard = window.confirm(
+              'This Rust model has unsaved changes. Close without saving them?'
+            );
+            if (!discard) event.preventDefault();
+          } catch {
+            // A failed dialog must not silently lose unsaved changes.
+            event.preventDefault();
+          }
+        }
+      }).then((unlisten) => {
+        if (disposed) unlisten();
+        else unlistenClose = unlisten;
+      }).catch(() => {
+        error = 'Close protection is unavailable. Save a model copy before exiting.';
+      });
+    }
     void load();
     return () => {
+      disposed = true;
+      unlistenClose?.();
       pauseAnimationPlayback();
       document.removeEventListener('visibilitychange', onAnimationVisibilityChanged);
       window.removeEventListener('blur', pauseAnimationPlayback);
@@ -1818,7 +1860,7 @@
                 <button role="menuitem" onclick={requestOpen} disabled={busy || loading}>Open Model… <kbd>Ctrl+O</kbd></button>
                 <button role="menuitem" onclick={() => void saveCopy()} disabled={!snapshot || busy}>Save Copy… <kbd>Ctrl+Shift+S</kbd></button>
                 <div class="menu-rule"></div>
-                <button role="menuitem" onclick={() => { closeMenus(); onLegacy(); }}>Legacy Workspace</button>
+                <button role="menuitem" onclick={openLegacyWorkspace}>Legacy Workspace</button>
               {:else if item === 'edit'}
                 <button role="menuitem" onclick={() => history('undo')} disabled={!snapshot?.canUndo || busy}>Undo <kbd>Ctrl+Z</kbd></button>
                 <button role="menuitem" onclick={() => history('redo')} disabled={!snapshot?.canRedo || busy}>Redo <kbd>Ctrl+Y</kbd></button>

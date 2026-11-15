@@ -13,9 +13,28 @@ const nativeStage = read('src/NativeEditorStage.svelte');
 const brand = read('branding/lazydesigner-ld-master.svg').trim();
 const tauriBrand = read('src-tauri/app-icon.svg').trim();
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
+const rustEditor = read('src/RustEditorPage.svelte');
 
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
+
+// The native Rust viewport and Paint atlas render vetted embedded PNG data
+// URLs. Verify their exact CSP allowance without relaxing other origins.
+const csp = String(config.app?.security?.csp ?? '');
+const imageCsp = csp.split(';').map(rule => rule.trim()).find(rule => rule.startsWith('img-src '));
+check(imageCsp === "img-src 'self' data:",
+  'Rust embedded PNGs require only self/data image sources in native CSP');
+check(rustEditor.includes("src={snapshot.texturePreviewSources[paintTextureIndex] ?? ''}"),
+  'Rust Paint must continue to render Rust-vetted inline PNG data');
+check(rustEditor.includes('onCloseRequested((event) =>') &&
+  rustEditor.includes('event.preventDefault()') &&
+  rustEditor.includes('unlistenClose?.()'),
+  'Rust editor native close guard or teardown is missing');
+
+check(rustEditor.includes('function openLegacyWorkspace()') &&
+  rustEditor.includes('if (loading || busy || paintStroke || snapshot?.dirty)') &&
+  rustEditor.includes('onclick={openLegacyWorkspace}'),
+  'Legacy navigation must not bypass the Rust unsaved-close guard');
 
 check(brand === tauriBrand, 'Tauri icon source diverged from the approved LD master');
 check(config.bundle?.windows?.nsis?.installerIcon === 'icons/icon.ico', 'NSIS installer icon path changed');
