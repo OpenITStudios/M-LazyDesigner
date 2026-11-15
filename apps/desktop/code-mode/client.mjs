@@ -169,6 +169,13 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
+    async inspectCubeFaceAlpha({ input, cubeUuid, expectedSha256 }) {
+      return call('inspect', {
+        input: absolute(input, 'input'),
+        'face-alpha-uuid': nonempty(cubeUuid, 'cubeUuid'),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
+      });
+    },
     async catalog({ input, kind, offset = 0, limit = 32, expectedSha256 }) {
       if (!['cubes', 'bones', 'textures', 'animations'].includes(kind)) {
         throw new TypeError('Unknown catalog kind');
@@ -299,6 +306,8 @@ export async function openRustCodeModeProject(client, input) {
     inspect: (uuid) => client.inspect({ input: path, uuid, expectedSha256 }),
     inspectCubeSurfaces: (cubeUuid) =>
       client.inspectCubeSurfaces({ input: path, cubeUuid, expectedSha256 }),
+    inspectCubeFaceAlpha: (cubeUuid) =>
+      client.inspectCubeFaceAlpha({ input: path, cubeUuid, expectedSha256 }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),

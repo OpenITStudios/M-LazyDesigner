@@ -150,6 +150,53 @@ test('client can request a SHA-pinned read without changing legacy unpinned read
   assert.equal(calls.length, 1);
 });
 
+test('Code Mode reports six saved manual UV alpha regions without inventing face quality', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      if (argv.includes('--face-alpha-uuid')) {
+        return {
+          status: 'OK', sha256: SHA, summary: { revision: 0 },
+          face_alpha: {
+            scope: 'saved_manual_face_uv_alpha', cube_uuid: 'cube-1',
+            visual_verdict: 'UNVERIFIED', face_coverage_verdict: 'UNVERIFIED',
+            effective_material: 'UNVERIFIED', face_count: 6,
+            faces: [
+              { side: 'north', saved_reference_kind: 'index',
+                alpha: { status: 'measured', region: {
+                  scope: 'saved_manual_uv_alpha_pixels', sampled_pixels: 16,
+                  transparent_pixels: 14, translucent_pixels: 1, opaque_pixels: 1,
+                  pixel_rect: [0, 0, 4, 4],
+                } } },
+              { side: 'south', saved_reference_kind: 'null',
+                alpha: { status: 'unsupported', reason: 'NO_EXPLICIT_TEXTURE_REFERENCE' } },
+            ],
+          },
+        };
+      }
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 } };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const inspection = await project.inspectCubeFaceAlpha('cube-1');
+  assert.deepEqual(calls[1], [
+    'inspect', '--input', '/abs/model.bbmodel',
+    '--face-alpha-uuid', 'cube-1', '--expected-sha256', SHA,
+  ]);
+  assert.equal(inspection.face_alpha.faces[0].alpha.region.transparent_pixels, 14);
+  assert.equal(inspection.face_alpha.faces[1].alpha.status, 'unsupported');
+  assert.equal(inspection.face_alpha.face_coverage_verdict, 'UNVERIFIED');
+  await assert.rejects(client.inspectCubeFaceAlpha({
+    input: '/abs/model.bbmodel', cubeUuid: '',
+  }));
+  await assert.rejects(client.inspectCubeFaceAlpha({
+    input: '/abs/model.bbmodel', cubeUuid: 'cube-1', expectedSha256: 'invalid',
+  }));
+  assert.equal(calls.length, 2);
+});
+
 test('Code Mode reads bounded decoded atlas alpha evidence using a pinned source SHA', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

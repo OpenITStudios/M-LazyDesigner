@@ -114,6 +114,65 @@ pub(super) fn alpha_diagnostics(texture: &Value, width: u32, height: u32) -> Res
     }))
 }
 
+/// Decode one admitted Paint RGBA8 texture for a transient, read-only
+/// source-UV inspection. The pixels are never serialized to agent context.
+pub(super) fn decode_for_uv_inspection(
+    texture: &Value, width: u32, height: u32,
+) -> Result<Vec<u8>> {
+    if !exportable(texture, width, height) {
+        return Err("PAINT_UV_TEXTURE_UNSUPPORTED".into());
+    }
+    decode_rgba8_source(texture, width, height)
+}
+
+/// Counts alpha categories inside a *saved manual UV pixel rectangle*.
+/// Exact integer pixel boundaries only; no UV tiling, interpolation, effective
+/// material or visible-face paint coverage is inferred. Reversed UV is allowed
+/// since reversing a rectangle does not change its alpha histogram.
+pub(super) fn uv_region_alpha_stats(
+    rgba: &[u8], width: u32, height: u32, uv: [f64; 4],
+) -> Result<Value> {
+    if size(width, height)? != rgba.len() {
+        return Err("PAINT_UV_BITMAP_INVALID".into());
+    }
+    if !uv.iter().all(|n| n.is_finite() && *n == n.round()) {
+        return Err("PAINT_UV_RECT_NON_INTEGRAL".into());
+    }
+    let x0 = uv[0].min(uv[2]);
+    let x1 = uv[0].max(uv[2]);
+    let y0 = uv[1].min(uv[3]);
+    let y1 = uv[1].max(uv[3]);
+    if x0 < 0.0 || y0 < 0.0 || x1 > f64::from(width) ||
+       y1 > f64::from(height) {
+        return Err("PAINT_UV_RECT_OUT_OF_BOUNDS".into());
+    }
+    if x0 == x1 || y0 == y1 {
+        return Err("PAINT_UV_RECT_ZERO_AREA".into());
+    }
+    let mut transparent = 0_u32;
+    let mut translucent = 0_u32;
+    let mut opaque = 0_u32;
+    for y in (y0 as u32)..(y1 as u32) {
+        for x in (x0 as u32)..(x1 as u32) {
+            let index = ((y * width + x) * 4 + 3) as usize;
+            match rgba[index] {
+                0 => transparent += 1,
+                255 => opaque += 1,
+                _ => translucent += 1,
+            }
+        }
+    }
+    let total = transparent + translucent + opaque;
+    Ok(json!({
+        "scope":"saved_manual_uv_alpha_pixels",
+        "sampled_pixels":total,
+        "transparent_pixels":transparent,
+        "translucent_pixels":translucent,
+        "opaque_pixels":opaque,
+        "pixel_rect":[x0 as u32, y0 as u32, x1 as u32, y1 as u32]
+    }))
+}
+
 pub(super) fn adopt(texture: &mut Value, width: u32, height: u32) -> Result<()> {
     if !adoptable(texture, width, height) {
         return Err("PAINT_IMPORTED_TEXTURE_UNSUPPORTED".into());

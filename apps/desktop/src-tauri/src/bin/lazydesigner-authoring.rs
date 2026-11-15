@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_cube_surfaces, inspect_paint_alpha, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -271,7 +271,7 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--surface-uuid", "--alpha-uuid", "--audit", "--expected-sha256"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--surface-uuid", "--face-alpha-uuid", "--alpha-uuid", "--audit", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
@@ -280,7 +280,7 @@ fn execute() -> Result<Value> {
             if let Some(expected) = options.get("--expected-sha256") {
                 ensure_source_sha(&digest, expected)?;
             }
-            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--surface-uuid", "--alpha-uuid", "--audit"]
+            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--surface-uuid", "--face-alpha-uuid", "--alpha-uuid", "--audit"]
                 .iter().filter(|key| options.contains_key(*key)).count();
             if query_count > 1 ||
                 (!options.contains_key("--list") &&
@@ -302,6 +302,10 @@ fn execute() -> Result<Value> {
                 let surfaces = inspect_cube_surfaces(session.document(), uuid)?;
                 Ok(json!({"status":"OK","sha256":digest,
                     "summary":session.summary(),"surfaces":surfaces}))
+            } else if let Some(uuid) = options.get("--face-alpha-uuid") {
+                let face_alpha = inspect_cube_uv_alpha(session.document(), uuid)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"face_alpha":face_alpha}))
             } else if let Some(kind) = options.get("--list") {
                 let offset = options.get("--offset").map(|s|s.parse::<usize>())
                     .transpose().map_err(|_| fail("INSPECT_OFFSET_INVALID"))?.unwrap_or(0);
@@ -465,6 +469,85 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Rust/CLI regression source only; no Cargo or native execution claimed.
+    #[test]
+    fn code_mode_face_uv_alpha_is_exact_on_manual_boundaries_and_refuses_ambiguous_uv() {
+        let mut session = EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let uuid = "00000000-0000-4000-8000-000000000899";
+        session.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid:uuid.into(), name:"face.png".into()
+        }]).unwrap();
+        session.apply(1, &[
+            EditOperation::PaintTexturePixel {
+                texture_index:0, x:0, y:0, rgba:[20,20,20,255]
+            },
+            EditOperation::PaintTexturePixel {
+                texture_index:0, x:1, y:0, rgba:[20,20,20,128]
+            }
+        ]).unwrap();
+        let mut doc = session.document().clone();
+        let cube_id = doc.cubes[0].uuid.clone();
+        doc.cubes[0].faces["north"]["texture"] = json!(0);
+        doc.cubes[0].faces["east"]["texture"] = json!(uuid);
+        doc.cubes[0].faces["south"]["texture"] = json!(false);
+        doc.cubes[0].faces["west"]["texture"] = Value::Null;
+        let original = doc.clone();
+        let report = inspect_cube_uv_alpha(&doc, &cube_id).unwrap();
+        assert_eq!(report["scope"], json!("saved_manual_face_uv_alpha"));
+        assert_eq!(report["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(report["face_coverage_verdict"], json!("UNVERIFIED"));
+        assert_eq!(report["face_count"], json!(6));
+        assert_eq!(report["faces"][0]["alpha"]["status"], json!("measured"));
+        assert_eq!(report["faces"][0]["alpha"]["region"]["sampled_pixels"], json!(16));
+        assert_eq!(report["faces"][0]["alpha"]["region"]["opaque_pixels"], json!(1));
+        assert_eq!(report["faces"][0]["alpha"]["region"]["translucent_pixels"], json!(1));
+        assert_eq!(report["faces"][0]["alpha"]["region"]["transparent_pixels"], json!(14));
+        assert_eq!(report["faces"][1]["saved_reference_kind"], json!("uuid"));
+        assert_eq!(report["faces"][1]["alpha"]["region"]["opaque_pixels"], json!(1));
+        assert_eq!(report["faces"][2]["alpha"]["reason"],
+            json!("NO_EXPLICIT_TEXTURE_REFERENCE"));
+        assert_eq!(report["faces"][3]["alpha"]["reason"],
+            json!("NO_EXPLICIT_TEXTURE_REFERENCE"));
+        assert_eq!(report["faces"][4]["alpha"]["reason"],
+            json!("NO_EXPLICIT_TEXTURE_REFERENCE"));
+        assert!(report.to_string().find("data:image/png").is_none());
+        assert_eq!(doc, original);
+
+        doc.cubes[0].faces["north"]["uv"] = json!([4.0,4.0,0.0,0.0]);
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["region"]["transparent_pixels"], json!(14));
+        doc.cubes[0].faces["north"]["uv"] = json!([0.0,0.0,0.0,4.0]);
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"], json!("PAINT_UV_RECT_ZERO_AREA"));
+        doc.cubes[0].faces["north"]["uv"] = json!([0.5,0.0,4.0,4.0]);
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"], json!("PAINT_UV_RECT_NON_INTEGRAL"));
+        doc.cubes[0].faces["north"]["uv"] = json!([0.0,0.0,400.0,4.0]);
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"], json!("PAINT_UV_RECT_OUT_OF_BOUNDS"));
+
+        doc = original.clone();
+        doc.meta.box_uv = Some(true);
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"], json!("BOX_UV_UNSUPPORTED"));
+        doc = original.clone();
+        doc.cubes[0].extra.insert("autouv".into(), json!(1));
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"], json!("AUTO_UV_UNSUPPORTED"));
+        doc = original.clone();
+        doc.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"],
+            json!("PER_TEXTURE_UV_RULES_UNSUPPORTED"));
+
+        doc = original.clone();
+        doc.texture_assets[0]["source"] = json!("data:image/png;base64,AAAA");
+        assert!(inspect_cube_uv_alpha(&doc, &cube_id).is_err());
+        assert_eq!(inspect_cube_uv_alpha(&original, "nonexistent-cube").unwrap_err(),
+            "CUBE_NOT_FOUND");
+    }
 
     // Authored-only verification: decode behavior/native runtime NOT_EXECUTED.
     #[test]

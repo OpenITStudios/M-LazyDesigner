@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Code Mode saved Cube Face UV alpha (2026-11-15; SOURCE_ONLY):** `inspectCubeFaceAlpha` and `inspect --face-alpha-uuid` combine saved Cube UV/reference interpretation with the full Rust Paint PNG decoder for a bounded six-face source alpha histogram, decoding each supported unique RGBA8 texture only once per request. Unrecognized UV rules, invalid/out-of-atlas pixel rectangles and no explicit image reference return per-face refusal, not a false visual PASS. Face coverage/effective material/native rendering remain `UNVERIFIED`; Rust/Node regressions AUTHORED_NOT_RUN.
+
 **Code Mode decoded atlas alpha inspection (2026-11-15; SOURCE_ONLY):** Rust `inspect_paint_alpha` reuses Paint's full RGBA8 PNG decoder for read-only transparent/translucent/opaque counts and a fixed 8×8 pixel-density summary; CLI `inspect --alpha-uuid`, typed SDK and SHA-bound project helper expose it without sending raw texture data. Imported advanced/per-texture UV assets refuse or report unsupported. No false inference of UV face coverage or visual quality is made; Node/Rust tests AUTHORED_NOT_RUN, and Windows/Blockbench native QA remains UNVERIFIED.
 
 **Rust Code Mode Cube surface links (2026-11-15; SOURCE_ONLY):** `inspect --surface-uuid` and the typed `inspectCubeSurfaces` SDK expose stored six-face UV/texture links with distinct null/false/unset/index/UUID semantics, resolved declared texture identity, and SHA-bound read consistency. The result is bounded and always flags effective material and visual coverage as `UNVERIFIED`; no PNG pixels/opaque metadata, host sandbox or native proof claimed. Node/Rust source regressions NOT_EXECUTED.

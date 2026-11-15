@@ -1091,6 +1091,97 @@ pub fn inspect_paint_alpha(doc: &AuthoringDocument, texture_uuid: &str) -> Resul
     }))
 }
 
+/// Inspect six saved *manual* Cube face UV regions against the Rust Paint
+/// PNG decoder, once per unique referenced texture. This is source evidence:
+/// a visible 3D face, effective Bedrock material and full texturing quality
+/// still require native observation. Unknown mappings fail closed per face.
+pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result<Value> {
+    let surface = inspect_cube_surfaces(doc, cube_uuid)?;
+    let uv = &surface["uv"];
+    let global_reason = if uv["per_texture_rules"].as_bool() == Some(true) {
+        Some("PER_TEXTURE_UV_RULES_UNSUPPORTED")
+    } else if uv["box_uv"].as_bool() == Some(true) {
+        Some("BOX_UV_UNSUPPORTED")
+    } else if uv["auto_uv"].as_u64() != Some(0) {
+        Some("AUTO_UV_UNSUPPORTED")
+    } else {
+        None
+    };
+    let faces = surface["faces"].as_array()
+        .ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
+    let width = doc.resolution.width;
+    let height = doc.resolution.height;
+    // Scratch memory only, scoped to this one read, not a second scene/texture
+    // cache. At most six explicitly referenced textures are decoded.
+    let mut decoded: Vec<(usize, Vec<u8>)> = Vec::new();
+    let mut projected = Vec::with_capacity(FACE_NAMES.len());
+    for face in faces {
+        let side = face["side"].as_str()
+            .ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
+        let kind = face["reference_kind"].as_str()
+            .ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
+        let index = face["texture_index"].as_u64()
+            .and_then(|index| usize::try_from(index).ok());
+        let mut reason = global_reason;
+        if reason.is_none() && index.is_none() {
+            reason = Some("NO_EXPLICIT_TEXTURE_REFERENCE");
+        }
+        let texture = index.and_then(|i| doc.texture_assets.get(i));
+        if reason.is_none() && !texture.is_some_and(|t|
+            paint::exportable(t, width, height)
+        ) {
+            reason = Some("UNSUPPORTED_TEXTURE_FORMAT_OR_METADATA");
+        }
+        let rect: [f64; 4] = serde_json::from_value(face["uv"].clone())
+            .map_err(|_| fail("CUBE_INSPECT_FACES_INVALID"))?;
+        let stats = if let Some(message) = reason {
+            json!({"status":"unsupported","reason":message})
+        } else {
+            let texture_index = index.ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
+            if !decoded.iter().any(|(i, _)| *i == texture_index) {
+                let png = paint::decode_for_uv_inspection(
+                    &doc.texture_assets[texture_index], width, height
+                )?;
+                decoded.push((texture_index, png));
+            }
+            let png = decoded.iter().find(|(i, _)| *i == texture_index)
+                .ok_or_else(|| fail("PAINT_UV_CACHE_INCONSISTENT"))?;
+            match paint::uv_region_alpha_stats(&png.1, width, height, rect) {
+                Ok(region) => json!({"status":"measured","region":region}),
+                Err(code) if matches!(code.as_str(),
+                    "PAINT_UV_RECT_NON_INTEGRAL" |
+                    "PAINT_UV_RECT_OUT_OF_BOUNDS" |
+                    "PAINT_UV_RECT_ZERO_AREA") => {
+                    json!({"status":"unsupported","reason":code})
+                }
+                Err(code) => return Err(code),
+            }
+        };
+        projected.push(json!({
+            "side":side,
+            "saved_reference_kind":kind,
+            "texture_index":index,
+            "texture_uuid":face["texture_uuid"],
+            "uv":rect,
+            "alpha":stats
+        }));
+    }
+    let report = json!({
+        "scope":"saved_manual_face_uv_alpha",
+        "cube_uuid":cube_uuid,
+        "visual_verdict":"UNVERIFIED",
+        "effective_material":"UNVERIFIED",
+        "face_coverage_verdict":"UNVERIFIED",
+        "face_count":projected.len(),
+        "faces":projected
+    });
+    if serde_json::to_vec(&report)
+        .map_err(|_| fail("CUBE_UV_ALPHA_SERIALIZE_FAILED"))?.len() > 24 * 1024 {
+        return Err(fail("CUBE_UV_ALPHA_RESULT_TOO_LARGE"));
+    }
+    Ok(report)
+}
+
 pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {
     doc.cubes.is_empty() && doc.bones.is_empty() &&
     doc.texture_assets.is_empty() && doc.animation_assets.is_empty() &&
