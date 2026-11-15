@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Texturing source increment:** Rust Paint now has `paint_texture_fill` for bounded four-connected color-region replacement or erasure on supported RGBA8 atlases. It is available to CLI/Code Mode and shares the existing session/Undo/PNG authoring path. Authored regression cases are NOT_EXECUTED. Do not treat region fill as evidence of full face coverage; prioritize the outstanding Geometry/UV/Texture/Animation source gaps.
+
 **Current maintainer direction overrides prior UI-parity goals:** finish Geometry, then Texturing, then Animation. The single Rust AuthoringDocument, CLI/Code Mode semantics, quality checks and export fidelity are the priority; UI/UX and Blockbench tool imitation are last. Required acceptance: an editable exported `.bbmodel` with all supported model, texture and animation data opening correctly in real Blockbench. Arbitrary reverse import is non-gating and still fail-closed. No change to `Local`, 12 project Skills, holds, release authority or Code Mode host.
 
 **Source increment:** `SetBoneOrigin`, `SetCubeOrigin`, `SetCubeInflate` provide bounded geometry/rig edits through one Rust EditOperation exposed by Tauri/CLI and typed Code Mode. Children, texture UV and opaque animation data are preserved; degenerate inflate is rejected; source atomicity/Undo/round-trip tests AUTHORED_NOT_RUN.

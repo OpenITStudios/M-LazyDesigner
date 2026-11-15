@@ -404,6 +404,50 @@ pub(super) fn rectangle(
     Ok(())
 }
 
+/// Four-connected bounded region fill on exact RGBA8 matches. This is a
+/// deterministic atlas edit, not a screen-space/UV-face interpretation.
+pub(super) fn fill(
+    texture: &mut Value, width: u32, height: u32,
+    at: [u32; 2], rgba: [u8; 4], erase: bool,
+) -> Result<()> {
+    if at[0] >= width || at[1] >= height {
+        return Err("PAINT_COORDINATE_INVALID".into());
+    }
+    let mut pixels = decode(texture, width, height)?;
+    let w = width as usize;
+    let h = height as usize;
+    let seed = at[1] as usize * w + at[0] as usize;
+    let start = seed * 4;
+    let target = [
+        pixels[start], pixels[start + 1],
+        pixels[start + 2], pixels[start + 3],
+    ];
+    let desired = if erase { [0, 0, 0, 0] } else { rgba };
+    if target == desired { return Ok(()); }
+
+    // Pixel count is bounded by the existing 256² RGBA8 codec; never
+    // recurse or grow data structures in proportion to untrusted PNG bytes.
+    let mut visited = vec![false; w * h];
+    let mut stack = vec![seed];
+    while let Some(index) = stack.pop() {
+        if visited[index] { continue; }
+        visited[index] = true;
+        let offset = index * 4;
+        if pixels[offset..offset + 4] != target { continue; }
+        pixels[offset..offset + 4].copy_from_slice(&desired);
+        let x = index % w;
+        let y = index / w;
+        if x > 0 { stack.push(index - 1); }
+        if x + 1 < w { stack.push(index + 1); }
+        if y > 0 { stack.push(index - w); }
+        if y + 1 < h { stack.push(index + w); }
+    }
+    let source = encode(width, height, &pixels)?;
+    texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
+        .insert("source".into(), Value::String(source));
+    Ok(())
+}
+
 pub(super) fn pixel(
     texture: &mut Value, width: u32, height: u32, x: u32, y: u32, rgba: [u8; 4],
 ) -> Result<()> {

@@ -332,6 +332,77 @@ fn rename_refuses_invalid_conflicting_and_opaque_track_names_without_partial_edi
     ]).unwrap_err(), "EDIT_NO_OP");
 }
 
+// Authored-only Rust/Paint regressions (not executed).
+#[test]
+fn region_fill_is_four_connected_and_one_undoable_rgba8_transaction() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Region", "region").unwrap()).unwrap();
+    let texture_id = "00000000-0000-4000-8000-000000009801";
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 4, height: 4 },
+        EditOperation::CreatePaintTexture { uuid: texture_id.into(), name: "atlas".into() },
+    ]).unwrap();
+    session.apply(1, &[
+        EditOperation::PaintTextureRectangle { texture_index: 0,
+            from: [1, 0], to: [1, 3], rgba: [255, 0, 0, 255], erase: false },
+    ]).unwrap();
+    let before = session.document().clone();
+    let receipt = session.apply(2, &[
+        EditOperation::PaintTextureFill { texture_index: 0, at: [0, 0],
+            rgba: [0, 0, 255, 255], erase: false },
+    ]).unwrap();
+    assert_eq!(receipt.operation_count, 1);
+    assert_eq!(receipt.revision, 3);
+    let saved = session.document().clone();
+    let pixels = paint::decode_for_uv_inspection(&saved.texture_assets[0], 4, 4).unwrap();
+    for y in 0..4_usize {
+        for x in 0..4_usize {
+            let i = (y * 4 + x) * 4;
+            let expected = match x {
+                0 => [0, 0, 255, 255],
+                1 => [255, 0, 0, 255],
+                _ => [0, 0, 0, 0],
+            };
+            assert_eq!(&pixels[i..i + 4], &expected);
+        }
+    }
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, saved);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(4).unwrap();
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.apply(5, &[
+        EditOperation::PaintTextureFill { texture_index: 0, at: [0, 0],
+            rgba: [0, 0, 255, 255], erase: false },
+    ]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &saved);
+}
+
+#[test]
+fn region_fill_out_of_bounds_and_unsupported_source_refuse_atomically() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Region", "region").unwrap()).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: "00000000-0000-4000-8000-000000009802".into(), name: "atlas".into(),
+    }]).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(1, &[
+        EditOperation::PaintTexturePixel { texture_index: 0, x: 0, y: 0, rgba: [1, 2, 3, 255] },
+        EditOperation::PaintTextureFill { texture_index: 0, at: [128, 0],
+            rgba: [0, 0, 0, 255], erase: false },
+    ]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 1);
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original_import = imported.document().clone();
+    assert_eq!(imported.apply(0, &[
+        EditOperation::PaintTextureFill { texture_index: 0, at: [0, 0],
+            rgba: [1, 2, 3, 255], erase: false },
+    ]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(imported.document(), &original_import);
+}
+
 // Authored-only Rust regressions (Cargo/Windows/Blockbench held).
 #[test]
 fn authoring_rig_pivots_and_cube_inflate_roundtrip_and_undo() {

@@ -1,5 +1,7 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**RGBA8 exact region fill (2026-11-15; SOURCE_ONLY):** `paint_texture_fill` paints/erases a four-connected region of exact RGBA8 matches in the existing 1–256² encoded PNG, in one Rust-owned Undo step and without reading foreign/external/layered assets. CLI and Code Mode use the same EditOperation; no UI redesign or second raster engine is introduced. Regression source AUTHORED_NOT_RUN; native textured .bbmodel export remains UNVERIFIED.
+
 **Rig pivot and Cube surface authoring (2026-11-15; SOURCE_ONLY):** `set_bone_origin`, `set_cube_origin` and `set_cube_inflate` use one Rust EditOperation for bounded pivots and non-degenerate surface inflation. Cube bounds/UV, child transforms and imported opaque animation data are retained; revisions, Undo/Redo and editable `.bbmodel` output remain Rust-owned. CLI/Tauri accept the same plans; Code Mode has the typed operations. Regression source AUTHORED_NOT_RUN; actual Blockbench export UNVERIFIED. UI parity deferred behind Geometry/Texturing/Animation.
 
 **Rust Bone transform channels (2026-11-15; SOURCE_ONLY):**

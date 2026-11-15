@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust RGBA8 region-fill authoring (SOURCE_ONLY)
+
+Canonical `PaintTextureFill` uses a bounded, nonrecursive four-neighbor exact-match fill through the existing generated/explicitly adopted RGBA8 PNG codec. It preserves texture metadata, other regions, undo history and .bbmodel export state; unsupported assets and invalid coordinates refuse. Tauri generic apply, CLI and typed Code Mode share the operation; no UI redesign. Regression source for isolated regions, rollback, no-op, Undo/Redo and export/reimport is AUTHORED_NOT_RUN. Windows/Blockbench compatibility UNVERIFIED.
+
 ## 2026-11-15 — Rust asset-first pivot/inflate source (SOURCE_ONLY)
 
 Goal prioritized Geometry → Texturing → Animation, UI/UX deferred. Canonical Rust EditOperation now includes bounded Bone pivot, Cube pivot and non-degenerate Cube Inflate, through shared Tauri/CLI and typed Code Mode. Round-trip, atomic failure, Undo/Redo regression sources were authored but NOT_EXECUTED. Actual Blockbench-native export fidelity, GUI and performance remain UNVERIFIED; no test hold was lifted.
