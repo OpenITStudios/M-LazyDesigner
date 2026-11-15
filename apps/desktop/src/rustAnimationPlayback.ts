@@ -7,7 +7,9 @@ export type OncePlaybackStep = { time: number; finished: boolean };
 
 /** Step the view-only playhead under one of the source-backed loop modes. */
 export function advanceAnimationPlayhead(
-  current: number, elapsedMs: number, length: number, mode: PreviewLoopMode,
+  current: number, elapsedMs: number, length: number,
+  // An unsupported imported mode is an explicit no-preview result.
+  mode: PreviewLoopMode | 'unsupported',
 ): OncePlaybackStep | null {
   if (![current, elapsedMs, length].every(Number.isFinite) ||
       length <= 0 || length > 3600 || current < 0 || current > length ||
