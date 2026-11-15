@@ -951,6 +951,85 @@ fn rust_png_export_rejects_opaque_invalid_and_per_texture_uv_assets() {
         "PAINT_TEXTURE_RULESET_UNSUPPORTED");
 }
 
+// SOURCE_AUTHORED_NOT_RUN: a single Bone operation owns descendant Cube
+// Geometry, pivots and source UV/Texture/Animation preservation.
+#[test]
+fn bone_subtree_move_translates_only_nested_rig_and_retains_opaque_assets() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    const OTHER_BONE: &str = "00000000-0000-4000-8000-000000009891";
+    const OTHER_CUBE: &str = "00000000-0000-4000-8000-000000009892";
+    session.apply(0, &[
+        EditOperation::AddBone {
+            bone: serde_json::from_value(json!({
+                "uuid": OTHER_BONE, "name": "unrelated", "origin": [10, 0, 0]
+            })).unwrap(),
+            parent_uuid: None,
+        },
+        EditOperation::AddCube {
+            cube: sample_cube(OTHER_CUBE), bone_uuid: OTHER_BONE.into(),
+        },
+    ]).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(1, &[EditOperation::TranslateBoneSubtree {
+        uuid: BONE.into(), delta: [2.0, 3.0, -1.0],
+    }]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.operation_count, 1);
+    assert_eq!(receipt.changed_uuids, vec![BONE.to_owned()]);
+    let saved = session.document().clone();
+    let root = saved.bones.iter().find(|bone| bone.uuid == BONE).unwrap();
+    let child = saved.bones.iter().find(|bone|
+        bone.uuid == "00000000-0000-4000-8000-000000000003").unwrap();
+    assert_eq!(root.origin, Some([2.0, 3.0, -1.0]));
+    assert_eq!(child.origin, Some([2.0, 5.0, -1.0]));
+    assert_eq!(saved.cubes[0].from, [2.0, 3.0, -1.0]);
+    assert_eq!(saved.cubes[0].to, [6.0, 7.0, 3.0]);
+    assert_eq!(saved.cubes[0].origin, Some([2.0, 3.0, -1.0]));
+    assert_eq!(saved.cubes[0].faces, original.cubes[0].faces);
+    assert_eq!(saved.cubes[0].extra, original.cubes[0].extra);
+    assert_eq!(saved.cubes[1], original.cubes[1]);
+    assert_eq!(saved.bones[2], original.bones[2]);
+    assert_eq!(saved.hierarchy, original.hierarchy);
+    assert_eq!(saved.texture_assets, original.texture_assets);
+    assert_eq!(saved.animation_assets, original.animation_assets);
+    assert_eq!(saved.extensions, original.extensions);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.apply(4, &[EditOperation::TranslateBoneSubtree {
+        uuid: BONE.into(), delta: [0.0, 0.0, 0.0],
+    }]).unwrap_err(), "EDIT_NO_OP");
+}
+
+#[test]
+fn bone_subtree_move_refuses_unsafe_child_uv_and_rolls_back_all_changes() {
+    let mut source: Value = serde_json::from_str(TEXTURED).unwrap();
+    source["elements"][0]["autouv"] = json!(1);
+    source["meta"]["per_texture_uv_size"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&source).unwrap()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::TranslateBoneSubtree {
+        uuid: BONE.into(), delta: [3.0, 0.0, 0.0],
+    }]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(session.apply(0, &[
+        EditOperation::TranslateCube { uuid: CUBE.into(), delta: [0.0, 1.0, 0.0] },
+        EditOperation::TranslateBoneSubtree {
+            uuid: BONE.into(), delta: [1.0, 0.0, 0.0],
+        },
+    ]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(session.apply(0, &[EditOperation::TranslateBoneSubtree {
+        uuid: BONE.into(), delta: [f64::NAN, 0.0, 0.0],
+    }]).unwrap_err(), "BONE_SUBTREE_DELTA_INVALID");
+    assert_eq!(session.apply(0, &[EditOperation::TranslateBoneSubtree {
+        uuid: "unknown".into(), delta: [1.0, 0.0, 0.0],
+    }]).unwrap_err(), "BONE_SUBTREE_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+    assert!(!session.can_undo());
+}
+
 // SOURCE_AUTHORED_NOT_RUN: semantic Cube face painting with one Rust PNG
 // transaction, not visual face-coverage evidence from native Blockbench.
 #[test]

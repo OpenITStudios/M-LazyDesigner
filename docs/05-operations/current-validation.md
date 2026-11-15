@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Bone-subtree Geometry translation (SOURCE_ONLY)
+
+`TranslateBoneSubtree` now performs one canonical Rust document transaction to offset a Bone and all nested Bone/Cube geometry. It reuses the existing UV-preserving/recomputing Cube translation owner and adjusts Bone pivots while leaving saved Texture bytes, Animation keyframe payloads, Outliner and unrelated roots unchanged. Regression source covers imported textured/animated fixture preservation, one Undo/Redo, .bbmodel reimport, invalid/zero deltas, unknown Bone and fail-closed imported per-texture Auto UV rollback. CLI/Tauri and typed Code Mode share the EditOperation. Tests AUTHORED_NOT_RUN; no native Blockbench rig, timing or efficiency proof. Receipt changed_uuids includes the selected Bone target, not a full descendant diff.
+
 ## 2026-11-16 — Semantic Cube UV face paint batch (SOURCE_ONLY)
 
 Rust `PaintCubeUvFaces` now maps 1–6 explicitly named Cube faces into their strict UV-pixel rectangles using saved manual UV or a transient derived Box UV net; one PNG `paint::rectangles` invocation writes the ordered colors. Every face must reference the exact existing editable Texture UUID/index. Read-only UV alpha statistics share the same integral pixel-bounds helper. Missing/disabled/duplicate faces, mismatched texture references, Auto UV, per-texture rules, float-sized Box nets and unsafe RGBA8 imports refuse. Positive/negative source regressions cover a six-face default Box atlas, RGB pixels, source-only UV alpha, Undo/Redo, no-op, manual UV, unsafe inputs and an approved Code Mode one-operation plan. `TEST_AUTHORED_NOT_RUN`; native Blockbench output, visual coverage and comparative speed remain UNVERIFIED. Shared atlas islands may intentionally affect other model faces; no exclusive-paint claim.

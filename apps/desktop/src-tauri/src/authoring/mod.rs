@@ -173,6 +173,7 @@ pub enum EditOperation {
         channel: String,
     },
     TranslateCube { uuid: String, delta: [f64; 3] },
+    TranslateBoneSubtree { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     ReframeCube { uuid: String, from: [f64; 3], to: [f64; 3], uv_policy: String },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
@@ -1680,6 +1681,48 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             if !box_uv {
                 refresh_auto_uv(cube, auto_uv, resolution, textures, None)?;
             }
+            Ok(uuid.clone())
+        }
+        EditOperation::TranslateBoneSubtree { uuid, delta } => {
+            // Move an articulated Cube/Bone cohort as a unit, rather than
+            // asking an agent to emit one operation per nested element.
+            // Reuse exactly the existing per-Cube UV-aware move semantics.
+            // Bone keyframes stay local to their targets; opaque assets
+            // and saved texture pixels are never rewritten by this command.
+            if !valid_vec3(*delta) {
+                return Err(fail("BONE_SUBTREE_DELTA_INVALID"));
+            }
+            let group = find_visibility_group(&doc.hierarchy, uuid)
+                .ok_or_else(|| fail("BONE_SUBTREE_NOT_FOUND"))?;
+            if delta.iter().all(|v| *v == 0.0) {
+                return Ok(uuid.clone());
+            }
+            let mut cube_ids = HashSet::new();
+            let mut bone_ids = HashSet::new();
+            collect_visibility_targets(group, &mut cube_ids, &mut bone_ids);
+            // Stable source order; no hash iteration decides write order.
+            let affected_cubes: Vec<String> = doc.cubes.iter()
+                .filter(|cube| cube_ids.contains(&cube.uuid))
+                .map(|cube| cube.uuid.clone()).collect();
+            let affected_bones: Vec<String> = doc.bones.iter()
+                .filter(|bone| bone_ids.contains(&bone.uuid))
+                .map(|bone| bone.uuid.clone()).collect();
+            for cube_id in affected_cubes {
+                apply_operation(doc, &EditOperation::TranslateCube {
+                    uuid: cube_id, delta: *delta,
+                })?;
+            }
+            for bone_id in affected_bones {
+                let origin = doc.bones.iter().find(|bone| bone.uuid == bone_id)
+                    .and_then(|bone| bone.origin).unwrap_or([0.0, 0.0, 0.0]);
+                let moved: [f64; 3] = std::array::from_fn(|axis|
+                    origin[axis] + delta[axis]);
+                apply_operation(doc, &EditOperation::SetBoneOrigin {
+                    uuid: bone_id, origin: moved,
+                })?;
+            }
+            // The parent EditorSession only commits after validate(),
+            // so one bad UV rule or overflow cancels the whole subtree move.
             Ok(uuid.clone())
         }
         EditOperation::SetCubeBounds { uuid, from, to } => {

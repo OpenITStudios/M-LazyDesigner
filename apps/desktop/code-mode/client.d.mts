@@ -48,6 +48,7 @@ export type EditOperation =
   | { op: "update_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: "remove_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }
   | { op: "translate_cube"; uuid: string; delta: Vec3 }
+  | { op: "translate_bone_subtree"; uuid: string; delta: Vec3 }
   | { op: "set_cube_bounds"; uuid: string; from: Vec3; to: Vec3 }
   | { op: "reframe_cube"; uuid: string; from: Vec3; to: Vec3; uv_policy: "box_repack" | "manual_preserve" }
   | { op: "set_cube_rotation"; uuid: string; rotation: Vec3 }
