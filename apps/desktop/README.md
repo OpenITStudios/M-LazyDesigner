@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**First-party Rust Code Mode bridge (2026-11-15; SOURCE_ONLY):** The new [code-mode/](code-mode/README.md) SDK and typed declarations let an authorized agent compose Node 24 JS/TS around the existing Rust CLI: inspect by UUID, batch guarded edits, PNG import/export and Bedrock geometry export. The SDK is not a JS sandbox, MCP service or secondary model engine. The CLI's original summary inspection remains compatible. Regression source authored NOT_EXECUTED; no PC-local code host, visual acceptance, token saving or legacy Gateway cutover is claimed.
+
 **Standalone Bedrock Geometry output (2026-11-15; SOURCE_ONLY):** The Rust editor File menu and top toolbar now offer **Export Bedrock Geometry** for the supported Cube/Bone subset. This creates a new `.geo.json` via the shared Rust Core, not a replacement for the editable `.bbmodel`. The headless Rust CLI exposes the same `export-geometry` function with exact source SHA and new sibling output. The exporter handles canonical origin/pivot conversion, basic UV mapping and supported face rotation, but rejects opaque or unrepresentable geometry/UV features. Other Bedrock companion files (texture, animation, client entity) and visible-bounds calculation remain separate/unimplemented output concerns; actual Windows/Blockbench/Minecraft behavior is NOT_EXECUTED/UNVERIFIED.
 
 

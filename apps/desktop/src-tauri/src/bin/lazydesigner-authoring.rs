@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, AuthoringDocument, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -54,6 +54,59 @@ fn read_verified_source(path: &Path, expected_sha: &str) -> Result<(Vec<u8>, Str
     Ok((bytes, actual_sha))
 }
 
+/// Bounded, read-only Code Mode projection. Opaque model data is never echoed.
+fn parent_for(nodes: &[OutlinerNode], target: &str, parent: Option<&str>) -> Option<Option<String>> {
+    for node in nodes {
+        match node {
+            OutlinerNode::Cube(id) if id == target => return Some(parent.map(str::to_owned)),
+            OutlinerNode::Bone(bone) => {
+                if bone.uuid == target { return Some(parent.map(str::to_owned)); }
+                if let Some(found) = parent_for(&bone.children, target, Some(&bone.uuid)) {
+                    return Some(found);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn focused_element(doc: &AuthoringDocument, uuid: &str) -> Result<Value> {
+    let parent = parent_for(&doc.hierarchy, uuid, None)
+        .ok_or_else(|| fail("ELEMENT_NOT_IN_OUTLINER"))?.flatten();
+    let detail = if let Some(cube) = doc.cubes.iter().find(|item| item.uuid == uuid) {
+        let mut faces = serde_json::Map::new();
+        for (direction, face) in &cube.faces {
+            faces.insert(direction.clone(), json!({
+                "uv": face.get("uv"),
+                "rotation": face.get("rotation"),
+                "texture": face.get("texture"),
+            }));
+        }
+        json!({
+            "uuid": uuid, "kind": "cube", "name": cube.name.as_deref(),
+            "parent_uuid": parent, "from": cube.from, "to": cube.to,
+            "origin": cube.origin, "uv_offset": cube.uv_offset,
+            "rotation": cube.extra.get("rotation"), "inflate": cube.extra.get("inflate"),
+            "stretch": cube.extra.get("stretch"), "box_uv": cube.extra.get("box_uv"),
+            "autouv": cube.extra.get("autouv"), "faces": faces,
+        })
+    } else if let Some(bone) = doc.bones.iter().find(|item| item.uuid == uuid) {
+        json!({
+            "uuid": uuid, "kind": "bone", "name": bone.name,
+            "parent_uuid": parent, "origin": bone.origin,
+            "rotation": bone.extra.get("rotation"),
+            "visibility": bone.extra.get("visibility"),
+        })
+    } else {
+        return Err(fail("ELEMENT_NOT_FOUND"));
+    };
+    if serde_json::to_vec(&detail).map_err(|_| fail("ELEMENT_SERIALIZE_FAILED"))?.len() > 16 * 1024 {
+        return Err(fail("ELEMENT_PROJECTION_TOO_LARGE"));
+    }
+    Ok(detail)
+}
+
 fn execute() -> Result<Value> {
     let (command, options) = arguments()?;
     match command.as_str() {
@@ -68,12 +121,19 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input"])?;
+            option_set(&options, &["--input", "--uuid"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
             let session = EditorSession::open(&bytes)?;
-            Ok(json!({"status":"OK","sha256":sha256(&bytes),"summary":session.summary()}))
+            let digest = sha256(&bytes);
+            if let Some(uuid) = options.get("--uuid") {
+                let element = focused_element(session.document(), uuid)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"element":element}))
+            } else {
+                Ok(json!({"status":"OK","sha256":digest,"summary":session.summary()}))
+            }
         }
         "apply" => {
             option_set(&options, &["--input", "--output", "--plan", "--expected-sha256"])?;
@@ -199,6 +259,22 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Source-authored regression; local execution remains on hold.
+    #[test]
+    fn code_mode_focused_inspect_is_bounded_and_read_only() {
+        let source = include_bytes!("../../fixtures/bedrock-basic.bbmodel");
+        let doc = AuthoringDocument::import_bbmodel(source).unwrap();
+        let before = doc.clone();
+        let id = doc.cubes[0].uuid.clone();
+        let detail = focused_element(&doc, &id).unwrap();
+        assert_eq!(detail["uuid"], json!(id));
+        assert_eq!(detail["kind"], json!("cube"));
+        assert!(detail["faces"]["north"]["uv"].is_array());
+        assert_eq!(doc, before);
+        assert_eq!(focused_element(&doc, "not-an-element").unwrap_err(),
+            "ELEMENT_NOT_IN_OUTLINER");
+    }
 
     // Source-authored regression only; native filesystem execution is held.
     #[test]

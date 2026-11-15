@@ -16,7 +16,7 @@ The user must be able to work in LazyDesigner as though they are working in the 
 | Human experience | 1:1 visual and behavioral parity with the pinned Blockbench 5.2.1 Default Dark baseline for the supported Bedrock Entity workflows; exceptions require explicit user approval. |
 | Engine | Single Rust-owned authoring document, validation, history, transaction and persistence authority. No second JS, MCP or CLI asset engine. |
 | Presentation | Svelte 5 + Tauri 2 for UI and IPC; Three.js for read-only 3D projection and transient input preview. |
-| AI access | Headless first-party Rust CLI for deterministic operations; MCP optional and routed through the same Rust commands. |
+| AI access | **Amended 2026-11-15:** Code Mode becomes the target primary agent composition pattern on `Rust`, with model-authored JS/TS executed by an authorized host against a typed SDK calling the same headless first-party Rust CLI. Legacy MCP on `Local` is separately preserved until evidenced cutover. See [Code Mode migration](code-mode-migration.md). |
 | Data interchange | Bidirectional editable `.bbmodel` import/export as a release-blocking acceptance gate, plus required Bedrock visual-asset exports. |
 | Migration | Incremental, source-first, preserve existing Blockbench Runtime/Gateway, product Skills, assets and user workflows on `Local` while `Rust` is developed. |
 | Quality/cost | Measure cost per accepted asset and human correction count; never assert token, speed, visual or functional improvement from source alone. |

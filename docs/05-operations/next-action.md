@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Rust Code Mode migration — current source work (2026-11-15)
+
+**Rust Code Mode source integration (2026-11-15):** The maintainer selected Code Mode as the target AI composition interface for `Rust`. `apps/desktop/code-mode/client.mjs` and its declaration expose bounded, programmatic CLI operations for read-only summary/UUID inspection, SHA-guarded atomic model edits, and PNG/geometry output. `lazydesigner-authoring inspect --uuid` adds a compact Cube/Bone projection without raw bitmap/opaque JSON. No model-written code is executed inside the editor; the authorized PC-local agent host must own its sandbox, filesystem permissions, and mutation approval. The existing `Local` MCP Gateway/Control and domain Skills are preserved. Regressions AUTHORED_NOT_RUN; no native or efficiency PASS is claimed. See [Code Mode migration](../04-system/code-mode-migration.md).
+
+**Continuation:** Preserve the existing Rust vertical slice and proceed to comprehensive agent-host integration and source-backed focused reads for Geometry, Paint, Animate and visual evidence. The Code Mode client is source-authored and callable but does **not** execute untrusted code, replace legacy `Local` MCP, or prove local runtime. No CI/localtest/branch promotion/release; no automatic replay of uncertain mutations.
+
 
 ## Active Rust-native editor track — initial Phase 2 Edit source (2026-11-14)
 

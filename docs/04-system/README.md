@@ -2,7 +2,7 @@
 
 Owns LazyDesigner system architecture details that are neither product policy nor asset-authoring policy.
 
-For the user-approved `Rust` branch native-editor architecture and Phase 0 gates, start with [rust-native-editor-plan.md](rust-native-editor-plan.md). It is a target plan only; existing Blockbench Runtime ownership remains in [implementation-map.md](implementation-map.md) until implemented.
+For the user-approved `Rust` branch native-editor architecture and Phase 0 gates, start with [rust-native-editor-plan.md](rust-native-editor-plan.md). The newer [Code Mode migration](code-mode-migration.md) describes the Rust-only AI interface target, source adapter and cutover gates. It is a target plan only; existing Blockbench Runtime ownership remains in [implementation-map.md](implementation-map.md) until implemented.
 
 ```text
 canonical-vocabulary.md
