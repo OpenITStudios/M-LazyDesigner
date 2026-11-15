@@ -483,6 +483,31 @@
         : boneContains(node.children, ancestor, target)));
   }
 
+  async function renameSelected(uuid: string, previousName: string, input: HTMLInputElement) {
+    // The Inspector only requests a typed Rust transaction. Neither Svelte
+    // nor the Outliner owns a second name or animation-track data store.
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'edit') {
+      input.value = previousName;
+      return;
+    }
+    const name = input.value.trim();
+    if (name === previousName) { input.value = previousName; return; }
+    if (!name || [...name].length > 128 || [...name].some((char) =>
+      char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
+      error = 'Enter a valid name (1–128 characters, without control characters).';
+      input.value = previousName;
+      return;
+    }
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{ op: 'rename_node', uuid, name }],
+    });
+    // A failed or stale edit must never leave an uncommitted name in the UI.
+    // Read back the authoritative Rust receipt, including a trimmed name.
+    input.value = next?.cubes.find((cube) => cube.uuid === uuid)?.name ??
+      next?.bones.find((bone) => bone.uuid === uuid)?.name ?? previousName;
+  }
+
   async function reparentSelected(parentUuid: string | null) {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'edit') return;
     const uuid = selectedId ?? selectedBoneId;
@@ -916,6 +941,19 @@
       return;
     }
     if (busy || event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+    // Same rename control as the Inspector. F2 changes only keyboard focus;
+    // the actual label mutation still requires a Rust EditOperation.
+    if (event.key === 'F2' && !loading && !paintStroke &&
+        workspaceMode === 'edit' && (selectedId || selectedBoneId)) {
+      const id = selectedId ?? selectedBoneId;
+      const input = document.getElementById(
+        'rust-' + (selectedId ? 'cube' : 'bone') + '-name-' + id,
+      );
+      if (input instanceof HTMLInputElement && !input.disabled) {
+        event.preventDefault(); input.focus(); input.select();
+      }
+      return;
+    }
     if (!(event.ctrlKey || event.metaKey)) return;
     const key = event.key.toLowerCase();
     if (key === 'n') { event.preventDefault(); requestNew(); }
@@ -1615,7 +1653,15 @@
         <div class="dock-title">ELEMENT</div>
         {#if selectedCube}
           <div class="property-scroll">
-            <p class="selected-name" title={selectedCube.name}>{selectedCube.name}</p>
+            <div class="property-group">
+              <label for={'rust-cube-name-' + selectedCube.uuid}>Cube name</label>
+              <input id={'rust-cube-name-' + selectedCube.uuid} class="node-name-input"
+                aria-label="Rename selected Cube" type="text" maxlength="128"
+                value={selectedCube.name} autocomplete="off"
+                disabled={busy || loading || !!paintStroke || workspaceMode !== 'edit'}
+                onchange={(event) => void renameSelected(
+                  selectedCube.uuid, selectedCube.name, event.currentTarget)}/>
+            </div>
             <div class="property-group">
               <label>Parent Bone</label>
               <select aria-label="Move Cube to another Bone"
@@ -1728,7 +1774,15 @@
           </div>
         {:else if selectedBone}
           <div class="property-scroll">
-            <p class="selected-name" title={selectedBone.name}>{selectedBone.name}</p>
+            <div class="property-group">
+              <label for={'rust-bone-name-' + selectedBone.uuid}>Bone name</label>
+              <input id={'rust-bone-name-' + selectedBone.uuid} class="node-name-input"
+                aria-label="Rename selected Bone" type="text" maxlength="128"
+                value={selectedBone.name} autocomplete="off"
+                disabled={busy || loading || !!paintStroke || workspaceMode !== 'edit'}
+                onchange={(event) => void renameSelected(
+                  selectedBone.uuid, selectedBone.name, event.currentTarget)}/>
+            </div>
             <div class="property-group">
               <label>Parent Bone</label>
               <select aria-label="Move Bone to another parent"

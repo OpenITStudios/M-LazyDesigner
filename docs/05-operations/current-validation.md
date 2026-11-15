@@ -1,5 +1,23 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust editor Cube/Bone rename transaction (SOURCE_ONLY)
+
+The canonical Rust `EditOperation::RenameNode` now accepts a bounded
+non-empty Cube/Bone name and updates the Rust-owned document by UUID,
+without changing geometry, UV, textures or Outliner identity. A Bone
+rename synchronizes recognized animation track display names keyed by
+the Bone UUID, preserving keyframe data and unknown fields. Ambiguous
+mismatched imported track names or newly introduced case-insensitive
+Bone-name collisions refuse atomically. The Svelte Edit Inspector
+exposes native Rust-backed rename fields, reverting unsuccessful
+edits to the last authoritative snapshot; all Undo/Redo, dirty state,
+and Save Copy remain owned by the same Rust EditorSession. The typed
+desktop and Code Mode EditOperation unions include the new variant.
+Source regressions cover Cube/Bone renames, animation-name sync,
+serializable round trip, Undo/Redo and fail-closed/no-partial-edits.
+SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; native UI/Blockbench acceptance,
+actual Cargo/Node/Windows execution and visual quality UNVERIFIED.
+
 ## 2026-11-15 — Rust editor content-based saved checkpoint (SOURCE_ONLY)
 
 The native Rust/Tauri `ActiveModel` now keeps a canonical serialized

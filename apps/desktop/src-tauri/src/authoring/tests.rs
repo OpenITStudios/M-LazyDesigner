@@ -14,6 +14,105 @@ fn sample_cube(uuid: &str) -> Cube {
     serde_json::from_value(value["elements"][0].clone()).unwrap()
 }
 
+// SOURCE-AUTHORED ONLY: Rust/Blockbench tests remain NOT_EXECUTED.
+#[test]
+fn node_rename_is_atomic_undoable_and_synchronizes_known_bone_animator_name() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let animation_uuid = "00000000-0000-4000-8000-000000009801";
+    let keyframe_uuid = "00000000-0000-4000-8000-000000009802";
+    session.apply(0, &[
+        EditOperation::CreateAnimation {
+            uuid: animation_uuid.into(), name: "idle".into(), length: 1.0,
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: animation_uuid.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: keyframe_uuid.into(), time: 0.5,
+            rotation: [0.0, 30.0, 0.0],
+        },
+    ]).unwrap();
+    let before_rename = session.document().clone();
+    assert_eq!(before_rename.animation_assets[0]["animators"][BONE]["name"],
+        json!("root_bone"));
+    let receipt = session.apply(1, &[
+        EditOperation::RenameNode { uuid: CUBE.into(), name: "helmet_plate".into() },
+        EditOperation::RenameNode { uuid: BONE.into(), name: "head".into() },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.operation_count, 2);
+    assert_eq!(receipt.changed_uuids, vec![CUBE.to_owned(), BONE.to_owned()]);
+    let changed = session.document().clone();
+    assert_eq!(changed.cubes[0].name.as_deref(), Some("helmet_plate"));
+    assert_eq!(changed.bones[0].name, "head");
+    assert_eq!(changed.animation_assets[0]["animators"][BONE]["name"], json!("head"));
+    assert_eq!(changed.animation_assets[0]["animators"][BONE]["keyframes"],
+        before_rename.animation_assets[0]["animators"][BONE]["keyframes"]);
+    assert_eq!(changed.cubes[0].uuid, original.cubes[0].uuid);
+    assert_eq!(changed.hierarchy, before_rename.hierarchy);
+    assert_eq!(changed.extensions, original.extensions);
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, changed);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &before_rename);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &changed);
+}
+
+#[test]
+fn rename_refuses_invalid_conflicting_and_opaque_track_names_without_partial_edits() {
+    let original = AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap();
+    let mut session = EditorSession::from_document(original.clone()).unwrap();
+    let too_long = "X".repeat(129);
+    for name in ["", "   ", "invalid\nname", too_long.as_str()] {
+        assert_eq!(session.apply(0, &[
+            EditOperation::RenameNode { uuid: BONE.into(), name: name.into() },
+        ]).unwrap_err(), "NODE_NAME_INVALID");
+    }
+    assert_eq!(session.apply(0, &[
+        EditOperation::RenameNode { uuid: "unknown".into(), name: "new".into() },
+    ]).unwrap_err(), "RENAME_NODE_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+
+    let mut second = original.clone();
+    second.bones.push(Bone {
+        uuid: "00000000-0000-4000-8000-000000009803".into(),
+        name: "other".into(), origin: Some([0.0, 0.0, 0.0]),
+        extra: Map::new(),
+    });
+    second.hierarchy.push(OutlinerNode::Bone(OutlinerBone {
+        uuid: "00000000-0000-4000-8000-000000009803".into(),
+        children: Vec::new(), is_open: Some(true), extra: Map::new(),
+    }));
+    let mut session = EditorSession::from_document(second.clone()).unwrap();
+    assert_eq!(session.apply(0, &[
+        EditOperation::RenameNode { uuid: BONE.into(), name: "OTHER".into() },
+    ]).unwrap_err(), "BONE_NAME_CONFLICT");
+    assert_eq!(session.document(), &second);
+
+    let mut tracked = original.clone();
+    let mut animators = Map::new();
+    animators.insert(BONE.into(), json!({
+        "name": "unexpected_alias", "type": "bone", "keyframes": [],
+    }));
+    tracked.animation_assets.push(json!({
+        "uuid": "00000000-0000-4000-8000-000000009804",
+        "name": "imported", "animators": animators,
+    }));
+    let mut session = EditorSession::from_document(tracked.clone()).unwrap();
+    assert_eq!(session.apply(0, &[
+        EditOperation::RenameNode { uuid: CUBE.into(), name: "temporary".into() },
+        EditOperation::RenameNode { uuid: BONE.into(), name: "head".into() },
+    ]).unwrap_err(), "BONE_ANIMATOR_NAME_UNSUPPORTED");
+    assert_eq!(session.document(), &tracked);
+    assert_eq!(session.summary().revision, 0);
+    assert!(!session.can_undo());
+    assert_eq!(session.apply(0, &[
+        EditOperation::RenameNode { uuid: CUBE.into(), name:
+            original.cubes[0].name.clone().unwrap_or_else(|| "cube".into()) },
+    ]).unwrap_err(), "EDIT_NO_OP");
+}
+
 // Authored regression only. Tests remain held and are NOT_EXECUTED.
 #[test]
 fn generated_paint_texture_limit_matches_import_preview_and_history() {

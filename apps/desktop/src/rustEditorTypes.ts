@@ -100,6 +100,7 @@ export type EditOperation =
   | { op: 'update_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: 'remove_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }
   | { op: 'set_node_visibility'; uuid: string; visible: boolean }
+  | { op: 'rename_node'; uuid: string; name: string }
   | { op: 'remove_cube'; uuid: string }
   | { op: 'duplicate_cube'; source_uuid: string; new_uuid: string }
   | { op: 'reparent_node'; uuid: string; parent_uuid: string | null }

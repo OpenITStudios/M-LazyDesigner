@@ -1,5 +1,16 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Rust-owned Cube/Bone name edits (2026-11-15; SOURCE_ONLY):** `RenameNode`
+adds a bounded user-visible name transaction for a selected Cube or
+Bone UUID. The operation preserves existing model geometry, texture
+links and Outliner references; it updates only recognized Bone UUID
+animator display names that still match the previous Bone name.
+Invalid names, Bone-name collisions and contradictory opaque animator
+names reject the entire batch. It is reversible with the normal
+EditorSession Undo/Redo and is exposed through the native Svelte
+Inspector and typed Code Mode EditOperation without another model
+owner. Tests AUTHORED_NOT_RUN; native .bbmodel acceptance UNVERIFIED.
+
 **Read-only saved Cube Face UV alpha (2026-11-15; SOURCE_ONLY):** Rust `inspect_cube_uv_alpha` reuses canonical `inspect_cube_surfaces` and the existing Paint RGBA8 decoder, caching up to six decoded images transiently per six-face read. Integer manual UV rectangles with explicit Texture IDs are summarized as transparent/translucent/opaque saved atlas pixels; unknown/missing links, Box UV, Auto UV, per-texture rules and unsafe UV coordinates are refused per face. The CLI and typed Code Mode client expose the same SHA-bounded read; no raw bitmap, extra engine or real rendered-face coverage claim. Source regressions AUTHORED_NOT_RUN; native acceptance remains `UNVERIFIED`.
 
 **Code Mode RGBA8 alpha inspection (2026-11-15; SOURCE_ONLY):** The existing Paint decoder now owns read-only `alpha_diagnostics` for an explicitly supported embedded RGBA8 PNG (≤256² pixels); canonical `inspect_paint_alpha` checks the selected Texture UUID, unsupported UV rules and metadata. It reports transparent/translucent/opaque pixels and bounded 8×8 sample/nonzero-alpha counts, with `face_coverage_verdict` and `visual_verdict` kept `UNVERIFIED`. CLI `inspect --alpha-uuid` and typed Code Mode API share the existing SHA-pinned read boundary; no full bitmap, new decoder or extra model authority. Rust/Node regressions AUTHORED_NOT_RUN; native texture fidelity and viewport coverage are not proved.

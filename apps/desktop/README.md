@@ -2,6 +2,17 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust editor Outliner naming (2026-11-15; SOURCE_ONLY):** The native Edit
+Inspector now requests Cube/Bone rename through typed Rust `rename_node`
+transactions, supports F2 keyboard focus, and reflects the authoritative
+resulting name. Bone
+animator display names keyed by UUID are synchronized conservatively;
+unknown mismatched imported animation names refuse instead of being
+overwritten. Geometry/UV and UUID/Outliner order are preserved; Undo/Redo,
+dirty-state reconciliation and Save Copy use existing Rust ownership.
+Regression source AUTHORED_NOT_RUN; native UI and Blockbench acceptance
+UNVERIFIED.
+
 **Rust native editor P0 saved-state correctness (2026-11-15; SOURCE_ONLY):**
 Rust now compares the current canonical model with a content SHA from
 the last Open or Save Copy. Undo/Redo back to that content clears the

@@ -492,6 +492,19 @@
 .rust-editor .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rust-editor .property-scroll { padding: 10px; overflow: auto; min-height: 0; }
 .rust-editor .selected-name { color: #d6dce5; font-size: 13px; font-weight: 600; margin: 1px 0 14px; }
+.rust-editor .node-name-input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #414c59;
+  border-radius: 3px;
+  background: #171d26;
+  color: #e0e4eb;
+  font: inherit;
+}
+.rust-editor .node-name-input:focus-visible { outline: 2px solid #639aff; outline-offset: 1px; }
+.rust-editor .node-name-input:disabled { opacity: 0.6; cursor: not-allowed; }
 .rust-editor .property-group { margin-bottom: 12px; }
 .rust-editor .property-group > label {
   display: block;

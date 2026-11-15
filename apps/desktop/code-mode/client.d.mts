@@ -24,6 +24,7 @@ export type EditOperation =
   | { op: "add_cube"; cube: Cube; bone_uuid: string }
   | { op: "duplicate_cube"; source_uuid: string; new_uuid: string }
   | { op: "reparent_node"; uuid: string; parent_uuid: string | null }
+  | { op: "rename_node"; uuid: string; name: string }
   | { op: "remove_cube"; uuid: string }
   | { op: "remove_empty_bone"; uuid: string }
   | { op: "create_animation"; uuid: string; name: string; length: number }

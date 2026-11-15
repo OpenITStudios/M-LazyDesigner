@@ -123,6 +123,7 @@ pub enum EditOperation {
     AddCube { cube: Cube, bone_uuid: String },
     DuplicateCube { source_uuid: String, new_uuid: String },
     ReparentNode { uuid: String, parent_uuid: Option<String> },
+    RenameNode { uuid: String, name: String },
     RemoveCube { uuid: String },
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
@@ -186,6 +187,14 @@ pub struct MutationReceipt {
 fn valid_uuid(uuid: &str) -> bool {
     !uuid.is_empty() && uuid.len() <= 128 &&
         !uuid.chars().any(|c| c.is_control() || c.is_whitespace())
+}
+
+/// User-authored element labels. Preserve imported names as stored; only new
+/// rename requests must be bounded and must not contain control characters.
+/// A separate Bedrock geometry exporter owns stricter bone export admission.
+fn valid_node_name(name: &str) -> bool {
+    !name.trim().is_empty() && name.chars().count() <= 128 &&
+        !name.chars().any(char::is_control)
 }
 fn valid_vec3(v: [f64; 3]) -> bool {
     v.iter().all(|n| n.is_finite() && n.abs() <= LIMIT)
@@ -1293,6 +1302,44 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             // Blockbench's default Outliner move has adjust_position=false.
             // Keep saved local transforms/UUIDs untouched; the target Bone's
             // inherited rotation may change the resulting world-space pose.
+            Ok(uuid.clone())
+        }
+        EditOperation::RenameNode { uuid, name } => {
+            if !valid_node_name(name) { return Err(fail("NODE_NAME_INVALID")); }
+            let desired = name.trim();
+            if let Some(cube) = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid) {
+                cube.name = Some(desired.to_owned());
+                return Ok(uuid.clone());
+            }
+            let bone_index = doc.bones.iter().position(|bone| bone.uuid == *uuid)
+                .ok_or_else(|| fail("RENAME_NODE_NOT_FOUND"))?;
+            let original = doc.bones[bone_index].name.clone();
+            // Bedrock JSON needs unambiguous Bone names for exported rigs.
+            // Existing imported names are preserved, but a newly authored
+            // rename cannot introduce another case-insensitive collision.
+            if doc.bones.iter().enumerate().any(|(index, bone)|
+                index != bone_index && bone.name.eq_ignore_ascii_case(desired)) {
+                return Err(fail("BONE_NAME_CONFLICT"));
+            }
+            // A Blockbench Bone animator is indexed by Bone UUID, while
+            // its optional display name mirrors the Bone name. Synchronize
+            // only that known field, never rewrite opaque keyframes/Molang.
+            // Imported inconsistent track names refuse rather than silently
+            // leave a misleading Bone->Animation relationship behind.
+            for animation in &mut doc.animation_assets {
+                if let Some(track) = animation.get_mut("animators")
+                    .and_then(Value::as_object_mut)
+                    .and_then(|animators| animators.get_mut(uuid))
+                {
+                    if let Some(label) = track.get("name") {
+                        if label.as_str() != Some(original.as_str()) {
+                            return Err(fail("BONE_ANIMATOR_NAME_UNSUPPORTED"));
+                        }
+                        track["name"] = json!(desired);
+                    }
+                }
+            }
+            doc.bones[bone_index].name = desired.to_owned();
             Ok(uuid.clone())
         }
         EditOperation::RemoveCube { uuid } => {

@@ -2,19 +2,24 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
-## Rust native editor P0 — saved content identity (2026-11-15)
+## Rust native editor P0 — Cube/Bone naming and Outliner workflow (2026-11-15)
 
-**Current source work:** Priority is now the standalone Rust/Tauri
-editor New/Edit/Paint/Animate/Save Copy/Open vertical path. The first
-source correction separates raw disk SHA from the canonical saved-model
-checksum to make Undo/Redo `dirty` state content-correct. This
-preserves unsaved-change protection, existing Rust history and the
-no-overwrite file publisher. Tests AUTHORED_NOT_RUN.
+**Current source work:** Add `rename_node` to the canonical Rust
+`EditOperation` for Cube and Bone, and expose it in the Svelte Edit
+Inspector (with F2 focus) and typed Code Mode SDK. It preserves UUIDs/Outliner order,
+atomically synchronizes known Bone animator display names keyed by Bone
+UUID, rejects conflicting/ambiguous imported track names and remains
+Undo/Redo/Save Copy-aware. Native geometric, texture and animation data
+are not rewritten. Source regression cases AUTHORED_NOT_RUN.
 
-**Continuation:** Close remaining material Rust editor P0 gaps with
-relevant UI/CLI consumers, while preserving the completed Code Mode
-source bridge as a separate AI interface. No held localtest, CI,
-release or premature Local MCP retirement.
+**Prior P0 correction:** A separate canonical saved-model content SHA
+already reconciles dirty status across Open, Edit, Undo, Redo and Save
+Copy while the raw on-disk source SHA independently protects files.
+
+**Continuation:** Focus next on material New/Edit/Paint/Animate/Save
+Copy/Open gaps in the Rust editor and relevant UI/CLI consumers. Preserve
+the Code Mode source bridge and the Local legacy product. Do not start
+held localtest/CI or claim native/Blockbench visual parity from source.
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 
