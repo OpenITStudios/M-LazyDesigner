@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Read-only per-Texture Cube UV overlap evidence (SOURCE_ONLY)
+
+Added Rust `inspect_cube_uv_sharing` to expose bounded positive-area overlaps for an explicitly referenced Texture UUID across all Cube faces. It uses reconstructed Box UV on a copy or strictly saved Manual UV, the same half-open pixel coordinates as Paint, and does not decode/alter PNG bytes or model data. Records full overlap count with up to 32 detailed intersections; reports unresolved explicit UV faces and implicit texture references separately. Unlike the existing six-face alpha report it answers the pre-paint question whether another mapped face references the target pixels, but does not assert exclusive rendered pixels or full painted face coverage. Available through existing CLI `inspect-batch` and typed Code Mode `inspectBatch` (no new host/sandbox methods). Regression source for two copies of one atlas, unit-length non-intersection boundaries, ambiguous source imports, read-only invariant and JS selector rejection AUTHORED_NOT_RUN. Native Blockbench visual checks and any efficiency benchmark remain UNVERIFIED.
+
 ## 2026-11-16 — Unified Box UV regeneration gate (SOURCE_ONLY)
 
 Diagnosed inconsistent safety admission: `ReframeCube` checked multi-file/per-texture and float-size rules, but `AddCube`, Box-UV `SetCubeBounds`, `ScaleCube`, and `SetBoxUvOffset` could regenerate integer UV rectangles on unsupported imported projects. The canonical Box UV preflight now guards every mutating repack path; existing Reframe/Mirror errors are retained for their callers and supported explicit-false flags still work. Authored regressions cover every previously unguarded operation under both rule families, full transaction rollback following a valid first edit, supported offset/resize/scale and no-loss .bbmodel round trip. `TEST_AUTHORED_NOT_RUN`; native Blockbench/Windows/export and efficiency remain unverified.

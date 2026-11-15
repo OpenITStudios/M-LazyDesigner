@@ -114,6 +114,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   cube: ['uuid'],
   cube_surfaces: ['uuid'],
   cube_face_alpha: ['uuid'],
+  cube_uv_sharing: ['uuid', 'texture_uuid'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
   texture_alpha: ['uuid'],

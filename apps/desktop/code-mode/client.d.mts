@@ -214,6 +214,29 @@ export interface CubeFaceAlphaInspection {
   face_count: number;
   faces: CubeFaceAlphaEvidence[];
 }
+/** Atlas UV rectangle intersection is saved-reference evidence only.
+ * Results do NOT prove exclusive pixels or visual face coverage. */
+export interface CubeUvOverlap {
+  focus_face: CubeFaceSurface["side"];
+  other_cube_uuid: string;
+  other_face: CubeFaceSurface["side"];
+  pixel_rect: Vec4;
+  overlap_pixels: number;
+}
+export interface CubeUvSharingInspection {
+  scope: "explicit_texture_uv_overlap";
+  cube_uuid: string;
+  texture_uuid: string;
+  visual_verdict: "UNVERIFIED";
+  face_coverage_verdict: "UNVERIFIED";
+  reference_scope: "explicit_texture_links_only";
+  focused_mapped_faces: number;
+  declared_overlap_pairs: number;
+  unresolved_explicit_faces: number;
+  implicit_reference_faces: number;
+  report_truncated: boolean;
+  overlaps: CubeUvOverlap[];
+}
 export interface RotationTrackInspection {
   scope: "linear_bone_rotation" | "unsupported_animation_track";
   recognized: boolean;
@@ -260,6 +283,7 @@ export interface InspectReceipt {
   element?: FocusedElement;
   surfaces?: CubeSurfaceInspection;
   face_alpha?: CubeFaceAlphaInspection;
+  uv_sharing?: CubeUvSharingInspection;
   alpha?: TextureAlphaInspection;
   catalog?: CatalogPage;
   asset?: InspectAsset;
@@ -271,6 +295,7 @@ export type InspectBatchQuery =
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
   | { kind: "cube_face_alpha"; uuid: string }
+  | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
@@ -282,6 +307,7 @@ export type InspectBatchResult =
   | { kind: "cube"; element: FocusedElement }
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
   | { kind: "cube_face_alpha"; face_alpha: CubeFaceAlphaInspection }
+  | { kind: "cube_uv_sharing"; uv_sharing: CubeUvSharingInspection }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }

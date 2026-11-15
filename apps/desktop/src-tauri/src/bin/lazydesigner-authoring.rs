@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -273,6 +273,7 @@ enum InspectBatchQuery {
     Cube { uuid: String },
     CubeSurfaces { uuid: String },
     CubeFaceAlpha { uuid: String },
+    CubeUvSharing { uuid: String, texture_uuid: String },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
     TextureAlpha { uuid: String },
@@ -317,6 +318,11 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
             InspectBatchQuery::CubeFaceAlpha { uuid } => {
                 let face_alpha = inspect_cube_uv_alpha(doc, batch_id(&uuid)?)?;
                 json!({"kind":"cube_face_alpha","face_alpha":face_alpha})
+            },
+            InspectBatchQuery::CubeUvSharing { uuid, texture_uuid } => {
+                let uv_sharing = inspect_cube_uv_sharing(
+                    doc, batch_id(&uuid)?, batch_id(&texture_uuid)?)?;
+                json!({"kind":"cube_uv_sharing","uv_sharing":uv_sharing})
             },
             InspectBatchQuery::Catalog { category, offset, limit } => {
                 let offset = offset.unwrap_or(0);

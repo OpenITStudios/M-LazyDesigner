@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 mod bbmodel;
 mod geometry;
 mod paint;
+mod uv_sharing;
+pub use uv_sharing::inspect_cube_uv_sharing;
 pub mod storage;
 pub use geometry::export_bedrock_geometry;
 

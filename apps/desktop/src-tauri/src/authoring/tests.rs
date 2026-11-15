@@ -1032,6 +1032,79 @@ fn bone_subtree_move_refuses_unsafe_child_uv_and_rolls_back_all_changes() {
     assert!(!session.can_undo());
 }
 
+// SOURCE_AUTHORED_NOT_RUN: the inspector never mutates model or bitmap.
+#[test]
+fn uv_sharing_detects_cross_cube_aliases_and_respects_half_open_boundaries() {
+    const TEXTURE: &str = "00000000-0000-4000-8000-000000009991";
+    const SECOND_CUBE: &str = "00000000-0000-4000-8000-000000009992";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Aliases", "aliases").unwrap()).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 32, height: 32 },
+        EditOperation::AddBone {
+            bone: serde_json::from_value(json!({"uuid":BONE,"name":"root","origin":[0,0,0]})).unwrap(),
+            parent_uuid: None,
+        },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+        EditOperation::CreatePaintTexture { uuid: TEXTURE.into(), name: "atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: TEXTURE.into() },
+    ]).unwrap();
+    let only = session.document().clone();
+    let report = inspect_cube_uv_sharing(&only, CUBE, TEXTURE).unwrap();
+    assert_eq!(report["focused_mapped_faces"], json!(6));
+    assert_eq!(report["declared_overlap_pairs"], json!(0));
+    assert_eq!(report["implicit_reference_faces"], json!(0));
+    assert_eq!(report["unresolved_explicit_faces"], json!(0));
+    assert_eq!(report["visual_verdict"], json!("UNVERIFIED"));
+    session.apply(1, &[EditOperation::DuplicateCube {
+        source_uuid: CUBE.into(), new_uuid: SECOND_CUBE.into(),
+    }]).unwrap();
+    let saved = session.document().clone();
+    let overlaps = inspect_cube_uv_sharing(&saved, CUBE, TEXTURE).unwrap();
+    assert_eq!(overlaps["declared_overlap_pairs"], json!(6));
+    assert_eq!(overlaps["overlaps"][0]["focus_face"], json!("north"));
+    assert_eq!(overlaps["overlaps"][0]["other_cube_uuid"], json!(SECOND_CUBE));
+    assert_eq!(overlaps["overlaps"][0]["other_face"], json!("north"));
+    assert_eq!(overlaps["overlaps"][0]["pixel_rect"], json!([4,4,8,8]));
+    assert_eq!(overlaps["overlaps"][0]["overlap_pixels"], json!(16));
+    assert_eq!(overlaps["report_truncated"], json!(false));
+    assert_eq!(saved.texture_assets, only.texture_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    assert_eq!(session.document(), &saved);
+}
+
+#[test]
+fn uv_sharing_reports_unknown_references_and_unsupported_uv_without_false_clearance() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    const TEX: &str = "00000000-0000-4000-8000-000000009993";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture { uuid: TEX.into(), name: "atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: TEX.into() },
+    ]).unwrap();
+    let mut doc = session.document().clone();
+    doc.cubes[0].faces.get_mut("south").unwrap()["uv"] = json!([0.25,0.0,4.0,4.0]);
+    let unknown = inspect_cube_uv_sharing(&doc, CUBE, TEX).unwrap();
+    assert_eq!(unknown["unresolved_explicit_faces"], json!(1));
+    assert_eq!(unknown["visual_verdict"], json!("UNVERIFIED"));
+    doc.cubes[0].faces.get_mut("south").unwrap().as_object_mut()
+        .unwrap().remove("texture");
+    let unknown = inspect_cube_uv_sharing(&doc, CUBE, TEX).unwrap();
+    assert_eq!(unknown["implicit_reference_faces"], json!(1));
+    assert_eq!(unknown["unresolved_explicit_faces"], json!(0));
+    model["meta"]["per_texture_uv_size"] = json!(true);
+    let mut unsafe_doc = AuthoringDocument::import_bbmodel(
+        &serde_json::to_vec(&model).unwrap()).unwrap();
+    unsafe_doc.texture_assets = session.document().texture_assets.clone();
+    assert_eq!(inspect_cube_uv_sharing(&unsafe_doc, CUBE, TEX).unwrap_err(),
+        "UV_SHARING_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(inspect_cube_uv_sharing(session.document(), "missing", TEX).unwrap_err(),
+        "UV_SHARING_CUBE_NOT_FOUND");
+    assert_eq!(inspect_cube_uv_sharing(session.document(), CUBE, "missing").unwrap_err(),
+        "UV_SHARING_TEXTURE_NOT_FOUND");
+    assert_eq!(session.document().texture_assets, doc.texture_assets);
+}
+
 // SOURCE_AUTHORED_NOT_RUN: semantic Cube face painting with one Rust PNG
 // transaction, not visual face-coverage evidence from native Blockbench.
 #[test]

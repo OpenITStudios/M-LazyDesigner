@@ -68,6 +68,39 @@ test('Code Mode catalog and metadata inspection remain read-only and bounded', a
   assert.equal(calls.length, 3);
 });
 
+test('Code Mode forwards strict explicit UV-sharing selector without allowing unknown query fields', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      const queries = JSON.parse(await readFile(argv[argv.indexOf('--queries') + 1], 'utf8'));
+      assert.deepEqual(queries, { requests: [{
+        kind: 'cube_uv_sharing', uuid: 'cube-1', texture_uuid: 'texture-1',
+      }] });
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 },
+        results: [{ kind: 'cube_uv_sharing', uv_sharing: {
+          scope: 'explicit_texture_uv_overlap', cube_uuid: 'cube-1',
+          texture_uuid: 'texture-1', declared_overlap_pairs: 1,
+          unresolved_explicit_faces: 0, implicit_reference_faces: 0,
+          report_truncated: false, visual_verdict: 'UNVERIFIED', overlaps: [],
+        } }] };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const response = await project.inspectBatch([
+    { kind: 'cube_uv_sharing', uuid: 'cube-1', texture_uuid: 'texture-1' },
+  ]);
+  assert.equal(response.results[0].uv_sharing.declared_overlap_pairs, 1);
+  assert.equal(response.results[0].uv_sharing.visual_verdict, 'UNVERIFIED');
+  assert.equal(calls.length, 1);
+  await assert.rejects(project.inspectBatch([{
+    kind: 'cube_uv_sharing', uuid: 'cube-1', texture_uuid: 'texture-1',
+    unsafe: true,
+  }]), /Unknown inspection selector or field/);
+  assert.equal(calls.length, 1);
+});
+
 test('Code Mode batches focused read selectors into a single Rust CLI call', async () => {
   const calls = [];
   let queryFile;
