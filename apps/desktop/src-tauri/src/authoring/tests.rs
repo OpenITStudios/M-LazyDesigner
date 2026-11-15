@@ -402,6 +402,114 @@ fn full_asset_authoring_assembly_roundtrip_preserves_geometry_texture_and_animat
     assert_eq!(session.document(), &saved);
 }
 
+// Tests authored in source; Cargo/Windows/Blockbench execution remains held.
+#[test]
+fn reframe_cube_rebuilds_full_box_uv_once_and_preserves_rig_texture_data() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Reframe", "reframe").unwrap()).unwrap();
+    let bone: Bone = serde_json::from_value(json!({
+        "uuid": BONE, "name": "root", "origin": [0, 0, 0]
+    })).unwrap();
+    session.apply(0, &[
+        EditOperation::AddBone { bone, parent_uuid: None },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+        EditOperation::SetCubeOrigin { uuid: CUBE.into(), origin: [2.0, 2.0, 2.0] },
+    ]).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(1, &[
+        EditOperation::ReframeCube {
+            uuid: CUBE.into(), from: [1.0, 2.0, 3.0],
+            to: [7.0, 8.0, 9.0], uv_policy: "box_repack".into(),
+        },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.changed_uuids, vec![CUBE.to_owned()]);
+    let exported: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(exported["elements"][0]["from"], json!([1.0,2.0,3.0]));
+    assert_eq!(exported["elements"][0]["to"], json!([7.0,8.0,9.0]));
+    assert_eq!(exported["elements"][0]["origin"], json!([2.0,2.0,2.0]));
+    assert_eq!(exported["elements"][0]["faces"]["north"]["uv"], json!([6.0,6.0,12.0,12.0]));
+    assert_eq!(exported["elements"][0]["faces"]["east"]["uv"], json!([0.0,6.0,6.0,12.0]));
+    let surfaces = inspect_cube_surfaces(session.document(), CUBE).unwrap();
+    assert_eq!(surfaces["geometry"]["projected_local_size"], json!([6.0,6.0,6.0]));
+    assert_eq!(surfaces["uv"]["box_uv"], json!(true));
+    assert_eq!(surfaces["faces"][0]["uv"], json!([6.0,6.0,12.0,12.0]));
+    assert_eq!(session.document().bones, original.bones);
+    assert_eq!(session.document().texture_assets, original.texture_assets);
+    let saved = session.document().clone();
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    // The explicit repack can refresh a stale Box UV cache even if the
+    // caller keeps the same geometry.
+    let mut stale = saved.clone();
+    stale.cubes[0].faces.get_mut("north").unwrap()["uv"] = json!([0,0,1,1]);
+    let mut repaired = EditorSession::from_document(stale).unwrap();
+    repaired.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [1.0,2.0,3.0], to: [7.0,8.0,9.0],
+        uv_policy: "box_repack".into(),
+    }]).unwrap();
+    assert_eq!(repaired.document(), &saved);
+}
+
+#[test]
+fn reframe_preserves_manual_face_uv_but_refuses_unsafe_auto_and_box_rules() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    session.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [-1.0,-2.0,0.0], to: [8.0,4.0,4.0],
+        uv_policy: "manual_preserve".into(),
+    }]).unwrap();
+    assert_eq!(session.document().cubes[0].faces, original.cubes[0].faces);
+    assert_eq!(session.document().cubes[0].origin, original.cubes[0].origin);
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+
+    for (bad, code) in [
+        ([4.0,0.0,0.0], "CUBE_REFRAME_BOUNDS_INVALID"),
+        ([f64::NAN,0.0,0.0], "CUBE_REFRAME_BOUNDS_INVALID"),
+    ] {
+        assert_eq!(session.apply(2, &[
+            EditOperation::RenameNode { uuid: CUBE.into(), name: "partial".into() },
+            EditOperation::ReframeCube { uuid: CUBE.into(), from: bad,
+                to: [2.0,2.0,2.0], uv_policy: "manual_preserve".into() },
+        ]).unwrap_err(), code);
+        assert_eq!(session.document(), &original);
+    }
+    let mut imported = original.clone();
+    imported.cubes[0].extra.insert("autouv".into(), json!(1));
+    let mut auto = EditorSession::from_document(imported.clone()).unwrap();
+    assert_eq!(auto.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [0.0,0.0,0.0], to: [5.0,5.0,5.0],
+        uv_policy: "manual_preserve".into(),
+    }]).unwrap_err(), "CUBE_REFRAME_AUTO_UV_UNSUPPORTED");
+    assert_eq!(auto.document(), &imported);
+    let mut box_doc = original.clone();
+    box_doc.meta.box_uv = Some(true);
+    let mut wrong_policy = EditorSession::from_document(box_doc.clone()).unwrap();
+    assert_eq!(wrong_policy.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [0.0,0.0,0.0], to: [5.0,5.0,5.0],
+        uv_policy: "manual_preserve".into(),
+    }]).unwrap_err(), "CUBE_REFRAME_UV_POLICY_MISMATCH");
+    box_doc.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+    let mut unsupported = EditorSession::from_document(box_doc.clone()).unwrap();
+    assert_eq!(unsupported.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [0.0,0.0,0.0], to: [5.0,5.0,5.0],
+        uv_policy: "box_repack".into(),
+    }]).unwrap_err(), "CUBE_REFRAME_UV_RULESET_UNSUPPORTED");
+    assert_eq!(unsupported.document(), &box_doc);
+    box_doc.extensions.remove("multi_file_ruleset");
+    box_doc.meta.extra.insert("box_uv_float_size".into(), json!(true));
+    let mut float_uv = EditorSession::from_document(box_doc.clone()).unwrap();
+    assert_eq!(float_uv.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [0.0,0.0,0.0], to: [5.0,5.0,5.0],
+        uv_policy: "box_repack".into(),
+    }]).unwrap_err(), "CUBE_REFRAME_BOX_UV_FLOAT_UNSUPPORTED");
+    assert_eq!(float_uv.document(), &box_doc);
+}
+
 // SOURCE-AUTHORED: intended Rust geometry/UV .bbmodel acceptance, not run.
 #[test]
 fn stretch_and_box_uv_mirror_are_one_lossless_geometry_transaction() {

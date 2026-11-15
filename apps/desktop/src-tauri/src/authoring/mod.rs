@@ -153,6 +153,7 @@ pub enum EditOperation {
     },
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
+    ReframeCube { uuid: String, from: [f64; 3], to: [f64; 3], uv_policy: String },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
     ScaleCube { uuid: String, factors: [f64; 3] },
     SetBoneRotation { uuid: String, rotation: [f64; 3] },
@@ -236,6 +237,24 @@ fn optional_rotation(extra: &Map<String, Value>) -> Result<()> {
             value.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= LIMIT)) {
             return Err(fail("ROTATION_FORMAT_INVALID"));
         }
+    }
+    Ok(())
+}
+
+/// A full Box UV repack is safe only when there is exactly one project
+/// atlas coordinate system and integer-sized cube nets. Unsupported imported
+/// UV capabilities remain preserved but are not normalized by authoring.
+fn check_box_uv_repack_rules(doc: &AuthoringDocument, cube: &Cube) -> Result<()> {
+    if has_per_texture_uv_rules(doc) {
+        return Err(fail("CUBE_REFRAME_UV_RULESET_UNSUPPORTED"));
+    }
+    let unknown_float_uv = [
+        doc.meta.extra.get("box_uv_float_size"),
+        doc.extensions.get("box_uv_float_size"),
+        cube.extra.get("box_uv_float_size"),
+    ].into_iter().flatten().any(|flag| flag != &Value::Bool(false));
+    if unknown_float_uv {
+        return Err(fail("CUBE_REFRAME_BOX_UV_FLOAT_UNSUPPORTED"));
     }
     Ok(())
 }
@@ -1010,6 +1029,20 @@ pub fn inspect_cube_surfaces(doc: &AuthoringDocument, cube_uuid: &str) -> Result
             "rotation":cube.extra.get("rotation")
                 .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok()),
             "inflate":cube.extra.get("inflate").and_then(Value::as_f64),
+            "stretch":cube.extra.get("stretch"),
+            "projected_local_size":{
+                // Only a local, unrotated Cube surface envelope. A null
+                // result is an unsupported projection, not a quality PASS.
+                let inflate = cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0);
+                let stretch = cube.extra.get("stretch").and_then(|value|
+                    serde_json::from_value::<[f64; 3]>(value.clone()).ok())
+                    .unwrap_or([1.0; 3]);
+                let projected: [f64; 3] = std::array::from_fn(|axis|
+                    (size[axis] + 2.0 * inflate) * stretch[axis]);
+                if projected.iter().all(|value| value.is_finite() && *value > 0.0) {
+                    Some(projected)
+                } else { None }
+            },
             "visibility_saved":cube.extra.get("visibility").and_then(Value::as_bool),
         },
         "uv":{
@@ -1663,6 +1696,37 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 refresh_box_uv(cube)?;
             } else {
                 refresh_auto_uv(cube, auto_uv, resolution, textures, Some((axis, direction)))?;
+            }
+            Ok(uuid.clone())
+        }
+        EditOperation::ReframeCube { uuid, from, to, uv_policy } => {
+            // Explicit, deterministic full-shape authoring rather than a
+            // sequence of mouse-edge resizes. The caller picks UV intent:
+            // regenerate the complete Box UV net, or retain manual Face UV.
+            // Preserve pivot/orientation/texture references without guessing.
+            if !valid_bounds(*from, *to) {
+                return Err(fail("CUBE_REFRAME_BOUNDS_INVALID"));
+            }
+            let box_uv_default = doc.meta.box_uv.unwrap_or(false);
+            let cube_index = doc.cubes.iter().position(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let box_uv = cube_box_uv(&doc.cubes[cube_index], box_uv_default);
+            if (box_uv && uv_policy != "box_repack") ||
+               (!box_uv && uv_policy != "manual_preserve") {
+                return Err(fail("CUBE_REFRAME_UV_POLICY_MISMATCH"));
+            }
+            if box_uv {
+                check_box_uv_repack_rules(doc, &doc.cubes[cube_index])?;
+            } else if cube_auto_uv(&doc.cubes[cube_index])? != 0 {
+                return Err(fail("CUBE_REFRAME_AUTO_UV_UNSUPPORTED"));
+            }
+            let cube = &mut doc.cubes[cube_index];
+            cube.from = *from;
+            cube.to = *to;
+            if box_uv {
+                // An explicit repack also repairs stale cached face UV
+                // when dimensions happen to stay unchanged.
+                refresh_box_uv(cube)?;
             }
             Ok(uuid.clone())
         }

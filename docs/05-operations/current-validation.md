@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Rust full-Cube reframe with explicit Box UV repack (SOURCE_ONLY)
+
+Identified that the legacy `SetCubeBounds` permits only one Box UV edge change per edit, limiting AI-first multi-axis modelling. Source now adds bounded `ReframeCube` with caller-selected `box_repack` or `manual_preserve` UV semantics, preserving pivot, hierarchy, textures and Animation while setting all Cube bounds atomically. Box UV derived face cache is rebuilt, including unchanged-bounds repair; unsupported imported Auto/per-texture/float-sized UV rules refuse instead of approximating them. Read-only `inspect_cube_surfaces` now exposes saved Stretch and positive local projected size for an agent to review shape data; it is not a visual verdict. Rust Core, generic Tauri/CLI, Code Mode typed contract, and positive/negative regressions are SOURCE_AUTHORED; tests and native Blockbench proof NOT_EXECUTED.
+
 ## 2026-11-15 — Geometry Cube stretch and Box UV mirror source (NOT_EXECUTED)
 
 Compared the pinned upstream `js/outliner/types/cube.js` save representation and `js/formats/bbmodel.js` format-5.0 path, then independently authored Rust `SetCubeStretch` and `SetCubeMirrorUv` on the canonical EditOperation. Positive source regression covers one atomic geometry/UV transaction, expected mirrored face UV coordinates, neutral-field omission, export/reimport and Undo/Redo. Negative source regressions cover degenerate/mirrored stretch factors, unknown/unsafe Box UV modes, atomic rollback and malformed imported mirror metadata. Tauri/CLI generic apply and Code Mode typed plans use the same source owner. Tests AUTHORED_NOT_RUN; no actual Blockbench, Windows, benchmark or native effect proof.

@@ -37,6 +37,7 @@ export type EditOperation =
   | { op: "remove_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }
   | { op: "translate_cube"; uuid: string; delta: Vec3 }
   | { op: "set_cube_bounds"; uuid: string; from: Vec3; to: Vec3 }
+  | { op: "reframe_cube"; uuid: string; from: Vec3; to: Vec3; uv_policy: "box_repack" | "manual_preserve" }
   | { op: "set_cube_rotation"; uuid: string; rotation: Vec3 }
   | { op: "scale_cube"; uuid: string; factors: Vec3 }
   | { op: "set_bone_rotation"; uuid: string; rotation: Vec3 }
@@ -126,6 +127,8 @@ export interface CubeSurfaceInspection {
     origin: Vec3 | null;
     rotation: Vec3 | null;
     inflate: number | null;
+    stretch: Vec3 | null;
+    projected_local_size: Vec3 | null;
     visibility_saved: boolean | null;
   };
   uv: {
