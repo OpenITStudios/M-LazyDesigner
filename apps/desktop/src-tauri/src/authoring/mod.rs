@@ -1113,6 +1113,76 @@ pub fn inspect_rotation_track(
     }))
 }
 
+/// Bounded Code Mode read of the exact numeric linear Bone channel authored
+/// by Rust. Unknown imported clips or expressions are never interpreted or
+/// normalized, and no raw keyframe extensions are returned to the agent.
+pub fn inspect_transform_track(
+    doc: &AuthoringDocument, animation_uuid: &str, bone_uuid: &str,
+    channel: &str, offset: usize, limit: usize,
+) -> Result<Value> {
+    if !supported_transform_channel(channel) {
+        return Err(fail("ANIMATION_INSPECT_CHANNEL_INVALID"));
+    }
+    if limit == 0 || limit > 64 || offset > MAX_ELEMENTS {
+        return Err(fail("ANIMATION_INSPECT_PAGE_INVALID"));
+    }
+    if !doc.bones.iter().any(|bone| bone.uuid == bone_uuid) {
+        return Err(fail("ANIMATION_BONE_NOT_FOUND"));
+    }
+    let matches: Vec<_> = doc.animation_assets.iter().filter(|item|
+        item.get("uuid").and_then(Value::as_str) == Some(animation_uuid)).collect();
+    let animation = match matches.as_slice() {
+        [] => return Err(fail("ANIMATION_NOT_FOUND")),
+        [animation] => *animation,
+        _ => return Err(fail("ANIMATION_ID_AMBIGUOUS")),
+    };
+    let track = animation.get("animators").and_then(Value::as_object)
+        .and_then(|tracks| tracks.get(bone_uuid))
+        .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+    let Some(all_frames) = track.get("keyframes").and_then(Value::as_array) else {
+        return Ok(json!({
+            "scope":"unsupported_animation_track", "channel":channel,
+            "recognized":false, "reason":"OPAQUE_OR_UNSUPPORTED_KEYFRAMES",
+            "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
+            "bone_uuid":bone_uuid, "total_frames":null,
+            "next_offset":null, "keyframes":[]
+        }));
+    };
+    if !editable_transform_clip(animation, &doc.bones) {
+        return Ok(json!({
+            "scope":"unsupported_animation_track", "channel":channel,
+            "recognized":false, "reason":"OPAQUE_OR_UNSUPPORTED_KEYFRAMES",
+            "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
+            "bone_uuid":bone_uuid, "total_frames":null,
+            "next_offset":null, "keyframes":[]
+        }));
+    }
+    let frames: Vec<_> = all_frames.iter().filter(|frame|
+        frame.get("channel").and_then(Value::as_str) == Some(channel)).collect();
+    let total = frames.len();
+    let end = offset.saturating_add(limit).min(total);
+    let mut selected = Vec::with_capacity(end.saturating_sub(offset));
+    for frame in frames.into_iter().skip(offset).take(limit) {
+        let points = &frame["data_points"][0];
+        let value = [
+            transform_axis(points.get("x")).ok_or_else(|| fail("ANIMATION_INSPECT_AXIS_INVALID"))?,
+            transform_axis(points.get("y")).ok_or_else(|| fail("ANIMATION_INSPECT_AXIS_INVALID"))?,
+            transform_axis(points.get("z")).ok_or_else(|| fail("ANIMATION_INSPECT_AXIS_INVALID"))?,
+        ];
+        selected.push(json!({
+            "uuid":frame["uuid"], "time":frame["time"], "value":value,
+        }));
+    }
+    Ok(json!({
+        "scope":"linear_bone_transform", "recognized":true,
+        "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
+        "bone_uuid":bone_uuid, "channel":channel,
+        "total_frames":total, "offset":offset,
+        "next_offset":if end < total {Some(end)} else {None},
+        "keyframes":selected
+    }))
+}
+
 /// Changing atlas dimensions with authored Cubes or texture/animation data
 /// would require native UV remapping. Keep this setting confined to a simple
 /// empty Bedrock model with no imported opaque authoring metadata.

@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -281,6 +281,10 @@ enum InspectBatchQuery {
         animation_uuid: String, bone_uuid: String,
         offset: Option<usize>, limit: Option<usize>,
     },
+    AnimationTransformTrack {
+        animation_uuid: String, bone_uuid: String, channel: String,
+        offset: Option<usize>, limit: Option<usize>,
+    },
     Audit,
 }
 
@@ -349,6 +353,18 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 )?;
                 json!({"kind":"animation_track","track":track})
             },
+            InspectBatchQuery::AnimationTransformTrack {
+                animation_uuid, bone_uuid, channel, offset, limit,
+            } => {
+                let offset = offset.unwrap_or(0);
+                let limit = limit.unwrap_or(32);
+                if offset > 65_536 || limit == 0 || limit > 64 {
+                    return Err(fail("INSPECT_BATCH_PAGE_INVALID"));
+                }
+                let track = inspect_transform_track(doc, batch_id(&animation_uuid)?,
+                    batch_id(&bone_uuid)?, &channel, offset, limit)?;
+                json!({"kind":"animation_transform_track","track":track})
+            },
             InspectBatchQuery::Audit => {
                 json!({"kind":"audit","audit":inspect_model_audit(doc)})
             },
@@ -377,7 +393,7 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--surface-uuid", "--face-alpha-uuid", "--alpha-uuid", "--audit", "--expected-sha256"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--track-channel", "--surface-uuid", "--face-alpha-uuid", "--alpha-uuid", "--audit", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
@@ -397,7 +413,8 @@ fn execute() -> Result<Value> {
                      options.contains_key("--frame-limit"))) ||
                 (!options.contains_key("--bone-uuid") &&
                     (options.contains_key("--frame-offset") ||
-                     options.contains_key("--frame-limit"))) {
+                     options.contains_key("--frame-limit") ||
+                     options.contains_key("--track-channel"))) {
                 return Err(fail("INSPECT_QUERY_CONFLICT"));
             }
             if let Some(uuid) = options.get("--uuid") {
@@ -435,7 +452,12 @@ fn execute() -> Result<Value> {
                         .transpose().map_err(|_| fail("ANIMATION_INSPECT_PAGE_INVALID"))?.unwrap_or(0);
                     let limit = options.get("--frame-limit").map(|s|s.parse::<usize>())
                         .transpose().map_err(|_| fail("ANIMATION_INSPECT_PAGE_INVALID"))?.unwrap_or(32);
-                    let track = inspect_rotation_track(session.document(), uuid, bone_uuid, offset, limit)?;
+                    let track = if let Some(channel) = options.get("--track-channel") {
+                        inspect_transform_track(session.document(), uuid, bone_uuid,
+                            channel, offset, limit)?
+                    } else {
+                        inspect_rotation_track(session.document(), uuid, bone_uuid, offset, limit)?
+                    };
                     Ok(json!({"status":"OK","sha256":digest,
                         "summary":session.summary(),"track":track}))
                 } else {
@@ -873,6 +895,62 @@ mod tests {
         assert!(restricted["keyframes"].as_array().unwrap().is_empty());
         assert_eq!(opaque.animation_assets[0]["animators"][bone.as_str()]["keyframes"][0]["data_points"][0]["x"],
             json!("query.head_yaw"));
+    }
+
+    // Source regression only: Rust executable, CLI and native app not run.
+    #[test]
+    fn code_mode_transform_track_read_covers_position_rotation_scale_and_refuses_opaque() {
+        let mut session = EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let bone = session.document().bones[0].uuid.clone();
+        let anim = "00000000-0000-4000-8000-000000000711";
+        session.apply(0, &[
+            EditOperation::CreateAnimation { uuid: anim.into(), name: "walk".into(), length: 2.0 },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: anim.into(), bone_uuid: bone.clone(),
+                keyframe_uuid: "00000000-0000-4000-8000-000000000712".into(),
+                channel: "position".into(), time: 0.5, value: [1.0, 2.0, 3.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: anim.into(), bone_uuid: bone.clone(),
+                keyframe_uuid: "00000000-0000-4000-8000-000000000713".into(),
+                channel: "scale".into(), time: 1.0, value: [1.0, 2.0, 1.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: anim.into(), bone_uuid: bone.clone(),
+                keyframe_uuid: "00000000-0000-4000-8000-000000000714".into(),
+                channel: "rotation".into(), time: 1.5, value: [0.0, 30.0, 0.0],
+            },
+        ]).unwrap();
+        let before = session.document().clone();
+        for (channel, time, values) in [
+            ("position", 0.5, [1.0, 2.0, 3.0]),
+            ("scale", 1.0, [1.0, 2.0, 1.0]),
+            ("rotation", 1.5, [0.0, 30.0, 0.0]),
+        ] {
+            let track = inspect_transform_track(session.document(), anim, &bone,
+                channel, 0, 16).unwrap();
+            assert_eq!(track["recognized"], json!(true));
+            assert_eq!(track["channel"], json!(channel));
+            assert_eq!(track["total_frames"], json!(1));
+            assert_eq!(track["keyframes"][0]["time"], json!(time));
+            assert_eq!(track["keyframes"][0]["value"], json!(values));
+            assert_eq!(track["visual_verdict"], json!("UNVERIFIED"));
+        }
+        assert_eq!(session.document(), &before);
+        assert_eq!(inspect_transform_track(session.document(), anim, &bone,
+            "bad", 0, 16).unwrap_err(), "ANIMATION_INSPECT_CHANNEL_INVALID");
+        assert_eq!(inspect_transform_track(session.document(), anim, &bone,
+            "position", 0, 65).unwrap_err(), "ANIMATION_INSPECT_PAGE_INVALID");
+        let mut opaque = before.clone();
+        opaque.animation_assets[0]["animators"][bone.as_str()]["keyframes"][0]["data_points"][0]["x"] =
+            json!("query.anim_time");
+        let refused = inspect_transform_track(&opaque, anim, &bone,
+            "scale", 0, 16).unwrap();
+        assert_eq!(refused["recognized"], json!(false));
+        assert!(refused["keyframes"].as_array().unwrap().is_empty());
+        assert_eq!(opaque.animation_assets[0]["animators"][bone.as_str()]["keyframes"][0]["data_points"][0]["x"],
+            json!("query.anim_time"));
     }
 
     #[test]

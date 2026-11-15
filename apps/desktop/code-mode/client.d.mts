@@ -203,6 +203,19 @@ export interface RotationTrackInspection {
   next_offset: number | null;
   keyframes: Array<{ uuid: string; time: number; rotation: Vec3 }>;
 }
+export interface TransformTrackInspection {
+  scope: "linear_bone_transform" | "unsupported_animation_track";
+  recognized: boolean;
+  visual_verdict: "UNVERIFIED";
+  animation_uuid: string;
+  bone_uuid: string;
+  channel: "rotation" | "position" | "scale";
+  reason?: "OPAQUE_OR_UNSUPPORTED_KEYFRAMES";
+  total_frames: number | null;
+  offset?: number;
+  next_offset: number | null;
+  keyframes: Array<{ uuid: string; time: number; value: Vec3 }>;
+}
 export interface StaticModelAudit {
   scope: "static_metadata_only";
   visual_verdict: "UNVERIFIED";
@@ -228,7 +241,7 @@ export interface InspectReceipt {
   catalog?: CatalogPage;
   asset?: InspectAsset;
   audit?: StaticModelAudit;
-  track?: RotationTrackInspection;
+  track?: RotationTrackInspection | TransformTrackInspection;
 }
 /** One host-authored read batch; unknown selectors fail closed in JS/Rust. */
 export type InspectBatchQuery =
@@ -240,6 +253,7 @@ export type InspectBatchQuery =
   | { kind: "texture_alpha"; uuid: string }
   | { kind: "animation"; uuid: string }
   | { kind: "animation_track"; animation_uuid: string; bone_uuid: string; offset?: number; limit?: number }
+  | { kind: "animation_transform_track"; animation_uuid: string; bone_uuid: string; channel: TransformTrackInspection["channel"]; offset?: number; limit?: number }
   | { kind: "audit" };
 export type InspectBatchResult =
   | { kind: "cube"; element: FocusedElement }
@@ -250,6 +264,7 @@ export type InspectBatchResult =
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }
   | { kind: "animation"; asset: InspectAsset }
   | { kind: "animation_track"; track: RotationTrackInspection }
+  | { kind: "animation_transform_track"; track: TransformTrackInspection }
   | { kind: "audit"; audit: StaticModelAudit };
 export interface InspectBatchReceipt {
   status: "OK";
@@ -299,6 +314,10 @@ export interface RustCodeModeClient {
     input: string; animationUuid: string; boneUuid: string;
     offset?: number; limit?: number; expectedSha256?: string;
   }): Promise<InspectReceipt & { track: RotationTrackInspection }>;
+  inspectAnimationTransformTrack(input: {
+    input: string; animationUuid: string; boneUuid: string; channel: TransformTrackInspection["channel"];
+    offset?: number; limit?: number; expectedSha256?: string;
+  }): Promise<InspectReceipt & { track: TransformTrackInspection }>;
   audit(input: { input: string; expectedSha256?: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
   apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
@@ -353,6 +372,10 @@ export interface RustCodeModeProject {
   inspectAnimationTrack(
     animationUuid: string, boneUuid: string, options?: {offset?: number; limit?: number}
   ): Promise<InspectReceipt & {track: RotationTrackInspection}>;
+  inspectAnimationTransformTrack(
+    animationUuid: string, boneUuid: string, channel: TransformTrackInspection["channel"],
+    options?: {offset?: number; limit?: number}
+  ): Promise<InspectReceipt & {track: TransformTrackInspection}>;
   apply(input: { output: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   exportPng(input: { output: string; textureUuid: string }): Promise<OutputReceipt>;
   exportGeometry(input: { output: string }): Promise<OutputReceipt>;

@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust numeric Bone transform-channel read (SOURCE_ONLY)
+
+First-party `inspect_transform_track` projects Position/Rotation/Scale keyframes from fully admitted numeric linear clips. It refuses ambiguous/unknown/opaque source clips and does not echo raw animation JSON. CLI direct + inspect-batch, typed Code Mode client and bound project helpers share the read. Authored Rust/JS regressions are NOT_EXECUTED; visual playback, .bbmodel export in Blockbench and token benefits remain UNVERIFIED.
+
 ## 2026-11-15 — Rust RGBA8 region-fill authoring (SOURCE_ONLY)
 
 Canonical `PaintTextureFill` uses a bounded, nonrecursive four-neighbor exact-match fill through the existing generated/explicitly adopted RGBA8 PNG codec. It preserves texture metadata, other regions, undo history and .bbmodel export state; unsupported assets and invalid coordinates refuse. Tauri generic apply, CLI and typed Code Mode share the operation; no UI redesign. Regression source for isolated regions, rollback, no-op, Undo/Redo and export/reimport is AUTHORED_NOT_RUN. Windows/Blockbench compatibility UNVERIFIED.

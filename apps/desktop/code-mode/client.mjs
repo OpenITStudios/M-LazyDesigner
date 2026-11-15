@@ -119,6 +119,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   texture_alpha: ['uuid'],
   animation: ['uuid'],
   animation_track: ['animation_uuid', 'bone_uuid', 'offset', 'limit'],
+  animation_transform_track: ['animation_uuid', 'bone_uuid', 'channel', 'offset', 'limit'],
   audit: [],
 });
 
@@ -146,6 +147,11 @@ function serializeInspectionQueries(requests) {
           value, field, field === 'limit' ? 1 : 0,
           field === 'limit' ? 64 : 65536,
         ));
+      } else if (field === 'channel') {
+        if (!['rotation', 'position', 'scale'].includes(value)) {
+          throw new TypeError('Unsupported transform channel');
+        }
+        output.channel = value;
       } else if (field === 'category') {
         if (!['cubes', 'bones', 'textures', 'animations'].includes(value)) {
           throw new TypeError('Unknown catalog category');
@@ -321,6 +327,22 @@ export function createRustCodeModeClient({
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
+    async inspectAnimationTransformTrack({
+      input, animationUuid, boneUuid, channel, offset = 0, limit = 32, expectedSha256,
+    }) {
+      if (!['rotation', 'position', 'scale'].includes(channel)) {
+        throw new TypeError('Unsupported transform channel');
+      }
+      return call('inspect', {
+        input: absolute(input, 'input'),
+        'animation-uuid': nonempty(animationUuid, 'animationUuid'),
+        'bone-uuid': nonempty(boneUuid, 'boneUuid'),
+        'track-channel': channel,
+        'frame-offset': wholeNumber(offset, 'offset', 0, 65536),
+        'frame-limit': wholeNumber(limit, 'limit', 1, 64),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
+      });
+    },
     async audit({ input, expectedSha256 }) {
       return call('inspect', {
         input: absolute(input, 'input'), audit: 'model',
@@ -422,6 +444,10 @@ export async function openRustCodeModeProject(client, input) {
     inspectAnimationTrack: (animationUuid, boneUuid, { offset = 0, limit = 32 } = {}) =>
       client.inspectAnimationTrack({
         input: path, animationUuid, boneUuid, offset, limit, expectedSha256,
+      }),
+    inspectAnimationTransformTrack: (animationUuid, boneUuid, channel, { offset = 0, limit = 32 } = {}) =>
+      client.inspectAnimationTransformTrack({
+        input: path, animationUuid, boneUuid, channel, offset, limit, expectedSha256,
       }),
     apply: ({ output, operations }) =>
       client.apply({ input: path, output, expectedSha256, operations }),

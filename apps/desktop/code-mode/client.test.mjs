@@ -150,6 +150,30 @@ test('invalid SHA, nonfinite fields and unbounded batches fail before invoking C
   assert.equal(count, 0);
 });
 
+test('Code Mode routes supported transform-channel reads and refuses unknown channels', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN, runner: async (argv) => {
+      calls.push(argv);
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 },
+        track: { scope: 'linear_bone_transform', recognized: true, channel: 'scale', keyframes: [] } };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  await project.inspectAnimationTransformTrack('clip', 'bone', 'scale', { offset: 1, limit: 2 });
+  assert.deepEqual(calls.at(-1), [
+    'inspect', '--input', '/abs/model.bbmodel', '--animation-uuid', 'clip',
+    '--bone-uuid', 'bone', '--track-channel', 'scale', '--frame-offset', '1',
+    '--frame-limit', '2', '--expected-sha256', SHA,
+  ]);
+  const before = calls.length;
+  await assert.rejects(project.inspectAnimationTransformTrack('clip', 'bone', 'unknown'));
+  await assert.rejects(project.inspectBatch([
+    { kind: 'animation_transform_track', animation_uuid: 'clip', bone_uuid: 'bone', channel: 'other' },
+  ]));
+  assert.equal(calls.length, before);
+});
+
 test('CLI failures are not reported as successful model mutations', async () => {
   const client = createRustCodeModeClient({
     binary: BIN, authorizeMutation: async () => true,
