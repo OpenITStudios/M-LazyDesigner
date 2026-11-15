@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Shared per-texture UV safety (2026-11-15; SOURCE_ONLY):** The Rust Auto UV remapping and read-only Tauri PNG preview now use the same per-texture ruleset guard. Present non-boolean `per_texture_uv_size` metadata refuses project-grid preview and unsafe UV remapping instead of being interpreted as absent; explicit `false` remains permitted without other rules. Source-authored Rust/Tauri regressions are NOT_EXECUTED. No imported `.bbmodel` normalization, CLI/Tauri command schema change or native compatibility proof.
+
 **Cube render order in Rust Edit (2026-11-15; SOURCE_ONLY):** Existing saved `.bbmodel` Cube render-order metadata (`default`, `behind`, `in_front`) now projects through the authoritative Rust validator and Tauri Cube view to Three.js mesh priorities `0`, `-1`, `1`. The renderer remains read-only and the asset/Undo/CLI contracts are unchanged. Source-authored canonical Rust and Tauri projection regressions are NOT_EXECUTED; actual overlapping/transparent faces, native WebView2 and Blockbench visual fidelity are UNVERIFIED.
 
 **Rust Outliner visibility (2026-11-15; SOURCE_ONLY):** Outliner Hide/Show now submits one canonical Rust `set_node_visibility` operation. Cube visibility changes only that Cube; Group toggles its own flag and descendant flags in one transaction/Undo step, matching the pinned Blockbench toggle semantics. The read-only Three.js viewport still observes individual Cube visibility, not an invented inherited Group mask. No new IPC endpoint, model authority or native acceptance proof; Rust regression and Tauri projection tests authored NOT_EXECUTED.

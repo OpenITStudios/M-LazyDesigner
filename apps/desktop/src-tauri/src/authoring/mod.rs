@@ -191,18 +191,21 @@ fn cube_box_uv(cube: &Cube, default: bool) -> bool {
 }
 
 
-/** UV changes are owned by Rust, not by the viewport or a second JS model. */
-fn has_per_texture_uv_rules(doc: &AuthoringDocument) -> bool {
-    // Project.getUVWidth/Height in Blockbench v5.2.1 can select a face's
-    // texture UV size when the format enables per_texture_uv_size. This
-    // bounded Bedrock authoring slice does not yet resolve that format rule.
-    // Refuse remapping if an imported project explicitly advertises it.
-    if doc.meta.extra.get("per_texture_uv_size") == Some(&Value::Bool(true)) ||
-        doc.extensions.get("per_texture_uv_size") == Some(&Value::Bool(true)) {
-        return true;
+/// Whether project-wide UV remapping/preview is unsafe for imported rules.
+/// Blockbench 5.2.1 derives per-texture UV sizing from the multi-file ruleset.
+/// Explicit flags are retained opaquely; malformed flags must fail closed,
+/// not silently become "false" on either the CLI/Tauri edit or preview path.
+pub fn has_per_texture_uv_rules(doc: &AuthoringDocument) -> bool {
+    for flag in [
+        doc.meta.extra.get("per_texture_uv_size"),
+        doc.extensions.get("per_texture_uv_size"),
+    ] {
+        if flag.is_some_and(|value| value != &Value::Bool(false)) {
+            return true;
+        }
     }
-    // Bedrock's format-level per_texture_uv_size depends on the project
-    // ruleset string. Unknown types must not mean the empty ruleset.
+    // A non-empty multi-file ruleset requires per-texture UV resolution.
+    // Unknown types cannot be interpreted as the empty ruleset.
     doc.extensions.get("multi_file_ruleset").is_some_and(|value| match value {
         Value::String(name) => !name.is_empty(),
         _ => true,

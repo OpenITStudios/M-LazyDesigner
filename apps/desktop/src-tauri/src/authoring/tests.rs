@@ -1112,3 +1112,66 @@ fn invalid_cube_render_order_is_refused_without_coercing_imported_data() {
         );
     }
 }
+
+#[test]
+fn ambiguous_per_texture_uv_flags_refuse_remap_and_preserve_source() {
+    for location in ["meta", "project"] {
+        for flag in [json!("true"), json!(1), Value::Null, json!({"unknown":true})] {
+            let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+            wire["elements"][0]["autouv"] = json!(2);
+            if location == "meta" {
+                wire["meta"]["per_texture_uv_size"] = flag.clone();
+            } else {
+                wire["per_texture_uv_size"] = flag.clone();
+            }
+            let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+            let initial = session.document().clone();
+            assert!(has_per_texture_uv_rules(session.document()));
+            assert_eq!(session.apply(0, &[EditOperation::TranslateCube {
+                uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+            }]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
+            assert_eq!(session.apply(0, &[EditOperation::SetCubeBounds {
+                uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 4.0, 4.0],
+            }]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
+            assert_eq!(session.document(), &initial);
+            assert_eq!(session.summary().revision, 0);
+            let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+            let actual = if location == "meta" {
+                &saved["meta"]["per_texture_uv_size"]
+            } else {
+                &saved["per_texture_uv_size"]
+            };
+            assert_eq!(actual, &flag);
+            assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+                initial);
+        }
+    }
+}
+
+#[test]
+fn explicit_false_per_texture_uv_flags_leave_project_resolution_enabled() {
+    for location in ["meta", "project"] {
+        let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+        wire["elements"][0]["autouv"] = json!(2);
+        if location == "meta" {
+            wire["meta"]["per_texture_uv_size"] = json!(false);
+        } else {
+            wire["per_texture_uv_size"] = json!(false);
+        }
+        let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+        assert!(!has_per_texture_uv_rules(session.document()));
+        let receipt = session.apply(0, &[EditOperation::TranslateCube {
+            uuid: CUBE.into(), delta: [1.0, 0.0, 0.0],
+        }]).unwrap();
+        assert_eq!(receipt.revision, 1);
+        let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+        let retained = if location == "meta" {
+            &saved["meta"]["per_texture_uv_size"]
+        } else {
+            &saved["per_texture_uv_size"]
+        };
+        assert_eq!(retained, &json!(false));
+        assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+            *session.document());
+    }
+}

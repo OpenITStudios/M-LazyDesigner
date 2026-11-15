@@ -3,7 +3,7 @@
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
-    storage, sha256, paint_texture_editable, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    storage, sha256, paint_texture_editable, has_per_texture_uv_rules, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -172,12 +172,9 @@ fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
     // Compression alone cannot authorize dozens of large GPU textures.
     const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
     const MAX_TEXTURES: usize = 16;
-    let ruleset = doc.extensions.get("multi_file_ruleset");
-    let per_texture = ruleset.is_some_and(|value| match value {
-        Value::String(name) => !name.is_empty(),
-        _ => true,
-    }) || doc.extensions.get("per_texture_uv_size") == Some(&Value::Bool(true)) ||
-        doc.meta.extra.get("per_texture_uv_size") == Some(&Value::Bool(true));
+    // Share the Rust authoring refusal gate with this read-only UV preview.
+    // Opaque or malformed per-texture flags must not imply a safe atlas grid.
+    let per_texture = has_per_texture_uv_rules(doc);
     let mut remaining_source_bytes = 4 * 1024 * 1024;
     let mut remaining_pixels = MAX_PROJECTED_PIXELS;
     let expected_width = doc.resolution.width;
@@ -724,6 +721,44 @@ mod tests {
             assert_eq!(project(&store).unwrap().cubes[0].render_order, expected);
             assert_eq!(store.active.as_ref().unwrap().session.document(), &doc);
         }
+    }
+
+
+    #[test]
+    fn per_texture_preview_refusal_matches_rust_edit_gate() {
+        let mut doc = AuthoringDocument::new_bedrock("UV metadata", "uv_metadata").unwrap();
+        doc.resolution.width = 2;
+        doc.resolution.height = 2;
+        let valid_png = png_candidate(2, 2);
+        doc.texture_assets.push(json!({"source":valid_png}));
+        assert_eq!(texture_preview_sources(&doc), vec![Some(valid_png.clone())]);
+        for location in ["meta", "project"] {
+            for flag in [json!(true), json!("true"), json!(17), Value::Null] {
+                if location == "meta" {
+                    doc.meta.extra.insert("per_texture_uv_size".into(), flag.clone());
+                } else {
+                    doc.extensions.insert("per_texture_uv_size".into(), flag.clone());
+                }
+                assert!(has_per_texture_uv_rules(&doc));
+                let before = doc.clone();
+                assert_eq!(texture_preview_sources(&doc), vec![None]);
+                assert_eq!(doc, before);
+                doc.meta.extra.remove("per_texture_uv_size");
+                doc.extensions.remove("per_texture_uv_size");
+            }
+            if location == "meta" {
+                doc.meta.extra.insert("per_texture_uv_size".into(), json!(false));
+            } else {
+                doc.extensions.insert("per_texture_uv_size".into(), json!(false));
+            }
+            assert!(!has_per_texture_uv_rules(&doc));
+            assert_eq!(texture_preview_sources(&doc), vec![Some(valid_png.clone())]);
+            doc.meta.extra.remove("per_texture_uv_size");
+            doc.extensions.remove("per_texture_uv_size");
+        }
+        doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
+        assert!(has_per_texture_uv_rules(&doc));
+        assert_eq!(texture_preview_sources(&doc), vec![None]);
     }
 
 }
