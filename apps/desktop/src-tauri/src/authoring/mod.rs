@@ -24,6 +24,8 @@ pub const MAX_PLAN_BYTES: usize = 64 * 1024;
 pub const MAX_IMPORT_PNG_BYTES: usize = 1024 * 1024;
 /// Shared bound for native Paint creation/import and the supported 3D preview.
 pub const MAX_PAINT_TEXTURES: usize = 16;
+/// Maximum validated RGBA8 PNG source bytes emitted without re-encoding.
+pub const MAX_EXPORT_PNG_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ELEMENTS: usize = 65_536;
 const MAX_OPERATIONS: usize = 128;
 const MAX_HISTORY: usize = 32;
@@ -833,6 +835,29 @@ fn check_paint_texture_addition(doc: &AuthoringDocument) -> Result<()> {
 /// Read-only eligibility used by the Tauri UI. Mutations recheck this gate.
 pub fn can_add_paint_texture(doc: &AuthoringDocument) -> bool {
     check_paint_texture_addition(doc).is_ok()
+}
+
+/// Metadata-only eligibility; expensive image decode happens on export.
+pub fn paint_texture_exportable(doc: &AuthoringDocument, index: usize) -> bool {
+    if has_per_texture_uv_rules(doc) { return false; }
+    doc.texture_assets.get(index).is_some_and(|texture| {
+        texture.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) &&
+        paint::exportable(texture, doc.resolution.width, doc.resolution.height)
+    })
+}
+
+/// Read-only export of a UUID-addressed supported embedded PNG.
+pub fn export_paint_png(doc: &AuthoringDocument, texture_uuid: &str) -> Result<Vec<u8>> {
+    if has_per_texture_uv_rules(doc) {
+        return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
+    }
+    let index = doc.texture_assets.iter().position(|texture|
+        texture.get("uuid").and_then(Value::as_str) == Some(texture_uuid))
+        .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+    if !paint_texture_exportable(doc, index) {
+        return Err(fail("PAINT_EXPORT_TEXTURE_UNSUPPORTED"));
+    }
+    paint::export_png(&doc.texture_assets[index], doc.resolution.width, doc.resolution.height)
 }
 
 pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {

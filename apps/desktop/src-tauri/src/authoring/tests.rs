@@ -72,6 +72,70 @@ fn generated_and_imported_paint_refuse_unsupported_uv_rules_and_id_conflicts() {
     assert_eq!(with_cube.document(), &before);
 }
 
+// Source-authored regression only: local/native execution remains held.
+#[test]
+fn rust_png_export_is_byte_exact_read_only_and_follows_undo_redo() {
+    let id = "00000000-0000-4000-8000-000000000810";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Export", "export").unwrap()
+    ).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: id.into(), name: "atlas.png".into(),
+    }]).unwrap();
+    let source = session.document().texture_assets[0]["source"].as_str().unwrap();
+    let original = base64::Engine::decode(&base64::engine::general_purpose::STANDARD,
+        source.strip_prefix("data:image/png;base64,").unwrap()).unwrap();
+    let before = session.document().clone();
+    assert!(paint_texture_exportable(session.document(), 0));
+    assert_eq!(export_paint_png(session.document(), id).unwrap(), original);
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 1);
+    session.apply(1, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 2, y: 3, rgba: [8, 17, 31, 255],
+    }]).unwrap();
+    let painted = export_paint_png(session.document(), id).unwrap();
+    assert_ne!(painted, original);
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(export_paint_png(&reopened, id).unwrap(), painted);
+    session.undo(2).unwrap();
+    assert_eq!(export_paint_png(session.document(), id).unwrap(), original);
+    session.redo(3).unwrap();
+    assert_eq!(export_paint_png(session.document(), id).unwrap(), painted);
+}
+
+#[test]
+fn rust_png_export_rejects_opaque_invalid_and_per_texture_uv_assets() {
+    let id = "00000000-0000-4000-8000-000000000811";
+    let mut generator = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Export", "export").unwrap()
+    ).unwrap();
+    generator.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: id.into(), name: "atlas.png".into(),
+    }]).unwrap();
+    let original = export_paint_png(generator.document(), id).unwrap();
+    let mut imported = generator.document().clone();
+    imported.texture_assets[0].as_object_mut().unwrap().remove("paint_owner");
+    assert!(paint_texture_exportable(&imported, 0));
+    assert_eq!(export_paint_png(&imported, id).unwrap(), original);
+    imported.texture_assets[0]["layers"] = json!([{"name":"preserved"}]);
+    let opaque = EditorSession::from_document(imported).unwrap();
+    assert!(!paint_texture_exportable(opaque.document(), 0));
+    assert_eq!(export_paint_png(opaque.document(), id).unwrap_err(),
+        "PAINT_EXPORT_TEXTURE_UNSUPPORTED");
+    assert_eq!(export_paint_png(opaque.document(), "missing").unwrap_err(),
+        "PAINT_TEXTURE_NOT_FOUND");
+    let mut bad = generator.document().clone();
+    bad.texture_assets[0]["source"] = json!("data:image/png;base64,AAAA");
+    let bad = EditorSession::from_document(bad).unwrap();
+    assert!(paint_texture_exportable(bad.document(), 0));
+    assert!(export_paint_png(bad.document(), id).is_err());
+    let mut rules = generator.document().clone();
+    rules.extensions.insert("per_texture_uv_size".into(), json!(true));
+    assert!(!paint_texture_exportable(&rules, 0));
+    assert_eq!(export_paint_png(&rules, id).unwrap_err(),
+        "PAINT_TEXTURE_RULESET_UNSUPPORTED");
+}
+
 #[test]
 fn paint_rectangle_fills_inclusive_reversed_corners_with_one_undo_step() {
     let mut session = EditorSession::from_document(

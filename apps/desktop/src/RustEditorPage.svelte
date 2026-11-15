@@ -707,6 +707,27 @@
     finally { busy = false; }
   }
 
+  type PaintPngExportReceipt = { sha256: string; byteCount: number };
+  async function exportPngTexture() {
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
+        !snapshot.paintExportableTextures[paintTextureIndex]) return;
+    const textureUuid = snapshot.textureUuids[paintTextureIndex];
+    if (!textureUuid) return;
+    const epoch = snapshot.epoch;
+    const revision = snapshot.revision;
+    busy = true;
+    closeMenus();
+    error = '';
+    try {
+      const receipt = await invoke<PaintPngExportReceipt | null>('rust_editor_export_paint_png', {
+        expectedEpoch: epoch, expectedRevision: revision, textureUuid,
+      });
+      if (receipt) notice = 'PNG exported (' + receipt.byteCount +
+        ' bytes). The Rust model and original files remain unchanged.';
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
+
   async function assignSelectedTexture() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
         !selectedId || !snapshot.texturePreviewSources[paintTextureIndex]) return;
@@ -1275,6 +1296,13 @@
                 {/each}
               </select>
             </label>
+            <button type="button" onclick={() => void exportPngTexture()}
+              disabled={busy || loading || !!paintStroke ||
+                !snapshot.paintExportableTextures[paintTextureIndex] ||
+                !snapshot.textureUuids[paintTextureIndex]}
+              title="Export the exact validated embedded RGBA8 PNG bytes as a new file; never overwrite originals">
+              Export PNG…
+            </button>
             <button type="button" onclick={() => void assignSelectedTexture()}
               disabled={busy || loading || !!paintStroke || !selectedId ||
                 !snapshot.textureUuids[paintTextureIndex] ||

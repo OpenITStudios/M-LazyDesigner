@@ -61,6 +61,16 @@ pub fn same_directory(input: &Path, output: &Path) -> Result<()> {
 /// fail closed. This is not proven against adversarial directory replacement.
 pub fn publish_new(path: &Path, data: &[u8], limit: usize) -> Result<()> {
     bbmodel(path)?;
+    publish_new_bytes(path, data, limit)
+}
+
+/// PNG export shares the existing exclusive, no-overwrite writer.
+pub fn publish_new_png(path: &Path, data: &[u8], limit: usize) -> Result<()> {
+    png(path)?;
+    publish_new_bytes(path, data, limit)
+}
+
+fn publish_new_bytes(path: &Path, data: &[u8], limit: usize) -> Result<()> {
     if data.is_empty() || data.len() > limit { return Err(fail("OUTPUT_SIZE_INVALID")); }
     if fs::symlink_metadata(path).is_ok() { return Err(fail("OUTPUT_ALREADY_EXISTS")); }
     let dir = parent(path);
@@ -106,6 +116,26 @@ mod tests {
         fs::remove_file(path).unwrap();
         fs::remove_dir(dir).unwrap();
     }
+    #[test]
+    fn exported_png_cannot_replace_an_existing_file_or_use_wrong_extension() {
+        let dir = std::env::temp_dir()
+            .join(format!("lazydesigner-png-export-{:016x}", rand::rng().next_u64()));
+        fs::create_dir(&dir).unwrap();
+        let original = dir.join("existing.png");
+        fs::write(&original, b"unchanged").unwrap();
+        assert_eq!(publish_new_png(&original, b"replacement", 1024).unwrap_err(),
+            "OUTPUT_ALREADY_EXISTS");
+        assert_eq!(fs::read(&original).unwrap(), b"unchanged");
+        assert_eq!(publish_new_png(&dir.join("wrong.jpg"), b"data", 1024).unwrap_err(),
+            "PNG_EXTENSION_REQUIRED");
+        let exported = dir.join("new.PNG");
+        publish_new_png(&exported, b"bounded-contents", 1024).unwrap();
+        assert_eq!(fs::read(&exported).unwrap(), b"bounded-contents");
+        fs::remove_file(original).unwrap();
+        fs::remove_file(exported).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
     #[test]
     fn png_input_extension_is_checked_even_when_picker_filters() {
         assert!(png(Path::new("textures/entity.png")).is_ok());

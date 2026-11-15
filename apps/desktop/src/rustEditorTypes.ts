@@ -77,6 +77,7 @@ export type EditorSnapshot = {
   texturePreviewSides: ('front' | 'double' | null)[];
   paintEditableTextures: boolean[];
   paintAdoptableTextures: boolean[];
+  paintExportableTextures: boolean[];
   textureResolution: [number, number];
   atlasResolutionEditable: boolean;
   paintTextureAddable: boolean;

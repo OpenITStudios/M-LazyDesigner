@@ -3,8 +3,10 @@
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
-    storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, can_set_empty_atlas_resolution, can_add_paint_texture, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
-    OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
+    storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
+    export_paint_png, has_per_texture_uv_rules, can_set_empty_atlas_resolution,
+    can_add_paint_texture, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rand::RngCore;
@@ -101,12 +103,20 @@ pub struct EditorSnapshot {
     texture_preview_sides: Vec<Option<&'static str>>,
     paint_editable_textures: Vec<bool>,
     paint_adoptable_textures: Vec<bool>,
+    paint_exportable_textures: Vec<bool>,
     texture_resolution: [u32; 2],
     atlas_resolution_editable: bool,
     paint_texture_addable: bool,
     animation_count: usize,
     animations: Vec<AnimationView>,
     preview_scope: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintPngExportReceipt {
+    sha256: String,
+    byte_count: usize,
 }
 
 fn failure(code: &'static str, detail: impl Into<String>) -> DesktopError {
@@ -375,6 +385,8 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 !has_per_texture_uv_rules(doc) &&
                 paint_texture_adoptable(texture, doc.resolution.width, doc.resolution.height)
             ).collect(),
+            paint_exportable_textures: doc.texture_assets.iter().enumerate()
+                .map(|(index, _)| paint_texture_exportable(doc, index)).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             atlas_resolution_editable: can_set_empty_atlas_resolution(doc),
             paint_texture_addable: can_add_paint_texture(doc),
@@ -517,6 +529,66 @@ pub async fn rust_editor_import_paint_png(
     }]).map_err(model_failure)?;
     active.dirty = true;
     current(&guard).map(Some)
+}
+
+/// A read-only PNG export, selected by stable UUID and Rust revision.
+/// Only native Rust knows the local path and publishes the file.
+#[tauri::command]
+pub async fn rust_editor_export_paint_png(
+    state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    texture_uuid: String,
+) -> Result<Option<PaintPngExportReceipt>, DesktopError> {
+    let (filename, source) = {
+        let guard = lock(&state)?;
+        check_epoch(&guard, expected_epoch)?;
+        let active = guard.active.as_ref()
+            .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+        if active.session.summary().revision != expected_revision {
+            return Err(failure("RUST_EDITOR_REVISION_STALE", "Refresh the model before exporting PNG."));
+        }
+        let doc = active.session.document();
+        let index = doc.texture_assets.iter().position(|texture|
+            texture.get("uuid").and_then(Value::as_str) == Some(texture_uuid.as_str()))
+            .ok_or_else(|| failure("PAINT_TEXTURE_NOT_FOUND", "Selected PNG texture is unavailable."))?;
+        if !paint_texture_exportable(doc, index) {
+            return Err(failure("PAINT_EXPORT_TEXTURE_UNSUPPORTED", "The selected texture cannot be exported as a single RGBA8 PNG."));
+        }
+        // Never use an untrusted imported asset filename as a native path.
+        (format!("texture-{texture_uuid}.png"), active.source_path.clone())
+    };
+    let destination = tauri::async_runtime::spawn_blocking(move || {
+        let mut picker = FileDialog::new()
+            .add_filter("PNG texture", &["png"])
+            .set_file_name(&filename);
+        if let Some(source) = source {
+            if let Some(directory) = source.parent() {
+                picker = picker.set_directory(directory);
+            }
+        }
+        picker.save_file()
+    }).await.map_err(|_| failure("RUST_EDITOR_PICKER_FAILED", "PNG export dialog did not complete."))?;
+    let Some(path) = destination else { return Ok(None); };
+    storage::png(&path).map_err(model_failure)?;
+
+    let guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_ref()
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE", "The model changed during PNG export selection."));
+    }
+    if let Some(ref source) = active.source_path {
+        storage::same_directory(source, &path).map_err(model_failure)?;
+        let expected = active.source_sha.as_ref()
+            .ok_or_else(|| failure("RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
+        let current = storage::read_bounded(source, MAX_MODEL_BYTES).map_err(model_failure)?;
+        if sha256(&current) != *expected {
+            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", "The original model changed on disk; no PNG was exported."));
+        }
+    }
+    let bytes = export_paint_png(active.session.document(), &texture_uuid).map_err(model_failure)?;
+    storage::publish_new_png(&path, &bytes, MAX_EXPORT_PNG_BYTES).map_err(model_failure)?;
+    Ok(Some(PaintPngExportReceipt { sha256: sha256(&bytes), byte_count: bytes.len() }))
 }
 
 // Pinned Blockbench 5.2.1 Cube.init assigns the default texture UUID to
@@ -1150,6 +1222,36 @@ mod tests {
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
     }
 
+
+    #[test]
+    fn png_export_projection_follows_rust_core_and_preserves_model() {
+        let uuid = "00000000-0000-4000-8000-000000000801";
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Paint", "paint").unwrap()
+        ).unwrap();
+        session.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid: uuid.into(), name: "atlas.png".into(),
+        }]).unwrap();
+        let original = session.document().clone();
+        let store = EditorStore {
+            epoch: 10,
+            active: Some(ActiveModel {
+                session, source_path: None, source_sha: None, dirty: true,
+            }),
+        };
+        assert_eq!(project(&store).unwrap().paint_exportable_textures, vec![true]);
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
+        let mut opaque = original;
+        opaque.texture_assets[0]["layers"] = json!([{"name":"opaque"}]);
+        let store = EditorStore {
+            epoch: 11,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(opaque).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        assert_eq!(project(&store).unwrap().paint_exportable_textures, vec![false]);
+    }
 
     #[test]
     fn paint_addition_projection_follows_shared_rust_admission_gate() {

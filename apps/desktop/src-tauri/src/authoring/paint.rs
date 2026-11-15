@@ -5,11 +5,11 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::io::Cursor;
-use super::MAX_IMPORT_PNG_BYTES;
+use super::{MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES};
 
 type Result<T> = std::result::Result<T, String>;
 const PREFIX: &str = "data:image/png;base64,";
-const MAX_PNG_BYTES: usize = 2 * 1024 * 1024;
+const MAX_PNG_BYTES: usize = MAX_EXPORT_PNG_BYTES;
 const MAX_SIDE: u32 = 256;
 pub(super) const OWNER: &str = "lazydesigner-rgba8-v1";
 
@@ -46,6 +46,25 @@ pub(super) fn adoptable(texture: &Value, width: u32, height: u32) -> bool {
             .is_some_and(|source| source.starts_with(PREFIX)) &&
         fields.get("uv_width").is_none_or(|v| v.as_u64() == Some(u64::from(width))) &&
         fields.get("uv_height").is_none_or(|v| v.as_u64() == Some(u64::from(height)))
+}
+
+/// Metadata-only eligibility; the actual export decodes the PNG.
+pub(super) fn exportable(texture: &Value, width: u32, height: u32) -> bool {
+    size(width, height).is_ok() &&
+        (editable(texture) || adoptable(texture, width, height)) &&
+        texture.get("source").and_then(Value::as_str)
+            .is_some_and(|source| source.starts_with(PREFIX)) &&
+        texture.get("uv_width").is_none_or(|v| v.as_u64() == Some(u64::from(width))) &&
+        texture.get("uv_height").is_none_or(|v| v.as_u64() == Some(u64::from(height)))
+}
+
+/// Preserve the original compressed PNG bytes and existing metadata.
+pub(super) fn export_png(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
+    if !exportable(texture, width, height) {
+        return Err("PAINT_EXPORT_TEXTURE_UNSUPPORTED".into());
+    }
+    let (original_bytes, _) = decode_rgba8_source_with_bytes(texture, width, height)?;
+    Ok(original_bytes)
 }
 
 pub(super) fn adopt(texture: &mut Value, width: u32, height: u32) -> Result<()> {
@@ -136,6 +155,14 @@ fn decode(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
 }
 
 fn decode_rgba8_source(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
+    let (_, pixels) = decode_rgba8_source_with_bytes(texture, width, height)?;
+    Ok(pixels)
+}
+
+// One full-decode gate for editing, adoption and verbatim PNG export.
+fn decode_rgba8_source_with_bytes(
+    texture: &Value, width: u32, height: u32,
+) -> Result<(Vec<u8>, Vec<u8>)> {
     let source = texture.get("source").and_then(Value::as_str)
         .and_then(|text| text.strip_prefix(PREFIX))
         .ok_or("PAINT_PNG_SOURCE_INVALID")?;
@@ -144,22 +171,25 @@ fn decode_rgba8_source(texture: &Value, width: u32, height: u32) -> Result<Vec<u
     }
     let bytes = STANDARD.decode(source).map_err(|_| "PAINT_PNG_SOURCE_INVALID")?;
     if bytes.len() > MAX_PNG_BYTES { return Err("PAINT_PNG_TOO_LARGE".into()); }
-    let decoder = png::Decoder::new(Cursor::new(bytes));
-    let mut reader = decoder.read_info().map_err(|_| "PAINT_PNG_DECODE_FAILED")?;
-    let info = reader.info();
-    let expected = size(width, height)?;
-    if info.width != width || info.height != height ||
-        info.color_type != png::ColorType::Rgba ||
-        info.bit_depth != png::BitDepth::Eight ||
-        info.animation_control.is_some() ||
-        info.interlaced ||
-        reader.output_buffer_size() != expected {
-        return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
-    }
-    let mut pixels = vec![0; expected];
-    let frame = reader.next_frame(&mut pixels).map_err(|_| "PAINT_PNG_DECODE_FAILED")?;
-    if frame.buffer_size() != expected { return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into()); }
-    Ok(pixels)
+    let pixels = {
+        let decoder = png::Decoder::new(Cursor::new(bytes.as_slice()));
+        let mut reader = decoder.read_info().map_err(|_| "PAINT_PNG_DECODE_FAILED")?;
+        let info = reader.info();
+        let expected = size(width, height)?;
+        if info.width != width || info.height != height ||
+            info.color_type != png::ColorType::Rgba ||
+            info.bit_depth != png::BitDepth::Eight ||
+            info.animation_control.is_some() ||
+            info.interlaced ||
+            reader.output_buffer_size() != expected {
+            return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
+        }
+        let mut pixels = vec![0; expected];
+        let frame = reader.next_frame(&mut pixels).map_err(|_| "PAINT_PNG_DECODE_FAILED")?;
+        if frame.buffer_size() != expected { return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into()); }
+        pixels
+    };
+    Ok((bytes, pixels))
 }
 
 pub(super) const MAX_STROKE_POINTS: usize = 4096;

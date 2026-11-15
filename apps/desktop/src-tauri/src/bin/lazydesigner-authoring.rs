@@ -2,11 +2,11 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, AuthoringDocument, EditOperation, EditPlan, EditorSession,
-    MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES,
+    sha256, export_paint_png, AuthoringDocument, EditOperation, EditPlan, EditorSession,
+    MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use lazydesigner::authoring::storage::{bbmodel, png, publish_new, read_bounded, same_directory};
+use lazydesigner::authoring::storage::{bbmodel, png, publish_new, publish_new_png, read_bounded, same_directory};
 use rand::RngCore;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
@@ -136,7 +136,32 @@ fn execute() -> Result<Value> {
                 "mutation":receipt
             }))
         }
-        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG")),
+        "export-png" => {
+            option_set(&options, &[
+                "--input", "--output", "--texture-uuid", "--expected-sha256",
+            ])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let output = PathBuf::from(option(&options, "--output")?);
+            png(&output)?;
+            same_directory(&input, &output)?;
+            let (bytes, source_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let session = EditorSession::open(&bytes)?;
+            let uuid = option(&options, "--texture-uuid")?;
+            let png_bytes = export_paint_png(session.document(), uuid)?;
+            if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != source_sha {
+                return Err(fail("SOURCE_CHANGED_DURING_EXPORT"));
+            }
+            publish_new_png(&output, &png_bytes, MAX_EXPORT_PNG_BYTES)?;
+            Ok(json!({
+                "status":"OK", "source_sha256":source_sha,
+                "output_sha256":sha256(&png_bytes),
+                "texture_uuid":uuid, "bytes":png_bytes.len(),
+                "summary":session.summary()
+            }))
+        }
+        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG_EXPORT_PNG")),
     }
 }
 
@@ -168,6 +193,40 @@ mod tests {
         fs::remove_file(target).unwrap();
         fs::remove_dir(folder).unwrap();
     }
+    #[test]
+    fn png_export_reuses_sha_guard_and_never_overwrites() {
+        let dir = std::env::temp_dir().join(
+            format!("lazydesigner-export-{:016x}", rand::rng().next_u64()));
+        fs::create_dir(&dir).unwrap();
+        let input = dir.join("model.bbmodel");
+        let output = dir.join("texture.png");
+        let id = "00000000-0000-4000-8000-000000000801";
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Export", "export").unwrap()
+        ).unwrap();
+        session.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid: id.into(), name: "texture.png".into(),
+        }]).unwrap();
+        let original = session.export().unwrap();
+        fs::write(&input, &original).unwrap();
+        assert_eq!(read_verified_source(&input, &"f".repeat(64)).unwrap_err(),
+            "SOURCE_SHA256_STALE");
+        let (verified, expected) = read_verified_source(&input, &sha256(&original)).unwrap();
+        let reopened = EditorSession::open(&verified).unwrap();
+        let png_bytes = export_paint_png(reopened.document(), id).unwrap();
+        assert!(png_bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+        same_directory(&input, &output).unwrap();
+        publish_new_png(&output, &png_bytes, MAX_EXPORT_PNG_BYTES).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), png_bytes);
+        assert_eq!(publish_new_png(&output, &png_bytes, MAX_EXPORT_PNG_BYTES).unwrap_err(),
+            "OUTPUT_ALREADY_EXISTS");
+        assert_eq!(sha256(&original), expected);
+        assert_eq!(fs::read(&input).unwrap(), original);
+        fs::remove_file(input).unwrap();
+        fs::remove_file(output).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
     // Source-only CLI regression: no executable test was run.
     #[test]
     fn import_png_and_apply_share_a_sha_guarded_source_reader() {
