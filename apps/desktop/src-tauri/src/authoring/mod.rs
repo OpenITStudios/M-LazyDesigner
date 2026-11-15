@@ -115,6 +115,13 @@ pub enum EditOperation {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
         time: f64, rotation: [f64; 3],
     },
+    UpdateBoneRotationKeyframe {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        time: f64, rotation: [f64; 3],
+    },
+    RemoveBoneRotationKeyframe {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+    },
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
@@ -692,6 +699,43 @@ fn has_external_uuid_references(doc: &AuthoringDocument, uuid: &str) -> bool {
     outliner_extra_references_uuid(&doc.hierarchy, uuid)
 }
 
+// The editable subset intentionally excludes unknown interpolation and
+// point extensions. Imported advanced frames remain unmodified.
+fn editable_rotation_frame(frame: &Value) -> bool {
+    let Some(fields) = frame.as_object() else { return false; };
+    if !fields.keys().all(|key| matches!(key.as_str(),
+        "uuid" | "channel" | "time" | "interpolation" | "data_points")) ||
+       frame.get("channel").and_then(Value::as_str) != Some("rotation") ||
+       frame.get("interpolation").and_then(Value::as_str) != Some("linear") ||
+       !frame.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
+       !frame.get("time").and_then(Value::as_f64).is_some_and(|v| v.is_finite() && v >= 0.0) {
+        return false;
+    }
+    let Some(points) = frame.get("data_points").and_then(Value::as_array) else {
+        return false;
+    };
+    if points.len() != 1 { return false; }
+    let Some(values) = points[0].as_object() else { return false; };
+    if !values.keys().all(|key| matches!(key.as_str(), "x" | "y" | "z")) {
+        return false;
+    }
+    ["x", "y", "z"].iter().all(|axis| {
+        let number = match values.get(*axis) {
+            Some(Value::String(text)) => text.parse::<f64>().ok(),
+            Some(Value::Number(number)) => number.as_f64(),
+            _ => None,
+        };
+        number.is_some_and(|v| v.is_finite() && v.abs() <= LIMIT)
+    })
+}
+
+fn editable_rotation_track(track: &Value) -> bool {
+    track.as_object().is_some_and(|values|
+        values.keys().all(|key| matches!(key.as_str(), "name" | "type" | "keyframes"))) &&
+    track.get("type").and_then(Value::as_str) == Some("bone") &&
+    track.get("keyframes").and_then(Value::as_array).is_some()
+}
+
 fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<String> {
     match op {
         EditOperation::AddBone { bone, parent_uuid } => {
@@ -935,6 +979,75 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                     "z": rotation[2].to_string()
                 }]
             }));
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::UpdateBoneRotationKeyframe {
+            animation_uuid, bone_uuid, keyframe_uuid, time, rotation,
+        } => {
+            if !valid_vec3(*rotation) || !time.is_finite() || *time < 0.0 {
+                return Err(fail("ANIMATION_KEYFRAME_INVALID"));
+            }
+            let animation = doc.animation_assets.iter_mut()
+                .find(|item| item.get("uuid").and_then(Value::as_str) == Some(animation_uuid))
+                .ok_or_else(|| fail("ANIMATION_NOT_FOUND"))?;
+            let length = animation.get("length").and_then(Value::as_f64)
+                .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v))
+                .ok_or_else(|| fail("ANIMATION_LENGTH_UNSUPPORTED"))?;
+            if *time > length { return Err(fail("ANIMATION_KEYFRAME_TIME_INVALID")); }
+            let track = animation.get_mut("animators").and_then(Value::as_object_mut)
+                .and_then(|tracks| tracks.get_mut(bone_uuid))
+                .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+            if !editable_rotation_track(track) {
+                return Err(fail("ANIMATION_KEYFRAME_UNSUPPORTED"));
+            }
+            let frames = track.get_mut("keyframes").and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_UNSUPPORTED"))?;
+            let index = frames.iter().position(|frame|
+                frame.get("uuid").and_then(Value::as_str) == Some(keyframe_uuid))
+                .ok_or_else(|| fail("ANIMATION_KEYFRAME_NOT_FOUND"))?;
+            if !editable_rotation_frame(&frames[index]) {
+                return Err(fail("ANIMATION_KEYFRAME_UNSUPPORTED"));
+            }
+            if frames.iter().enumerate().any(|(i, frame)| i != index &&
+                frame.get("channel").and_then(Value::as_str) == Some("rotation") &&
+                frame.get("time").and_then(Value::as_f64)
+                    .is_some_and(|existing| (existing - time).abs() <= 1e-6)) {
+                return Err(fail("ANIMATION_KEYFRAME_CONFLICT"));
+            }
+            frames[index]["time"] = json!(time);
+            frames[index]["data_points"][0] = json!({
+                "x": rotation[0].to_string(), "y": rotation[1].to_string(),
+                "z": rotation[2].to_string()
+            });
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::RemoveBoneRotationKeyframe {
+            animation_uuid, bone_uuid, keyframe_uuid,
+        } => {
+            let animation = doc.animation_assets.iter_mut()
+                .find(|item| item.get("uuid").and_then(Value::as_str) == Some(animation_uuid))
+                .ok_or_else(|| fail("ANIMATION_NOT_FOUND"))?;
+            let track = animation.get_mut("animators").and_then(Value::as_object_mut)
+                .and_then(|tracks| tracks.get_mut(bone_uuid))
+                .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+            if !editable_rotation_track(track) {
+                return Err(fail("ANIMATION_KEYFRAME_UNSUPPORTED"));
+            }
+            let frames = track.get_mut("keyframes").and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_UNSUPPORTED"))?;
+            let index = frames.iter().position(|frame|
+                frame.get("uuid").and_then(Value::as_str) == Some(keyframe_uuid))
+                .ok_or_else(|| fail("ANIMATION_KEYFRAME_NOT_FOUND"))?;
+            if !editable_rotation_frame(&frames[index]) {
+                return Err(fail("ANIMATION_KEYFRAME_UNSUPPORTED"));
+            }
+            frames.remove(index);
+            // The session owns a draft; a refusal here rolls back the removal.
+            if has_external_uuid_references(doc, keyframe_uuid) ||
+               doc.cubes.iter().any(|cube| cube.uuid == *keyframe_uuid) ||
+               doc.bones.iter().any(|bone| bone.uuid == *keyframe_uuid) {
+                return Err(fail("ANIMATION_KEYFRAME_REFERENCED"));
+            }
             Ok(keyframe_uuid.clone())
         }
         EditOperation::CreatePaintTexture { uuid, name } => {

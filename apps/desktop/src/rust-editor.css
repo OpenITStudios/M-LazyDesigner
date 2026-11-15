@@ -715,7 +715,7 @@
 .rust-editor .animate-list, .rust-editor .animate-keyframe-list {
   display: flex; flex-wrap: wrap; gap: 6px;
 }
-.rust-editor .animate-list button.active { background: #314e75; border-color: #5596e6; }
+.rust-editor .animate-list button.active, .rust-editor .animate-keyframe-list button.active { background: #314e75; border-color: #5596e6; }
 .rust-editor .animate-track { display: flex; flex-direction: column; gap: 9px; }
 .rust-editor .animate-workspace button:focus-visible, .rust-editor .animate-workspace input:focus-visible {
   outline: 2px solid #3e90ff; outline-offset: 2px;

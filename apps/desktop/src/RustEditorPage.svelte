@@ -33,6 +33,7 @@
   let workspaceMode: WorkspaceMode = 'edit';
   // UI-only selection and input buffers; animation data is owned by Rust.
   let selectedAnimationId: string | null = null;
+  let selectedKeyframeUuid: string | null = null;
   let newAnimationName = 'animation.new';
   let newAnimationLength = 1;
   let animationTime = 0;
@@ -122,6 +123,9 @@
   $: selectedBone = snapshot?.bones.find((bone) => bone.uuid === selectedBoneId) ?? null;
   $: selectedAnimation = snapshot?.animations.find((animation) => animation.uuid === selectedAnimationId)
     ?? snapshot?.animations[0] ?? null;
+  $: selectedKeyframe = selectedAnimation?.rotationKeyframes.find(
+    (frame) => frame.uuid === selectedKeyframeUuid,
+  ) ?? null;
   // UI-only time selection drives a read-only Bone pose; no Rust mutation.
   $: previewBoneRotations = workspaceMode === 'animate'
     ? projectedBoneRotationPose(selectedAnimation, animationTime) : null;
@@ -170,6 +174,7 @@
     );
     if (snapshot && snapshot.epoch !== next.epoch) {
       selectedAnimationId = null;
+      selectedKeyframeUuid = null;
       animationTime = 0;
     }
     snapshot = next;
@@ -373,21 +378,61 @@
     });
     if (next) {
       selectedAnimationId = next.animations.find((animation) => !old.has(animation.uuid))?.uuid ?? null;
+      selectedKeyframeUuid = null;
       animationTime = 0;
     }
   }
   async function addRotationKeyframe() {
-    if (!snapshot || !selectedAnimation || !selectedBoneId || busy || loading) return;
+    if (!snapshot || !selectedAnimation?.previewSupported || !selectedBoneId || busy || loading) return;
     if (animationTime < 0 || animationTime > selectedAnimation.length) {
       error = 'Keyframe time must be inside the selected animation.';
       return;
     }
+    // Capture the prior frame IDs before command() refreshes the Rust snapshot.
+    const animationUuid = selectedAnimation.uuid;
+    const previously = new Set(selectedAnimation.rotationKeyframes.map((frame) => frame.uuid));
     const next = await command('rust_editor_add_rotation_keyframe', {
       expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
-      animationUuid: selectedAnimation.uuid, boneUuid: selectedBoneId,
+      animationUuid, boneUuid: selectedBoneId,
       time: animationTime, rotation: animationRotation,
     });
-    if (next) notice = 'Rotation keyframe saved in the Rust document.';
+    if (next) {
+      const animation = next.animations.find((item) => item.uuid === animationUuid);
+      selectedKeyframeUuid = animation?.rotationKeyframes.find(
+        (frame) => !previously.has(frame.uuid),
+      )?.uuid ?? null;
+      notice = 'Rotation keyframe saved in the Rust document.';
+    }
+  }
+  async function updateRotationKeyframe() {
+    if (!snapshot || !selectedAnimation?.previewSupported || !selectedKeyframe || busy || loading) return;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{
+        op: 'update_bone_rotation_keyframe',
+        animation_uuid: selectedAnimation.uuid,
+        bone_uuid: selectedKeyframe.boneUuid,
+        keyframe_uuid: selectedKeyframe.uuid,
+        time: animationTime, rotation: animationRotation,
+      }],
+    });
+    if (next) notice = 'Rotation keyframe updated in the Rust document.';
+  }
+  async function removeRotationKeyframe() {
+    if (!snapshot || !selectedAnimation?.previewSupported || !selectedKeyframe || busy || loading) return;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{
+        op: 'remove_bone_rotation_keyframe',
+        animation_uuid: selectedAnimation.uuid,
+        bone_uuid: selectedKeyframe.boneUuid,
+        keyframe_uuid: selectedKeyframe.uuid,
+      }],
+    });
+    if (next) {
+      selectedKeyframeUuid = null;
+      notice = 'Rotation keyframe removed; Undo restores it.';
+    }
   }
   function history(direction: 'undo' | 'redo') {
     if (!snapshot) return;
@@ -1026,7 +1071,11 @@
           {#each snapshot.animations as animation}
             <button type="button" class:active={selectedAnimation?.uuid === animation.uuid}
               aria-pressed={selectedAnimation?.uuid === animation.uuid}
-              onclick={() => { selectedAnimationId = animation.uuid; animationTime = 0; }}>
+              onclick={() => {
+                selectedAnimationId = animation.uuid;
+                selectedKeyframeUuid = null;
+                animationTime = 0;
+              }}>
               {animation.name} ({animation.length}s)
             </button>
           {/each}
@@ -1064,15 +1113,22 @@
                   onchange={(event) => updateAnimationAxis(axis, event.currentTarget.value)}/>
               </label>
             {/each}
-            <button type="button" disabled={busy || !selectedBoneId}
+            <button type="button" disabled={busy || !selectedBoneId || !selectedAnimation.previewSupported}
               onclick={() => void addRotationKeyframe()}>Add Bone Rotation Keyframe</button>
+            <button type="button" disabled={busy || !selectedKeyframe || !selectedAnimation.previewSupported}
+              onclick={() => void updateRotationKeyframe()}>Update Selected Keyframe</button>
+            <button type="button" disabled={busy || !selectedKeyframe || !selectedAnimation.previewSupported}
+              title="Remove only the selected supported keyframe; Undo restores it"
+              onclick={() => void removeRotationKeyframe()}>Delete Selected Keyframe</button>
           </div>
           <p class="hint">Target Bone: {snapshot.bones.find((bone) => bone.uuid === selectedBoneId)?.name ?? 'Select a Bone in Outliner'}</p>
           <div class="animate-keyframe-list" aria-label="Existing supported rotation keyframes">
             {#each selectedAnimation.rotationKeyframes as frame}
-              <button type="button"
+              <button type="button" class:active={selectedKeyframe?.uuid === frame.uuid}
+                aria-pressed={selectedKeyframe?.uuid === frame.uuid}
                 title={'Select rotation keyframe at ' + frame.time + ' seconds'}
                 onclick={() => {
+                  selectedKeyframeUuid = frame.uuid;
                   selectedId = null;
                   selectedBoneId = frame.boneUuid;
                   animationTime = frame.time;

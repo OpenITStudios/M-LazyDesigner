@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust Animate keyframe update/remove (2026-11-15; SOURCE_ONLY):** A selected supported linear Bone rotation keyframe can now be updated or deleted with Undo/Redo using canonical Rust operations; imported unsupported keyframes remain read-only. Keyframe UUID selection is derived from Rust snapshots and the previous frame list is captured before asynchronous writes, avoiding stale selection after Add. No new Tauri IPC command, data engine or playback facility. Regression source written NOT_EXECUTED; native interoperability and 1:1 timeline parity unverified.
+
 **Rust Edit Bone bind rotation (2026-11-15; SOURCE_ONLY):** Selected Bones now expose editable XYZ bind-rotation fields in the Edit Inspector, using the shared Rust transaction/Undo/Redo and existing Bone snapshot/3D hierarchy. The same fields are read-only in Animate, which edits keyframes separately. Imported model and animation data remain Rust-owned; Rust regressions authored NOT_EXECUTED. Native Bone pivot/transform fidelity remains UNVERIFIED.
 
 **Rust Animate static rotation scrub (2026-11-15; SOURCE_ONLY):** The existing Animate editor now shows a time slider for fully supported constant linear Bone rotation tracks; Tauri marks complex imported animations as pose-unsupported and the Svelte/Three.js viewport adds derived offsets to Bone bind rotations only for admitted tracks. The real `.bbmodel` source, keyframe transactions, Undo/Redo and CLI stay Rust-owned. The scrubber never writes model data or starts playback; expression evaluation and effects are not implemented. Focused regression source authored NOT_EXECUTED, native visual/format parity unverified.

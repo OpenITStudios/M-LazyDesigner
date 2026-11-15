@@ -1383,3 +1383,84 @@ fn invalid_or_noop_bone_rotation_does_not_consume_a_revision() {
     assert_eq!(session.document(), &original);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn editing_and_removing_known_rotation_frames_is_atomic_and_undoable() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let anim = "00000000-0000-4000-8000-000000000320";
+    let a = "00000000-0000-4000-8000-000000000321";
+    let b = "00000000-0000-4000-8000-000000000322";
+    session.apply(0, &[
+        EditOperation::CreateAnimation {
+            uuid: anim.into(), name: "animation.new".into(), length: 2.0,
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: anim.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: a.into(), time: 0.0, rotation: [0.0, 0.0, 0.0],
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: anim.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: b.into(), time: 1.0, rotation: [0.0, 90.0, 0.0],
+        },
+    ]).unwrap();
+    let before = session.document().clone();
+    session.apply(1, &[EditOperation::UpdateBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: b.into(), time: 1.5, rotation: [0.0, 45.0, -15.0],
+    }]).unwrap();
+    let frames = &session.document().animation_assets[0]["animators"][BONE]["keyframes"];
+    assert_eq!(frames[1]["time"], json!(1.5));
+    assert_eq!(frames[1]["data_points"][0]["y"], json!("45"));
+    let updated = session.document().clone();
+    session.apply(2, &[EditOperation::RemoveBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(), keyframe_uuid: a.into(),
+    }]).unwrap();
+    assert_eq!(session.document().animation_assets[0]["animators"][BONE]["keyframes"].as_array().unwrap().len(), 1);
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(3).unwrap();
+    assert_eq!(session.document(), &updated);
+    session.undo(4).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(5).unwrap();
+    session.redo(6).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn updating_unsupported_or_conflicting_frames_refuses_without_partial_changes() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let anim = "00000000-0000-4000-8000-000000000320";
+    let a = "00000000-0000-4000-8000-000000000321";
+    let b = "00000000-0000-4000-8000-000000000322";
+    session.apply(0, &[
+        EditOperation::CreateAnimation { uuid: anim.into(), name: "animation.new".into(), length: 2.0 },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: anim.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: a.into(), time: 0.0, rotation: [0.0, 0.0, 0.0],
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: anim.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: b.into(), time: 1.0, rotation: [0.0, 90.0, 0.0],
+        },
+    ]).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(1, &[EditOperation::UpdateBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: a.into(), time: 1.0, rotation: [0.0, 15.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_CONFLICT");
+    assert_eq!(session.apply(1, &[EditOperation::RemoveBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(), keyframe_uuid: "unknown".into(),
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 1);
+    let wire: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    let mut edited_wire = wire.clone();
+    edited_wire["animations"][0]["animators"][BONE]["keyframes"][0]["interpolation"] = json!("bezier");
+    let mut imported = EditorSession::open(&serde_json::to_vec(&edited_wire).unwrap()).unwrap();
+    let original_advanced = imported.document().clone();
+    assert_eq!(imported.apply(0, &[EditOperation::RemoveBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(), keyframe_uuid: a.into(),
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_UNSUPPORTED");
+    assert_eq!(imported.document(), &original_advanced);
+}
