@@ -31,7 +31,10 @@ struct EditorStore {
 struct ActiveModel {
     session: EditorSession,
     source_path: Option<PathBuf>,
+    // Raw disk byte identity: external-file change detection.
     source_sha: Option<String>,
+    // Last Open/Save Copy canonical Rust model bytes: Undo/Redo dirty status.
+    saved_canonical_sha: Option<String>,
     dirty: bool,
 }
 
@@ -147,6 +150,20 @@ fn check_epoch(store: &EditorStore, expected: u64) -> Result<(), DesktopError> {
         Ok(())
     }
 }
+/// Revision advances are not equivalent to unsaved content. Reconcile the
+/// edited Rust document with the last Open/Save Copy canonical snapshot,
+/// without creating an alternate scene or changing the raw source SHA guard.
+fn refresh_dirty(active: &mut ActiveModel) {
+    active.dirty = match active.saved_canonical_sha.as_ref() {
+        Some(saved) => active.session.export()
+            .map_or(true, |current| sha256(&current) != *saved),
+        // New projects, or models that cannot safely serialize, must
+        // remain unsaved. Never report a failed export as 'clean' after
+        // an already-committed Rust Edit/Undo/Redo transaction.
+        None => true,
+    };
+}
+
 fn check_discard(store: &EditorStore, allowed: bool) -> Result<(), DesktopError> {
     if store.active.as_ref().is_some_and(|m| m.dirty) && !allowed {
         Err(failure("RUST_EDITOR_UNSAVED", "The current model has unsaved edits. Export a copy or confirm discarding changes."))
@@ -542,7 +559,10 @@ pub fn rust_editor_new(
     check_epoch(&store, expected_epoch)?;
     check_discard(&store, discard)?;
     store.epoch += 1;
-    store.active = Some(ActiveModel { session, source_path: None, source_sha: None, dirty: true });
+    store.active = Some(ActiveModel {
+        session, source_path: None, source_sha: None,
+        saved_canonical_sha: None, dirty: true,
+    });
     current(&store)
 }
 
@@ -564,6 +584,8 @@ pub async fn rust_editor_open(
     storage::bbmodel(&path).map_err(model_failure)?;
     let bytes = storage::read_bounded(&path, MAX_MODEL_BYTES).map_err(model_failure)?;
     let session = EditorSession::open(&bytes).map_err(model_failure)?;
+    // Keep raw disk identity independent of canonical Rust model content.
+    let canonical_sha = sha256(&session.export().map_err(model_failure)?);
     let sha = sha256(&bytes);
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -573,6 +595,7 @@ pub async fn rust_editor_open(
         session,
         source_path: Some(path),
         source_sha: Some(sha),
+        saved_canonical_sha: Some(canonical_sha),
         dirty: false,
     });
     current(&guard).map(Some)
@@ -590,7 +613,7 @@ pub fn rust_editor_apply(
     let active = guard.active.as_mut()
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -630,7 +653,7 @@ pub async fn rust_editor_import_paint_png(
     active.session.apply(expected_revision, &[EditOperation::ImportPaintTexture {
         uuid: create_uuid(), name: filename, source,
     }]).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard).map(Some)
 }
 
@@ -753,7 +776,7 @@ pub fn rust_editor_add_cube(
         bone_uuid: parent,
     });
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -772,7 +795,7 @@ pub fn rust_editor_duplicate_cube(
     active.session.apply(expected_revision, &[EditOperation::DuplicateCube {
         source_uuid, new_uuid: create_uuid(),
     }]).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&store)
 }
 
@@ -802,7 +825,7 @@ pub fn rust_editor_add_bone(
         },
         parent_uuid,
     }]).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -819,7 +842,7 @@ pub fn rust_editor_create_animation(
     active.session.apply(expected_revision, &[EditOperation::CreateAnimation {
         uuid: create_uuid(), name, length,
     }]).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -835,7 +858,7 @@ pub fn rust_editor_add_rotation_keyframe(
     active.session.apply(expected_revision, &[EditOperation::AddBoneRotationKeyframe {
         animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
     }]).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -848,7 +871,7 @@ pub fn rust_editor_undo(
     let active = guard.active.as_mut()
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.undo(expected_revision).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -861,7 +884,7 @@ pub fn rust_editor_redo(
     let active = guard.active.as_mut()
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.redo(expected_revision).map_err(model_failure)?;
-    active.dirty = true;
+    refresh_dirty(active);
     current(&guard)
 }
 
@@ -979,7 +1002,9 @@ pub async fn rust_editor_save_copy(
     }
     let bytes = active.session.export().map_err(model_failure)?;
     storage::publish_new(&path, &bytes, MAX_MODEL_BYTES).map_err(model_failure)?;
-    active.source_sha = Some(sha256(&bytes));
+    let saved_hash = sha256(&bytes);
+    active.source_sha = Some(saved_hash.clone());
+    active.saved_canonical_sha = Some(saved_hash);
     active.source_path = Some(path);
     active.dirty = false;
     current(&guard).map(Some)
@@ -988,6 +1013,70 @@ pub async fn rust_editor_save_copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE AUTHORED; NOT_EXECUTED under the Rust branch's localtest hold.
+    #[test]
+    fn canonical_save_checkpoint_reconciles_dirty_on_apply_undo_redo() {
+        const BASIC: &[u8] =
+            include_bytes!("../fixtures/bedrock-basic.bbmodel");
+        let session = EditorSession::open(BASIC).unwrap();
+        let saved = sha256(&session.export().unwrap());
+        let raw_sha = sha256(BASIC);
+        let cube_uuid = session.document().cubes[0].uuid.clone();
+        let mut active = ActiveModel {
+            session,
+            source_path: Some(PathBuf::from("source.bbmodel")),
+            source_sha: Some(raw_sha.clone()),
+            saved_canonical_sha: Some(saved),
+            dirty: false,
+        };
+        assert!(!active.dirty);
+        refresh_dirty(&mut active);
+        assert!(!active.dirty);
+        active.session.apply(0, &[EditOperation::TranslateCube {
+            uuid: cube_uuid, delta: [1.0, 0.0, 0.0],
+        }]).unwrap();
+        refresh_dirty(&mut active);
+        assert!(active.dirty);
+        active.session.undo(1).unwrap();
+        refresh_dirty(&mut active);
+        assert!(!active.dirty);
+        active.session.redo(2).unwrap();
+        refresh_dirty(&mut active);
+        assert!(active.dirty);
+        // Save Copy establishes a new checkpoint without removing history.
+        active.saved_canonical_sha = Some(sha256(&active.session.export().unwrap()));
+        refresh_dirty(&mut active);
+        assert!(!active.dirty);
+        active.session.undo(3).unwrap();
+        refresh_dirty(&mut active);
+        assert!(active.dirty);
+        active.session.redo(4).unwrap();
+        refresh_dirty(&mut active);
+        assert!(!active.dirty);
+        // Disk identity remains independent of model-content identity.
+        assert_eq!(active.source_sha, Some(raw_sha));
+    }
+
+    #[test]
+    fn new_unsaved_project_stays_dirty_after_history_returns_to_initial_state() {
+        let document = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let cube_uuid = document.cubes[0].uuid.clone();
+        let mut active = ActiveModel {
+            session: EditorSession::from_document(document).unwrap(),
+            source_path: None, source_sha: None,
+            saved_canonical_sha: None, dirty: true,
+        };
+        active.session.apply(0, &[EditOperation::TranslateCube {
+            uuid: cube_uuid, delta: [2.0, 0.0, 0.0],
+        }]).unwrap();
+        refresh_dirty(&mut active);
+        assert!(active.dirty);
+        active.session.undo(1).unwrap();
+        refresh_dirty(&mut active);
+        assert!(active.dirty);
+    }
 
     // Source authored only; test execution remains held.
     #[test]
@@ -1086,7 +1175,7 @@ mod tests {
             epoch: 17,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(doc).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         let preview = project(&store).unwrap();
@@ -1258,7 +1347,7 @@ mod tests {
         let store = EditorStore {
             epoch: 4,
             active: Some(ActiveModel {
-                session, source_path: None, source_sha: None, dirty: true,
+                session, source_path: None, source_sha: None, saved_canonical_sha: None, dirty: true,
             }),
         };
         let snapshot = project(&store).unwrap();
@@ -1279,7 +1368,7 @@ mod tests {
             epoch: 2,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(doc.clone()).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         let snapshot = project(&store).unwrap();
@@ -1305,7 +1394,7 @@ mod tests {
                 epoch: 12,
                 active: Some(ActiveModel {
                     session: EditorSession::from_document(doc.clone()).unwrap(),
-                    source_path: None, source_sha: None, dirty: false,
+                    source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
                 }),
             };
             assert_eq!(project(&store).unwrap().cubes[0].render_order, expected);
@@ -1397,7 +1486,7 @@ mod tests {
         let store = EditorStore {
             epoch: 3,
             active: Some(ActiveModel {
-                session, source_path: None, source_sha: None, dirty: true,
+                session, source_path: None, source_sha: None, saved_canonical_sha: None, dirty: true,
             }),
         };
         let snapshot = project(&store).unwrap();
@@ -1459,7 +1548,7 @@ mod tests {
             epoch: 7,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(doc.clone()).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         let preview = project(&store).unwrap();
@@ -1485,7 +1574,7 @@ mod tests {
             epoch: 1,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(doc).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         let snapshot = project(&store).unwrap();
@@ -1508,7 +1597,7 @@ mod tests {
         let store = EditorStore {
             epoch: 10,
             active: Some(ActiveModel {
-                session, source_path: None, source_sha: None, dirty: true,
+                session, source_path: None, source_sha: None, saved_canonical_sha: None, dirty: true,
             }),
         };
         assert_eq!(project(&store).unwrap().paint_exportable_textures, vec![true]);
@@ -1519,7 +1608,7 @@ mod tests {
             epoch: 11,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(opaque).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         assert_eq!(project(&store).unwrap().paint_exportable_textures, vec![false]);
@@ -1532,7 +1621,7 @@ mod tests {
             epoch: 4,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(empty.clone()).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         assert!(project(&store).unwrap().paint_texture_addable);
@@ -1543,7 +1632,7 @@ mod tests {
             epoch: 5,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(per_texture).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         assert!(!project(&store).unwrap().paint_texture_addable);
@@ -1557,7 +1646,7 @@ mod tests {
             epoch: 9,
             active: Some(ActiveModel {
                 session: EditorSession::from_document(document.clone()).unwrap(),
-                source_path: None, source_sha: None, dirty: false,
+                source_path: None, source_sha: None, saved_canonical_sha: None, dirty: false,
             }),
         };
         assert!(project(&store).unwrap().atlas_resolution_editable);

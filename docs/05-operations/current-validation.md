@@ -1,5 +1,18 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust editor content-based saved checkpoint (SOURCE_ONLY)
+
+The native Rust/Tauri `ActiveModel` now keeps a canonical serialized
+`.bbmodel` SHA for its most recent Open/Save Copy, independently from
+the raw source-file SHA used to detect external changes. Every admitted
+Apply/Undo/Redo reconciles `dirty` against saved content instead of
+treating any revision increment as unsaved. Undoing to the saved model
+clears `dirty`; later changes make it dirty again. A New model stays
+unsaved without a checkpoint. Failure to serialize conservatively keeps
+the model marked unsaved, without claiming that an already applied edit
+failed. Source regressions AUTHORED_NOT_RUN; native UI and Blockbench
+file round-trip UNVERIFIED.
+
 ## 2026-11-15 — Code Mode mutation approval-to-launch lease guard (SOURCE_ONLY)
 
 The typed Rust Code Mode client now accepts a trusted host-only synchronous

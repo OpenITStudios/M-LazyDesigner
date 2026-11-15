@@ -2,6 +2,14 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust native editor P0 saved-state correctness (2026-11-15; SOURCE_ONLY):**
+Rust now compares the current canonical model with a content SHA from
+the last Open or Save Copy. Undo/Redo back to that content clears the
+unsaved marker, and New remains unsaved until first Save Copy. The
+original source-file SHA stays separate for external-change detection.
+No Svelte model ownership or persistence path has changed. Tests
+AUTHORED_NOT_RUN and native Blockbench verification UNVERIFIED.
+
 **End-to-end Code Mode host SOURCE_AUTHORED (2026-11-15):** The existing
 Rust-first CLI SDK is now called through a trusted Node RPC host and
 permission-denied local Deno code guest. One model-facing code tool exposes

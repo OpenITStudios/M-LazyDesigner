@@ -2,6 +2,20 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Rust native editor P0 — saved content identity (2026-11-15)
+
+**Current source work:** Priority is now the standalone Rust/Tauri
+editor New/Edit/Paint/Animate/Save Copy/Open vertical path. The first
+source correction separates raw disk SHA from the canonical saved-model
+checksum to make Undo/Redo `dirty` state content-correct. This
+preserves unsaved-change protection, existing Rust history and the
+no-overwrite file publisher. Tests AUTHORED_NOT_RUN.
+
+**Continuation:** Close remaining material Rust editor P0 gaps with
+relevant UI/CLI consumers, while preserving the completed Code Mode
+source bridge as a separate AI interface. No held localtest, CI,
+release or premature Local MCP retirement.
+
 ## Rust Code Mode migration — current source work (2026-11-15)
 
 **Mutation launch lease (SOURCE_ONLY):** To finish host lifecycle security,
