@@ -40,6 +40,9 @@ export type EditOperation =
   | { op: "set_cube_rotation"; uuid: string; rotation: Vec3 }
   | { op: "scale_cube"; uuid: string; factors: Vec3 }
   | { op: "set_bone_rotation"; uuid: string; rotation: Vec3 }
+  | { op: "set_bone_origin"; uuid: string; origin: Vec3 }
+  | { op: "set_cube_origin"; uuid: string; origin: Vec3 }
+  | { op: "set_cube_inflate"; uuid: string; inflate: number }
   | { op: "set_node_visibility"; uuid: string; visible: boolean }
   | { op: "set_face_uv"; uuid: string; face: string; uv: Vec4 }
   | { op: "set_face_uv_rotation"; uuid: string; face: string; rotation: 0 | 90 | 180 | 270 }

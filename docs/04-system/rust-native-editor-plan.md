@@ -1,6 +1,6 @@
 # Rust-native LazyDesigner — Architecture and Acceptance Contract
 
-**Status:** APPROVED PRODUCT DIRECTION; PHASE 0 CONTRACT + PHASE 1 RUST CORE + INITIAL PHASE 2 EDIT UI SOURCE_AUTHORED / NOT_EXECUTED. The complete editor and Paint/Animate parity remain NOT_IMPLEMENTED.
+**Status:** APPROVED ASSET-FIRST DIRECTION; Geometry/Texturing/Animation SOURCE_IN_PROGRESS / NOT_EXECUTED. UI/UX deferred; actual editable Blockbench export remains a product gate.
 **Selected development branch:** `Rust`, created from `Local@2fb3b2f2a9f37649c927886122e9442d9f84b7c7`. The source integration parent for this plan is the branch-local profile commit `2260734f01a5803f6679aefb5f6bdf265cdba264`.
 **Upstream UI and file-format reference:** `JannisX11/blockbench@e2ede0809ee6bc91f374ac7e00d34cffbdf86a14` (tag `v5.2.1`, Default Dark).
 **Product:** Minecraft Bedrock Entity visual assets, not a general Blockbench clone or gameplay/add-on pack generator.
@@ -17,15 +17,15 @@ remain unchanged. See
 [Code Mode host implementation](../../apps/desktop/code-mode/HOST_INTEGRATION.md).
 
 ## 1. Approved outcome and explicit non-goals
-The user must be able to work in LazyDesigner as though they are working in the **pinned Blockbench UI**, including the supported Edit, Paint and Animate workflows, while the authoritative model engine is independent **Rust**. A completed editable `.bbmodel` from LazyDesigner must open, remain editable and preserve supported asset data in actual Blockbench. Reverse imports from Blockbench must also work. The visible editor must not require Blockbench as its execution host.
+**Maintainer priority supersession (2026-11-15):** Finish **Geometry → Texturing → Animation** authoring and export fidelity before UI/UX. LazyDesigner can use more effective authoring flows than Blockbench and is not required to copy its user interface. The release-blocking handoff is a faithful, editable Rust-exported `.bbmodel` opened in actual Blockbench with supported Geometry, UV/Texture and Animation preserved. Reverse import remains supported only where lossless, and unrestricted reverse parity is no longer a product gate. Preserve one Rust engine, fail-closed unknown data, local test holds and final native Blockbench proof.
 
 | Locked product decision | Required behavior |
 | --- | --- |
-| Human experience | 1:1 visual and behavioral parity with the pinned Blockbench 5.2.1 Default Dark baseline for the supported Bedrock Entity workflows; exceptions require explicit user approval. |
+| Human experience | Prioritize authoring fidelity and efficiency; UI/UX changes are deferred and no Blockbench 1:1 visual/interaction requirement remains. |
 | Engine | Single Rust-owned authoring document, validation, history, transaction and persistence authority. No second JS, MCP or CLI asset engine. |
 | Presentation | Svelte 5 + Tauri 2 for UI and IPC; Three.js for read-only 3D projection and transient input preview. |
 | AI access | **Amended 2026-11-15:** Code Mode becomes the target primary agent composition pattern on `Rust`, with model-authored JS/TS executed by an authorized host against a typed SDK calling the same headless first-party Rust CLI. Legacy MCP on `Local` is separately preserved until evidenced cutover. See [Code Mode migration](code-mode-migration.md). |
-| Data interchange | Bidirectional editable `.bbmodel` import/export as a release-blocking acceptance gate, plus required Bedrock visual-asset exports. |
+| Data interchange | Editable Rust → Blockbench `.bbmodel` with supported Geometry/UV/Texture/Animation intact is release-blocking; reverse imports are a safe supported subset only. |
 | Migration | Incremental, source-first, preserve existing Blockbench Runtime/Gateway, product Skills, assets and user workflows on `Local` while `Rust` is developed. |
 | Quality/cost | Measure cost per accepted asset and human correction count; never assert token, speed, visual or functional improvement from source alone. |
 
@@ -86,18 +86,18 @@ The `.bbmodel` codec is a **version-aware adapter**, not the internal document s
 | Format identity | Match project `model_format`, declared `format_version`, coordinate convention, scale, default settings and deterministic field mappings for the pinned profile. |
 | Unknown fields | Preserve opaque, safe unknown data whenever it can be faithfully round-tripped without semantic conflict; otherwise reject lossy overwrite/export with a precise supported/unsupported-field report. |
 
-**Two required paths:**
+**Required export gate and optional reverse-import diagnostics:**
 
-1. `Blockbench v5.2.1 → LazyDesigner Rust → Blockbench v5.2.1`. Import a representative editable project, perform a supported change, save/export, reopen in Blockbench, inspect the hierarchy/UV/texture/animation invariants and verify the model remains editable.
-2. `LazyDesigner Rust → Blockbench v5.2.1 → LazyDesigner Rust`. Create the same supported asset natively, export it, edit/save it in Blockbench, reimport, and compare the supported semantic state and visual rendering.
+1. **Release gate:** `LazyDesigner Rust → editable .bbmodel → actual Blockbench`. Author and export representative Geometry/UV/Texture/Animation, then open/edit and inspect their semantic and visual fidelity in Blockbench.
+2. **Diagnostic subset:** `Blockbench → Rust → Blockbench`. Preserve supported imported data and refuse unsafe or lossy edits. Arbitrary reverse-import parity is not a release requirement.
 
 Comparison is **semantic**, not byte-for-byte JSON formatting. For each supported family, record `PASS | FAIL | UNVERIFIED` with exact file/build/revision provenance. Never mark a category PASS from parse success, a source fixture or a screenshot alone. Preserve the original file until atomic replacement is confirmed; opening a newer or unknown version must fail closed or be explicitly read-only if loss-free editing cannot be assured. Do not require a proprietary sidecar or a second canonical file to open an ordinary supported `.bbmodel`.
 
 Bedrock geometry, animation and texture PNG exports are separate outputs with their own validity checks; `.bbmodel` interoperability must not be confused with gameplay/add-on packaging.
 
-## 5. Blockbench 1:1 UI/interaction parity matrix
+## 5. Deferred UI/UX reference (non-gating)
 
-The requested parity applies **within the supported Bedrock Entity workflows**, not every unrelated Blockbench plugin/format. Compare a running Blockbench v5.2.1 reference and the actual Svelte/Tauri app under identical window pixels, DPI scale, Default Dark theme, mode, panel layout, sample model, camera and input conditions. The HTML/Svelte source preview is not a native screenshot or runtime proof.
+The matrix below records older UI reference ideas, **not current acceptance requirements**. Rust UI and workflows may differ from Blockbench. UI/UX follows completion of Geometry, Texturing and Animation. A source preview is not native proof.
 
 | Area | Observable acceptance |
 | --- | --- |
@@ -110,7 +110,7 @@ The requested parity applies **within the supported Bedrock Entity workflows**, 
 | Cross-mode behavior | Mode/tool switching preserves project state, Undo history, selection where applicable, panel preferences, unsaved state and keyboard focus without duplicate state owners. |
 | Resize/accessibility | Dock bounds, minimum viewport area, keyboard traversal, tooltips, shortcut discoverability, accessible labels and high-DPI rendering do not regress. |
 
-**Parity gate:** retain a per-view reference screenshot, a matching actual application capture, measured geometry/image differences and a real input-action outcome for each relevant row. An area remains `UNVERIFIED` until both visual and behavioral evidence exist. Unsupported behavior must be explicitly tracked and cannot be labeled 1:1. No substitute dashboard, extra AI panel or CLI status chrome may change the default editor composition. Review all actual upstream UI assets and GPL/brand boundaries before copying them.
+**Deferred reference:** native UI/UX remains UNVERIFIED and is not a pixel-parity release gate. Asset fidelity and real Blockbench-export verification are mandatory. Any future upstream UI resource reuse requires a license/brand review.
 
 The existing legacy green/blue companion desktop token arrangement and icon registry describe the *Blockbench-hosted companion*; they are not automatic visual authority for the Rust-native editor. For the Rust branch the pinned **actual Default Dark editor** is the design reference, with independently authored components or reviewed licensed reuse.
 
@@ -131,10 +131,10 @@ The CLI is a real **mutating and read-only authoring interface**, not only a rep
 | --- | --- | --- |
 | Phase 0 — contract (current) | Branch authority, precise target/legacy separation, compatibility policy, parity matrix, migration boundaries and measured acceptance plan. | One source-coherent target spec and current status; no build/visual PASS claimed. |
 | Phase 1 — headless Rust slice | Canonical document; cube/group/pivot/UV/texture references; revision-checked command, Undo/Redo, file I/O; initial `.bbmodel` codec; headless CLI. | A representative synthetic Bedrock Entity can be imported, changed, exported/reopened without Blockbench as engine; tests authored in source, execution separately authorized. |
-| Phase 2 — Svelte Edit editor | Build the pinned UI shell and Three.js viewport with real editing, panels, modes and input routing against Rust document snapshots. | Edit actions have real handlers and one Rust semantic owner; UI parity remains unverified until actual native comparison. |
-| Phase 3 — Paint and textures | Editable UV, atlas, painting, relevant layers and texture export; preserve texture intelligence and visual review. | Native and Blockbench round-trip texture/UV behavior on representative assets when authorized. |
-| Phase 4 — Animate and effects | Keyframes, playback, rigging, relevant controllers/effect cues and supported export. | Native replay/round-trip and visual user acceptance of supported animated assets when authorized. |
-| Phase 5 — cutover gate | Integrated visual/behavioral 1:1 review; format and render equivalence; measured AI use, Windows distribution, recovery and safety. | Only after matched native/local evidence and user approval may the old required Blockbench Runtime be retired or a release/promotion be proposed. |
+| Phase 2 — Geometry and rig (active) | Complete Cube/Bone hierarchy, pivots, transforms, UV correspondence and semantic authoring commands in one Rust Core/CLI/Code Mode path. | Source regression coverage and actual editable Blockbench output acceptance when authorized. |
+| Phase 3 — Paint and textures | Complete useful UV/atlas/texture authoring and face-coverage diagnostics without lossy metadata normalization. | Native texture/UV mapping and actual Blockbench-export acceptance on representative assets when authorized. |
+| Phase 4 — Animate and effects | Complete rig/keyframes/linear and supported advanced playback/effect authoring without data loss. | Native exported Blockbench playback and visual user acceptance when authorized. |
+| Phase 5 — asset export / cutover | Verify actual Blockbench Geometry/Texture/Animation editability, Windows performance/safety and AI efficiency before release. | Only after native asset evidence and user approval may legacy retirement, release or branch promotion be proposed; UI/UX refinement comes last. |
 
 The first source implementation must demonstrate a complete **vertical slice**, not isolated GUI mockups or independent geometry planners. Create no new agent Skills, hidden test runners, provider stack, release channel, CI workflow, benchmark system or separate repository as a prerequisite.
 

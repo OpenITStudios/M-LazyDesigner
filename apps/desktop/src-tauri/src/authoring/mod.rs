@@ -156,6 +156,9 @@ pub enum EditOperation {
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
     ScaleCube { uuid: String, factors: [f64; 3] },
     SetBoneRotation { uuid: String, rotation: [f64; 3] },
+    SetBoneOrigin { uuid: String, origin: [f64; 3] },
+    SetCubeOrigin { uuid: String, origin: [f64; 3] },
+    SetCubeInflate { uuid: String, inflate: f64 },
     SetNodeVisibility { uuid: String, visible: bool },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
     SetFaceUvRotation { uuid: String, face: String, rotation: u16 },
@@ -1563,6 +1566,48 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 bone.extra.remove("rotation");
             } else {
                 bone.extra.insert("rotation".into(), json!(rotation));
+            }
+            Ok(uuid.clone())
+        }
+        EditOperation::SetBoneOrigin { uuid, origin } => {
+            // Rig pivot edit: never silently move child Cubes, UVs, or animation data.
+            if !valid_vec3(*origin) { return Err(fail("BONE_ORIGIN_INVALID")); }
+            let bone = doc.bones.iter_mut().find(|bone| bone.uuid == *uuid)
+                .ok_or_else(|| fail("BONE_NOT_FOUND"))?;
+            if bone.origin.unwrap_or([0.0, 0.0, 0.0]) == *origin {
+                return Ok(uuid.clone());
+            }
+            bone.origin = Some(*origin);
+            Ok(uuid.clone())
+        }
+        EditOperation::SetCubeOrigin { uuid, origin } => {
+            // Keep the Cube's saved faces, bounds and parent Bone untouched.
+            if !valid_vec3(*origin) { return Err(fail("CUBE_ORIGIN_INVALID")); }
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if cube.origin.unwrap_or([0.0, 0.0, 0.0]) == *origin {
+                return Ok(uuid.clone());
+            }
+            cube.origin = Some(*origin);
+            Ok(uuid.clone())
+        }
+        EditOperation::SetCubeInflate { uuid, inflate } => {
+            if !inflate.is_finite() || inflate.abs() > LIMIT {
+                return Err(fail("CUBE_INFLATE_INVALID"));
+            }
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            // Never commit a collapsed or inverted rendered surface.
+            if (0..3).any(|axis| cube.to[axis] - cube.from[axis] + 2.0 * inflate <= 0.0) {
+                return Err(fail("CUBE_INFLATE_DEGENERATE"));
+            }
+            if cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0) == *inflate {
+                return Ok(uuid.clone());
+            }
+            if *inflate == 0.0 {
+                cube.extra.remove("inflate");
+            } else {
+                cube.extra.insert("inflate".into(), json!(inflate));
             }
             Ok(uuid.clone())
         }

@@ -332,6 +332,61 @@ fn rename_refuses_invalid_conflicting_and_opaque_track_names_without_partial_edi
     ]).unwrap_err(), "EDIT_NO_OP");
 }
 
+// Authored-only Rust regressions (Cargo/Windows/Blockbench held).
+#[test]
+fn authoring_rig_pivots_and_cube_inflate_roundtrip_and_undo() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[
+        EditOperation::SetBoneOrigin { uuid: BONE.into(), origin: [2.0, 4.0, -1.0] },
+        EditOperation::SetCubeOrigin { uuid: CUBE.into(), origin: [1.0, 2.0, 3.0] },
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: 0.125 },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(receipt.changed_uuids, vec![BONE.to_owned(), CUBE.to_owned()]);
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["groups"][0]["origin"], json!([2.0, 4.0, -1.0]));
+    assert_eq!(saved["elements"][0]["origin"], json!([1.0, 2.0, 3.0]));
+    assert_eq!(saved["elements"][0]["inflate"], json!(0.125));
+    assert_eq!(saved["elements"][0]["from"], json!([0.0, 0.0, 0.0]));
+    assert_eq!(saved["elements"][0]["to"], json!([4.0, 4.0, 4.0]));
+    assert_eq!(saved["elements"][0]["faces"], serde_json::to_value(&original.cubes[0].faces).unwrap());
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn pivot_and_inflate_invalid_batches_refuse_without_mutating() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetBoneOrigin { uuid: BONE.into(), origin: [1.0, 2.0, 3.0] },
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: -2.0 },
+    ]).unwrap_err(), "CUBE_INFLATE_DEGENERATE");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetCubeOrigin { uuid: CUBE.into(), origin: [f64::NAN, 0.0, 0.0] },
+    ]).unwrap_err(), "CUBE_ORIGIN_INVALID");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetBoneOrigin { uuid: BONE.into(), origin: [f64::INFINITY, 0.0, 0.0] },
+    ]).unwrap_err(), "BONE_ORIGIN_INVALID");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: f64::NAN },
+    ]).unwrap_err(), "CUBE_INFLATE_INVALID");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetCubeInflate { uuid: "unknown".into(), inflate: 1.0 },
+    ]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetBoneOrigin { uuid: BONE.into(), origin: [0.0, 0.0, 0.0] },
+    ]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+    assert!(!session.can_undo());
+}
+
 // Authored regression only. Tests remain held and are NOT_EXECUTED.
 #[test]
 fn generated_paint_texture_limit_matches_import_preview_and_history() {

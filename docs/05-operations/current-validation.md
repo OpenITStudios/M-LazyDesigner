@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust asset-first pivot/inflate source (SOURCE_ONLY)
+
+Goal prioritized Geometry → Texturing → Animation, UI/UX deferred. Canonical Rust EditOperation now includes bounded Bone pivot, Cube pivot and non-degenerate Cube Inflate, through shared Tauri/CLI and typed Code Mode. Round-trip, atomic failure, Undo/Redo regression sources were authored but NOT_EXECUTED. Actual Blockbench-native export fidelity, GUI and performance remain UNVERIFIED; no test hold was lifted.
+
 ## 2026-11-15 — Rust editor numeric Bone transform channels (SOURCE_ONLY)
 
 Canonical Rust EditOperation adds bounded linear numeric Position and Scale

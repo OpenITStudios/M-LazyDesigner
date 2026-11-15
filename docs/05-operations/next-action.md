@@ -1,5 +1,13 @@
 # LazyDesigner Next Action
 
+## Rust asset-first authoring — 2026-11-15
+
+**Current maintainer direction overrides prior UI-parity goals:** finish Geometry, then Texturing, then Animation. The single Rust AuthoringDocument, CLI/Code Mode semantics, quality checks and export fidelity are the priority; UI/UX and Blockbench tool imitation are last. Required acceptance: an editable exported `.bbmodel` with all supported model, texture and animation data opening correctly in real Blockbench. Arbitrary reverse import is non-gating and still fail-closed. No change to `Local`, 12 project Skills, holds, release authority or Code Mode host.
+
+**Source increment:** `SetBoneOrigin`, `SetCubeOrigin`, `SetCubeInflate` provide bounded geometry/rig edits through one Rust EditOperation exposed by Tauri/CLI and typed Code Mode. Children, texture UV and opaque animation data are preserved; degenerate inflate is rejected; source atomicity/Undo/round-trip tests AUTHORED_NOT_RUN.
+
+**Continuation:** finish substantial missing Geometry/rig/UV operations, then Paint/Texturing and Animation authoring/export, without redesigning UI or adding another engine. Later PC-local proof is required for actual Blockbench export; local/CI tests remain held.
+
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
 ## Rust native editor P0 — Bone Position/Scale/Rotation channels (2026-11-15)
