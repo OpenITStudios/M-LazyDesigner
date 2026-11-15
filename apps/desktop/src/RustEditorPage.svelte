@@ -659,6 +659,18 @@
     if (next) paintTextureIndex = before;
   }
 
+  async function enableImportedPaintTexture() {
+    if (!snapshot || busy || loading || paintStroke ||
+        !snapshot.paintAdoptableTextures[paintTextureIndex] ||
+        !snapshot.texturePreviewSources[paintTextureIndex]) return;
+    const index = paintTextureIndex;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{ op: 'enable_imported_paint_texture', texture_index: index }],
+    });
+    if (next) notice = 'Imported RGBA8 PNG validated for painting; the original bitmap is unchanged until the first stroke.';
+  }
+
   function paintPoint(event: PointerEvent, target: HTMLImageElement): PaintPoint | null {
     if (!snapshot) return null;
     const rect = target.getBoundingClientRect();
@@ -1139,7 +1151,7 @@
       {:else}
         <p class="empty-label">No textures</p>
       {/if}
-      <p class="dock-note">Switch to Paint to edit a generated atlas. Imported textures remain read-only.</p>
+      <p class="dock-note">Generated textures can be painted directly. Compatible imported RGBA8 PNGs may be enabled explicitly in Paint.</p>
    {/if}
   </aside>
 {/snippet}
@@ -1157,6 +1169,15 @@
             snapshot.textureResolution.some(size => size > 256)}>
             New RGBA8 Texture
           </button>
+          {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
+            snapshot.texturePreviewSources[paintTextureIndex]}
+            <button type="button" onclick={() => void enableImportedPaintTexture()}
+              disabled={busy || loading || !!paintStroke}
+              title="Validate this embedded RGBA8 PNG before enabling direct edits">
+              Enable Painting for Imported PNG
+            </button>
+            <p class="hint">Opt in to edit this compatible imported PNG. Original PNG bytes are unchanged until the first stroke; Undo restores the prior state.</p>
+          {/if}
           {#if snapshot.textureNames.length}
             <label>Texture
               <select bind:value={paintTextureIndex} disabled={busy || !!paintStroke}>
@@ -1195,7 +1216,7 @@
               onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
             <p class="dock-note">Pencil and Eraser use circular strokes. Filled Rectangle uses two corners. Each completed gesture is one Rust Undo step. Atlas selection changes only the Paint preview, not saved model face references.</p>
           {:else}
-            <p class="dock-note">Only newly created LazyDesigner RGBA8 textures are editable. Imported textures remain read-only.</p>
+            <p class="dock-note">Only LazyDesigner-owned or explicitly enabled embedded RGBA8 PNGs can be painted. External paths, layers and unsupported formats stay read-only.</p>
           {/if}
         </section>
     {/if}

@@ -1,5 +1,6 @@
-//! Bounded Rust-owned RGBA8 Paint transactions for new LazyDesigner textures.
-//! Imported PNGs remain opaque and are never rewritten through this path.
+//! Bounded Rust-owned RGBA8 Paint transactions.
+//! Imported textures are immutable unless the user explicitly enables Paint,
+//! and only a narrowly validated embedded RGBA8 PNG can be adopted.
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
@@ -11,19 +12,51 @@ const MAX_PNG_BYTES: usize = 2 * 1024 * 1024;
 const MAX_SIDE: u32 = 256;
 pub(super) const OWNER: &str = "lazydesigner-rgba8-v1";
 
+// Conversion and editing have one identical field whitelist. Keep supported
+// imported UV-grid metadata byte-for-byte when it matches the project.
+const ALLOWED_FIELDS: [&str; 10] = [
+    "uuid", "name", "source", "internal", "wrap_mode",
+    "render_mode", "render_sides", "paint_owner", "uv_width", "uv_height",
+];
+
 pub(super) fn editable(texture: &Value) -> bool {
     let Some(fields) = texture.as_object() else { return false; };
-    // Re-encoding must not silently strip imported/extended texture metadata.
-    const ALLOWED: [&str; 8] = [
-        "uuid", "name", "source", "internal", "wrap_mode",
-        "render_mode", "render_sides", "paint_owner",
-    ];
-    fields.keys().all(|key| ALLOWED.contains(&key.as_str())) &&
+    fields.keys().all(|key| ALLOWED_FIELDS.contains(&key.as_str())) &&
         fields.get("paint_owner").and_then(Value::as_str) == Some(OWNER) &&
         fields.get("internal") == Some(&Value::Bool(true)) &&
         fields.get("wrap_mode").and_then(Value::as_str) == Some("limited") &&
         fields.get("render_mode").and_then(Value::as_str) == Some("default") &&
         fields.get("render_sides").and_then(Value::as_str) == Some("double")
+}
+
+// Metadata-only eligibility for an explicit Enable Painting UI action.
+// The Rust operation always decodes and validates the complete PNG before
+// admitting it. Never touch external paths, layers, frames or unknown fields.
+pub(super) fn adoptable(texture: &Value, width: u32, height: u32) -> bool {
+    if size(width, height).is_err() { return false; }
+    let Some(fields) = texture.as_object() else { return false; };
+    fields.keys().all(|key| ALLOWED_FIELDS.contains(&key.as_str())) &&
+        !fields.contains_key("paint_owner") &&
+        fields.get("internal") == Some(&Value::Bool(true)) &&
+        fields.get("wrap_mode").and_then(Value::as_str) == Some("limited") &&
+        fields.get("render_mode").and_then(Value::as_str) == Some("default") &&
+        fields.get("render_sides").and_then(Value::as_str) == Some("double") &&
+        fields.get("source").and_then(Value::as_str)
+            .is_some_and(|source| source.starts_with(PREFIX)) &&
+        fields.get("uv_width").is_none_or(|v| v.as_u64() == Some(u64::from(width))) &&
+        fields.get("uv_height").is_none_or(|v| v.as_u64() == Some(u64::from(height)))
+}
+
+pub(super) fn adopt(texture: &mut Value, width: u32, height: u32) -> Result<()> {
+    if !adoptable(texture, width, height) {
+        return Err("PAINT_IMPORTED_TEXTURE_UNSUPPORTED".into());
+    }
+    // Decode + CRC/color-type/frame/dimension checks are the acceptance gate.
+    // Keep the original encoded source untouched until the first real stroke.
+    let _ = decode_rgba8_source(texture, width, height)?;
+    texture.as_object_mut().ok_or("PAINT_IMPORTED_TEXTURE_UNSUPPORTED")?
+        .insert("paint_owner".into(), Value::String(OWNER.into()));
+    Ok(())
 }
 
 fn encode(width: u32, height: u32, pixels: &[u8]) -> Result<String> {
@@ -67,6 +100,14 @@ pub(super) fn create(uuid: &str, name: &str, width: u32, height: u32) -> Result<
 
 fn decode(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
     if !editable(texture) { return Err("PAINT_TEXTURE_NOT_OWNED".into()); }
+    if texture.get("uv_width").is_some_and(|v| v.as_u64() != Some(u64::from(width))) ||
+       texture.get("uv_height").is_some_and(|v| v.as_u64() != Some(u64::from(height))) {
+        return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
+    }
+    decode_rgba8_source(texture, width, height)
+}
+
+fn decode_rgba8_source(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
     let source = texture.get("source").and_then(Value::as_str)
         .and_then(|text| text.strip_prefix(PREFIX))
         .ok_or("PAINT_PNG_SOURCE_INVALID")?;

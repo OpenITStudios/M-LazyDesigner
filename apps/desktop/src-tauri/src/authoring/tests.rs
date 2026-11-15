@@ -1710,3 +1710,129 @@ fn invalid_noop_or_partial_cube_scale_refuses_atomically() {
     assert_eq!(session.document(), &original);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn compatible_imported_rgba_png_requires_explicit_paint_adoption_and_preserves_bytes() {
+    let uuid = "00000000-0000-4000-8000-000000000152";
+    let mut authored = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Imported", "imported").unwrap()
+    ).unwrap();
+    authored.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "sample.png".into(),
+    }]).unwrap();
+    // Simulate a valid existing embedded PNG that is not LazyDesigner-owned.
+    let mut wire: Value = serde_json::from_slice(&authored.export().unwrap()).unwrap();
+    wire["textures"][0].as_object_mut().unwrap().remove("paint_owner");
+    wire["textures"][0]["uv_width"] = json!(128);
+    wire["textures"][0]["uv_height"] = json!(128);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let imported = session.document().clone();
+    let original_source = imported.texture_assets[0]["source"].clone();
+    assert!(!paint_texture_editable(&imported.texture_assets[0]));
+    assert!(paint_texture_adoptable(&imported.texture_assets[0], 128, 128));
+    assert_eq!(session.apply(0, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 1, y: 1, rgba: [10, 20, 30, 255],
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(session.summary().revision, 0);
+    let receipt = session.apply(0, &[EditOperation::EnableImportedPaintTexture {
+        texture_index: 0,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert!(paint_texture_editable(&session.document().texture_assets[0]));
+    assert_eq!(session.document().texture_assets[0]["source"], original_source);
+    assert_eq!(session.document().texture_assets[0]["uv_width"], json!(128));
+    assert_eq!(session.document().texture_assets[0]["uv_height"], json!(128));
+    let adopted = session.document().clone();
+    session.apply(1, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 1, y: 1, rgba: [10, 20, 30, 255],
+    }]).unwrap();
+    assert_ne!(session.document().texture_assets[0]["source"], original_source);
+    let output = session.export().unwrap();
+    let reopened = AuthoringDocument::import_bbmodel(&output).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &adopted);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(), &imported);
+    session.redo(4).unwrap();
+    session.redo(5).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn imported_paint_adoption_rejects_opaque_or_external_png_and_bad_batches() {
+    let uuid = "00000000-0000-4000-8000-000000000152";
+    let mut authored = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Imported", "imported").unwrap()
+    ).unwrap();
+    authored.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "sample.png".into(),
+    }]).unwrap();
+    let mut wire: Value = serde_json::from_slice(&authored.export().unwrap()).unwrap();
+    wire["textures"][0].as_object_mut().unwrap().remove("paint_owner");
+    for (field, value) in [
+        ("vendor_extension", json!({"keep":"opaque"})),
+        ("relative_path", json!("textures/entity/external.png")),
+        ("render_mode", json!("emissive")),
+        ("uv_width", json!(64)),
+        ("internal", json!(false)),
+    ] {
+        let mut candidate = wire.clone();
+        candidate["textures"][0][field] = value;
+        let mut session = EditorSession::open(&serde_json::to_vec(&candidate).unwrap()).unwrap();
+        let before = session.document().clone();
+        assert!(!paint_texture_adoptable(&before.texture_assets[0], 128, 128));
+        assert_eq!(session.apply(0, &[EditOperation::EnableImportedPaintTexture {
+            texture_index: 0,
+        }]).unwrap_err(), "PAINT_IMPORTED_TEXTURE_UNSUPPORTED");
+        assert_eq!(session.document(), &before);
+        assert_eq!(session.summary().revision, 0);
+    }
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(0, &[
+        EditOperation::EnableImportedPaintTexture { texture_index: 0 },
+        EditOperation::EnableImportedPaintTexture { texture_index: usize::MAX },
+    ]).unwrap_err(), "PAINT_TEXTURE_NOT_FOUND");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+    wire["textures"][0]["source"] = json!("data:image/png;base64,AAAA");
+    let mut invalid = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let initial = invalid.document().clone();
+    assert!(invalid.apply(0, &[EditOperation::EnableImportedPaintTexture {
+        texture_index: 0,
+    }]).is_err());
+    assert_eq!(invalid.document(), &initial);
+    assert_eq!(invalid.summary().revision, 0);
+}
+
+#[test]
+fn imported_rgb_png_is_not_silently_converted_to_rgba_paint_data() {
+    let mut png_bytes = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut png_bytes, 128, 128);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(&vec![99; 128 * 128 * 3]).unwrap();
+    }
+    let rgb_source = format!(
+        "data:image/png;base64,{}",
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_bytes)
+    );
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["textures"] = json!([{
+        "uuid": "00000000-0000-4000-8000-000000000152",
+        "name": "imported-rgb.png", "source": rgb_source,
+        "internal": true, "wrap_mode": "limited",
+        "render_mode": "default", "render_sides": "double"
+    }]);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let before = session.document().clone();
+    assert!(paint_texture_adoptable(&before.texture_assets[0], 128, 128));
+    assert_eq!(session.apply(0, &[EditOperation::EnableImportedPaintTexture {
+        texture_index: 0,
+    }]).unwrap_err(), "PAINT_PNG_FORMAT_UNSUPPORTED");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+}

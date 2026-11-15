@@ -13,6 +13,11 @@ pub mod storage;
 /// The exact generated-texture gate shared by Rust edits and Tauri UI projection.
 pub fn paint_texture_editable(texture: &Value) -> bool { paint::editable(texture) }
 
+/// Metadata-only eligibility; the actual Paint adoption must fully decode PNG.
+pub fn paint_texture_adoptable(texture: &Value, width: u32, height: u32) -> bool {
+    paint::adoptable(texture, width, height)
+}
+
 pub const MAX_MODEL_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_PLAN_BYTES: usize = 64 * 1024;
 const MAX_ELEMENTS: usize = 65_536;
@@ -133,6 +138,7 @@ pub enum EditOperation {
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
     CreatePaintTexture { uuid: String, name: String },
+    EnableImportedPaintTexture { texture_index: usize },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
@@ -1212,6 +1218,17 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("ANIMATION_KEYFRAME_REFERENCED"));
             }
             Ok(keyframe_uuid.clone())
+        }
+        EditOperation::EnableImportedPaintTexture { texture_index } => {
+            if has_per_texture_uv_rules(doc) {
+                return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
+            }
+            let (width, height) = (doc.resolution.width, doc.resolution.height);
+            let texture = doc.texture_assets.get_mut(*texture_index)
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::adopt(texture, width, height)?;
+            Ok(texture.get("uuid").and_then(Value::as_str)
+                .unwrap_or("paint-texture").to_owned())
         }
         EditOperation::CreatePaintTexture { uuid, name } => {
             if !valid_uuid(uuid) || doc.texture_assets.len() >= MAX_ELEMENTS ||

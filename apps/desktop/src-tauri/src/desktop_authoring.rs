@@ -3,7 +3,7 @@
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
-    storage, sha256, paint_texture_editable, has_per_texture_uv_rules, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -99,6 +99,7 @@ pub struct EditorSnapshot {
     texture_preview_sources: Vec<Option<String>>,
     texture_preview_sides: Vec<Option<&'static str>>,
     paint_editable_textures: Vec<bool>,
+    paint_adoptable_textures: Vec<bool>,
     texture_resolution: [u32; 2],
     animation_count: usize,
     animations: Vec<AnimationView>,
@@ -365,6 +366,10 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
             paint_editable_textures: doc.texture_assets.iter()
                 .map(paint_texture_editable).collect(),
+            paint_adoptable_textures: doc.texture_assets.iter().map(|texture|
+                !has_per_texture_uv_rules(doc) &&
+                paint_texture_adoptable(texture, doc.resolution.width, doc.resolution.height)
+            ).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             animation_count: doc.animation_assets.len(),
             animations: animation_views(doc),
@@ -1043,6 +1048,36 @@ mod tests {
         doc.animation_assets[0] = before.animation_assets[0].clone();
         doc.animation_assets[0]["animators"]["effects"] = json!({"keyframes":[]});
         assert!(!animation_views(&doc)[0].preview_supported);
+    }
+
+
+    #[test]
+    fn imported_png_paint_adoption_projection_does_not_mutate_assets() {
+        let mut doc = AuthoringDocument::new_bedrock("UV import", "uv_import").unwrap();
+        let texture = crate::authoring::paint_texture_adoptable;
+        let mut session = EditorSession::from_document(doc.clone()).unwrap();
+        session.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid: "00000000-0000-4000-8000-000000000152".into(),
+            name: "paint.png".into(),
+        }]).unwrap();
+        doc = session.document().clone();
+        doc.texture_assets[0].as_object_mut().unwrap().remove("paint_owner");
+        let original = doc.clone();
+        assert!(texture(&doc.texture_assets[0], 128, 128));
+        let store = EditorStore {
+            epoch: 7,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(doc.clone()).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        let preview = project(&store).unwrap();
+        assert_eq!(preview.paint_editable_textures, vec![false]);
+        assert_eq!(preview.paint_adoptable_textures, vec![true]);
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
+        let mut unsupported = original;
+        unsupported.texture_assets[0]["vendor"] = json!({"preserve":true});
+        assert!(!texture(&unsupported.texture_assets[0], 128, 128));
     }
 
 }
