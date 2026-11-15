@@ -332,6 +332,76 @@ fn rename_refuses_invalid_conflicting_and_opaque_track_names_without_partial_edi
     ]).unwrap_err(), "EDIT_NO_OP");
 }
 
+// Full New -> Geometry -> Paint -> Animate -> .bbmodel -> Open source
+// acceptance fixture. These assertions are AUTHORED_NOT_RUN.
+#[test]
+fn full_asset_authoring_assembly_roundtrip_preserves_geometry_texture_and_animation() {
+    let original = AuthoringDocument::new_bedrock("Asset P0", "asset_p0").unwrap();
+    let mut session = EditorSession::from_document(original.clone()).unwrap();
+    let bone: Bone = serde_json::from_value(json!({
+        "uuid": BONE, "name": "body", "origin": [0, 0, 0]
+    })).unwrap();
+    let texture_id = "00000000-0000-4000-8000-000000009901";
+    let anim_id = "00000000-0000-4000-8000-000000009902";
+    let result = session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 16, height: 16 },
+        EditOperation::AddBone { bone, parent_uuid: None },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+        EditOperation::SetBoneOrigin { uuid: BONE.into(), origin: [0.0, 3.0, 0.0] },
+        EditOperation::SetCubeOrigin { uuid: CUBE.into(), origin: [1.0, 2.0, 1.0] },
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: 0.125 },
+        EditOperation::CreatePaintTexture { uuid: texture_id.into(), name: "body.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: texture_id.into() },
+        EditOperation::PaintTextureFill {
+            texture_index: 0, at: [0, 0], rgba: [24, 48, 96, 255], erase: false,
+        },
+        EditOperation::CreateAnimation { uuid: anim_id.into(), name: "walk".into(), length: 2.0 },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: anim_id.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009903".into(),
+            channel: "position".into(), time: 0.5, value: [0.0, 1.0, 0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: anim_id.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009904".into(),
+            channel: "rotation".into(), time: 1.0, value: [0.0, 45.0, 0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: anim_id.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009905".into(),
+            channel: "scale".into(), time: 1.5, value: [1.0, 1.5, 1.0],
+        },
+    ]).unwrap();
+    assert_eq!(result.revision, 1);
+    assert_eq!(result.operation_count, 13);
+    let wire: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(wire["elements"][0]["inflate"], json!(0.125));
+    assert_eq!(wire["groups"][0]["origin"], json!([0.0, 3.0, 0.0]));
+    assert_eq!(wire["elements"][0]["faces"]["north"]["texture"], json!(texture_id));
+    assert!(wire["textures"][0]["source"].as_str().unwrap().starts_with("data:image/png;base64,"));
+    assert_eq!(wire["animations"][0]["animators"][BONE]["keyframes"]
+        .as_array().unwrap().len(), 3);
+    let saved = session.document().clone();
+    for channel in ["position", "rotation", "scale"] {
+        let track = inspect_transform_track(&saved, anim_id, BONE, channel, 0, 16).unwrap();
+        assert_eq!(track["recognized"], json!(true));
+        assert_eq!(track["total_frames"], json!(1));
+    }
+    let reopened = EditorSession::open(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened.document(), &saved);
+    assert_eq!(session.apply(1, &[
+        EditOperation::PaintTextureFill {
+            texture_index: 0, at: [0, 0], rgba: [0, 0, 0, 0], erase: true,
+        },
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: -4.0 },
+    ]).unwrap_err(), "CUBE_INFLATE_DEGENERATE");
+    assert_eq!(session.document(), &saved);
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &saved);
+}
+
 // Authored-only Rust/Paint regressions (not executed).
 #[test]
 fn region_fill_is_four_connected_and_one_undoable_rgba8_transaction() {

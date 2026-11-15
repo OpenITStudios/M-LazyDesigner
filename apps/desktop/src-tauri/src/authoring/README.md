@@ -1,5 +1,7 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Integrated asset authoring fixture (2026-11-15; TEST_AUTHORED_NOT_RUN):** A single session now has source regression coverage for New/Geometry/Rig/Texture/Animation/.bbmodel reopen, including three-channel inspection, atomic refusal and Undo/Redo. It is a future falsifiable PC-local/native acceptance input, not proof of Blockbench compatibility or a passed Rust build.
+
 **Bone transform channel inspection (2026-11-15; SOURCE_ONLY):** `inspect_transform_track` now projects separately paged numeric-linear Position/Rotation/Scale values using the same strict Rust editable-clip admission as authoring. CLI `inspect --track-channel position|rotation|scale` and Code Mode `inspectAnimationTransformTrack` / batch selector return bounded values, never opaque Molang/Bezier data; old rotation-only inspection remains compatible. Source regressions AUTHORED_NOT_RUN; no native animation playback proof.
 
 **RGBA8 exact region fill (2026-11-15; SOURCE_ONLY):** `paint_texture_fill` paints/erases a four-connected region of exact RGBA8 matches in the existing 1–256² encoded PNG, in one Rust-owned Undo step and without reading foreign/external/layered assets. CLI and Code Mode use the same EditOperation; no UI redesign or second raster engine is introduced. Regression source AUTHORED_NOT_RUN; native textured .bbmodel export remains UNVERIFIED.

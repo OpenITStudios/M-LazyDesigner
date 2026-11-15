@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — New/Geometry/Paint/Animate/Save/Open integrated source fixture (NOT_EXECUTED)
+
+One Rust `EditorSession` source regression now composes empty project, Cube/Bone pivots/Inflate, generated RGBA8 texture assignment+fill, three Bone transform channels, `.bbmodel` export/reimport, per-channel inspection, atomic rollback and Undo/Redo. This is TEST_AUTHORED_NOT_RUN, not a Windows executable run or evidence that actual Blockbench can open/replay the result. The mandatory native Blockbench output acceptance remains UNVERIFIED.
+
 ## 2026-11-15 — Rust Code Mode host/guest transform-channel consumer closure (SOURCE_ONLY)
 
 The Code Mode host RPC dispatch, Deno guest method allowlist, host type declarations and source regression cases now expose the same SHA-bound transform-channel inspector as CLI and typed SDK. The UI-only EditOperation contract also acknowledges the three Geometry pivot/inflate operations for consistency, without shipping new controls. No tests/guest execution or native Blockbench validation performed.
