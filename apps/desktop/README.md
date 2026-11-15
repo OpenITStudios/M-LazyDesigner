@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust Outliner visibility (2026-11-15; SOURCE_ONLY):** Outliner Hide/Show now submits one canonical Rust `set_node_visibility` operation. Cube visibility changes only that Cube; Group toggles its own flag and descendant flags in one transaction/Undo step, matching the pinned Blockbench toggle semantics. The read-only Three.js viewport still observes individual Cube visibility, not an invented inherited Group mask. No new IPC endpoint, model authority or native acceptance proof; Rust regression and Tauri projection tests authored NOT_EXECUTED.
+
 The `Rust` branch now includes a **source-authored Rust Bedrock Core, CLI and Tauri/Svelte Edit editor**. `src-tauri/src/desktop_authoring.rs` owns the Tauri session/IPC; `src/RustEditorPage.svelte` owns Edit controls; `src/RustViewport.svelte` derives an untextured Three.js geometry preview from Rust snapshots. `src/main.ts` selects the Rust editor by default on this development branch, with the previous companion accessible through an explicit legacy route. CLI and UI share the same Rust model, transactions, `.bbmodel` codec and `authoring/storage.rs`. Paint, Animate, full Blockbench UI parity, native/Windows builds, and real bidirectional Blockbench round-trip remain NOT_EXECUTED/UNVERIFIED. See [the source owner](src-tauri/src/authoring/README.md) and [Rust target](../../docs/04-system/rust-native-editor-plan.md).
 
 

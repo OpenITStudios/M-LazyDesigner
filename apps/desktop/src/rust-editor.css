@@ -472,6 +472,22 @@
   text-align: left;
   padding: 0 6px 0 0;
 }
+.rust-editor .outliner-visibility {
+  flex: none;
+  margin-right: 4px;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #b3bac7;
+  font-size: 11px;
+  cursor: pointer;
+}
+.rust-editor .outliner-visibility:hover { border-color: #66758b; }
+.rust-editor .outliner-visibility:focus-visible { outline: 2px solid #3e90ff; outline-offset: -2px; }
+.rust-editor .outliner-visibility.is-hidden { color: #8ba9cf; }
+.rust-editor .outliner-visibility:disabled { opacity: 0.45; cursor: not-allowed; }
+.rust-editor .outliner-row.muted .outliner-label { opacity: 0.65; }
 .rust-editor .item-kind { color: #a2adc1; font-size: 16px; }
 .rust-editor .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rust-editor .property-scroll { padding: 10px; overflow: auto; min-height: 0; }

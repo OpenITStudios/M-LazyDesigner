@@ -59,6 +59,7 @@ pub struct BoneView {
     name: String,
     origin: [f64; 3],
     rotation: [f64; 3],
+    visible: bool,
 }
 
 #[derive(Serialize)]
@@ -239,6 +240,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 name: bone.name.clone(),
                 origin: bone.origin.unwrap_or([0.0, 0.0, 0.0]),
                 rotation: property_vec3(&bone.extra, "rotation"),
+                visible: bone.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
             }).collect(),
             hierarchy: doc.hierarchy.clone(),
             texture_names: doc.texture_assets.iter().map(|texture| {
@@ -671,4 +673,25 @@ mod tests {
         assert_eq!(snapshot.cubes.len(), 0);
         assert_eq!(snapshot.preview_scope, "UNVERIFIED_EMBEDDED_PNG_SUBSET");
     }
+
+    #[test]
+    fn bone_visibility_snapshot_is_derived_from_authoritative_rust_data() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        doc.bones[0].extra.insert("visibility".into(), json!(false));
+        doc.cubes[0].extra.insert("visibility".into(), json!(false));
+        let store = EditorStore {
+            epoch: 2,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(doc.clone()).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        let snapshot = project(&store).unwrap();
+        assert!(!snapshot.bones[0].visible);
+        assert!(!snapshot.cubes[0].visible);
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &doc);
+    }
+
 }

@@ -1,5 +1,7 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Outliner visibility transactions (2026-11-15; SOURCE_ONLY):** `set_node_visibility` uses the same revision-checked Rust CLI/Tauri EditOperation path to change one Cube or an entire Group subtree, matching Blockbench's propagated visibility toggle without treating Group visibility as inherited GPU masking. Tauri projects Bone visibility into the existing Svelte Outliner; Save Copy, .bbmodel retention, history and imported opaque fields remain Rust-owned. New Rust source regressions are TEST_AUTHORED_NOT_RUN; native interaction and true Blockbench 1:1 remain UNVERIFIED.
+
 This folder owns the **single authoritative Bedrock Entity Geometry/UV model** shared by the headless CLI and the Rust-branch Tauri/Svelte Edit UI. Cargo, WebView2, Windows and native Blockbench have NOT_EXECUTED status. The legacy Runtime, Gateway, Desktop source, Skills and all user assets remain preserved.
 
 ## Source owners

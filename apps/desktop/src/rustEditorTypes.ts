@@ -33,6 +33,7 @@ export type BoneView = {
   name: string;
   origin: Vec3;
   rotation: Vec3;
+  visible: boolean;
 };
 
 export type HierarchyNode = string | {
@@ -65,6 +66,7 @@ export type EditOperation =
   | { op: 'translate_cube'; uuid: string; delta: Vec3 }
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
+  | { op: 'set_node_visibility'; uuid: string; visible: boolean }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
   | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
   | { op: 'create_paint_texture'; uuid: string; name: string }

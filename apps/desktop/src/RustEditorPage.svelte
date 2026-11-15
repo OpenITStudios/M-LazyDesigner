@@ -21,7 +21,7 @@
 
   export let onLegacy: () => void = () => {};
   type Menu = 'file' | 'edit' | 'view' | null;
-  type Row = { uuid: string; name: string; depth: number; kind: 'cube' | 'bone' };
+  type Row = { uuid: string; name: string; depth: number; kind: 'cube' | 'bone'; visible: boolean };
 
   let snapshot: EditorSnapshot | null = null;
   let selectedId: string | null = null;
@@ -91,16 +91,18 @@
   const AXES = ['X', 'Y', 'Z'] as const;
   const FACES = ['north', 'east', 'south', 'west', 'up', 'down'] as const;
 
-  function makeRows(nodes: HierarchyNode[], cubes: CubeView[], folded: Set<string>): Row[] {
-    const cubeNames = new Map(cubes.map((cube) => [cube.uuid, cube.name] as const));
-    const boneNames = new Map((snapshot?.bones ?? []).map((bone) => [bone.uuid, bone.name] as const));
+  function makeRows(nodes: HierarchyNode[], cubes: CubeView[], bones: EditorSnapshot['bones'], folded: Set<string>): Row[] {
+    const cubesById = new Map(cubes.map((cube) => [cube.uuid, cube] as const));
+    const bonesById = new Map(bones.map((bone) => [bone.uuid, bone] as const));
     const rows: Row[] = [];
     function walk(items: HierarchyNode[], depth: number) {
       for (const item of items) {
         if (typeof item === 'string') {
-          rows.push({ uuid: item, name: cubeNames.get(item) ?? 'Cube', depth, kind: 'cube' });
+          const cube = cubesById.get(item);
+          rows.push({ uuid: item, name: cube?.name ?? 'Cube', depth, kind: 'cube', visible: cube?.visible ?? true });
         } else {
-          rows.push({ uuid: item.uuid, name: boneNames.get(item.uuid) ?? 'Bone', depth, kind: 'bone' });
+          const bone = bonesById.get(item.uuid);
+          rows.push({ uuid: item.uuid, name: bone?.name ?? 'Bone', depth, kind: 'bone', visible: bone?.visible ?? true });
           if (!folded.has(item.uuid)) walk(item.children, depth + 1);
         }
       }
@@ -110,7 +112,7 @@
   }
 
   $: selectedCube = snapshot?.cubes.find((cube) => cube.uuid === selectedId) ?? null;
-  $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], collapsed);
+  $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
 
   function selectWorkspace(mode: WorkspaceMode) {
@@ -135,6 +137,11 @@
   function selectRow(row: Row) {
     if (row.kind === 'cube') selectCube(row.uuid);
     else { selectedId = null; selectedBoneId = row.uuid; }
+  }
+  function toggleRowVisibility(row: Row) {
+    if (!snapshot || busy || loading || paintStroke) return;
+    // The Rust operation handles group descendants in one Undo transaction.
+    apply([{ op: 'set_node_visibility', uuid: row.uuid, visible: !row.visible }]);
   }
   function showError(cause: unknown) {
     if (cause && typeof cause === 'object' && 'message' in cause &&
@@ -901,6 +908,7 @@
           <div class="outliner-list" role="tree" aria-label="Model hierarchy">
             {#each rows as row (row.uuid)}
               <div class="outliner-row" class:selected={selectedId === row.uuid || selectedBoneId === row.uuid}
+                class:muted={!row.visible}
                 style:padding-left={(6 + row.depth * 14) + 'px'} role="presentation">
                 {#if row.kind === 'bone'}
                   <button class="collapse" aria-label="Toggle group" aria-expanded={!collapsed.has(row.uuid)}
@@ -913,6 +921,11 @@
                   <span class="item-kind" aria-hidden="true">{row.kind === 'bone' ? '◇' : '□'}</span>
                   <span class="truncate" title={row.name}>{row.name}</span>
                 </button>
+                <button type="button" class="outliner-visibility" class:is-hidden={!row.visible}
+                  disabled={busy || loading || !!paintStroke}
+                  aria-label={(row.visible ? 'Hide ' : 'Show ') + row.kind + ' ' + row.name}
+                  title={(row.visible ? 'Hide ' : 'Show ') + row.kind + (row.kind === 'bone' ? ' and descendants' : '')}
+                  onclick={() => toggleRowVisibility(row)}>{row.visible ? 'Hide' : 'Show'}</button>
               </div>
             {/each}
           </div>

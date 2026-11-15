@@ -1002,3 +1002,77 @@ fn invalid_rotation_edits_reject_and_keep_revision_stable() {
     assert_eq!(session.document(), &before);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn cube_visibility_changes_only_the_target_and_roundtrips() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[EditOperation::SetNodeVisibility {
+        uuid: CUBE.into(), visible: false,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(session.document().cubes[0].extra.get("visibility"), Some(&json!(false)));
+    assert_eq!(session.document().bones, original.bones);
+    assert_eq!(session.document().hierarchy, original.hierarchy);
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    let source: Value = serde_json::from_str(TEXTURED).unwrap();
+    assert_eq!(saved["elements"][0]["visibility"], json!(false));
+    assert_eq!(saved["textures"], source["textures"]);
+    assert_eq!(saved["animations"], source["animations"]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    assert_eq!(session.apply(1, &[EditOperation::SetNodeVisibility {
+        uuid: CUBE.into(), visible: false,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document().cubes[0].extra.get("visibility"), Some(&json!(false)));
+}
+
+#[test]
+fn nested_group_visibility_updates_descendants_not_siblings_and_refuses_atomic_failures() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    let sibling = "00000000-0000-4000-8000-000000000004";
+    let nested = "00000000-0000-4000-8000-000000000003";
+    let mut sibling_cube = wire["elements"][0].clone();
+    sibling_cube["uuid"] = json!(sibling);
+    wire["elements"].as_array_mut().unwrap().push(sibling_cube);
+    wire["outliner"][0]["children"].as_array_mut().unwrap().push(json!(sibling));
+    wire["groups"][1]["vendor_visibility_extension"] = json!({"retain": true});
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[EditOperation::SetNodeVisibility {
+        uuid: nested.into(), visible: false,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(session.document().bones[1].extra.get("visibility"), Some(&json!(false)));
+    assert_eq!(session.document().bones[0].extra.get("visibility"), None);
+    assert_eq!(session.document().cubes[0].extra.get("visibility"), Some(&json!(false)));
+    assert_eq!(session.document().cubes[1].extra.get("visibility"), None);
+    assert_eq!(session.document().bones[1].extra.get("vendor_visibility_extension"),
+        Some(&json!({"retain":true})));
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["textures"], wire["textures"]);
+    assert_eq!(saved["animations"], wire["animations"]);
+    assert_eq!(saved["outliner"], wire["outliner"]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document().cubes[0].extra.get("visibility"), Some(&json!(false)));
+    session.apply(3, &[EditOperation::SetNodeVisibility {
+        uuid: nested.into(), visible: true,
+    }]).unwrap();
+    assert_eq!(session.document().bones[1].extra.get("visibility"), None);
+    assert_eq!(session.document().cubes[0].extra.get("visibility"), None);
+    assert_eq!(session.document().cubes[1].extra.get("visibility"), None);
+    let before = session.document().clone();
+    assert_eq!(session.apply(4, &[
+        EditOperation::SetNodeVisibility { uuid: nested.into(), visible: false },
+        EditOperation::SetNodeVisibility { uuid: "unknown".into(), visible: false },
+    ]).unwrap_err(), "VISIBILITY_TARGET_NOT_FOUND");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 4);
+}

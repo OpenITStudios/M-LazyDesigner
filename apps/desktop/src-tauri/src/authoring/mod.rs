@@ -111,6 +111,7 @@ pub enum EditOperation {
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
+    SetNodeVisibility { uuid: String, visible: bool },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
     CreatePaintTexture { uuid: String, name: String },
@@ -582,6 +583,41 @@ fn append_child(nodes: &mut [OutlinerNode], parent_uuid: &str, child: &OutlinerN
     false
 }
 
+// In pinned Blockbench 5.2.1 an Outliner group visibility toggle writes
+// the group and all descendants; the Group preview is not an inherited mask.
+fn find_visibility_group<'a>(nodes: &'a [OutlinerNode], uuid: &str) -> Option<&'a OutlinerBone> {
+    for node in nodes {
+        if let OutlinerNode::Bone(group) = node {
+            if group.uuid == uuid { return Some(group); }
+            if let Some(found) = find_visibility_group(&group.children, uuid) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
+fn collect_visibility_targets(
+    group: &OutlinerBone, cube_ids: &mut HashSet<String>, bone_ids: &mut HashSet<String>,
+) {
+    bone_ids.insert(group.uuid.clone());
+    for child in &group.children {
+        match child {
+            OutlinerNode::Cube(uuid) => { cube_ids.insert(uuid.clone()); },
+            OutlinerNode::Bone(nested) => collect_visibility_targets(nested, cube_ids, bone_ids),
+        }
+    }
+}
+
+fn set_visibility(extra: &mut Map<String, Value>, visible: bool) {
+    if visible {
+        // Blockbench omits the default visible Cube field on save.
+        extra.remove("visibility");
+    } else {
+        extra.insert("visibility".into(), Value::Bool(false));
+    }
+}
+
 fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<String> {
     match op {
         EditOperation::AddBone { bone, parent_uuid } => {
@@ -619,6 +655,24 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(cube.uuid.clone())
         }
 
+        EditOperation::SetNodeVisibility { uuid, visible } => {
+            if let Some(cube) = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid) {
+                set_visibility(&mut cube.extra, *visible);
+            } else {
+                let group = find_visibility_group(&doc.hierarchy, uuid)
+                    .ok_or_else(|| fail("VISIBILITY_TARGET_NOT_FOUND"))?;
+                let mut cube_ids = HashSet::new();
+                let mut bone_ids = HashSet::new();
+                collect_visibility_targets(group, &mut cube_ids, &mut bone_ids);
+                for cube in &mut doc.cubes {
+                    if cube_ids.contains(&cube.uuid) { set_visibility(&mut cube.extra, *visible); }
+                }
+                for bone in &mut doc.bones {
+                    if bone_ids.contains(&bone.uuid) { set_visibility(&mut bone.extra, *visible); }
+                }
+            }
+            Ok(uuid.clone())
+        }
         EditOperation::TranslateCube { uuid, delta } => {
             if !valid_vec3(*delta) { return Err(fail("CUBE_DELTA_INVALID")); }
             let per_texture = has_per_texture_uv_rules(doc);
