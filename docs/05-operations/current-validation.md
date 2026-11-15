@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Functional Animation preview mode integration (SOURCE_ONLY)
+
+Aligned the existing Tauri AnimationView's read-only selected-clip projection with the canonical Rust once/loop/hold authoring subset. New `loopMode` is saved metadata, not another model owner. Unknown/opaque import and zero-length repeating clips remain preview-unsupported; admitted numeric-linear Bone channels can be displayed for all source-backed loop modes. The existing elapsed-time helper and RustEditorPage handler now implement preview playhead once-reset, loop-wrap and hold-final-pose without altering layout or authoring data. Authored Rust/Node regressions NOT_EXECUTED; native Windows/Blockbench playback and animation quality still UNVERIFIED.
+
 ## 2026-11-16 — Source-backed Animation loop and hold editing (SOURCE_ONLY)
 
 Pinned official `JannisX11/blockbench@e2ede0809ee6bc91f374ac7e00d34cffbdf86a14` Animation source confirms saved `once/loop/hold` variants. Rust now authors `SetAnimationLoopMode` for strictly supported numeric-linear Bone clips, preserves the mode through keyframe add/update/remove, length adjustments and proportional retiming, and refuses malformed/duplicate/opaque imported loops or zero-duration loop/hold. Code Mode track inspection includes the admitted `loop_mode` and `clip_length` while retaining UNVERIFIED visual status. Tauri pose projection still marks non-once loops preview-unsupported by design, not a successful playback preview. Authored Rust regression checks three channels, mode switches, .bbmodel reimport and Undo/Redo, plus refusal and atomic no-op. Tests NOT_EXECUTED; native Blockbench loop playback/export remains UNVERIFIED.

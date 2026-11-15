@@ -6,7 +6,7 @@
   import RustViewport from './RustViewport.svelte';
   import { projectedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
   import { supportedFaceUvRotation } from './rustTextureProjection';
-  import { advanceOncePlayhead } from './rustAnimationPlayback';
+  import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
@@ -147,8 +147,8 @@
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
   $: faceRotation = supportedFaceUvRotation(selectedCube?.faces[selectedFace]);
 
-  // One-shot playback is admitted only for the strict numeric linear transform
-  // projection. Stale snapshots, hidden windows and unsupported clips pause.
+  // Source-backed once/loop/hold playback is admitted only for the strict
+  // numeric-linear projection. Stale snapshots and unknown clips pause.
   function pauseAnimationPlayback() {
     if (playbackFrame !== null) window.cancelAnimationFrame(playbackFrame);
     playbackFrame = null;
@@ -176,11 +176,13 @@
     const elapsed = playbackPreviousTimestamp === null
       ? 0 : Math.max(0, timestamp - playbackPreviousTimestamp);
     playbackPreviousTimestamp = timestamp;
-    const next = advanceOncePlayhead(animationTime, elapsed, current.length);
+    const next = advanceAnimationPlayhead(
+      animationTime, elapsed, current.length, current.loopMode,
+    );
     if (!next) { pauseAnimationPlayback(); return; }
     animationTime = next.time;
     if (next.finished) {
-      // Pinned Blockbench 'once' playback resets to the start and pauses.
+      // Once resets to start; hold keeps its final pose. Loop never finishes.
       pauseAnimationPlayback();
       return;
     }

@@ -1,7 +1,7 @@
 // Source-authored only; tests are NOT_EXECUTED while the repo hold applies.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { advanceOncePlayhead } from './rustAnimationPlayback.ts';
+import { advanceOncePlayhead, advanceAnimationPlayhead } from './rustAnimationPlayback.ts';
 
 test('one-shot preview advances in seconds from frame elapsed milliseconds', () => {
   assert.deepEqual(advanceOncePlayhead(0.25, 125, 2), {
@@ -31,6 +31,29 @@ test('invalid durations, backwards time and impossible playback positions are re
   ]) {
     assert.equal(advanceOncePlayhead(time, elapsed, length), null);
   }
+});
+
+test('loop playback wraps without stopping; hold retains its terminal pose', () => {
+  const wrapped = advanceAnimationPlayhead(0.8, 450, 1, 'loop');
+  assert.ok(wrapped);
+  assert.ok(Math.abs(wrapped.time - 0.25) < 1e-10);
+  assert.equal(wrapped.finished, false);
+  const multiLoop = advanceAnimationPlayhead(0.8, 2_450, 1, 'loop');
+  assert.ok(multiLoop);
+  assert.ok(Math.abs(multiLoop.time - 0.25) < 1e-10);
+  assert.equal(multiLoop.finished, false);
+  assert.deepEqual(advanceAnimationPlayhead(0.8, 450, 1, 'hold'), {
+    time: 1, finished: true,
+  });
+  assert.deepEqual(advanceAnimationPlayhead(0.5, 250, 1, 'hold'), {
+    time: 0.75, finished: false,
+  });
+  assert.deepEqual(advanceAnimationPlayhead(0.8, 450, 1, 'once'), {
+    time: 0, finished: true,
+  });
+  assert.equal(advanceAnimationPlayhead(0.5, 100, 1, 'unsupported'), null);
+  assert.equal(advanceAnimationPlayhead(0.5, 100, 0, 'loop'), null);
+  assert.equal(advanceAnimationPlayhead(-1, 100, 1, 'hold'), null);
 });
 
 test('the computed preview step is fresh data and does not mutate source inputs', () => {

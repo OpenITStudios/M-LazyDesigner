@@ -67,6 +67,8 @@ export type AnimationView = {
   uuid: string;
   name: string;
   length: number;
+  /** Three Blockbench modes; imported malformed mode cannot be previewed. */
+  loopMode: 'once' | 'loop' | 'hold' | 'unsupported';
   rotationKeyframes: RotationKeyframeView[];
   transformKeyframes: TransformKeyframeView[];
   // True only when Tauri recognizes every animation/track field for static pose.

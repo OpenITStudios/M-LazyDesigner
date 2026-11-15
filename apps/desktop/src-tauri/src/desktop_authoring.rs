@@ -98,6 +98,7 @@ pub struct AnimationView {
     uuid: String,
     name: String,
     length: f64,
+    loop_mode: String,
     rotation_keyframes: Vec<RotationKeyframeView>,
     transform_keyframes: Vec<TransformKeyframeView>,
     preview_supported: bool,
@@ -386,13 +387,23 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
             .unwrap_or("Unnamed Animation").to_owned();
         let length = animation.get("length")?.as_f64()
             .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v))?;
+        // Only the three pinned Blockbench v5.2.1 playback policies are
+        // projected. Malformed imported fields have an unsupported marker,
+        // never a silently assumed once mode.
+        let loop_mode = match animation.get("loop") {
+            None => Some("once"),
+            Some(Value::String(mode)) if
+                matches!(mode.as_str(), "once" | "loop" | "hold") =>
+                    Some(mode.as_str()),
+            _ => None,
+        };
         let mut preview_supported = counts.get(uuid.as_str()) == Some(&1) &&
             !uuid.is_empty() && uuid.len() <= 128 &&
             !uuid.chars().any(|ch| ch.is_control() || ch.is_whitespace()) &&
             animation.as_object().is_some_and(|map|
                 map.keys().all(|key| matches!(key.as_str(),
                     "uuid" | "name" | "loop" | "length" | "animators"))) &&
-            animation.get("loop").and_then(Value::as_str).unwrap_or("once") == "once";
+            loop_mode.is_some_and(|mode| mode == "once" || length > 0.0);
         let mut rotation_keyframes = Vec::new();
         let mut transform_keyframes: Vec<TransformKeyframeView> = Vec::new();
         let mut keyframe_ids = HashSet::new();
@@ -485,8 +496,9 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
             transform_keyframes.clear();
         }
         Some(AnimationView {
-            uuid, name, length, rotation_keyframes,
-            transform_keyframes, preview_supported,
+            uuid, name, length,
+            loop_mode:loop_mode.unwrap_or("unsupported").to_owned(),
+            rotation_keyframes, transform_keyframes, preview_supported,
         })
     }).collect()
 }
@@ -1603,6 +1615,50 @@ mod tests {
         assert!(!refused[0].preview_supported);
         assert!(refused[0].transform_keyframes.is_empty());
         assert!(refused[0].rotation_keyframes.is_empty());
+    }
+
+    // Authored regression only. Windows/Tauri preview NOT_EXECUTED.
+    #[test]
+    fn animation_projection_recognizes_loop_hold_and_fails_closed_on_unknown_modes() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let anim = "00000000-0000-4000-8000-000000009741";
+        let bone = "00000000-0000-4000-8000-000000000001";
+        doc.animation_assets.push(json!({
+            "uuid":anim, "name":"looping", "loop":"once",
+            "length":2.0, "animators":{}
+        }));
+        doc.animation_assets[0]["animators"][bone] = json!({
+            "name":"root_bone", "type":"bone", "keyframes":[{
+                "uuid":"00000000-0000-4000-8000-000000009742",
+                "channel":"rotation", "time":1.0, "interpolation":"linear",
+                "data_points":[{"x":"0","y":"45","z":"0"}]
+            }]
+        });
+        let original = doc.clone();
+        for mode in ["once", "loop", "hold"] {
+            doc.animation_assets[0]["loop"] = json!(mode);
+            let views = animation_views(&doc);
+            assert_eq!(views.len(), 1);
+            assert_eq!(views[0].loop_mode, mode);
+            assert!(views[0].preview_supported);
+            assert_eq!(views[0].transform_keyframes.len(), 1);
+        }
+        doc.animation_assets[0]["length"] = json!(0.0);
+        assert!(!animation_views(&doc)[0].preview_supported);
+        doc.animation_assets[0]["length"] = json!(2.0);
+        doc.animation_assets[0]["loop"] = json!("bounce");
+        assert!(!animation_views(&doc)[0].preview_supported);
+        assert_eq!(animation_views(&doc)[0].loop_mode, "unsupported");
+        doc.animation_assets[0]["loop"] = json!(42);
+        assert!(!animation_views(&doc)[0].preview_supported);
+        assert_eq!(animation_views(&doc)[0].loop_mode, "unsupported");
+        doc = original;
+        doc.animation_assets[0]["loop"] = json!("loop");
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["data_points"][0]["x"] = json!("query.head_yaw");
+        assert!(!animation_views(&doc)[0].preview_supported);
+        assert!(animation_views(&doc)[0].transform_keyframes.is_empty());
     }
 
     #[test]
