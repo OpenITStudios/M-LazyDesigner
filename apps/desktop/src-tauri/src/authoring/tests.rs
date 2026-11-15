@@ -402,6 +402,85 @@ fn full_asset_authoring_assembly_roundtrip_preserves_geometry_texture_and_animat
     assert_eq!(session.document(), &saved);
 }
 
+// SOURCE-AUTHORED: intended Rust geometry/UV .bbmodel acceptance, not run.
+#[test]
+fn stretch_and_box_uv_mirror_are_one_lossless_geometry_transaction() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Symmetry", "symmetry").unwrap()).unwrap();
+    let bone: Bone = serde_json::from_value(json!({
+        "uuid": BONE, "name": "root", "origin": [0, 0, 0]
+    })).unwrap();
+    session.apply(0, &[
+        EditOperation::AddBone { bone, parent_uuid: None },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+    ]).unwrap();
+    let original = session.document().clone();
+    let original_faces = original.cubes[0].faces.clone();
+    assert_eq!(original_faces["north"]["uv"], json!([4.0, 4.0, 8.0, 8.0]));
+
+    let changed = session.apply(1, &[
+        EditOperation::SetCubeStretch { uuid: CUBE.into(), stretch: [1.5, 1.0, 0.75] },
+        EditOperation::SetCubeMirrorUv { uuid: CUBE.into(), mirrored: true },
+    ]).unwrap();
+    assert_eq!(changed.operation_count, 2);
+    assert_eq!(changed.revision, 2);
+    assert_eq!(changed.changed_uuids, vec![CUBE.to_owned()]);
+    let wire: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(wire["elements"][0]["stretch"], json!([1.5, 1.0, 0.75]));
+    assert_eq!(wire["elements"][0]["mirror_uv"], json!(true));
+    assert_eq!(wire["elements"][0]["faces"]["north"]["uv"], json!([8.0, 4.0, 4.0, 8.0]));
+    assert_eq!(wire["elements"][0]["faces"]["east"]["uv"], json!([12.0, 4.0, 8.0, 8.0]));
+    assert_eq!(wire["elements"][0]["from"], json!([0.0, 0.0, 0.0]));
+    assert_eq!(wire["elements"][0]["to"], json!([4.0, 4.0, 4.0]));
+    let saved = session.document().clone();
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    session.apply(4, &[
+        EditOperation::SetCubeStretch { uuid: CUBE.into(), stretch: [1.0; 3] },
+        EditOperation::SetCubeMirrorUv { uuid: CUBE.into(), mirrored: false },
+    ]).unwrap();
+    let reset: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert!(reset["elements"][0].get("stretch").is_none());
+    assert!(reset["elements"][0].get("mirror_uv").is_none());
+    assert_eq!(session.document().cubes[0].faces, original_faces);
+}
+
+#[test]
+fn unsafe_stretch_and_box_uv_modes_refuse_without_partial_writes() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let initial = session.document().clone();
+    for bad in [[1.0, 0.0, 1.0], [-1.0, 1.0, 1.0], [101.0, 1.0, 1.0],
+                [f64::INFINITY, 1.0, 1.0], [f64::NAN, 1.0, 1.0]] {
+        assert_eq!(session.apply(0, &[
+            EditOperation::RenameNode { uuid: CUBE.into(), name: "temporary".into() },
+            EditOperation::SetCubeStretch { uuid: CUBE.into(), stretch: bad },
+        ]).unwrap_err(), "CUBE_STRETCH_INVALID");
+    }
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetCubeStretch { uuid: CUBE.into(), stretch: [1.0; 3] },
+    ]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetCubeMirrorUv { uuid: CUBE.into(), mirrored: true },
+    ]).unwrap_err(), "CUBE_MIRROR_BOX_UV_REQUIRED");
+    let mut invalid = initial.clone();
+    invalid.meta.box_uv = Some(true);
+    invalid.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+    let mut unsupported = EditorSession::from_document(invalid.clone()).unwrap();
+    assert_eq!(unsupported.apply(0, &[
+        EditOperation::SetCubeMirrorUv { uuid: CUBE.into(), mirrored: true },
+    ]).unwrap_err(), "CUBE_MIRROR_UV_RULESET_UNSUPPORTED");
+    assert_eq!(unsupported.document(), &invalid);
+    assert_eq!(session.document(), &initial);
+    assert_eq!(session.summary().revision, 0);
+    let mut malformed: Value = serde_json::from_str(SAMPLE).unwrap();
+    malformed["elements"][0]["mirror_uv"] = json!("true");
+    assert_eq!(AuthoringDocument::import_bbmodel(
+        &serde_json::to_vec(&malformed).unwrap()).unwrap_err(), "CUBE_MIRROR_UV_FLAG_INVALID");
+}
+
 // Authored-only Rust/Paint regressions (not executed).
 #[test]
 fn region_fill_is_four_connected_and_one_undoable_rgba8_transaction() {

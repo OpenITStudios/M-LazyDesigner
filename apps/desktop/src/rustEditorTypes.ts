@@ -110,6 +110,8 @@ export type EditOperation =
   | { op: 'set_bone_origin'; uuid: string; origin: Vec3 }
   | { op: 'set_cube_origin'; uuid: string; origin: Vec3 }
   | { op: 'set_cube_inflate'; uuid: string; inflate: number }
+  | { op: 'set_cube_stretch'; uuid: string; stretch: Vec3 }
+  | { op: 'set_cube_mirror_uv'; uuid: string; mirrored: boolean }
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
   | { op: 'add_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'update_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }

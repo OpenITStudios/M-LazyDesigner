@@ -159,6 +159,8 @@ pub enum EditOperation {
     SetBoneOrigin { uuid: String, origin: [f64; 3] },
     SetCubeOrigin { uuid: String, origin: [f64; 3] },
     SetCubeInflate { uuid: String, inflate: f64 },
+    SetCubeStretch { uuid: String, stretch: [f64; 3] },
+    SetCubeMirrorUv { uuid: String, mirrored: bool },
     SetNodeVisibility { uuid: String, visible: bool },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
     SetFaceUvRotation { uuid: String, face: String, rotation: u16 },
@@ -485,6 +487,11 @@ fn validate_cube(cube: &Cube, textures: &[Value]) -> Result<()> {
     }
     if cube.extra.get("box_uv").is_some_and(|v| !v.is_boolean()) {
         return Err(fail("CUBE_BOX_UV_FLAG_INVALID"));
+    }
+    // UV mirroring is source-backed metadata: a malformed imported value
+    // must never silently become false in the Box UV net.
+    if cube.extra.get("mirror_uv").is_some_and(|v| !v.is_boolean()) {
+        return Err(fail("CUBE_MIRROR_UV_FLAG_INVALID"));
     }
     if !valid_uuid(&cube.uuid) || !valid_bounds(cube.from, cube.to) {
         return Err(fail("CUBE_ID_OR_BOUNDS_INVALID"));
@@ -1715,6 +1722,66 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             } else {
                 cube.extra.insert("inflate".into(), json!(inflate));
             }
+            Ok(uuid.clone())
+        }
+        EditOperation::SetCubeStretch { uuid, stretch } => {
+            // Preserve Cube bounds, pivot, UV and source image. Author only
+            // positive, bounded stretches that the Three.js preview can show.
+            // Imported unusual stretch fields remain preserved separately;
+            // they are not silently coerced by this edit.
+            if !stretch.iter().all(|value|
+                value.is_finite() && *value > 0.0 && *value <= 100.0) {
+                return Err(fail("CUBE_STRETCH_INVALID"));
+            }
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let inflation = cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0);
+            if (0..3).any(|axis|
+                (cube.to[axis] - cube.from[axis] + 2.0 * inflation) * stretch[axis] <= 0.0) {
+                return Err(fail("CUBE_STRETCH_DEGENERATE"));
+            }
+            let current = cube.extra.get("stretch")
+                .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok())
+                .unwrap_or([1.0; 3]);
+            if current == *stretch { return Ok(uuid.clone()); }
+            if *stretch == [1.0; 3] {
+                cube.extra.remove("stretch");
+            } else {
+                cube.extra.insert("stretch".into(), json!(stretch));
+            }
+            Ok(uuid.clone())
+        }
+        EditOperation::SetCubeMirrorUv { uuid, mirrored } => {
+            // One semantic operation replaces six manual Box UV edits.
+            // Never approximate advanced per-texture or float-sized nets.
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
+            let per_texture_rules = has_per_texture_uv_rules(doc);
+            let project_float_uv = [
+                doc.meta.extra.get("box_uv_float_size"),
+                doc.extensions.get("box_uv_float_size"),
+            ].into_iter().flatten().any(|flag| flag != &Value::Bool(false));
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if !cube_box_uv(cube, project_box_uv) {
+                return Err(fail("CUBE_MIRROR_BOX_UV_REQUIRED"));
+            }
+            if per_texture_rules {
+                return Err(fail("CUBE_MIRROR_UV_RULESET_UNSUPPORTED"));
+            }
+            if project_float_uv || cube.extra.get("box_uv_float_size")
+                .is_some_and(|flag| flag != &Value::Bool(false)) {
+                return Err(fail("CUBE_MIRROR_UV_FLOAT_UNSUPPORTED"));
+            }
+            if cube.extra.get("mirror_uv").and_then(Value::as_bool).unwrap_or(false)
+                == *mirrored {
+                return Ok(uuid.clone());
+            }
+            if *mirrored {
+                cube.extra.insert("mirror_uv".into(), Value::Bool(true));
+            } else {
+                cube.extra.remove("mirror_uv");
+            }
+            refresh_box_uv(cube)?;
             Ok(uuid.clone())
         }
         EditOperation::ScaleCube { uuid, factors } => {

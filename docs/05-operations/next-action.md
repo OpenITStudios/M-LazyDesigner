@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Next Geometry source slice (2026-11-15):** `set_cube_stretch` and `set_cube_mirror_uv` now create supported Blockbench-format Cube stretch metadata and a full derived Box UV mirrored face net as one bounded Rust session transaction, instead of manual per-face rewrites. The format fields are grounded in official Blockbench v5.2.1 source, but the implementation is independent. Structured Rust/CLI/Code Mode authoring paths share existing revision/Undo and no-overwrite publication. Source regression AUTHORED_NOT_RUN. This does not claim measured speed/quality improvement or `.geo.json` stretch export. UI remains deferred.
+
 **Default Box UV texturing inspection:** The source-level six-face RGBA alpha inspector now supports conservatively derived Box UV coordinates for explicitly referenced, supported atlas textures. The generated Box UV state is recomputed on a copy rather than reading imported stale face fields. Unsupported float-size, unknown mirroring or per-texture metadata fail closed; `face_coverage_verdict` stays UNVERIFIED. This directly reduces one texture blindspot without altering UI. Tests AUTHORED_NOT_RUN; actual Blockbench export still pending.
 
 **Integrated source acceptance fixture:** The single Rust model authority now has one authored-not-run regression covering New → Geometry (Cube/Bone pivots/Inflate) → Paint (RGBA8 PNG and Cube link) → Animate (Position/Rotation/Scale) → .bbmodel export/reopen plus Undo/rollback. The remaining work is actual missing supported asset capabilities and later user-authorized native Blockbench/format/visual proof, not UI mimicry.

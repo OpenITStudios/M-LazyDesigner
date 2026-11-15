@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Geometry Cube stretch and Box UV mirror source (NOT_EXECUTED)
+
+Compared the pinned upstream `js/outliner/types/cube.js` save representation and `js/formats/bbmodel.js` format-5.0 path, then independently authored Rust `SetCubeStretch` and `SetCubeMirrorUv` on the canonical EditOperation. Positive source regression covers one atomic geometry/UV transaction, expected mirrored face UV coordinates, neutral-field omission, export/reimport and Undo/Redo. Negative source regressions cover degenerate/mirrored stretch factors, unknown/unsafe Box UV modes, atomic rollback and malformed imported mirror metadata. Tauri/CLI generic apply and Code Mode typed plans use the same source owner. Tests AUTHORED_NOT_RUN; no actual Blockbench, Windows, benchmark or native effect proof.
+
 ## 2026-11-15 — Box UV alpha gap closed in source (SOURCE_ONLY)
 
 The default Rust Box UV model was not eligible for existing six-face alpha inspection. The Rust inspector now derives Box UV face rectangles on a transient Cube copy, records saved vs derived UV and counts exact RGBA8 sampled atlas pixels through the existing decoder. Per-texture rules and unsafe float/mirror metadata refuse; the actual model is never changed and the output does not claim visible-face coverage. CLI/Code Mode types and regression fixture cover positive/negative cases (TEST_AUTHORED_NOT_RUN). Native Blockbench visual/export and build tests remain UNVERIFIED/DEFERRED.
