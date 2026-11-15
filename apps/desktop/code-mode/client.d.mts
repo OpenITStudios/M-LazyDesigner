@@ -320,6 +320,12 @@ export declare function createRustCodeModeClient(options: {
    * This callback alone does NOT sandbox a model-authored Node script.
    */
   authorizeMutation?: (request: Readonly<MutationRequest>) => boolean | Promise<boolean>;
+  /**
+   * Optional synchronous launch-time lease check for the trusted host.
+   * Receives the EXACT approved request descriptor object; if false, Rust is
+   * not invoked. Must not be model-authored or asynchronously resolved.
+   */
+  permitWriteLaunch?: (request: Readonly<MutationRequest>) => boolean;
 }): RustCodeModeClient;
 /** A path and SHA-bound read-only view plus guarded output operations. */
 export interface RustCodeModeProject {

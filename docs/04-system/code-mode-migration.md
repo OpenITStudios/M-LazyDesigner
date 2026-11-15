@@ -47,6 +47,12 @@ Programmatic use does not imply a new model engine, second document registry, or
 
 ## Programmatic read batching — 2026-11-15 (SOURCE_ONLY)
 
+**Write launch integrity:** A host-approved transaction is rechecked by a
+synchronous one-time descriptor/guest lease immediately before Rust
+invocation. Thus a previously approved edit cannot start from a terminated
+or replaced guest after awaited edit-plan file preparation. This source
+guard does not replace OS isolation or PC-local security validation.
+
 **Host lifecycle hardening:** The first-party Code Mode host refuses
 overlapping execution on the same bound project, uses a separate
 operator-approval timeout, and invalidates approvals after a guest exit.

@@ -160,6 +160,46 @@ test('CLI failures are not reported as successful model mutations', async () => 
   }), /SOURCE_SHA256_STALE/);
 });
 
+test('Code Mode rechecks the exact approval descriptor before launching Rust', async () => {
+  let invoked = 0;
+  let approved = null;
+  let launchChecks = 0;
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: async (request) => {
+      approved = request;
+      return true;
+    },
+    permitWriteLaunch: (request) => {
+      launchChecks++;
+      assert.strictEqual(request, approved);
+      // The guest could have closed after approval while the SDK created
+      // the temporary edit-plan file; deny this stale session lease.
+      return false;
+    },
+    runner: async () => {
+      invoked++;
+      return { status: 'OK' };
+    },
+  });
+  await assert.rejects(client.apply({
+    input: '/abs/model.bbmodel', output: '/abs/next.bbmodel',
+    expectedSha256: SHA, operations: [
+      { op: 'translate_cube', uuid: 'cube-1', delta: [1, 0, 0] },
+    ],
+  }), /CODE_MODE_MUTATION_SESSION_STALE/);
+  assert.equal(approved.operation, 'apply');
+  await assert.rejects(client.newModel({
+    output: '/abs/new.bbmodel', name: 'New', modelIdentifier: 'new',
+  }), /CODE_MODE_MUTATION_SESSION_STALE/);
+  await assert.rejects(client.exportGeometry({
+    input: '/abs/model.bbmodel', output: '/abs/model.geo.json',
+    expectedSha256: SHA,
+  }), /CODE_MODE_MUTATION_SESSION_STALE/);
+  assert.equal(launchChecks, 3);
+  assert.equal(invoked, 0);
+});
+
 test('Code Mode denies mutations without trusted host authorization', async () => {
   let invoked = 0;
   const client = createRustCodeModeClient({

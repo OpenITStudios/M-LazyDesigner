@@ -1,5 +1,18 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Code Mode mutation approval-to-launch lease guard (SOURCE_ONLY)
+
+The typed Rust Code Mode client now accepts a trusted host-only synchronous
+`permitWriteLaunch` callback. It receives the exact approved mutation
+descriptor immediately before the first-party Rust process invocation,
+including after asynchronous edit-plan file creation. The host owns a
+WeakMap binding that descriptor to the originating guest session; a
+terminated/replaced guest cannot reuse an earlier approval to launch Rust.
+All write routes (New, Apply, PNG import/export and Geometry export) pass
+the same pre-launch check. Read-only inspections are unaffected. Positive
+and refusal regression source AUTHORED_NOT_RUN; no Node, Deno, Cargo, local
+sandbox or native model execution. This source is not runtime security PASS.
+
 ## 2026-11-15 — Code Mode host session/approval lifecycle hardening (SOURCE_ONLY)
 
 The first-party Rust Code Mode Node host now rejects concurrent guest

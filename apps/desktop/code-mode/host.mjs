@@ -131,6 +131,10 @@ export async function createCodeModeHost({
   // Only one code session may be active per host. Operator approval is
   // invalidated when that session exits or times out.
   let activeExecution = null;
+  // Every approval descriptor is linked to the exact guest that received it.
+  // This prevents an old approval from being consumed by a later guest when
+  // Rust plan-file creation yields to the event loop before CLI launch.
+  const approvedGuest = new WeakMap();
   const client = createRustCodeModeClient({
     binary: rustBinary,
     ...(runner ? { runner } : {}),
@@ -150,8 +154,17 @@ export async function createCodeModeHost({
         execution.resume();
       }
       // Prevent a delayed approval from reviving a timed-out guest.
-      return approved === true &&
+      const valid = approved === true &&
         !execution.closed && activeExecution === execution;
+      if (valid) approvedGuest.set(request, execution);
+      return valid;
+    },
+    // Synchronous last lease check, directly before the SDK launches Rust.
+    // No async work may occur between this check and the execFile request.
+    permitWriteLaunch: (request) => {
+      const owner = approvedGuest.get(request);
+      approvedGuest.delete(request);
+      return owner !== undefined && owner === activeExecution && !owner.closed;
     },
   });
   const projects = new Map();

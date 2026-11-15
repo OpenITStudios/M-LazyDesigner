@@ -122,6 +122,16 @@ must inspect current files rather than automatically retry a mutation. A
 source-authored regression covers both overlapping calls and approval
 completion after guest termination; neither test has been executed.
 
+**Write-launch lease closure:** Approval is attached to the exact source
+operation descriptor and guest execution identity. After a trusted host
+approves the request, the SDK may still perform asynchronous plan-file I/O.
+Immediately before invoking a mutating Rust CLI command, a synchronous
+`permitWriteLaunch` check consumes the approved descriptor and rejects it
+if the original guest has ended or been replaced. This closes the
+approval-to-spawn time-of-check/time-of-use gap without turning approval
+into a reusable token. The check is host-owned and is never exposed to
+model-authored code. Regression source is AUTHORED_NOT_RUN.
+
 The **Deno permission model is not a certified hostile-code isolation layer**.
 Before running independently supplied untrusted scripts, the eventual
 PC-local host must provide and verify suitable OS/process containment and

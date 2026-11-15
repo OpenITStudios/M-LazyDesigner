@@ -15,6 +15,9 @@ const execFileAsync = promisify(execFile);
 const PLAN_LIMIT = 64 * 1024;
 const OUTPUT_LIMIT = 128 * 1024;
 const SHA256 = /^[a-f0-9]{64}$/i;
+const WRITE_COMMANDS = new Set([
+  'new', 'apply', 'import-png', 'export-png', 'export-geometry',
+]);
 
 function nonempty(value, name) {
   if (typeof value !== 'string' || !value.trim() || value.startsWith('--') || value.includes('\0')) {
@@ -179,13 +182,18 @@ function serializeInspectionQueries(requests) {
  * Node process could instantiate a client with a dishonest callback or call
  * the binary directly. The host must isolate the code and supply a fixed SDK.
  */
-export function createRustCodeModeClient({ binary, runner, authorizeMutation } = {}) {
+export function createRustCodeModeClient({
+  binary, runner, authorizeMutation, permitWriteLaunch,
+} = {}) {
   absolute(binary, 'binary');
   if (runner !== undefined && typeof runner !== 'function') {
     throw new TypeError('runner must be a function supplied by a trusted host');
   }
   if (authorizeMutation !== undefined && typeof authorizeMutation !== 'function') {
     throw new TypeError('authorizeMutation must be a trusted-host function');
+  }
+  if (permitWriteLaunch !== undefined && typeof permitWriteLaunch !== 'function') {
+    throw new TypeError('permitWriteLaunch must be a synchronous trusted-host function');
   }
   const invoke = runner ?? ((args) => runBinary(binary, args));
   async function requestWrite(operation, details) {
@@ -196,9 +204,22 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
     if (await authorizeMutation(descriptor) !== true) {
       throw new Error('CODE_MODE_MUTATION_NOT_APPROVED');
     }
+    return descriptor;
   }
-  async function call(command, options) {
+  async function call(command, options, approval) {
     const args = optionArgs(command, options);
+    if (WRITE_COMMANDS.has(command)) {
+      if (!approval) {
+        throw new Error('CODE_MODE_MUTATION_AUTHORITY_REQUIRED');
+      }
+      // Synchronous final lease check immediately before invoking Rust.
+      // Apply performs async plan-file I/O AFTER operator approval; a guest
+      // may have exited during that gap. Never launch from a stale session.
+      if (permitWriteLaunch !== undefined &&
+          permitWriteLaunch(approval) !== true) {
+        throw new Error('CODE_MODE_MUTATION_SESSION_STALE');
+      }
+    }
     const result = await invoke(args);
     // The default process runner validates JSON on success and on error.
     // Trusted test runners return objects directly.
@@ -213,11 +234,11 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         output: absolute(output, 'output'), name: nonempty(name, 'name'),
         'model-identifier': nonempty(modelIdentifier, 'modelIdentifier'),
       };
-      await requestWrite('newModel', {
+      const approval = await requestWrite('newModel', {
         output: options.output, name: options.name,
         modelIdentifier: options['model-identifier'],
       });
-      return call('new', options);
+      return call('new', options, approval);
     },
     async inspect({ input, uuid, expectedSha256 } = {}) {
       return call('inspect', {
@@ -313,7 +334,7 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         'expected-sha256': hash(expectedSha256),
       };
       const payload = serializePlan(operations);
-      await requestWrite('apply', {
+      const approval = await requestWrite('apply', {
         input: options.input, output: options.output,
         expectedSha256: options['expected-sha256'],
         operationCount: operations.length,
@@ -324,7 +345,7 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
       const file = join(directory, 'edit.plan.json');
       try {
         await writeFile(file, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-        return await call('apply', { ...options, plan: file });
+        return await call('apply', { ...options, plan: file }, approval);
       } finally {
         await rm(directory, { recursive: true, force: true });
       }
@@ -335,11 +356,11 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         png: absolute(png, 'png'), uuid: nonempty(uuid, 'uuid'),
         name: nonempty(name, 'name'), 'expected-sha256': hash(expectedSha256),
       };
-      await requestWrite('importPng', {
+      const approval = await requestWrite('importPng', {
         input: options.input, output: options.output, png: options.png,
         uuid: options.uuid, expectedSha256: options['expected-sha256'],
       });
-      return call('import-png', options);
+      return call('import-png', options, approval);
     },
     async exportPng({ input, output, textureUuid, expectedSha256 }) {
       const options = {
@@ -347,22 +368,22 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         'texture-uuid': nonempty(textureUuid, 'textureUuid'),
         'expected-sha256': hash(expectedSha256),
       };
-      await requestWrite('exportPng', {
+      const approval = await requestWrite('exportPng', {
         input: options.input, output: options.output,
         textureUuid: options['texture-uuid'], expectedSha256: options['expected-sha256'],
       });
-      return call('export-png', options);
+      return call('export-png', options, approval);
     },
     async exportGeometry({ input, output, expectedSha256 }) {
       const options = {
         input: absolute(input, 'input'), output: absolute(output, 'output'),
         'expected-sha256': hash(expectedSha256),
       };
-      await requestWrite('exportGeometry', {
+      const approval = await requestWrite('exportGeometry', {
         input: options.input, output: options.output,
         expectedSha256: options['expected-sha256'],
       });
-      return call('export-geometry', options);
+      return call('export-geometry', options, approval);
     },
   });
 }

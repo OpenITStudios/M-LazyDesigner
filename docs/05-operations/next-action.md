@@ -4,6 +4,16 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 
+**Mutation launch lease (SOURCE_ONLY):** To finish host lifecycle security,
+every Code Mode write now checks a trusted per-guest permit immediately
+before the Rust CLI starts, after any awaited plan preparation. Approval
+is tied to the exact descriptor and original guest execution identity,
+not transferable to a later session. This closes the gap left by a
+preparation-time approval followed by guest termination. Regressions
+AUTHORED_NOT_RUN, local/CI holds intact. The supported Rust Code Mode
+source path is complete at this proof ceiling; native host/format/visual
+verification is still required before actual cutover.
+
 **Code Mode host hardening (SOURCE_ONLY):** The newly authored host now
 serializes one active guest per host, separates operator-approval wait from
 the guest execution timer, limits approval waits, invalidates approvals
