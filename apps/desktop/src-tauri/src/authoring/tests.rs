@@ -1076,3 +1076,39 @@ fn nested_group_visibility_updates_descendants_not_siblings_and_refuses_atomic_f
     assert_eq!(session.document(), &before);
     assert_eq!(session.summary().revision, 4);
 }
+
+#[test]
+fn cube_render_order_preserves_pinned_values_through_edit_export_and_history() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    for order in ["default", "behind", "in_front"] {
+        wire["elements"][0]["render_order"] = json!(order);
+        let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+        let original = session.document().clone();
+        session.apply(0, &[EditOperation::SetNodeVisibility {
+            uuid: CUBE.into(), visible: false,
+        }]).unwrap();
+        let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+        assert_eq!(saved["elements"][0]["render_order"], json!(order));
+        assert_eq!(saved["textures"], wire["textures"]);
+        assert_eq!(saved["animations"], wire["animations"]);
+        assert_eq!(saved["outliner"], wire["outliner"]);
+        let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+        assert_eq!(reopened, *session.document());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(), &original);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(), &reopened);
+    }
+}
+
+#[test]
+fn invalid_cube_render_order_is_refused_without_coercing_imported_data() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    for invalid in [json!("overlay"), json!(2), Value::Null, json!(false)] {
+        wire["elements"][0]["render_order"] = invalid;
+        assert_eq!(
+            AuthoringDocument::import_bbmodel(&serde_json::to_vec(&wire).unwrap()).unwrap_err(),
+            "CUBE_RENDER_ORDER_INVALID"
+        );
+    }
+}

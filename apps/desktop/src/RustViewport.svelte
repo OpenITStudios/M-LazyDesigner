@@ -192,6 +192,8 @@
           }
           uvAttribute.needsUpdate = true;
           const mesh = new THREE.Mesh(geometry, materials);
+          // Match pinned Blockbench Cube.preview_controller.updateRenderOrder.
+          mesh.renderOrder = cube.renderOrder;
           mesh.position.set(
             bounds.center[0] - cube.origin[0],
             bounds.center[1] - cube.origin[1],

@@ -411,6 +411,13 @@ fn validate_cube(cube: &Cube, textures: &[Value]) -> Result<()> {
         }
     }
     cube_auto_uv(cube)?;
+    // Pinned Blockbench Cube.render_order is an enum with three supported
+    // render priorities. Refuse malformed known semantics on import/edit.
+    if let Some(order) = cube.extra.get("render_order") {
+        if !matches!(order.as_str(), Some("default" | "behind" | "in_front")) {
+            return Err(fail("CUBE_RENDER_ORDER_INVALID"));
+        }
+    }
     if cube.extra.get("box_uv").is_some_and(|v| !v.is_boolean()) {
         return Err(fail("CUBE_BOX_UV_FLAG_INVALID"));
     }

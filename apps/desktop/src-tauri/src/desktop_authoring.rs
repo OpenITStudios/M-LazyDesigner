@@ -45,6 +45,7 @@ pub struct CubeView {
     inflate: f64,
     stretch: [f64; 3],
     visible: bool,
+    render_order: i8,
     box_uv: bool,
     uv_offset: [f64; 2],
     auto_uv: u8,
@@ -228,6 +229,12 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                     .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok())
                     .unwrap_or([1.0, 1.0, 1.0]),
                 visible: cube.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
+                // Blockbench's Cube preview controller maps behind/default/front to -1/0/1.
+                render_order: match cube.extra.get("render_order").and_then(Value::as_str) {
+                    Some("behind") => -1,
+                    Some("in_front") => 1,
+                    _ => 0,
+                },
                 box_uv: cube.extra.get("box_uv").and_then(Value::as_bool).unwrap_or(default_box_uv),
                 uv_offset: cube.uv_offset.unwrap_or([0.0, 0.0]),
                 // Validated as 0/1/2 by the single Rust authoring engine.
@@ -692,6 +699,31 @@ mod tests {
         assert!(!snapshot.bones[0].visible);
         assert!(!snapshot.cubes[0].visible);
         assert_eq!(store.active.as_ref().unwrap().session.document(), &doc);
+    }
+
+
+    #[test]
+    fn cube_render_order_snapshot_follows_pinned_blockbench_priorities() {
+        for (order, expected) in [
+            (None, 0i8), (Some("default"), 0),
+            (Some("behind"), -1), (Some("in_front"), 1),
+        ] {
+            let mut doc = AuthoringDocument::import_bbmodel(
+                include_bytes!("../fixtures/bedrock-basic.bbmodel")
+            ).unwrap();
+            if let Some(value) = order {
+                doc.cubes[0].extra.insert("render_order".into(), json!(value));
+            }
+            let store = EditorStore {
+                epoch: 12,
+                active: Some(ActiveModel {
+                    session: EditorSession::from_document(doc.clone()).unwrap(),
+                    source_path: None, source_sha: None, dirty: false,
+                }),
+            };
+            assert_eq!(project(&store).unwrap().cubes[0].render_order, expected);
+            assert_eq!(store.active.as_ref().unwrap().session.document(), &doc);
+        }
     }
 
 }

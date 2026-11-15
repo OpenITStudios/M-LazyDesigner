@@ -21,6 +21,8 @@ export type CubeView = {
   inflate: number;
   stretch: Vec3;
   visible: boolean;
+  // Read-only Three.js render priority from Rust-validated Blockbench metadata.
+  renderOrder: -1 | 0 | 1;
   boxUv: boolean;
   uvOffset: [number, number];
   autoUv: number;
