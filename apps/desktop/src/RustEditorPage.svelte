@@ -399,16 +399,56 @@
     }
   }
 
-  function revealCubePath(nodes: HierarchyNode[], uuid: string, open: Set<string>): boolean {
+  function revealOutlinerPath(nodes: HierarchyNode[], uuid: string, open: Set<string>): boolean {
     for (const node of nodes) {
       if (typeof node === 'string') {
         if (node === uuid) return true;
-      } else if (revealCubePath(node.children, uuid, open)) {
-        open.delete(node.uuid);
-        return true;
+      } else {
+        if (node.uuid === uuid || revealOutlinerPath(node.children, uuid, open)) {
+          open.delete(node.uuid);
+          return true;
+        }
       }
     }
     return false;
+  }
+
+  // Hierarchy navigation is read from the current Rust snapshot only.
+  function outlinerParentId(nodes: HierarchyNode[], uuid: string, parent = ''): string {
+    for (const node of nodes) {
+      if (typeof node === 'string') {
+        if (node === uuid) return parent;
+      } else {
+        if (node.uuid === uuid) return parent;
+        const found = outlinerParentId(node.children, uuid, node.uuid);
+        if (found) return found;
+      }
+    }
+    return '';
+  }
+  function boneContains(nodes: HierarchyNode[], ancestor: string, target: string): boolean {
+    const descendantsContain = (children: HierarchyNode[]): boolean =>
+      children.some((child) => typeof child !== 'string' &&
+        (child.uuid === target || descendantsContain(child.children)));
+    return nodes.some((node) => typeof node !== 'string' &&
+      (node.uuid === ancestor
+        ? descendantsContain(node.children)
+        : boneContains(node.children, ancestor, target)));
+  }
+
+  async function reparentSelected(parentUuid: string | null) {
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'edit') return;
+    const uuid = selectedId ?? selectedBoneId;
+    if (!uuid) return;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{ op: 'reparent_node', uuid, parent_uuid: parentUuid }],
+    });
+    if (next) {
+      const visible = new Set(collapsed);
+      revealOutlinerPath(next.hierarchy, uuid, visible);
+      collapsed = visible;
+    }
   }
   async function duplicateSelectedCube() {
     if (!snapshot || !selectedId || busy || loading || workspaceMode !== 'edit') return;
@@ -424,7 +464,7 @@
     selectedId = duplicate.uuid;
     selectedBoneId = null;
     const open = new Set(collapsed);
-    revealCubePath(next.hierarchy, duplicate.uuid, open);
+    revealOutlinerPath(next.hierarchy, duplicate.uuid, open);
     collapsed = open;
   }
   async function deleteSelected() {
@@ -1339,6 +1379,20 @@
           <div class="property-scroll">
             <p class="selected-name" title={selectedCube.name}>{selectedCube.name}</p>
             <div class="property-group">
+              <label>Parent Bone</label>
+              <select aria-label="Move Cube to another Bone"
+                title="Reparent the selected Cube without changing its stored local coordinates"
+                value={outlinerParentId(snapshot?.hierarchy ?? [], selectedCube.uuid)}
+                disabled={busy || loading || workspaceMode !== 'edit' || !snapshot?.bones.length}
+                onchange={(event) => void reparentSelected(event.currentTarget.value || null)}>
+                <option value="" disabled>Select Bone</option>
+                {#each snapshot?.bones ?? [] as bone (bone.uuid)}
+                  <option value={bone.uuid}>{bone.name}</option>
+                {/each}
+              </select>
+              <p class="hint">Keep local transforms. World-space pose can change if the new Bone is rotated.</p>
+            </div>
+            <div class="property-group">
               <label>Position</label>
               <div class="xyz-fields">
                 {#each [0,1,2] as axis}
@@ -1421,6 +1475,23 @@
         {:else if selectedBone}
           <div class="property-scroll">
             <p class="selected-name" title={selectedBone.name}>{selectedBone.name}</p>
+            <div class="property-group">
+              <label>Parent Bone</label>
+              <select aria-label="Move Bone to another parent"
+                title="Reparent the selected Bone without changing saved local transforms"
+                value={outlinerParentId(snapshot?.hierarchy ?? [], selectedBone.uuid)}
+                disabled={busy || loading || workspaceMode !== 'edit'}
+                onchange={(event) => void reparentSelected(event.currentTarget.value || null)}>
+                <option value="">Root</option>
+                {#each snapshot?.bones ?? [] as bone (bone.uuid)}
+                  {#if bone.uuid !== selectedBone.uuid &&
+                    !boneContains(snapshot?.hierarchy ?? [], selectedBone.uuid, bone.uuid)}
+                    <option value={bone.uuid}>{bone.name}</option>
+                  {/if}
+                {/each}
+              </select>
+              <p class="hint">Keep local transforms. Reparenting can change the world-space pose.</p>
+            </div>
             <div class="property-group">
               <label>Bone origin (read-only)</label>
               <p class="hint">{selectedBone.origin.join(', ')}</p>

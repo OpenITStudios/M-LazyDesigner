@@ -1542,3 +1542,94 @@ fn duplicate_cube_refuses_opaque_self_reference_without_erasing_source_data() {
     assert_eq!(session.document(), &before);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn reparent_cube_preserves_saved_data_and_moves_only_the_outliner_reference() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let root = BONE;
+    let child = "00000000-0000-4000-8000-000000000003";
+    let receipt = session.apply(0, &[EditOperation::ReparentNode {
+        uuid: CUBE.into(), parent_uuid: Some(root.into()),
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(receipt.changed_uuids, vec![CUBE.to_string()]);
+    assert_eq!(session.document().cubes, original.cubes);
+    assert_eq!(session.document().bones, original.bones);
+    assert_eq!(session.document().texture_assets, original.texture_assets);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+    assert_eq!(session.document().extensions, original.extensions);
+    assert_eq!(
+        outliner_parent_uuid(&session.document().hierarchy, CUBE, None),
+        Some(Some(root.to_string()))
+    );
+    let nested = find_visibility_group(&session.document().hierarchy, child).unwrap();
+    assert!(nested.children.is_empty());
+    let saved = session.export().unwrap();
+    let reimported = AuthoringDocument::import_bbmodel(&saved).unwrap();
+    assert_eq!(reimported, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reimported);
+    assert_eq!(session.apply(3, &[EditOperation::ReparentNode {
+        uuid: CUBE.into(), parent_uuid: Some(root.into()),
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.summary().revision, 3);
+}
+
+#[test]
+fn reparent_bone_to_root_and_nested_parent_keeps_descendants_and_animations() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let child = "00000000-0000-4000-8000-000000000003";
+    session.apply(0, &[EditOperation::ReparentNode {
+        uuid: child.into(), parent_uuid: None,
+    }]).unwrap();
+    assert_eq!(outliner_parent_uuid(&session.document().hierarchy, child, None), Some(None));
+    assert_eq!(
+        outliner_parent_uuid(&session.document().hierarchy, CUBE, None),
+        Some(Some(child.to_string()))
+    );
+    let moved = find_visibility_group(&session.document().hierarchy, child).unwrap();
+    assert_eq!(moved.is_open, Some(true));
+    assert_eq!(session.document().cubes, original.cubes);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+    session.apply(1, &[EditOperation::ReparentNode {
+        uuid: child.into(), parent_uuid: Some(BONE.into()),
+    }]).unwrap();
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 2);
+    session.undo(2).unwrap();
+    assert_eq!(outliner_parent_uuid(&session.document().hierarchy, child, None), Some(None));
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &original);
+}
+
+#[test]
+fn reparent_rejects_cycles_root_cube_unknown_targets_and_atomic_bad_batches() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let child = "00000000-0000-4000-8000-000000000003";
+    let wrong = "00000000-0000-4000-8000-000000000099";
+    let cases = [
+        (BONE, Some(child), "REPARENT_CYCLE"),
+        (child, Some(child), "REPARENT_CYCLE"),
+        (CUBE, None, "REPARENT_CUBE_REQUIRES_BONE"),
+        (CUBE, Some(wrong), "REPARENT_PARENT_NOT_FOUND"),
+        (wrong, Some(BONE), "REPARENT_NODE_NOT_FOUND"),
+    ];
+    for (uuid, parent, expected) in cases {
+        assert_eq!(session.apply(0, &[EditOperation::ReparentNode {
+            uuid: uuid.into(), parent_uuid: parent.map(str::to_owned),
+        }]).unwrap_err(), expected);
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.summary().revision, 0);
+    }
+    assert_eq!(session.apply(0, &[
+        EditOperation::ReparentNode { uuid: CUBE.into(), parent_uuid: Some(BONE.into()) },
+        EditOperation::ReparentNode { uuid: BONE.into(), parent_uuid: Some(child.into()) },
+    ]).unwrap_err(), "REPARENT_CYCLE");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+}

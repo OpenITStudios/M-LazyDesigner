@@ -109,6 +109,7 @@ pub enum EditOperation {
     AddBone { bone: Bone, parent_uuid: Option<String> },
     AddCube { cube: Cube, bone_uuid: String },
     DuplicateCube { source_uuid: String, new_uuid: String },
+    ReparentNode { uuid: String, parent_uuid: Option<String> },
     RemoveCube { uuid: String },
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
@@ -628,6 +629,46 @@ fn insert_cube_sibling_after(
     false
 }
 
+// Return Some(None) for an Outliner root entry and Some(Some(id)) for
+// a nested entry; None means that the requested node is not present.
+fn outliner_parent_uuid(
+    nodes: &[OutlinerNode], uuid: &str, parent: Option<&str>,
+) -> Option<Option<String>> {
+    for node in nodes {
+        match node {
+            OutlinerNode::Cube(id) if id == uuid => return Some(parent.map(str::to_owned)),
+            OutlinerNode::Bone(group) => {
+                if group.uuid == uuid { return Some(parent.map(str::to_owned)); }
+                if let Some(found) = outliner_parent_uuid(
+                    &group.children, uuid, Some(&group.uuid)
+                ) {
+                    return Some(found);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+// A moved Bone retains every descendant and all Outliner-local metadata.
+fn take_outliner_node(nodes: &mut Vec<OutlinerNode>, uuid: &str) -> Option<OutlinerNode> {
+    if let Some(index) = nodes.iter().position(|node| match node {
+        OutlinerNode::Cube(id) => id == uuid,
+        OutlinerNode::Bone(group) => group.uuid == uuid,
+    }) {
+        return Some(nodes.remove(index));
+    }
+    for node in nodes {
+        if let OutlinerNode::Bone(group) = node {
+            if let Some(found) = take_outliner_node(&mut group.children, uuid) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 // In pinned Blockbench 5.2.1 an Outliner group visibility toggle writes
 // the group and all descendants; the Group preview is not an inherited mask.
 fn find_visibility_group<'a>(nodes: &'a [OutlinerNode], uuid: &str) -> Option<&'a OutlinerBone> {
@@ -820,6 +861,45 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             }
             doc.cubes.push(duplicate);
             Ok(new_uuid.clone())
+        }
+        EditOperation::ReparentNode { uuid, parent_uuid } => {
+            let is_cube = doc.cubes.iter().any(|cube| cube.uuid == *uuid);
+            let is_bone = doc.bones.iter().any(|bone| bone.uuid == *uuid);
+            if !is_cube && !is_bone { return Err(fail("REPARENT_NODE_NOT_FOUND")); }
+            if is_cube && parent_uuid.is_none() {
+                // A Bedrock Cube may only be reparented to a Bone in this slice.
+                return Err(fail("REPARENT_CUBE_REQUIRES_BONE"));
+            }
+            if let Some(target) = parent_uuid {
+                if !doc.bones.iter().any(|bone| bone.uuid == *target) {
+                    return Err(fail("REPARENT_PARENT_NOT_FOUND"));
+                }
+                // The destination must not lie within the source Bone subtree.
+                if is_bone {
+                    let source_group = find_visibility_group(&doc.hierarchy, uuid)
+                        .ok_or_else(|| fail("REPARENT_NODE_NOT_FOUND"))?;
+                    if target == uuid ||
+                        find_visibility_group(&source_group.children, target).is_some() {
+                        return Err(fail("REPARENT_CYCLE"));
+                    }
+                }
+            }
+            let current_parent = outliner_parent_uuid(&doc.hierarchy, uuid, None)
+                .ok_or_else(|| fail("REPARENT_NODE_NOT_FOUND"))?;
+            if current_parent.as_deref() == parent_uuid.as_deref() { return Ok(uuid.clone()); }
+            let moved = take_outliner_node(&mut doc.hierarchy, uuid)
+                .ok_or_else(|| fail("REPARENT_NODE_NOT_FOUND"))?;
+            if let Some(target) = parent_uuid {
+                if !append_child(&mut doc.hierarchy, target, &moved) {
+                    return Err(fail("REPARENT_PARENT_NOT_FOUND"));
+                }
+            } else {
+                doc.hierarchy.push(moved);
+            }
+            // Blockbench's default Outliner move has adjust_position=false.
+            // Keep saved local transforms/UUIDs untouched; the target Bone's
+            // inherited rotation may change the resulting world-space pose.
+            Ok(uuid.clone())
         }
         EditOperation::RemoveCube { uuid } => {
             if !doc.cubes.iter().any(|cube| cube.uuid == *uuid) {
