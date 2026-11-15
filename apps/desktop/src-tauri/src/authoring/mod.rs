@@ -116,6 +116,16 @@ pub struct AuthoringDocument {
     pub extensions: Map<String, Value>,
 }
 
+/// An ordered, bounded rectangle instruction on one RGBA8 texture atlas.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaintRectangleStep {
+    pub from: [u32; 2],
+    pub to: [u32; 2],
+    pub rgba: [u8; 4],
+    pub erase: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditOperation {
@@ -175,6 +185,7 @@ pub enum EditOperation {
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
     PaintTextureRectangle { texture_index: usize, from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool },
+    PaintTextureRectangles { texture_index: usize, rectangles: Vec<PaintRectangleStep> },
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
 }
 
@@ -2303,6 +2314,14 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
             paint::rectangle(texture, doc.resolution.width, doc.resolution.height,
                 *from, *to, *rgba, *erase)?;
+            Ok(texture.get("uuid").and_then(Value::as_str)
+                .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::PaintTextureRectangles { texture_index, rectangles } => {
+            let texture = doc.texture_assets.get_mut(*texture_index)
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::rectangles(texture, doc.resolution.width, doc.resolution.height,
+                rectangles)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
         }

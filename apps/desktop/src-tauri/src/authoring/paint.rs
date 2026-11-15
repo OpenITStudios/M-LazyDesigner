@@ -5,7 +5,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::io::Cursor;
-use super::{MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES};
+use super::{MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, PaintRectangleStep};
 
 type Result<T> = std::result::Result<T, String>;
 const PREFIX: &str = "data:image/png;base64,";
@@ -371,37 +371,55 @@ pub(super) fn brush(
     Ok(())
 }
 
-/// A filled, inclusive rectangle in the bounded generated RGBA8 atlas.
-/// The two corners may arrive in either order; a single edit is one Undo step.
-pub(super) fn rectangle(
+/// One or many ordered, filled, inclusive atlas rectangles. The caller can
+/// paint a coherent palette/face-zone cohort as one PNG decode and encode,
+/// rather than decomposing it into repeated per-rectangle PNG mutations.
+pub(super) fn rectangles(
     texture: &mut Value, width: u32, height: u32,
-    from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool,
+    steps: &[PaintRectangleStep],
 ) -> Result<()> {
-    if from[0] >= width || from[1] >= height ||
-        to[0] >= width || to[1] >= height {
+    const MAX_RECTANGLES: usize = 64;
+    if steps.is_empty() || steps.len() > MAX_RECTANGLES {
+        return Err("PAINT_RECTANGLES_SIZE_INVALID".into());
+    }
+    // Validate the entire plan before touching the PNG. The parent Rust
+    // EditorSession also snapshots the complete transaction and refuses
+    // all partial writes if any subsequent operation fails.
+    if steps.iter().any(|step|
+        step.from[0] >= width || step.from[1] >= height ||
+        step.to[0] >= width || step.to[1] >= height) {
         return Err("PAINT_COORDINATE_INVALID".into());
     }
     let mut pixels = decode(texture, width, height)?;
-    let desired = if erase { [0, 0, 0, 0] } else { rgba };
-    let x0 = from[0].min(to[0]) as usize;
-    let x1 = from[0].max(to[0]) as usize;
-    let y0 = from[1].min(to[1]) as usize;
-    let y1 = from[1].max(to[1]) as usize;
-    let mut changed = false;
-    for y in y0..=y1 {
-        for x in x0..=x1 {
-            let at = (y * width as usize + x) * 4;
-            if pixels[at..at + 4] != desired {
-                pixels[at..at + 4].copy_from_slice(&desired);
-                changed = true;
+    let before = pixels.clone();
+    let w = width as usize;
+    for step in steps {
+        let desired = if step.erase { [0, 0, 0, 0] } else { step.rgba };
+        let x0 = step.from[0].min(step.to[0]) as usize;
+        let x1 = step.from[0].max(step.to[0]) as usize;
+        let y0 = step.from[1].min(step.to[1]) as usize;
+        let y1 = step.from[1].max(step.to[1]) as usize;
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let offset = (y * w + x) * 4;
+                pixels[offset..offset + 4].copy_from_slice(&desired);
             }
         }
     }
-    if !changed { return Ok(()); }
+    // Even a series of painted-and-reverted rectangles is a genuine no-op.
+    if pixels == before { return Ok(()); }
     let source = encode(width, height, &pixels)?;
     texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
         .insert("source".into(), Value::String(source));
     Ok(())
+}
+
+/// Legacy single rectangle uses the exact same strict Rust bitmap owner.
+pub(super) fn rectangle(
+    texture: &mut Value, width: u32, height: u32,
+    from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool,
+) -> Result<()> {
+    rectangles(texture, width, height, &[PaintRectangleStep { from, to, rgba, erase }])
 }
 
 /// Four-connected bounded region fill on exact RGBA8 matches. This is a

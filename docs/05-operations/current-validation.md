@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Bounded multi-rectangle Paint bitmap transaction (SOURCE_ONLY)
+
+The Rust Paint engine now applies up to 64 ordered rectangle fills/erasures to a supported embedded RGBA8 PNG in one decode/encode. Single Rectangle preserves its API by delegating to the same owner. Canonical `PaintTextureRectangles` is available to CLI, Tauri and typed Code Mode, with no new editor UI. Test source covers ordered overlaps, actual 8x8 saved pixels, transparent erasure, final no-op, malformed/extreme input, unsupported imported assets, Undo and editable `.bbmodel` reimport. Tests AUTHORED_NOT_RUN, Windows/Blockbench visual proof and measured efficiency remain UNVERIFIED.
+
 ## 2026-11-16 — Rust full-Cube reframe with explicit Box UV repack (SOURCE_ONLY)
 
 Identified that the legacy `SetCubeBounds` permits only one Box UV edge change per edit, limiting AI-first multi-axis modelling. Source now adds bounded `ReframeCube` with caller-selected `box_repack` or `manual_preserve` UV semantics, preserving pivot, hierarchy, textures and Animation while setting all Cube bounds atomically. Box UV derived face cache is rebuilt, including unchanged-bounds repair; unsupported imported Auto/per-texture/float-sized UV rules refuse instead of approximating them. Read-only `inspect_cube_surfaces` now exposes saved Stretch and positive local projected size for an agent to review shape data; it is not a visual verdict. Rust Core, generic Tauri/CLI, Code Mode typed contract, and positive/negative regressions are SOURCE_AUTHORED; tests and native Blockbench proof NOT_EXECUTED.

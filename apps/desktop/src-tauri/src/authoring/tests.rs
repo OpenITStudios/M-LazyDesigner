@@ -837,6 +837,101 @@ fn rust_png_export_rejects_opaque_invalid_and_per_texture_uv_assets() {
         "PAINT_TEXTURE_RULESET_UNSUPPORTED");
 }
 
+// Source-only: the same PNG decoder is used once for a coherent group
+// of atlas rectangles, retaining deterministic order and one Undo step.
+#[test]
+fn paint_rectangle_batch_preserves_order_noop_and_bbmodel_roundtrip() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Batch Paint", "batch_paint").unwrap()).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 8, height: 8 },
+        EditOperation::CreatePaintTexture {
+            uuid: "00000000-0000-4000-8000-000000009811".into(),
+            name: "atlas.png".into(),
+        },
+    ]).unwrap();
+    let original = session.document().clone();
+    let red = [190, 40, 30, 255];
+    let blue = [20, 80, 200, 255];
+    let paint = vec![
+        PaintRectangleStep { from: [3, 3], to: [0, 0], rgba: red, erase: false },
+        PaintRectangleStep { from: [2, 2], to: [5, 5], rgba: blue, erase: false },
+        PaintRectangleStep { from: [7, 7], to: [7, 7], rgba: red, erase: true },
+    ];
+    let receipt = session.apply(1, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: paint.clone(),
+    }]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.operation_count, 1);
+    let saved = session.document().clone();
+    let px = paint::decode_for_uv_inspection(&saved.texture_assets[0], 8, 8).unwrap();
+    for (x, y, expected) in [
+        (0_usize, 0_usize, red), (1, 1, red), (2, 2, blue),
+        (3, 3, blue), (4, 4, blue), (5, 5, blue),
+        (6, 6, [0,0,0,0]), (7, 7, [0,0,0,0]),
+    ] {
+        let offset = (y * 8 + x) * 4;
+        assert_eq!(&px[offset..offset + 4], &expected);
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.apply(4, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: paint,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &saved);
+
+    // Painting an area and fully erasing it in the same batch is a no-op.
+    let mut new_session = EditorSession::from_document(original.clone()).unwrap();
+    let transient = vec![
+        PaintRectangleStep { from: [0,0], to: [1,1], rgba: red, erase: false },
+        PaintRectangleStep { from: [0,0], to: [1,1], rgba: blue, erase: true },
+    ];
+    assert_eq!(new_session.apply(0, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: transient,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(new_session.document(), &original);
+}
+
+#[test]
+fn paint_rectangle_batch_refuses_malformed_plans_and_imported_opaque_assets() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Batch Paint", "batch_paint").unwrap()).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: "00000000-0000-4000-8000-000000009812".into(),
+        name: "atlas.png".into(),
+    }]).unwrap();
+    let original = session.document().clone();
+    let good = PaintRectangleStep {
+        from: [0, 0], to: [2, 2], rgba: [1, 2, 3, 255], erase: false,
+    };
+    let bad = PaintRectangleStep {
+        from: [128, 0], to: [128, 2], rgba: [1, 2, 3, 255], erase: false,
+    };
+    assert_eq!(session.apply(1, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: Vec::new(),
+    }]).unwrap_err(), "PAINT_RECTANGLES_SIZE_INVALID");
+    assert_eq!(session.apply(1, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: vec![good.clone(); 65],
+    }]).unwrap_err(), "PAINT_RECTANGLES_SIZE_INVALID");
+    assert_eq!(session.apply(1, &[
+        EditOperation::RenameNode { uuid: "does-not-exist".into(), name: "unused".into() },
+    ]).unwrap_err(), "RENAME_NODE_NOT_FOUND");
+    assert_eq!(session.apply(1, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: vec![good.clone(), bad],
+    }]).unwrap_err(), "PAINT_COORDINATE_INVALID");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 1);
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let prior = imported.document().clone();
+    assert_eq!(imported.apply(0, &[EditOperation::PaintTextureRectangles {
+        texture_index: 0, rectangles: vec![good],
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(imported.document(), &prior);
+}
+
 #[test]
 fn paint_rectangle_fills_inclusive_reversed_corners_with_one_undo_step() {
     let mut session = EditorSession::from_document(

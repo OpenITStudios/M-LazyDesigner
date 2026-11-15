@@ -2,6 +2,12 @@
 export type Vec3 = [number, number, number];
 export type Vec4 = [number, number, number, number];
 export type Vec2 = [number, number];
+export interface PaintRectangleStep {
+  from: Vec2;
+  to: Vec2;
+  rgba: [number, number, number, number];
+  erase: boolean;
+}
 export interface Cube {
   uuid: string;
   type: "cube";
@@ -59,6 +65,7 @@ export type EditOperation =
   | { op: "paint_texture_stroke"; texture_index: number; points: Vec2[]; rgba: [number, number, number, number] }
   | { op: "paint_texture_brush"; texture_index: number; points: Vec2[]; radius: number; rgba: [number, number, number, number]; erase: boolean }
   | { op: "paint_texture_rectangle"; texture_index: number; from: Vec2; to: Vec2; rgba: [number, number, number, number]; erase: boolean }
+  | { op: "paint_texture_rectangles"; texture_index: number; rectangles: PaintRectangleStep[] }
   | { op: "paint_texture_fill"; texture_index: number; at: Vec2; rgba: [number, number, number, number]; erase: boolean };
 export interface DocumentSummary {
   revision: number;

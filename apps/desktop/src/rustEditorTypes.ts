@@ -137,4 +137,5 @@ export type EditOperation =
   | { op: 'paint_texture_stroke'; texture_index: number; points: [number, number][]; rgba: [number, number, number, number] }
   | { op: 'paint_texture_brush'; texture_index: number; points: [number, number][]; radius: number; rgba: [number, number, number, number]; erase: boolean }
   | { op: 'paint_texture_rectangle'; texture_index: number; from: [number, number]; to: [number, number]; rgba: [number, number, number, number]; erase: boolean }
+  | { op: 'paint_texture_rectangles'; texture_index: number; rectangles: Array<{ from: [number, number]; to: [number, number]; rgba: [number, number, number, number]; erase: boolean }> }
   | { op: 'paint_texture_fill'; texture_index: number; at: [number, number]; rgba: [number, number, number, number]; erase: boolean };
