@@ -108,6 +108,7 @@ pub struct AuthoringDocument {
 pub enum EditOperation {
     AddBone { bone: Bone, parent_uuid: Option<String> },
     AddCube { cube: Cube, bone_uuid: String },
+    DuplicateCube { source_uuid: String, new_uuid: String },
     RemoveCube { uuid: String },
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
@@ -608,6 +609,25 @@ fn append_child(nodes: &mut [OutlinerNode], parent_uuid: &str, child: &OutlinerN
     false
 }
 
+// A duplicated Cube stays beside its source in the nested Outliner.
+// The Rust document, rather than the Svelte Outliner, owns this ordering.
+fn insert_cube_sibling_after(
+    nodes: &mut Vec<OutlinerNode>, source_uuid: &str, new_uuid: &str,
+) -> bool {
+    for index in 0..nodes.len() {
+        if matches!(nodes.get(index), Some(OutlinerNode::Cube(id)) if id == source_uuid) {
+            nodes.insert(index + 1, OutlinerNode::Cube(new_uuid.to_owned()));
+            return true;
+        }
+        if let Some(OutlinerNode::Bone(group)) = nodes.get_mut(index) {
+            if insert_cube_sibling_after(&mut group.children, source_uuid, new_uuid) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 // In pinned Blockbench 5.2.1 an Outliner group visibility toggle writes
 // the group and all descendants; the Group preview is not an inherited mask.
 fn find_visibility_group<'a>(nodes: &'a [OutlinerNode], uuid: &str) -> Option<&'a OutlinerBone> {
@@ -773,6 +793,34 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(cube.uuid.clone())
         }
 
+        EditOperation::DuplicateCube { source_uuid, new_uuid } => {
+            if !valid_uuid(new_uuid) ||
+               doc.cubes.iter().any(|cube| cube.uuid == *new_uuid) ||
+               doc.bones.iter().any(|bone| bone.uuid == *new_uuid) ||
+               doc.texture_assets.iter().chain(&doc.animation_assets)
+                   .any(|value| value.get("uuid").and_then(Value::as_str) == Some(new_uuid.as_str())) {
+                return Err(fail("CUBE_DUPLICATE_ID_INVALID"));
+            }
+            if doc.cubes.len() >= MAX_ELEMENTS {
+                return Err(fail("CUBE_COUNT_LIMIT"));
+            }
+            let source = doc.cubes.iter().find(|cube| cube.uuid == *source_uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            // An opaque source self-reference cannot be rewritten safely.
+            // Refuse it rather than copy a stale reference to the source UUID.
+            if map_references_uuid(&source.extra, source_uuid) ||
+               source.faces.values().any(|face| value_references_uuid(face, source_uuid)) {
+                return Err(fail("CUBE_DUPLICATE_SELF_REFERENCE_UNSUPPORTED"));
+            }
+            let mut duplicate = source.clone();
+            duplicate.uuid = new_uuid.clone();
+            validate_cube(&duplicate, &doc.texture_assets)?;
+            if !insert_cube_sibling_after(&mut doc.hierarchy, source_uuid, new_uuid) {
+                return Err(fail("OUTLINER_CUBE_REFERENCE_INVALID"));
+            }
+            doc.cubes.push(duplicate);
+            Ok(new_uuid.clone())
+        }
         EditOperation::RemoveCube { uuid } => {
             if !doc.cubes.iter().any(|cube| cube.uuid == *uuid) {
                 return Err(fail("CUBE_NOT_FOUND"));

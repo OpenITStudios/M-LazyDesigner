@@ -398,6 +398,35 @@
       }
     }
   }
+
+  function revealCubePath(nodes: HierarchyNode[], uuid: string, open: Set<string>): boolean {
+    for (const node of nodes) {
+      if (typeof node === 'string') {
+        if (node === uuid) return true;
+      } else if (revealCubePath(node.children, uuid, open)) {
+        open.delete(node.uuid);
+        return true;
+      }
+    }
+    return false;
+  }
+  async function duplicateSelectedCube() {
+    if (!snapshot || !selectedId || busy || loading || workspaceMode !== 'edit') return;
+    const sourceUuid = selectedId;
+    const oldIds = new Set(snapshot.cubes.map((cube) => cube.uuid));
+    const next = await command('rust_editor_duplicate_cube', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      sourceUuid,
+    });
+    if (!next) return;
+    const duplicate = next.cubes.find((cube) => !oldIds.has(cube.uuid));
+    if (!duplicate) return;
+    selectedId = duplicate.uuid;
+    selectedBoneId = null;
+    const open = new Set(collapsed);
+    revealCubePath(next.hierarchy, duplicate.uuid, open);
+    collapsed = open;
+  }
   async function deleteSelected() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'edit') return;
     const operation: EditOperation | null = selectedId
@@ -1531,6 +1560,10 @@
                 <div class="menu-rule"></div>
                 <button role="menuitem" onclick={() => void addCube()} disabled={!snapshot || busy}>Add Cube</button>
                 <button role="menuitem" onclick={() => void addBone()} disabled={!snapshot || busy}>Add Bone</button>
+                <button role="menuitem" onclick={() => void duplicateSelectedCube()}
+                  disabled={!snapshot || busy || loading || workspaceMode !== 'edit' || !selectedId}>
+                  Duplicate Selected Cube
+                </button>
                 <button role="menuitem" onclick={() => void deleteSelected()}
                   disabled={!snapshot || busy || (!selectedId && !selectedBoneId)}>
                   Delete Selected Cube / Empty Bone
@@ -1592,6 +1625,9 @@
       {#if workspaceMode === 'edit'}
         <button disabled={!snapshot || busy} onclick={() => void addCube()}>Add Cube</button>
         <button disabled={!snapshot || busy} onclick={() => void addBone()}>Add Bone</button>
+        <button disabled={!snapshot || busy || loading || !selectedId}
+          title="Copy selected Cube with its faces and UV next to the source, using one Rust Undo step"
+          onclick={() => void duplicateSelectedCube()}>Duplicate</button>
         <button disabled={!snapshot || busy || (!selectedId && !selectedBoneId)}
           title="Delete the selected Cube or an empty Bone; Undo restores it"
           onclick={() => void deleteSelected()}>Delete</button>

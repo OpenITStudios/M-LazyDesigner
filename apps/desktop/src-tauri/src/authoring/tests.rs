@@ -1464,3 +1464,81 @@ fn updating_unsupported_or_conflicting_frames_refuses_without_partial_changes() 
     }]).unwrap_err(), "ANIMATION_KEYFRAME_UNSUPPORTED");
     assert_eq!(imported.document(), &original_advanced);
 }
+
+#[test]
+fn duplicate_cube_preserves_imported_geometry_faces_and_outliner_order_with_history() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let clone = "00000000-0000-4000-8000-000000000005";
+    let receipt = session.apply(0, &[EditOperation::DuplicateCube {
+        source_uuid: CUBE.into(), new_uuid: clone.into(),
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(receipt.changed_uuids, vec![clone.to_string()]);
+    assert_eq!(session.document().cubes.len(), 2);
+    let copied = &session.document().cubes[1];
+    assert_eq!(copied.uuid, clone);
+    let mut original_copy = original.cubes[0].clone();
+    original_copy.uuid = clone.into();
+    assert_eq!(*copied, original_copy);
+    assert_eq!(session.document().cubes[0], original.cubes[0]);
+    assert_eq!(session.document().bones, original.bones);
+    assert_eq!(session.document().texture_assets, original.texture_assets);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+    let nested = match &session.document().hierarchy[0] {
+        OutlinerNode::Bone(root) => match &root.children[0] {
+            OutlinerNode::Bone(child) => child,
+            _ => panic!("missing nested bone"),
+        },
+        _ => panic!("missing root bone"),
+    };
+    assert!(matches!(&nested.children[..], [OutlinerNode::Cube(source), OutlinerNode::Cube(duplicate)]
+        if source.as_str() == CUBE && duplicate.as_str() == clone));
+    let exported = session.export().unwrap();
+    let imported = AuthoringDocument::import_bbmodel(&exported).unwrap();
+    assert_eq!(imported, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &imported);
+}
+
+#[test]
+fn duplicate_cube_rejects_missing_or_colliding_ids_and_atomic_bad_batches() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let before = session.document().clone();
+    let new_uuid = "00000000-0000-4000-8000-000000000005";
+    assert_eq!(session.apply(0, &[EditOperation::DuplicateCube {
+        source_uuid: "missing".into(), new_uuid: new_uuid.into(),
+    }]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.apply(0, &[EditOperation::DuplicateCube {
+        source_uuid: CUBE.into(), new_uuid: CUBE.into(),
+    }]).unwrap_err(), "CUBE_DUPLICATE_ID_INVALID");
+    assert_eq!(session.apply(0, &[EditOperation::DuplicateCube {
+        source_uuid: CUBE.into(), new_uuid: BONE.into(),
+    }]).unwrap_err(), "CUBE_DUPLICATE_ID_INVALID");
+    assert_eq!(session.apply(0, &[
+        EditOperation::DuplicateCube {
+            source_uuid: CUBE.into(), new_uuid: new_uuid.into(),
+        },
+        EditOperation::DuplicateCube {
+            source_uuid: CUBE.into(), new_uuid: new_uuid.into(),
+        },
+    ]).unwrap_err(), "CUBE_DUPLICATE_ID_INVALID");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+}
+
+#[test]
+fn duplicate_cube_refuses_opaque_self_reference_without_erasing_source_data() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["elements"][0]["linked_uuid"] = json!(CUBE);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::DuplicateCube {
+        source_uuid: CUBE.into(),
+        new_uuid: "00000000-0000-4000-8000-000000000005".into(),
+    }]).unwrap_err(), "CUBE_DUPLICATE_SELF_REFERENCE_UNSUPPORTED");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+}

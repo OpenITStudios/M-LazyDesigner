@@ -90,6 +90,7 @@ export type EditOperation =
   | { op: 'remove_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }
   | { op: 'set_node_visibility'; uuid: string; visible: boolean }
   | { op: 'remove_cube'; uuid: string }
+  | { op: 'duplicate_cube'; source_uuid: string; new_uuid: string }
   | { op: 'remove_empty_bone'; uuid: string }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
   | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
