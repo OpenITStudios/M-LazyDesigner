@@ -1032,6 +1032,93 @@ fn bone_subtree_move_refuses_unsafe_child_uv_and_rolls_back_all_changes() {
     assert!(!session.can_undo());
 }
 
+// SOURCE_AUTHORED_NOT_RUN: guard selected face Paint against other users of
+// the same PNG pixel rectangle, while retaining explicit legacy shared Paint.
+#[test]
+fn guarded_cube_face_paint_refuses_cross_cube_alias_and_preserves_undo() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009994";
+    const DUP: &str = "00000000-0000-4000-8000-000000009995";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Guarded", "guarded").unwrap()).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 32, height: 32 },
+        EditOperation::AddBone {
+            bone: serde_json::from_value(json!({
+                "uuid":BONE, "name":"root", "origin":[0,0,0]
+            })).unwrap(), parent_uuid: None,
+        },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+        EditOperation::CreatePaintTexture { uuid: TEX.into(), name: "atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: TEX.into() },
+    ]).unwrap();
+    let blank = session.document().clone();
+    let patch = CubeFacePaintPatch { face: "north".into(),
+        rgba: [40, 60, 200, 255], erase: false };
+    session.apply(1, &[EditOperation::PaintCubeUvFacesGuarded {
+        cube_uuid: CUBE.into(), texture_uuid: TEX.into(),
+        faces: vec![patch.clone()],
+    }]).unwrap();
+    let painted = session.document().clone();
+    let pixels = paint::decode_for_uv_inspection(&painted.texture_assets[0], 32, 32).unwrap();
+    let offset = ((5 * 32 + 5) * 4) as usize;
+    assert_eq!(&pixels[offset..offset + 4], &[40, 60, 200, 255]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        painted);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &blank);
+    session.apply(3, &[EditOperation::DuplicateCube {
+        source_uuid: CUBE.into(), new_uuid: DUP.into(),
+    }]).unwrap();
+    let cloned = session.document().clone();
+    assert_eq!(session.apply(4, &[
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: 0.25 },
+        EditOperation::PaintCubeUvFacesGuarded {
+            cube_uuid: CUBE.into(), texture_uuid: TEX.into(), faces: vec![patch.clone()],
+        },
+    ]).unwrap_err(), "PAINT_CUBE_UV_GUARD_SHARED");
+    assert_eq!(session.document(), &cloned);
+    assert_eq!(session.summary().revision, 4);
+    session.apply(4, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid: CUBE.into(), texture_uuid: TEX.into(), faces: vec![patch],
+    }]).unwrap();
+    assert_eq!(session.document().cubes, cloned.cubes);
+}
+
+#[test]
+fn guarded_cube_face_paint_rejects_implicit_and_unknown_uv_mappings() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009996";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture { uuid: TEX.into(), name: "atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: TEX.into() },
+    ]).unwrap();
+    let mut doc = session.document().clone();
+    doc.cubes[0].faces.get_mut("east").unwrap().as_object_mut()
+        .unwrap().remove("texture");
+    let patch = CubeFacePaintPatch { face: "north".into(),
+        rgba: [10, 20, 30, 255], erase: false };
+    let paint = |patch: CubeFacePaintPatch| EditOperation::PaintCubeUvFacesGuarded {
+        cube_uuid: CUBE.into(), texture_uuid: TEX.into(), faces: vec![patch],
+    };
+    let mut ambiguous = EditorSession::from_document(doc.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0, &[paint(patch.clone())]).unwrap_err(),
+        "PAINT_CUBE_UV_GUARD_UNRESOLVED");
+    assert_eq!(ambiguous.document(), &doc);
+    doc.cubes[0].faces.get_mut("east").unwrap()["texture"] = json!(TEX);
+    doc.cubes[0].faces.get_mut("east").unwrap()["uv"] = json!([0.25,0.0,4.0,4.0]);
+    let mut invalid = EditorSession::from_document(doc.clone()).unwrap();
+    assert_eq!(invalid.apply(0, &[paint(patch.clone())]).unwrap_err(),
+        "PAINT_CUBE_UV_GUARD_UNRESOLVED");
+    assert_eq!(invalid.document(), &doc);
+    doc.meta.box_uv = Some(true);
+    doc.meta.extra.insert("box_uv_float_size".into(), json!(true));
+    let mut float_uv = EditorSession::from_document(doc.clone()).unwrap();
+    assert_eq!(float_uv.apply(0, &[paint(patch)]).unwrap_err(),
+        "PAINT_CUBE_UV_GUARD_UNRESOLVED");
+    assert_eq!(float_uv.document(), &doc);
+    assert_eq!(session.document().texture_assets, doc.texture_assets);
+}
+
 // SOURCE_AUTHORED_NOT_RUN: the inspector never mutates model or bitmap.
 #[test]
 fn uv_sharing_detects_cross_cube_aliases_and_respects_half_open_boundaries() {

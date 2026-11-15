@@ -53,6 +53,15 @@ fn overlap(
 pub fn inspect_cube_uv_sharing(
     doc: &AuthoringDocument, cube_uuid: &str, texture_uuid: &str,
 ) -> Result<Value> {
+    inspect_cube_uv_sharing_for_faces(doc, cube_uuid, texture_uuid, None)
+}
+
+/// Internal selected-focus mode for the guarded Paint operation. Other
+/// faces, including those on this Cube, remain possible atlas consumers.
+pub(super) fn inspect_cube_uv_sharing_for_faces(
+    doc: &AuthoringDocument, cube_uuid: &str, texture_uuid: &str,
+    selected_faces: Option<&[&str]>,
+) -> Result<Value> {
     doc.validate()?;
     if has_per_texture_uv_rules(doc) {
         return Err("UV_SHARING_TEXTURE_RULESET_UNSUPPORTED".into());
@@ -80,6 +89,7 @@ pub fn inspect_cube_uv_sharing(
         if face.get("texture").is_none() {
             implicit_faces += 1;
         }
+        if selected_faces.is_some_and(|names| !names.contains(&side)) { continue; }
         if !linked_to(face, texture_uuid, texture_index) { continue; }
         if face.get("enabled") == Some(&Value::Bool(false)) { continue; }
         if face.get("enabled").is_some_and(|v| !v.is_boolean()) {
@@ -110,23 +120,25 @@ pub fn inspect_cube_uv_sharing(
             }
             if !linked_to(face, texture_uuid, texture_index) { continue; }
             if face.get("enabled") == Some(&Value::Bool(false)) { continue; }
-            if other.uuid == cube_uuid {
-                // Already counted unsupported focused face mappings above.
-                if face.get("enabled").is_some_and(|v| !v.is_boolean()) { continue; }
-            } else if face.get("enabled").is_some_and(|v| !v.is_boolean()) {
-                unresolved_explicit += 1;
+            // A selected target's unsupported mapping was already counted.
+            // An unselected face on that Cube must still count as unresolved
+            // if its atlas coordinates cannot be projected safely.
+            let counted_as_focus = other.uuid == cube_uuid &&
+                selected_faces.is_none_or(|names| names.contains(&side));
+            if face.get("enabled").is_some_and(|v| !v.is_boolean()) {
+                if !counted_as_focus { unresolved_explicit += 1; }
                 continue;
             }
             let (other_from, other_to) = match &projection {
                 Ok(cube) => match rectangle(doc, cube, side) {
                     Ok(region) => region,
                     Err(_) => {
-                        if other.uuid != cube_uuid { unresolved_explicit += 1; }
+                        if !counted_as_focus { unresolved_explicit += 1; }
                         continue;
                     }
                 },
                 Err(_) => {
-                    if other.uuid != cube_uuid { unresolved_explicit += 1; }
+                    if !counted_as_focus { unresolved_explicit += 1; }
                     continue;
                 }
             };

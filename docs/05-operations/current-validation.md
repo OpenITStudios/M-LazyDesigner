@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Guarded Cube UV face painting (SOURCE_ONLY)
+
+The opt-in `PaintCubeUvFacesGuarded` operation rejects source-level positive-area overlap for selected faces, or any unresolved/implicit atlas reference, before reusing the existing Rust RGBA8 Paint operation. The older Paint path is unchanged for explicitly intended shared atlases. Source regression covers isolated positive Paint/Undo/.bbmodel reimport, cross-Cube duplicate alias refusal after a staged valid Inflate, deliberate legacy shared Paint, unknown references, fractional manual UV and float Box UV. No UI or Code Mode host changes. TEST_AUTHORED_NOT_RUN; native Blockbench fidelity and performance remain UNVERIFIED.
+
 ## 2026-11-16 — Read-only per-Texture Cube UV overlap evidence (SOURCE_ONLY)
 
 Added Rust `inspect_cube_uv_sharing` to expose bounded positive-area overlaps for an explicitly referenced Texture UUID across all Cube faces. It uses reconstructed Box UV on a copy or strictly saved Manual UV, the same half-open pixel coordinates as Paint, and does not decode/alter PNG bytes or model data. Records full overlap count with up to 32 detailed intersections; reports unresolved explicit UV faces and implicit texture references separately. Unlike the existing six-face alpha report it answers the pre-paint question whether another mapped face references the target pixels, but does not assert exclusive rendered pixels or full painted face coverage. Available through existing CLI `inspect-batch` and typed Code Mode `inspectBatch` (no new host/sandbox methods). Regression source for two copies of one atlas, unit-length non-intersection boundaries, ambiguous source imports, read-only invariant and JS selector rejection AUTHORED_NOT_RUN. Native Blockbench visual checks and any efficiency benchmark remain UNVERIFIED.

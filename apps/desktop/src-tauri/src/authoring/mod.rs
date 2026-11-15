@@ -203,6 +203,9 @@ pub enum EditOperation {
     PaintCubeUvFaces {
         cube_uuid: String, texture_uuid: String, faces: Vec<CubeFacePaintPatch>,
     },
+    PaintCubeUvFacesGuarded {
+        cube_uuid: String, texture_uuid: String, faces: Vec<CubeFacePaintPatch>,
+    },
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
 }
 
@@ -2469,6 +2472,38 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 rectangles)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::PaintCubeUvFacesGuarded { cube_uuid, texture_uuid, faces } => {
+            // Opt-in shared-atlas protection: only requested faces are paint
+            // targets, while all other faces remain possible UV consumers.
+            if faces.is_empty() || faces.len() > FACE_NAMES.len() {
+                return Err(fail("PAINT_CUBE_FACES_SIZE_INVALID"));
+            }
+            let mut seen = HashSet::new();
+            for patch in faces {
+                if !FACE_NAMES.contains(&patch.face.as_str()) ||
+                   !seen.insert(patch.face.as_str()) {
+                    return Err(fail("PAINT_CUBE_FACE_DUPLICATE_OR_UNKNOWN"));
+                }
+            }
+            let names: Vec<&str> = faces.iter().map(|patch| patch.face.as_str()).collect();
+            let report = uv_sharing::inspect_cube_uv_sharing_for_faces(
+                doc, cube_uuid, texture_uuid, Some(&names))?;
+            let count = |key| report[key].as_u64().unwrap_or(u64::MAX);
+            if count("focused_mapped_faces") != faces.len() as u64 ||
+               count("unresolved_explicit_faces") > 0 ||
+               count("implicit_reference_faces") > 0 {
+                return Err(fail("PAINT_CUBE_UV_GUARD_UNRESOLVED"));
+            }
+            if count("declared_overlap_pairs") > 0 {
+                return Err(fail("PAINT_CUBE_UV_GUARD_SHARED"));
+            }
+            // Reuse exactly one existing PNG mutation/Undo source. This
+            // guard is not proof of native material or face-coverage parity.
+            apply_operation(doc, &EditOperation::PaintCubeUvFaces {
+                cube_uuid: cube_uuid.clone(), texture_uuid: texture_uuid.clone(),
+                faces: faces.clone(),
+            })
         }
         EditOperation::PaintCubeUvFaces { cube_uuid, texture_uuid, faces } => {
             // Paint up to six explicit semantic Cube faces on one validated

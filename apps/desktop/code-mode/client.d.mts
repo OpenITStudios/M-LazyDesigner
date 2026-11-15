@@ -74,6 +74,7 @@ export type EditOperation =
   | { op: "paint_texture_rectangle"; texture_index: number; from: Vec2; to: Vec2; rgba: [number, number, number, number]; erase: boolean }
   | { op: "paint_texture_rectangles"; texture_index: number; rectangles: PaintRectangleStep[] }
   | { op: "paint_cube_uv_faces"; cube_uuid: string; texture_uuid: string; faces: CubeFacePaintPatch[] }
+  | { op: "paint_cube_uv_faces_guarded"; cube_uuid: string; texture_uuid: string; faces: CubeFacePaintPatch[] }
   | { op: "paint_texture_fill"; texture_index: number; at: Vec2; rgba: [number, number, number, number]; erase: boolean };
 export interface DocumentSummary {
   revision: number;
