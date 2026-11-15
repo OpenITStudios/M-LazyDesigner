@@ -150,6 +150,49 @@ test('client can request a SHA-pinned read without changing legacy unpinned read
   assert.equal(calls.length, 1);
 });
 
+test('Code Mode reads bounded decoded atlas alpha evidence using a pinned source SHA', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      if (argv.includes('--alpha-uuid')) {
+        return {
+          status: 'OK', sha256: SHA, summary: { revision: 0 },
+          alpha: {
+            kind: 'texture_alpha', texture_uuid: 'texture-1', texture_index: 0,
+            inspection: {
+              scope: 'decoded_embedded_rgba8_alpha', supported: true,
+              visual_verdict: 'UNVERIFIED', face_coverage_verdict: 'UNVERIFIED',
+              width: 16, height: 16, total_pixels: 256,
+              transparent_pixels: 254, translucent_pixels: 1, opaque_pixels: 1,
+              grid_size: [8, 8],
+            },
+          },
+        };
+      }
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 } };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const result = await project.inspectTextureAlpha('texture-1');
+  assert.deepEqual(calls[1], [
+    'inspect', '--input', '/abs/model.bbmodel',
+    '--alpha-uuid', 'texture-1', '--expected-sha256', SHA,
+  ]);
+  assert.equal(result.alpha.inspection.transparent_pixels, 254);
+  assert.equal(result.alpha.inspection.visual_verdict, 'UNVERIFIED');
+  assert.equal(result.alpha.inspection.face_coverage_verdict, 'UNVERIFIED');
+  await assert.rejects(client.inspectTextureAlpha({
+    input: '/abs/model.bbmodel', textureUuid: '',
+  }));
+  await assert.rejects(client.inspectTextureAlpha({
+    input: '/abs/model.bbmodel', textureUuid: 'texture-1',
+    expectedSha256: 'stale-or-malformed',
+  }));
+  assert.equal(calls.length, 2);
+});
+
 test('Code Mode reads six authored Cube face links using an exact SHA without inferring texture coverage', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

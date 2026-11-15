@@ -187,6 +187,13 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
+    async inspectTextureAlpha({ input, textureUuid, expectedSha256 }) {
+      return call('inspect', {
+        input: absolute(input, 'input'),
+        'alpha-uuid': nonempty(textureUuid, 'textureUuid'),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
+      });
+    },
     async inspectAnimation({ input, uuid, expectedSha256 }) {
       return call('inspect', {
         input: absolute(input, 'input'), 'animation-uuid': nonempty(uuid, 'uuid'),
@@ -296,6 +303,8 @@ export async function openRustCodeModeProject(client, input) {
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),
     inspectTexture: (index) => client.inspectTexture({ input: path, index, expectedSha256 }),
+    inspectTextureAlpha: (textureUuid) =>
+      client.inspectTextureAlpha({ input: path, textureUuid, expectedSha256 }),
     inspectAnimation: (uuid) => client.inspectAnimation({ input: path, uuid, expectedSha256 }),
     inspectAnimationTrack: (animationUuid, boneUuid, { offset = 0, limit = 32 } = {}) =>
       client.inspectAnimationTrack({

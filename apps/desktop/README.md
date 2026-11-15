@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Code Mode decoded atlas alpha inspection (2026-11-15; SOURCE_ONLY):** Rust `inspect_paint_alpha` reuses Paint's full RGBA8 PNG decoder for read-only transparent/translucent/opaque counts and a fixed 8×8 pixel-density summary; CLI `inspect --alpha-uuid`, typed SDK and SHA-bound project helper expose it without sending raw texture data. Imported advanced/per-texture UV assets refuse or report unsupported. No false inference of UV face coverage or visual quality is made; Node/Rust tests AUTHORED_NOT_RUN, and Windows/Blockbench native QA remains UNVERIFIED.
+
 **Rust Code Mode Cube surface links (2026-11-15; SOURCE_ONLY):** `inspect --surface-uuid` and the typed `inspectCubeSurfaces` SDK expose stored six-face UV/texture links with distinct null/false/unset/index/UUID semantics, resolved declared texture identity, and SHA-bound read consistency. The result is bounded and always flags effective material and visual coverage as `UNVERIFIED`; no PNG pixels/opaque metadata, host sandbox or native proof claimed. Node/Rust source regressions NOT_EXECUTED.
 
 **Code Mode host approval and static model audit (2026-11-15; SOURCE_ONLY):** The Rust-first Code Mode SDK now default-denies every write until a trusted host explicitly approves the exact file/output plan; `openRustCodeModeProject` binds source SHA and `inspect --audit model` returns limited structure statistics while leaving visual verdict `UNVERIFIED`. See [host acceptance contract](code-mode/HOST_INTEGRATION.md). This is not an installed code sandbox, native QA result or measured efficiency gain. Regression source AUTHORED_NOT_RUN.

@@ -67,6 +67,53 @@ pub(super) fn export_png(texture: &Value, width: u32, height: u32) -> Result<Vec
     Ok(original_bytes)
 }
 
+/// Read-only alpha evidence for one narrowly admitted RGBA8 texture.
+/// This reuses the exact full PNG decoder used by Paint/export, with no
+/// re-encoding, source mutation or full bitmap echo to the agent.
+/// Transparent atlas pixels alone do NOT prove a model-face texturing defect.
+pub(super) fn alpha_diagnostics(texture: &Value, width: u32, height: u32) -> Result<Value> {
+    if !exportable(texture, width, height) {
+        return Err("PAINT_ALPHA_INSPECTION_UNSUPPORTED".into());
+    }
+    let pixels = decode_rgba8_source(texture, width, height)?;
+    let mut transparent = 0_u32;
+    let mut translucent = 0_u32;
+    let mut opaque = 0_u32;
+    // Fixed 8x8 bins are small enough for a focused model-context read.
+    // The sample count prevents an agent from treating empty bins on tiny
+    // atlases as a missing-texture verdict.
+    let mut tile_samples = [[0_u32; 8]; 8];
+    let mut tile_nonzero_alpha = [[0_u32; 8]; 8];
+    for (index, pixel) in pixels.chunks_exact(4).enumerate() {
+        let alpha = pixel[3];
+        match alpha {
+            0 => transparent += 1,
+            255 => opaque += 1,
+            _ => translucent += 1,
+        }
+        let x = (index as u32) % width;
+        let y = (index as u32) / width;
+        let tile_x = ((x * 8) / width) as usize;
+        let tile_y = ((y * 8) / height) as usize;
+        tile_samples[tile_y][tile_x] += 1;
+        if alpha > 0 { tile_nonzero_alpha[tile_y][tile_x] += 1; }
+    }
+    Ok(json!({
+        "scope":"decoded_embedded_rgba8_alpha",
+        "supported":true,
+        "visual_verdict":"UNVERIFIED",
+        "face_coverage_verdict":"UNVERIFIED",
+        "width":width, "height":height,
+        "total_pixels":width * height,
+        "transparent_pixels":transparent,
+        "translucent_pixels":translucent,
+        "opaque_pixels":opaque,
+        "grid_size":[8,8],
+        "tile_samples":tile_samples,
+        "tile_nonzero_alpha":tile_nonzero_alpha
+    }))
+}
+
 pub(super) fn adopt(texture: &mut Value, width: u32, height: u32) -> Result<()> {
     if !adoptable(texture, width, height) {
         return Err("PAINT_IMPORTED_TEXTURE_UNSUPPORTED".into());

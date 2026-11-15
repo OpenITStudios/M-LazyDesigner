@@ -125,6 +125,35 @@ export interface CubeSurfaceInspection {
   };
   faces: CubeFaceSurface[];
 }
+/** Source decoded alpha counts only; NOT a painted-face coverage verdict. */
+export interface SupportedTextureAlpha {
+  scope: "decoded_embedded_rgba8_alpha";
+  supported: true;
+  visual_verdict: "UNVERIFIED";
+  face_coverage_verdict: "UNVERIFIED";
+  width: number;
+  height: number;
+  total_pixels: number;
+  transparent_pixels: number;
+  translucent_pixels: number;
+  opaque_pixels: number;
+  grid_size: [8, 8];
+  tile_samples: number[][];
+  tile_nonzero_alpha: number[][];
+}
+export interface UnsupportedTextureAlpha {
+  scope: "unsupported_texture_alpha";
+  supported: false;
+  reason: "PER_TEXTURE_UV_RULES_UNSUPPORTED" | "UNSUPPORTED_FORMAT_OR_METADATA";
+  visual_verdict: "UNVERIFIED";
+  face_coverage_verdict: "UNVERIFIED";
+}
+export interface TextureAlphaInspection {
+  kind: "texture_alpha";
+  texture_uuid: string;
+  texture_index: number;
+  inspection: SupportedTextureAlpha | UnsupportedTextureAlpha;
+}
 export interface RotationTrackInspection {
   scope: "linear_bone_rotation" | "unsupported_animation_track";
   recognized: boolean;
@@ -157,6 +186,7 @@ export interface InspectReceipt {
   summary: DocumentSummary;
   element?: FocusedElement;
   surfaces?: CubeSurfaceInspection;
+  alpha?: TextureAlphaInspection;
   catalog?: CatalogPage;
   asset?: InspectAsset;
   audit?: StaticModelAudit;
@@ -189,6 +219,9 @@ export interface RustCodeModeClient {
   }): Promise<InspectReceipt & { surfaces: CubeSurfaceInspection }>;
   catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number; expectedSha256?: string }): Promise<InspectReceipt & { catalog: CatalogPage }>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
+  inspectTextureAlpha(input: {
+    input: string; textureUuid: string; expectedSha256?: string;
+  }): Promise<InspectReceipt & { alpha: TextureAlphaInspection }>;
   inspectAnimation(input: { input: string; uuid: string; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectAnimationTrack(input: {
     input: string; animationUuid: string; boneUuid: string;
@@ -235,6 +268,7 @@ export interface RustCodeModeProject {
   catalog(kind: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<InspectReceipt & {catalog: CatalogPage}>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
+  inspectTextureAlpha(textureUuid: string): Promise<InspectReceipt & {alpha: TextureAlphaInspection}>;
   inspectAnimation(uuid: string): Promise<InspectReceipt & {asset: InspectAsset}>;
   inspectAnimationTrack(
     animationUuid: string, boneUuid: string, options?: {offset?: number; limit?: number}

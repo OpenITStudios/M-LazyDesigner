@@ -1052,6 +1052,45 @@ pub fn export_paint_png(doc: &AuthoringDocument, texture_uuid: &str) -> Result<V
     paint::export_png(&doc.texture_assets[index], doc.resolution.width, doc.resolution.height)
 }
 
+/// Bounded, read-only Code Mode Paint inspection for one explicit Texture UUID.
+/// The same Rust PNG codec used for Paint/edit/export owns pixel decoding.
+/// Unknown formats and multi-file rules remain UNVERIFIED, not silently
+/// interpreted or rewritten. Alpha statistics cannot prove face coverage.
+pub fn inspect_paint_alpha(doc: &AuthoringDocument, texture_uuid: &str) -> Result<Value> {
+    doc.validate()?;
+    let index = doc.texture_assets.iter().position(|texture|
+        texture.get("uuid").and_then(Value::as_str) == Some(texture_uuid))
+        .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+    let texture = &doc.texture_assets[index];
+    let inspection = if has_per_texture_uv_rules(doc) {
+        json!({
+            "scope":"unsupported_texture_alpha",
+            "supported":false,
+            "reason":"PER_TEXTURE_UV_RULES_UNSUPPORTED",
+            "visual_verdict":"UNVERIFIED",
+            "face_coverage_verdict":"UNVERIFIED"
+        })
+    } else if !paint::exportable(texture, doc.resolution.width, doc.resolution.height) {
+        json!({
+            "scope":"unsupported_texture_alpha",
+            "supported":false,
+            "reason":"UNSUPPORTED_FORMAT_OR_METADATA",
+            "visual_verdict":"UNVERIFIED",
+            "face_coverage_verdict":"UNVERIFIED"
+        })
+    } else {
+        // A purportedly supported image must survive the full decoder.
+        // Malformed/corrupt RGBA8 is an explicit error, not zero coverage.
+        paint::alpha_diagnostics(texture, doc.resolution.width, doc.resolution.height)?
+    };
+    Ok(json!({
+        "kind":"texture_alpha",
+        "texture_uuid":texture_uuid,
+        "texture_index":index,
+        "inspection":inspection
+    }))
+}
+
 pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {
     doc.cubes.is_empty() && doc.bones.is_empty() &&
     doc.texture_assets.is_empty() && doc.animation_assets.is_empty() &&

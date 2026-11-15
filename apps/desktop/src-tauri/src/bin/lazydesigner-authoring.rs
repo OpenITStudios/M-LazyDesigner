@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_cube_surfaces, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_cube_surfaces, inspect_paint_alpha, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -271,7 +271,7 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--surface-uuid", "--audit", "--expected-sha256"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--surface-uuid", "--alpha-uuid", "--audit", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
@@ -280,7 +280,7 @@ fn execute() -> Result<Value> {
             if let Some(expected) = options.get("--expected-sha256") {
                 ensure_source_sha(&digest, expected)?;
             }
-            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--surface-uuid", "--audit"]
+            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--surface-uuid", "--alpha-uuid", "--audit"]
                 .iter().filter(|key| options.contains_key(*key)).count();
             if query_count > 1 ||
                 (!options.contains_key("--list") &&
@@ -315,6 +315,10 @@ fn execute() -> Result<Value> {
                 let asset = inspect_asset(session.document(), "texture", index)?;
                 Ok(json!({"status":"OK","sha256":digest,
                     "summary":session.summary(),"asset":asset}))
+            } else if let Some(uuid) = options.get("--alpha-uuid") {
+                let alpha = inspect_paint_alpha(session.document(), uuid)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"alpha":alpha}))
             } else if let Some(uuid) = options.get("--animation-uuid") {
                 if let Some(bone_uuid) = options.get("--bone-uuid") {
                     let offset = options.get("--frame-offset").map(|s|s.parse::<usize>())
@@ -461,6 +465,65 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Authored-only verification: decode behavior/native runtime NOT_EXECUTED.
+    #[test]
+    fn code_mode_alpha_inspection_reuses_the_rust_png_codec_without_mutation() {
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Alpha test", "alpha_test").unwrap()
+        ).unwrap();
+        let id = "00000000-0000-4000-8000-000000000811";
+        session.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid: id.into(), name: "alpha.png".into()
+        }]).unwrap();
+        let saved = session.document().clone();
+        let total = u64::from(saved.resolution.width) * u64::from(saved.resolution.height);
+        let initial = inspect_paint_alpha(session.document(), id).unwrap();
+        assert_eq!(initial["kind"], json!("texture_alpha"));
+        assert_eq!(initial["texture_uuid"], json!(id));
+        assert_eq!(initial["inspection"]["supported"], json!(true));
+        assert_eq!(initial["inspection"]["transparent_pixels"], json!(total));
+        assert_eq!(initial["inspection"]["opaque_pixels"], json!(0));
+        assert_eq!(initial["inspection"]["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(initial["inspection"]["face_coverage_verdict"], json!("UNVERIFIED"));
+        assert_eq!(initial["inspection"]["tile_samples"].as_array().unwrap().len(), 8);
+        assert!(initial.to_string().find("data:image/png").is_none());
+        assert_eq!(session.document(), &saved);
+
+        session.apply(1, &[
+            EditOperation::PaintTexturePixel { texture_index:0, x:0, y:0, rgba:[10,20,30,255] },
+            EditOperation::PaintTexturePixel { texture_index:0, x:1, y:0, rgba:[10,20,30,128] },
+        ]).unwrap();
+        let changed = inspect_paint_alpha(session.document(), id).unwrap();
+        assert_eq!(changed["inspection"]["opaque_pixels"], json!(1));
+        assert_eq!(changed["inspection"]["translucent_pixels"], json!(1));
+        assert_eq!(changed["inspection"]["transparent_pixels"], json!(total - 2));
+        assert_eq!(changed["inspection"]["tile_nonzero_alpha"][0][0], json!(2));
+
+        let mut corrupt = session.document().clone();
+        corrupt.texture_assets[0]["source"] = json!("data:image/png;base64,AAAA");
+        assert!(inspect_paint_alpha(&corrupt, id).is_err());
+
+        let mut multi_file = session.document().clone();
+        multi_file.extensions.insert("multi_file_ruleset".into(),
+            json!("bedrock_attachable"));
+        let multi_file_report = inspect_paint_alpha(&multi_file, id).unwrap();
+        assert_eq!(multi_file_report["inspection"]["supported"], json!(false));
+        assert_eq!(multi_file_report["inspection"]["reason"],
+            json!("PER_TEXTURE_UV_RULES_UNSUPPORTED"));
+
+        let imported = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")).unwrap();
+        let preserved = imported.clone();
+        let unsupported = inspect_paint_alpha(
+            &imported, "00000000-0000-4000-8000-000000000101").unwrap();
+        assert_eq!(unsupported["inspection"]["supported"], json!(false));
+        assert_eq!(unsupported["inspection"]["reason"],
+            json!("UNSUPPORTED_FORMAT_OR_METADATA"));
+        assert_eq!(preserved, imported);
+        assert_eq!(inspect_paint_alpha(&imported, "missing").unwrap_err(),
+            "PAINT_TEXTURE_NOT_FOUND");
+    }
 
     // Source-authored only: no Cargo, native app or model visual QA executed.
     #[test]
