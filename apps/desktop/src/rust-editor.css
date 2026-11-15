@@ -640,6 +640,17 @@
   gap: 9px;
   width: 100%;
 }
+.rust-editor .paint-workspace .paint-atlas-resolution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.rust-editor .paint-workspace .paint-atlas-resolution input[type="number"] {
+  width: 72px;
+}
 .rust-editor .paint-workspace .paint-workspace-tools > .dock-title { width: 100%; min-height: 20px; }
 .rust-editor .paint-workspace .paint-workspace-tools label { display: flex; align-items: center; gap: 6px; }
 .rust-editor .paint-workspace .paint-workspace-tools .paint-workspace-atlas {

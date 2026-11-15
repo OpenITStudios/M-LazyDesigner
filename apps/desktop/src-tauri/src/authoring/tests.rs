@@ -1997,3 +1997,97 @@ fn imported_png_dimensions_and_color_depth_are_validated_by_the_shared_decoder()
         assert_eq!(session.summary().revision, 0);
     }
 }
+
+#[test]
+fn empty_project_atlas_resolution_is_an_explicit_reversible_rust_edit() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Atlas", "atlas").unwrap()
+    ).unwrap();
+    let original = session.document().clone();
+    assert!(can_set_empty_atlas_resolution(session.document()));
+    let receipt = session.apply(0, &[EditOperation::SetEmptyAtlasResolution {
+        width: 64, height: 32,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!([session.document().resolution.width, session.document().resolution.height],
+        [64, 32]);
+    assert_eq!(session.document().resolution.extra, original.resolution.extra);
+    assert_eq!(session.document().extensions, original.extensions);
+    assert_eq!(session.document().texture_assets, original.texture_assets);
+    let encoded = session.export().unwrap();
+    assert_eq!(AuthoringDocument::import_bbmodel(&encoded).unwrap(),
+        *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    assert_eq!(session.apply(3, &[EditOperation::SetEmptyAtlasResolution {
+        width: 64, height: 32,
+    }]).unwrap_err(), "EDIT_NO_OP");
+}
+
+#[test]
+fn atlas_resolution_refuses_invalid_size_or_existing_authored_data_atomically() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Atlas", "atlas").unwrap()
+    ).unwrap();
+    let before = session.document().clone();
+    for [width, height] in [[0, 64], [64, 0], [257, 64], [64, 257]] {
+        assert_eq!(session.apply(0, &[EditOperation::SetEmptyAtlasResolution {
+            width, height,
+        }]).unwrap_err(), "ATLAS_RESOLUTION_UNSUPPORTED");
+    }
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+    let cube_session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    assert!(!can_set_empty_atlas_resolution(cube_session.document()));
+    let original_cube = cube_session.document().clone();
+    let mut cube_session = cube_session;
+    assert_eq!(cube_session.apply(0, &[EditOperation::SetEmptyAtlasResolution {
+        width: 32, height: 32,
+    }]).unwrap_err(), "ATLAS_RESOLUTION_LOCKED");
+    assert_eq!(cube_session.document(), &original_cube);
+    let mut imported = before.clone();
+    imported.extensions.insert("vendor_extension".into(), json!({"retain":true}));
+    let mut imported = EditorSession::from_document(imported).unwrap();
+    assert!(!can_set_empty_atlas_resolution(imported.document()));
+    assert_eq!(imported.apply(0, &[EditOperation::SetEmptyAtlasResolution {
+        width: 16, height: 16,
+    }]).unwrap_err(), "ATLAS_RESOLUTION_LOCKED");
+}
+
+#[test]
+fn empty_atlas_resize_and_matching_png_import_can_commit_atomically() {
+    let id = "00000000-0000-4000-8000-000000000170";
+    let mut produced = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Source", "source").unwrap()
+    ).unwrap();
+    produced.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 64, height: 64 },
+        EditOperation::CreatePaintTexture { uuid: id.into(), name: "64.png".into() },
+    ]).unwrap();
+    let source = produced.document().texture_assets[0]["source"].as_str().unwrap().to_string();
+
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Target", "target").unwrap()
+    ).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 64, height: 64 },
+        EditOperation::ImportPaintTexture {
+            uuid: id.into(), name: "64.png".into(), source: source.clone(),
+        },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(session.document().resolution.width, 64);
+    assert_eq!(session.document().resolution.height, 64);
+    assert_eq!(session.document().texture_assets[0]["source"], json!(source));
+    assert!(!can_set_empty_atlas_resolution(session.document()));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document().texture_assets.len(), 1);
+}

@@ -78,6 +78,7 @@ export type EditorSnapshot = {
   paintEditableTextures: boolean[];
   paintAdoptableTextures: boolean[];
   textureResolution: [number, number];
+  atlasResolutionEditable: boolean;
   animationCount: number;
   animations: AnimationView[];
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';
@@ -101,6 +102,7 @@ export type EditOperation =
   | { op: 'create_paint_texture'; uuid: string; name: string }
   | { op: 'enable_imported_paint_texture'; texture_index: number }
   | { op: 'import_paint_texture'; uuid: string; name: string; source: string }
+  | { op: 'set_empty_atlas_resolution'; width: number; height: number }
   | { op: 'assign_cube_texture'; cube_uuid: string; texture_uuid: string }
   | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
   | { op: 'paint_texture_stroke'; texture_index: number; points: [number, number][]; rgba: [number, number, number, number] }

@@ -142,6 +142,7 @@ pub enum EditOperation {
     CreatePaintTexture { uuid: String, name: String },
     EnableImportedPaintTexture { texture_index: usize },
     ImportPaintTexture { uuid: String, name: String, source: String },
+    SetEmptyAtlasResolution { width: u32, height: u32 },
     AssignCubeTexture { cube_uuid: String, texture_uuid: String },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
@@ -808,6 +809,18 @@ fn editable_rotation_track(track: &Value) -> bool {
     track.get("keyframes").and_then(Value::as_array).is_some()
 }
 
+/// Changing atlas dimensions with authored Cubes or texture/animation data
+/// would require native UV remapping. Keep this setting confined to a simple
+/// empty Bedrock model with no imported opaque authoring metadata.
+pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {
+    doc.cubes.is_empty() && doc.bones.is_empty() &&
+    doc.texture_assets.is_empty() && doc.animation_assets.is_empty() &&
+    doc.meta.extra.is_empty() && doc.resolution.extra.is_empty() &&
+    doc.extensions.keys().all(|key|
+        matches!(key.as_str(), "name" | "model_identifier")) &&
+    !has_per_texture_uv_rules(doc)
+}
+
 fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<String> {
     match op {
         EditOperation::AddBone { bone, parent_uuid } => {
@@ -1233,6 +1246,17 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             paint::adopt(texture, width, height)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::SetEmptyAtlasResolution { width, height } => {
+            if !can_set_empty_atlas_resolution(doc) {
+                return Err(fail("ATLAS_RESOLUTION_LOCKED"));
+            }
+            if *width == 0 || *height == 0 || *width > 256 || *height > 256 {
+                return Err(fail("ATLAS_RESOLUTION_UNSUPPORTED"));
+            }
+            doc.resolution.width = *width;
+            doc.resolution.height = *height;
+            Ok("project-resolution".into())
         }
         EditOperation::ImportPaintTexture { uuid, name, source } => {
             if has_per_texture_uv_rules(doc) {

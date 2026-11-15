@@ -3,7 +3,7 @@
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
-    storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, can_set_empty_atlas_resolution, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -102,6 +102,7 @@ pub struct EditorSnapshot {
     paint_editable_textures: Vec<bool>,
     paint_adoptable_textures: Vec<bool>,
     texture_resolution: [u32; 2],
+    atlas_resolution_editable: bool,
     animation_count: usize,
     animations: Vec<AnimationView>,
     preview_scope: &'static str,
@@ -375,6 +376,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 paint_texture_adoptable(texture, doc.resolution.width, doc.resolution.height)
             ).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
+            atlas_resolution_editable: can_set_empty_atlas_resolution(doc),
             animation_count: doc.animation_assets.len(),
             animations: animation_views(doc),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
@@ -1145,6 +1147,24 @@ mod tests {
         assert_eq!(snapshot.texture_uuids, vec![Some(id.into()), None]);
         assert_eq!(snapshot.texture_names, vec!["import.png", "legacy-uuidless.png"]);
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
+    }
+
+
+    #[test]
+    fn empty_atlas_editability_projection_changes_when_model_has_cubes() {
+        let document = AuthoringDocument::new_bedrock("Atlas", "atlas").unwrap();
+        assert!(can_set_empty_atlas_resolution(&document));
+        let store = EditorStore {
+            epoch: 9,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(document.clone()).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        assert!(project(&store).unwrap().atlas_resolution_editable);
+        let mut with_cube = document;
+        with_cube.texture_assets.push(json!({"name": "existing"}));
+        assert!(!can_set_empty_atlas_resolution(&with_cube));
     }
 
 }

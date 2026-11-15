@@ -45,6 +45,8 @@
   let playbackPreviousTimestamp: number | null = null;
   let playbackSource: { epoch: number; revision: number; animationUuid: string } | null = null;
   let paintTextureIndex = 0;
+  let requestedAtlasWidth = 128;
+  let requestedAtlasHeight = 128;
   let paintColor = '#e53935';
   let paintAlpha = 255;
   let paintTool: 'pencil' | 'eraser' | 'rectangle' = 'pencil';
@@ -246,6 +248,10 @@
       animationTime = 0;
     }
     snapshot = next;
+    // Only an empty source model can change atlas dimensions; discard stale
+    // UI drafts after any authoritative Rust snapshot or Undo receipt.
+    requestedAtlasWidth = next.textureResolution[0];
+    requestedAtlasHeight = next.textureResolution[1];
     if (selectedAnimationId && !next.animations.some((animation) => animation.uuid === selectedAnimationId)) {
       selectedAnimationId = null;
     }
@@ -659,6 +665,20 @@
     if (next) paintTextureIndex = before;
   }
 
+
+  function setEmptyAtlasResolution() {
+    if (!snapshot || busy || loading || paintStroke ||
+        workspaceMode !== 'paint' || !snapshot.atlasResolutionEditable) return;
+    const width = requestedAtlasWidth, height = requestedAtlasHeight;
+    if (!Number.isInteger(width) || !Number.isInteger(height) ||
+        width < 1 || height < 1 || width > 256 || height > 256) {
+      error = 'Atlas width and height must each be integers from 1 to 256.';
+      return;
+    }
+    if (width === snapshot.textureResolution[0] &&
+        height === snapshot.textureResolution[1]) return;
+    apply([{ op: 'set_empty_atlas_resolution', width, height }]);
+  }
 
   async function importPngTexture() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint') return;
@@ -1205,6 +1225,27 @@
     {#if snapshot}
       <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
           <div class="dock-title"><span>ATLAS &amp; BRUSH</span></div>
+          {#if snapshot.atlasResolutionEditable}
+            <div class="paint-atlas-resolution" role="group" aria-label="New empty model atlas size">
+              <label>Atlas width
+                <input type="number" min="1" max="256" step="1"
+                  bind:value={requestedAtlasWidth} disabled={busy || loading}/>
+              </label>
+              <label>Atlas height
+                <input type="number" min="1" max="256" step="1"
+                  bind:value={requestedAtlasHeight} disabled={busy || loading}/>
+              </label>
+              <button type="button" onclick={setEmptyAtlasResolution}
+                disabled={busy || loading || !Number.isInteger(requestedAtlasWidth) ||
+                  !Number.isInteger(requestedAtlasHeight) ||
+                  requestedAtlasWidth < 1 || requestedAtlasWidth > 256 ||
+                  requestedAtlasHeight < 1 || requestedAtlasHeight > 256}
+                title="Apply project atlas dimensions before creating Cubes, textures or animations">
+                Set Atlas Size
+              </button>
+            </div>
+            <p class="hint">Choose the atlas size before importing PNG or adding model elements; existing model UV is never resized implicitly.</p>
+          {/if}
           <button type="button" onclick={() => void newPaintTexture()} disabled={busy || loading ||
             snapshot.textureResolution.some(size => size > 256)}>
             New RGBA8 Texture
