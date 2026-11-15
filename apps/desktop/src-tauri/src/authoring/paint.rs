@@ -382,6 +382,52 @@ pub(super) fn brush(
     Ok(())
 }
 
+/// Bounded, pixel-exact destination for one Box UV face rectangle.
+pub(super) struct UvCopyRegion {
+    pub from: [u32; 2],
+    pub to: [u32; 2],
+    pub size: [u32; 2],
+}
+
+/// Copy existing face pixels to unused cells of the *same* owned atlas.
+/// Read source pixels from the original bitmap, never from earlier writes.
+pub(super) fn copy_uv_regions(
+    texture: &mut Value, width: u32, height: u32, regions: &[UvCopyRegion],
+) -> Result<()> {
+    if regions.is_empty() || regions.len() > 6 {
+        return Err("PAINT_UV_COPY_REGIONS_INVALID".into());
+    }
+    let original = decode(texture, width, height)?;
+    let mut copied = original.clone();
+    for region in regions {
+        for bound in [region.from, region.to] {
+            if region.size.contains(&0) ||
+               !bound[0].checked_add(region.size[0]).is_some_and(|v| v <= width) ||
+               !bound[1].checked_add(region.size[1]).is_some_and(|v| v <= height) {
+                return Err("PAINT_UV_COPY_REGION_INVALID".into());
+            }
+        }
+        for y in 0..region.size[1] {
+            for x in 0..region.size[0] {
+                let from = (((region.from[1] + y) * width +
+                    region.from[0] + x) * 4) as usize;
+                let to = (((region.to[1] + y) * width +
+                    region.to[0] + x) * 4) as usize;
+                if original[to..to + 4] != [0,0,0,0] {
+                    return Err("PAINT_UV_COPY_DESTINATION_NOT_BLANK".into());
+                }
+                copied[to..to + 4].copy_from_slice(&original[from..from + 4]);
+            }
+        }
+    }
+    if copied != original {
+        let source = encode(width, height, &copied)?;
+        texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
+            .insert("source".into(), Value::String(source));
+    }
+    Ok(())
+}
+
 /// One or many ordered, filled, inclusive atlas rectangles. The caller can
 /// paint a coherent palette/face-zone cohort as one PNG decode and encode,
 /// rather than decomposing it into repeated per-rectangle PNG mutations.

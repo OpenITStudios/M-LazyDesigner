@@ -208,6 +208,7 @@ pub enum EditOperation {
     PaintCubeUvFacesGuarded {
         cube_uuid: String, texture_uuid: String, faces: Vec<CubeFacePaintPatch>,
     },
+    IsolateCubeBoxUv { cube_uuid: String, texture_uuid: String },
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
 }
 
@@ -2474,6 +2475,18 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 rectangles)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::IsolateCubeBoxUv { cube_uuid, texture_uuid } => {
+            let plan = uv_sharing::plan_box_uv_isolation(doc,cube_uuid,texture_uuid)?;
+            let (width,height) = (doc.resolution.width,doc.resolution.height);
+            let texture = doc.texture_assets.get_mut(plan.texture_index)
+                .ok_or_else(|| fail("UV_ATLAS_TEXTURE_NOT_FOUND"))?;
+            paint::copy_uv_regions(texture,width,height,&plan.copies)?;
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *cube_uuid)
+                .ok_or_else(|| fail("UV_ATLAS_CUBE_NOT_FOUND"))?;
+            cube.uv_offset = Some(plan.next_offset);
+            refresh_box_uv(cube)?;
+            Ok(cube_uuid.clone())
         }
         EditOperation::PaintCubeUvFacesGuarded { cube_uuid, texture_uuid, faces } => {
             // Opt-in shared-atlas protection: only requested faces are paint

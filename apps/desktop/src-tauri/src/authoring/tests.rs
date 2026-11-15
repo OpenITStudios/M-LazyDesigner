@@ -1119,6 +1119,120 @@ fn guarded_cube_face_paint_rejects_implicit_and_unknown_uv_mappings() {
     assert_eq!(session.document().texture_assets, doc.texture_assets);
 }
 
+// SOURCE-AUTHORED: one Cube's painted Box UV can be relocated without
+// erasing the shared source, then painted independently from its duplicate.
+#[test]
+fn isolate_duplicate_box_uv_copies_existing_face_pixels_and_supports_guarded_paint() {
+    const TEX:&str="00000000-0000-4000-8000-000000009971";
+    const DUP:&str="00000000-0000-4000-8000-000000009972";
+    let mut session=EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Isolated","isolated").unwrap()).unwrap();
+    session.apply(0,&[
+        EditOperation::SetEmptyAtlasResolution { width:32,height:32 },
+        EditOperation::AddBone { bone:serde_json::from_value(json!({
+            "uuid":BONE,"name":"root","origin":[0,0,0]
+        })).unwrap(),parent_uuid:None },
+        EditOperation::AddCube { cube:sample_cube(CUBE),bone_uuid:BONE.into() },
+        EditOperation::CreatePaintTexture { uuid:TEX.into(),name:"skin.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(),texture_uuid:TEX.into() },
+        EditOperation::PaintCubeUvFaces {
+            cube_uuid:CUBE.into(),texture_uuid:TEX.into(),faces:vec![
+                CubeFacePaintPatch { face:"north".into(),
+                    rgba:[160,40,20,255],erase:false },
+                CubeFacePaintPatch { face:"up".into(),
+                    rgba:[20,100,180,255],erase:false },
+            ],
+        },
+    ]).unwrap();
+    session.apply(1,&[EditOperation::DuplicateCube {
+        source_uuid:CUBE.into(),new_uuid:DUP.into()
+    }]).unwrap();
+    let original=session.document().clone();
+    assert_eq!(inspect_cube_uv_sharing(&original,DUP,TEX).unwrap()
+        ["declared_overlap_pairs"],json!(6));
+    let receipt=session.apply(2,&[EditOperation::IsolateCubeBoxUv {
+        cube_uuid:DUP.into(),texture_uuid:TEX.into()
+    }]).unwrap();
+    assert_eq!(receipt.revision,3);
+    let isolated=session.document().clone();
+    assert_eq!(isolated.cubes[0],original.cubes[0]);
+    assert_eq!(isolated.cubes[1].uv_offset,Some([16.0,0.0]));
+    assert_eq!(isolated.cubes[1].faces["north"]["uv"],json!([20.0,4.0,24.0,8.0]));
+    assert_eq!(isolated.bones,original.bones);
+    assert_eq!(isolated.animation_assets,original.animation_assets);
+    assert_eq!(inspect_cube_uv_sharing(&isolated,DUP,TEX).unwrap()
+        ["declared_overlap_pairs"],json!(0));
+    let rgba=paint::decode_for_uv_inspection(
+        &isolated.texture_assets[0],32,32).unwrap();
+    for (x,y,expected) in [
+        (5usize,5usize,[160,40,20,255]),
+        (21,5,[160,40,20,255]),
+        (5,1,[20,100,180,255]),
+        (21,1,[20,100,180,255])
+    ] {
+        assert_eq!(&rgba[(y*32+x)*4..(y*32+x)*4+4],&expected);
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        isolated);
+    session.apply(3,&[EditOperation::PaintCubeUvFacesGuarded {
+        cube_uuid:DUP.into(),texture_uuid:TEX.into(),faces:vec![
+            CubeFacePaintPatch {face:"north".into(),
+                rgba:[90,170,40,255],erase:false}
+        ]
+    }]).unwrap();
+    let edited=paint::decode_for_uv_inspection(
+        &session.document().texture_assets[0],32,32).unwrap();
+    assert_eq!(&edited[(5*32+5)*4..(5*32+5)*4+4],&[160,40,20,255]);
+    assert_eq!(&edited[(5*32+21)*4..(5*32+21)*4+4],&[90,170,40,255]);
+    session.undo(4).unwrap();
+    assert_eq!(session.document(),&isolated);
+    session.undo(5).unwrap();
+    assert_eq!(session.document(),&original);
+    session.redo(6).unwrap();
+    assert_eq!(session.document(),&isolated);
+}
+
+#[test]
+fn isolate_box_uv_refuses_full_or_unknown_atlas_without_partial_mutation() {
+    const TEX:&str="00000000-0000-4000-8000-000000009973";
+    const DUP:&str="00000000-0000-4000-8000-000000009974";
+    let mut session=EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Full","full").unwrap()).unwrap();
+    session.apply(0,&[
+        EditOperation::SetEmptyAtlasResolution {width:16,height:8},
+        EditOperation::AddBone {bone:serde_json::from_value(json!({
+            "uuid":BONE,"name":"root","origin":[0,0,0]
+        })).unwrap(),parent_uuid:None},
+        EditOperation::AddCube {cube:sample_cube(CUBE),bone_uuid:BONE.into()},
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"skin.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+        EditOperation::DuplicateCube {source_uuid:CUBE.into(),new_uuid:DUP.into()}
+    ]).unwrap();
+    let original=session.document().clone();
+    let operation=|| EditOperation::IsolateCubeBoxUv {
+        cube_uuid:DUP.into(),texture_uuid:TEX.into()
+    };
+    assert_eq!(session.apply(1,&[
+        EditOperation::SetCubeOrigin {uuid:CUBE.into(),origin:[2.0,1.0,0.0]},
+        operation()
+    ]).unwrap_err(),"UV_ATLAS_NO_FREE_SPACE");
+    assert_eq!(session.document(),&original);
+    assert_eq!(session.summary().revision,1);
+    let mut unknown=original.clone();
+    unknown.cubes[0].faces.get_mut("north").unwrap()
+        .as_object_mut().unwrap().remove("texture");
+    let mut undecidable=EditorSession::from_document(unknown.clone()).unwrap();
+    assert_eq!(undecidable.apply(0,&[operation()]).unwrap_err(),
+        "UV_ATLAS_IMPLICIT_TEXTURE_UNSUPPORTED");
+    assert_eq!(undecidable.document(),&unknown);
+    let mut foreign=original.clone();
+    foreign.texture_assets[0].as_object_mut().unwrap().remove("paint_owner");
+    let mut other=EditorSession::from_document(foreign.clone()).unwrap();
+    assert_eq!(other.apply(0,&[operation()]).unwrap_err(),
+        "UV_ATLAS_TEXTURE_NOT_OWNED");
+    assert_eq!(other.document(),&foreign);
+}
+
 // AUTHORED_NOT_RUN: an agent can ask about several Cube faces in one
 // bounded Rust read without claiming that nontransparent pixels are visible.
 #[test]

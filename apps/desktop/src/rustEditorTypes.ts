@@ -142,4 +142,5 @@ export type EditOperation =
   | { op: 'paint_texture_rectangles'; texture_index: number; rectangles: Array<{ from: [number, number]; to: [number, number]; rgba: [number, number, number, number]; erase: boolean }> }
   | { op: 'paint_cube_uv_faces'; cube_uuid: string; texture_uuid: string; faces: Array<{ face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; rgba: [number, number, number, number]; erase: boolean }> }
   | { op: 'paint_cube_uv_faces_guarded'; cube_uuid: string; texture_uuid: string; faces: Array<{ face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; rgba: [number, number, number, number]; erase: boolean }> }
+  | { op: 'isolate_cube_box_uv'; cube_uuid: string; texture_uuid: string }
   | { op: 'paint_texture_fill'; texture_index: number; at: [number, number]; rgba: [number, number, number, number]; erase: boolean };

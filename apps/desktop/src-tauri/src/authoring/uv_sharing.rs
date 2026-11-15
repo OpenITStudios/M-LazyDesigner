@@ -9,6 +9,155 @@ use serde_json::{json, Value};
 
 const MAX_OVERLAP_DETAILS: usize = 32;
 
+/// Transient placement plan; source-of-truth UV/Texture edits stay in Rust.
+pub(super) struct BoxUvIsolationPlan {
+    pub texture_index: usize,
+    pub next_offset: [f64; 2],
+    pub copies: Vec<paint::UvCopyRegion>,
+}
+
+/// Rehome one Cube's Box UV into unused atlas pixels, retaining all source
+/// pixels and copying only its explicit face regions. No atlas resizing.
+pub(super) fn plan_box_uv_isolation(
+    doc: &AuthoringDocument, cube_uuid: &str, texture_uuid: &str,
+) -> Result<BoxUvIsolationPlan> {
+    doc.validate()?;
+    if has_per_texture_uv_rules(doc) {
+        return Err("UV_ATLAS_RULESET_UNSUPPORTED".into());
+    }
+    let (w,h) = (doc.resolution.width, doc.resolution.height);
+    if w == 0 || h == 0 || w > 256 || h > 256 {
+        return Err("UV_ATLAS_DIMENSIONS_UNSUPPORTED".into());
+    }
+    let ids: Vec<_> = doc.texture_assets.iter().enumerate()
+        .filter(|(_,asset)| asset.get("uuid").and_then(Value::as_str)
+            == Some(texture_uuid)).map(|(i,_)| i).collect();
+    let texture_index = match ids.as_slice() {
+        [] => return Err("UV_ATLAS_TEXTURE_NOT_FOUND".into()),
+        [i] => *i,
+        _ => return Err("UV_ATLAS_TEXTURE_ID_AMBIGUOUS".into()),
+    };
+    let texture = &doc.texture_assets[texture_index];
+    if !paint::editable(texture) {
+        return Err("UV_ATLAS_TEXTURE_NOT_OWNED".into());
+    }
+    let bitmap = paint::decode_for_uv_inspection(texture,w,h)?;
+    let cube = doc.cubes.iter().find(|c| c.uuid == cube_uuid)
+        .ok_or_else(|| "UV_ATLAS_CUBE_NOT_FOUND".to_string())?;
+    if !cube_box_uv(cube, doc.meta.box_uv.unwrap_or(false)) {
+        return Err("UV_ATLAS_BOX_UV_REQUIRED".into());
+    }
+    let original_offset = cube.uv_offset.unwrap_or([0.0,0.0]);
+    if !original_offset.iter().all(|v| v.is_finite() && v.fract() == 0.0) {
+        return Err("UV_ATLAS_BOX_OFFSET_UNSUPPORTED".into());
+    }
+    let projected = project_supported_uv(doc,cube)
+        .map_err(|_| "UV_ATLAS_BOX_RULES_UNSUPPORTED".to_string())?;
+    let mut source = Vec::new();
+    for side in FACE_NAMES {
+        let face = cube.faces.get(side)
+            .ok_or_else(|| "UV_ATLAS_FACE_INVALID".to_string())?;
+        match face.get("texture") {
+            Some(Value::Null) | Some(Value::Bool(false)) => continue,
+            Some(_) if linked_to(face,texture_uuid,texture_index) => {},
+            _ => return Err("UV_ATLAS_TARGET_TEXTURE_UNSUPPORTED".into()),
+        }
+        if face.get("enabled").is_some_and(|v| v != &Value::Bool(true)) {
+            return Err("UV_ATLAS_FACE_RULES_UNSUPPORTED".into());
+        }
+        source.push(rectangle(doc,&projected,side)
+            .map_err(|_| "UV_ATLAS_SOURCE_UV_UNSUPPORTED".to_string())?);
+    }
+    if source.is_empty() { return Err("UV_ATLAS_NO_MAPPED_FACES".into()); }
+    for i in 0..source.len() {
+        for j in i+1..source.len() {
+            if overlap(source[i].0,source[i].1,source[j].0,source[j].1).is_some() {
+                return Err("UV_ATLAS_SOURCE_FACES_OVERLAP".into());
+            }
+        }
+    }
+    let min_x = source.iter().map(|s|s.0[0]).min().unwrap_or(0);
+    let min_y = source.iter().map(|s|s.0[1]).min().unwrap_or(0);
+    let max_x = source.iter().map(|s|s.1[0]).max().unwrap_or(0);
+    let max_y = source.iter().map(|s|s.1[1]).max().unwrap_or(0);
+    let (net_w,net_h) = (max_x-min_x,max_y-min_y);
+    let mut occupied = vec![false;(w*h) as usize];
+    for (i,pixel) in bitmap.chunks_exact(4).enumerate() {
+        occupied[i] = pixel != [0,0,0,0];
+    }
+    // Every explicit face referring to this atlas reserves its exact pixels.
+    // Missing/default links may still resolve to this atlas in Blockbench.
+    for other in &doc.cubes {
+        let mut projected_other: Option<Cube> = None;
+        for side in FACE_NAMES {
+            let face = other.faces.get(side)
+                .ok_or_else(|| "UV_ATLAS_FACE_INVALID".to_string())?;
+            let used = match face.get("texture") {
+                Some(Value::Null) | Some(Value::Bool(false)) => false,
+                Some(Value::String(id)) => id == texture_uuid,
+                Some(Value::Number(i)) => i.as_u64() == Some(texture_index as u64),
+                None => return Err("UV_ATLAS_IMPLICIT_TEXTURE_UNSUPPORTED".into()),
+                _ => return Err("UV_ATLAS_FACE_TEXTURE_UNSUPPORTED".into()),
+            };
+            if !used { continue; }
+            if face.get("enabled").is_some_and(|v| v != &Value::Bool(true)) {
+                return Err("UV_ATLAS_FACE_RULES_UNSUPPORTED".into());
+            }
+            if projected_other.is_none() {
+                projected_other = Some(project_supported_uv(doc,other)
+                    .map_err(|_| "UV_ATLAS_OTHER_UV_UNSUPPORTED".to_string())?);
+            }
+            let (from,to) = rectangle(doc,projected_other.as_ref().unwrap(),side)
+                .map_err(|_| "UV_ATLAS_OTHER_UV_UNSUPPORTED".to_string())?;
+            for y in from[1]..to[1] {
+                for x in from[0]..to[0] {
+                    occupied[(y*w+x) as usize] = true;
+                }
+            }
+        }
+    }
+    // Summed area makes each candidate-face overlap check constant time,
+    // with a bounded 256x256 scan instead of a pixel-by-pixel search.
+    let stride = w as usize + 1;
+    let mut sum = vec![0u32;stride * (h as usize + 1)];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            sum[(y+1)*stride+x+1] = u32::from(occupied[y*w as usize+x]) +
+                sum[y*stride+x+1] + sum[(y+1)*stride+x] - sum[y*stride+x];
+        }
+    }
+    let blocked = |x0:usize,y0:usize,x1:usize,y1:usize| {
+        sum[y1*stride+x1]+sum[y0*stride+x0] -
+        sum[y0*stride+x1]-sum[y1*stride+x0] > 0
+    };
+    for y in 0..=h-net_h {
+        for x in 0..=w-net_w {
+            let mut copies = Vec::with_capacity(source.len());
+            for &(from,to) in &source {
+                let dst = [x+from[0]-min_x,y+from[1]-min_y];
+                if blocked(dst[0] as usize,dst[1] as usize,
+                    (x+to[0]-min_x) as usize,(y+to[1]-min_y) as usize) {
+                    copies.clear();
+                    break;
+                }
+                copies.push(paint::UvCopyRegion { from,to:dst,
+                    size:[to[0]-from[0],to[1]-from[1]] });
+            }
+            if copies.is_empty() { continue; }
+            let next_offset = [
+                original_offset[0]+f64::from(x)-f64::from(min_x),
+                original_offset[1]+f64::from(y)-f64::from(min_y)
+            ];
+            if !next_offset.iter().all(|v|v.is_finite() && v.abs()<=100_000.0) {
+                return Err("UV_ATLAS_OFFSET_INVALID".into());
+            }
+            return Ok(BoxUvIsolationPlan { texture_index,next_offset,copies });
+        }
+    }
+    Err("UV_ATLAS_NO_FREE_SPACE".into())
+}
+
+
 fn linked_to(face: &Value, texture_uuid: &str, texture_index: usize) -> bool {
     match face.get("texture") {
         Some(Value::String(id)) => id == texture_uuid,
