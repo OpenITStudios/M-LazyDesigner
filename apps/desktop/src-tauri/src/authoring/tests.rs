@@ -1633,3 +1633,80 @@ fn reparent_rejects_cycles_root_cube_unknown_targets_and_atomic_bad_batches() {
     assert_eq!(session.document(), &original);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn cube_scale_matches_pinned_inflate_and_pivot_math_with_manual_uv_preservation() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    wire["elements"][0]["inflate"] = json!(1.0);
+    wire["elements"][0]["autouv"] = json!(2);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[EditOperation::ScaleCube {
+        uuid: CUBE.into(), factors: [2.0, 0.5, 1.0],
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    let cube = &session.document().cubes[0];
+    assert_eq!(cube.from, [-1.0, 0.5, 0.0]);
+    assert_eq!(cube.to, [9.0, 1.5, 4.0]);
+    assert_eq!(cube.origin, original.cubes[0].origin);
+    assert_eq!(cube.extra["autouv"], json!(0));
+    assert_eq!(cube.faces, original.cubes[0].faces);
+    assert_eq!(session.document().texture_assets, original.texture_assets);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+    assert_eq!(session.document().hierarchy, original.hierarchy);
+    let reopened = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn cube_scale_refreshes_box_uv_without_changing_saved_atlas_offset() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Scale", "scale").unwrap()
+    ).unwrap();
+    let bone: Bone = serde_json::from_value(json!({
+        "uuid": BONE, "name": "root", "origin": [0,0,0]
+    })).unwrap();
+    session.apply(0, &[
+        EditOperation::AddBone { bone, parent_uuid: None },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+    ]).unwrap();
+    let prior = session.document().cubes[0].clone();
+    session.apply(1, &[EditOperation::ScaleCube {
+        uuid: CUBE.into(), factors: [1.5, 1.0, 1.0],
+    }]).unwrap();
+    let scaled = &session.document().cubes[0];
+    assert_eq!(scaled.from, prior.from);
+    assert_eq!(scaled.to[0], prior.from[0] + (prior.to[0] - prior.from[0]) * 1.5);
+    assert_eq!(scaled.uv_offset, prior.uv_offset);
+    assert_ne!(scaled.faces["north"]["uv"], prior.faces["north"]["uv"]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    session.undo(2).unwrap();
+    assert_eq!(session.document().cubes[0], prior);
+}
+
+#[test]
+fn invalid_noop_or_partial_cube_scale_refuses_atomically() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    for factors in [[0.0, 1.0, 1.0], [-1.0, 1.0, 1.0],
+                    [4.1, 1.0, 1.0], [f64::NAN, 1.0, 1.0]] {
+        assert_eq!(session.apply(0, &[EditOperation::ScaleCube {
+            uuid: CUBE.into(), factors,
+        }]).unwrap_err(), "CUBE_SCALE_INVALID");
+        assert_eq!(session.document(), &original);
+    }
+    assert_eq!(session.apply(0, &[EditOperation::ScaleCube {
+        uuid: CUBE.into(), factors: [1.0, 1.0, 1.0],
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.apply(0, &[
+        EditOperation::ScaleCube { uuid: CUBE.into(), factors: [1.5, 1.0, 1.0] },
+        EditOperation::ScaleCube { uuid: "missing".into(), factors: [1.2, 1.0, 1.0] },
+    ]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+}

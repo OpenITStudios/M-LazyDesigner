@@ -127,6 +127,7 @@ pub enum EditOperation {
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
+    ScaleCube { uuid: String, factors: [f64; 3] },
     SetBoneRotation { uuid: String, rotation: [f64; 3] },
     SetNodeVisibility { uuid: String, visible: bool },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
@@ -1027,6 +1028,40 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 bone.extra.remove("rotation");
             } else {
                 bone.extra.insert("rotation".into(), json!(rotation));
+            }
+            Ok(uuid.clone())
+        }
+        EditOperation::ScaleCube { uuid, factors } => {
+            // A bounded, positive per-axis extension of pinned Blockbench
+            // ModelScaler.scaleElements about the selected Cube's own pivot.
+            // Its original scalar may be axis-filtered; this supports the same
+            // math independently on each selected axis.
+            if !factors.iter().all(|f| f.is_finite() && *f > 0.0 && *f <= 4.0) {
+                return Err(fail("CUBE_SCALE_INVALID"));
+            }
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if factors.iter().all(|f| *f == 1.0) { return Ok(uuid.clone()); }
+            let inflate = cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0);
+            let pivot = cube.origin.unwrap_or([0.0, 0.0, 0.0]);
+            for axis in 0..3 {
+                let from = cube.from[axis];
+                let to = cube.to[axis];
+                cube.from[axis] = (from - inflate - pivot[axis]) * factors[axis] +
+                    inflate + pivot[axis];
+                cube.to[axis] = (to + inflate - pivot[axis]) * factors[axis] -
+                    inflate + pivot[axis];
+            }
+            // ModelScaler clears Auto UV on scale; leave manual face UV and
+            // texture identity untouched, rather than falsely remapping it.
+            if cube_auto_uv(cube)? != 0 {
+                cube.extra.insert("autouv".into(), json!(0));
+            }
+            if cube_box_uv(cube, project_box_uv) {
+                // Box UV extents derive from the new saved Cube dimensions.
+                // Scaling does not change the atlas UV offset.
+                refresh_box_uv(cube)?;
             }
             Ok(uuid.clone())
         }

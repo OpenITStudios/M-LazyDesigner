@@ -3,7 +3,7 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
-  import { planCubeLocalTranslation, planCubeLocalRotation } from './rustMoveGizmo';
+  import { planCubeLocalTranslation, planCubeLocalRotation, planCubeLocalScale } from './rustMoveGizmo';
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide } from './rustTextureProjection';
@@ -22,9 +22,10 @@
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
-  type GizmoMode = 'translate' | 'rotate';
+  type GizmoMode = 'translate' | 'rotate' | 'scale';
   export let onTranslate: (uuid: string, delta: Vec3) => Promise<boolean> = async () => false;
   export let onRotate: (uuid: string, rotation: Vec3) => Promise<boolean> = async () => false;
+  export let onScale: (uuid: string, factors: Vec3) => Promise<boolean> = async () => false;
   export let transformMode: GizmoMode | null = 'translate';
   export let canTransform = false;
 
@@ -47,7 +48,8 @@
   let bonePivots = new Map<string, { pivot: THREE.Group; bindRotation: Vec3 }>();
   let drag: {
     uuid: string; pivot: THREE.Group; mode: GizmoMode;
-    start: THREE.Vector3; rotationStart: THREE.Quaternion; anglesStart: Vec3;
+    start: THREE.Vector3; rotationStart: THREE.Quaternion;
+    anglesStart: Vec3; scaleStart: THREE.Vector3;
   } | null = null;
   let mutationPending = false;
   let skipPick = false;
@@ -125,7 +127,7 @@
     if (!gizmo) return;
     if (mode && !drag) {
       gizmo.setMode(mode);
-      gizmo.setSpace(mode === 'rotate' ? 'local' : 'world');
+      gizmo.setSpace(mode === 'translate' ? 'world' : 'local');
     }
     const pivot = selectedId ? pivots.get(selectedId) : undefined;
     if (pivot && allowed && mode && !mutationPending && !drag) {
@@ -295,6 +297,7 @@
       start: pivot.position.clone(),
       rotationStart: pivot.quaternion.clone(),
       anglesStart: [...cube.rotation] as Vec3,
+      scaleStart: pivot.scale.clone(),
     };
     skipPick = true;
     mouseStart = null;
@@ -312,13 +315,19 @@
           [gesture.start.x, gesture.start.y, gesture.start.z],
           [gesture.pivot.position.x, gesture.pivot.position.y, gesture.pivot.position.z],
         )
-      : gesture.rotationStart.angleTo(gesture.pivot.quaternion) > 1e-6
-        ? planCubeLocalRotation(gesture.uuid, gesture.anglesStart, [
-            THREE.MathUtils.radToDeg(gesture.pivot.rotation.x),
-            THREE.MathUtils.radToDeg(gesture.pivot.rotation.y),
-            THREE.MathUtils.radToDeg(gesture.pivot.rotation.z),
-          ])
-        : null;
+      : gesture.mode === 'rotate'
+        ? gesture.rotationStart.angleTo(gesture.pivot.quaternion) > 1e-6
+          ? planCubeLocalRotation(gesture.uuid, gesture.anglesStart, [
+              THREE.MathUtils.radToDeg(gesture.pivot.rotation.x),
+              THREE.MathUtils.radToDeg(gesture.pivot.rotation.y),
+              THREE.MathUtils.radToDeg(gesture.pivot.rotation.z),
+            ])
+          : null
+        : planCubeLocalScale(
+            gesture.uuid,
+            [gesture.scaleStart.x, gesture.scaleStart.y, gesture.scaleStart.z],
+            [gesture.pivot.scale.x, gesture.pivot.scale.y, gesture.pivot.scale.z],
+          );
     if (!edit || gesture.uuid !== selectedId || !canTransform ||
         gesture.mode !== transformMode) {
       rebuild(cubes, bones, hierarchy, selectedId);
@@ -330,7 +339,8 @@
     void (async () => {
       try {
         if (edit.op === 'translate_cube') await onTranslate(edit.uuid, edit.delta);
-        else await onRotate(edit.uuid, edit.rotation);
+        else if (edit.op === 'set_cube_rotation') await onRotate(edit.uuid, edit.rotation);
+        else await onScale(edit.uuid, edit.factors);
       } catch {
         // No speculative retry or model mutation in the viewport.
       } finally {
@@ -458,7 +468,7 @@
 
 <div class="view" bind:this={host} aria-label="3D model viewport">
   <canvas bind:this={canvas} tabindex="0" onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={pointerCancel}
-    aria-label="Geometry preview with supported embedded PNG textures. Select a Cube and use its Move or Rotate gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
+    aria-label="Geometry preview with supported embedded PNG textures. Select a Cube and use its Move, Rotate or Scale gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>
   {/if}

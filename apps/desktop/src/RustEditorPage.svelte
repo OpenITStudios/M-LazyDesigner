@@ -29,7 +29,7 @@
   let selectedId: string | null = null;
   let selectedBoneId: string | null = null;
   // UI-only tool selection. Geometry and history remain Rust-owned.
-  let transformTool: 'translate' | 'rotate' | null = 'translate';
+  let transformTool: 'translate' | 'rotate' | 'scale' | null = 'translate';
   let selectedFace = 'north';
   let workspaceMode: WorkspaceMode = 'edit';
   // UI-only selection and input buffers; animation data is owned by Rust.
@@ -363,6 +363,16 @@
       expectedEpoch: snapshot.epoch,
       expectedRevision: snapshot.revision,
       operations: [{ op: 'set_cube_rotation', uuid, rotation }],
+    });
+    await tick();
+    return next !== null;
+  }
+  async function scaleFromViewport(uuid: string, factors: Vec3): Promise<boolean> {
+    if (!snapshot || transformTool !== 'scale' || busy || selectedId !== uuid) return false;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch,
+      expectedRevision: snapshot.revision,
+      operations: [{ op: 'scale_cube', uuid, factors }],
     });
     await tick();
     return next !== null;
@@ -1717,6 +1727,10 @@
           title="Rotate the selected Cube with the 3D gizmo"
           disabled={!snapshot || busy || loading}
           onclick={() => transformTool = transformTool === 'rotate' ? null : 'rotate'}>Rotate</button>
+        <button class:active={transformTool === 'scale'} aria-pressed={transformTool === 'scale'}
+          title="Scale selected Cube about its pivot using the 3D gizmo (0–4×; Auto UV becomes manual)"
+          disabled={!snapshot || busy || loading}
+          onclick={() => transformTool = transformTool === 'scale' ? null : 'scale'}>Scale</button>
       </div>
     {/if}
     <div class="tool-spacer"></div>
@@ -1765,7 +1779,8 @@
           {selectedId} onSelect={selectCube}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
           canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard}
-          onTranslate={moveFromViewport} onRotate={rotateFromViewport}/>
+          onTranslate={moveFromViewport} onRotate={rotateFromViewport}
+          onScale={scaleFromViewport}/>
       {:else}
         <div class="empty-editor">
           <h2>{loading ? 'Loading editor…' : 'No model open'}</h2>
@@ -1823,6 +1838,8 @@
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
         : selectedId && transformTool === 'rotate'
         ? 'Rotate gizmo · release to commit one Rust edit · visual parity unverified'
+        : selectedId && transformTool === 'scale'
+        ? 'Scale gizmo · pivot-based resize, Auto UV becomes manual · visual parity unverified'
         : 'Embedded PNG preview subset · visual parity unverified'
     ) : 'Native Rust authoring core')}</span>
     <span>{snapshot ? 'Revision ' + snapshot.revision + (snapshot.dirty ? ' · Unsaved' : '') : 'Edit mode'}</span>

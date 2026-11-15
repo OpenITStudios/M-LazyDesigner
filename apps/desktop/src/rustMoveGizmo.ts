@@ -34,3 +34,19 @@ export function planCubeLocalRotation(
       rotation.every((v, i) => Math.abs(v - start[i]) <= 1e-5)) return null;
   return { op: 'set_cube_rotation', uuid, rotation };
 }
+
+// Convert a Three.js local Scale gesture into a bounded Rust model edit.
+// Rust reproduces the pinned Blockbench ModelScaler pivot/inflate geometry math.
+export function planCubeLocalScale(
+  uuid: string, start: readonly number[], end: readonly number[],
+): Extract<EditOperation, { op: 'scale_cube' }> | null {
+  if (!uuid || start.length !== 3 || end.length !== 3 ||
+      !start.every(v => Number.isFinite(v) && v > 0) ||
+      !end.every(Number.isFinite)) return null;
+  const factors = end.map((value, i) =>
+    Math.round((value / start[i]) * 10000) / 10000) as Vec3;
+  if (!factors.every(v => Number.isFinite(v) && v > 0 && v <= 4) ||
+      factors.every(v => Math.abs(v - 1) <= 1e-5)) return null;
+  return { op: 'scale_cube', uuid, factors };
+}
+
