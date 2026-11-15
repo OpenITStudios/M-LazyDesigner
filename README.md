@@ -18,8 +18,19 @@ Legacy Blockbench-hosted development uses `Local`; the standalone Rust-native ed
 
 For a new ChatGPT repository chat, provide the selected `Local` or `Rust` URL and intended task. ChatGPT follows current root rules, works GitHub/cloud-first without requiring the user's PC, and treats `amati` as read-only. Continuity comes from current source and relevant work commits, not chat titles.
 
-## Existing Blockbench-hosted Product Flow (Local implementation baseline)
+## Rust-native Code Mode development surface
 
+The selected Rust branch now contains source-authored code for a primary
+programmatic AI entrypoint: one model-facing Code Mode tool, a local
+Deno permission-denied JavaScript guest, a trusted Node host with explicit
+write approval, and the existing canonical Rust authoring CLI.
+This is an independently developed source path; it does not replace the
+installed Local Blockbench Gateway, require cloud Workers, or prove a native
+runtime. Start at
+[Code Mode host setup](apps/desktop/code-mode/HOST_INTEGRATION.md) and
+[Code Mode migration contract](docs/04-system/code-mode-migration.md).
+
+## Existing Blockbench-hosted Product Flow (Local implementation baseline)
 ```text
 User request
 → ChatGPT Reference Preparation

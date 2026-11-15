@@ -2,8 +2,31 @@
 
 **Status:** Rust-branch source integration; local JS host, Rust executable, and native editor **NOT_EXECUTED**. This is a Code Mode *client-side programmatic API*, not an installed server-side Cloudflare Worker sandbox and not a claim of accepted end-to-end asset production.
 
-## Decision and ownership
+## End-to-end Code Mode host source — 2026-11-15
 
+The first-party **host.mjs**, **sandbox-worker.mjs** and **run.mjs** now
+implement a local agent-program execution path instead of leaving the
+sandbox and host as only a proposal. **createCodeModeTool(host)** exposes
+one model-facing input, a bounded JavaScript code string. The host launches
+a fixed Deno guest with no I/O grants and no prompt; guest code can call
+only named codemode.* methods through typed, bounded RPC. The trusted Node
+host verifies the project/sibling paths and invokes the existing Rust CLI.
+Every mutation is denied unless an independent host-owned authorization
+callback explicitly approves it. The Rust engine remains the sole model
+owner; resulting files are new siblings with SHA/revision receipts.
+
+The host supports opening an existing .bbmodel OR bootstrapping New from a trusted existing output directory (the initial project handle is null until newModel returns its first SHA-bound handle). The built-in local CLI is **read-only by default**. Write operations require
+an explicitly selected interactive operator path or an independently
+authorized host callback. It supports New, Edit, Paint PNG import, PNG and
+Bedrock geometry export, and every existing focused/batched read; unsupported
+Rust authoring capabilities remain unavailable rather than silently emulated.
+
+**State:** SOURCE_AUTHORED / HOST_NOT_EXECUTED. Deno and native runtime
+dependencies are not installed from this GitHub session, and true OS
+isolation, Blockbench parity, user visual QA and cost savings remain UNVERIFIED.
+See [host setup and execution contract](HOST_INTEGRATION.md).
+
+## Decision and ownership
 Use one code-execution entry at the **agent host** (Codex CLI or another authenticated, explicitly authorized PC-local host) to write JavaScript/TypeScript which composes calls to `createRustCodeModeClient`. The SDK calls the existing first-party headless `lazydesigner-authoring` binary without `shell`, and Rust alone owns validation, model state, transaction atomicity, Undo/Redo, and non-overwriting publication.
 
 No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implicit filesystem permission, or new model engine is introduced. **This SDK is not an execution sandbox.** The host must enforce code execution, filesystem access, and mutation authorization. Do not run generated scripts with unrestricted Node privileges as a substitute for an approved host. The SDK only restricts its own CLI arguments and payloads.

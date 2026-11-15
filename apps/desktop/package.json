@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev:frontend": "vite --host 127.0.0.1 --port 1421 --strictPort",
+    "code-mode:run": "node code-mode/run.mjs",
     "preview:plan": "node scripts/ui-preview/render.mjs --current-local",
     "preview:quick": "node scripts/ui-preview/render.mjs --execute --current-local",
     "preview:render": "node scripts/ui-preview/render.mjs",

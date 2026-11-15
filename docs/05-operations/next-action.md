@@ -4,6 +4,18 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 
+**Source host integration (2026-11-15):** The model-facing Code Mode
+execution chain is now source-authored on Rust: one agent code tool, support for New-model bootstrap in an approved directory, a fixed
+Deno default-deny JavaScript guest, trusted Node RPC host, typed
+read/edit/import/export methods, SHA-bound handles, operator approval on
+all writes, bounded responses and no-overwrite Rust publishing. A local
+operator CLI and positive/negative regression sources are present.
+This is a substantial code integration rather than another narrow
+inspection-only increment. Existing Rust editor code and 12 project Skills
+remain canonical. No installed Deno, PC-host environment or local tests
+are claimed; all such proof is on hold. Full Rust-native editor/visual
+interoperability and native acceptance remain independent outstanding
+requirements. Do not retire or modify the separate Local MCP product.
 **Read-batch integration (SOURCE_ONLY):** The Code Mode SDK now combines up
 to eight existing inspections in a single SHA-bound Rust CLI invocation and
 one authoring document open, with result and request caps. This avoids

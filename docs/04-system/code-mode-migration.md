@@ -2,7 +2,24 @@
 
 **Source extension (2026-11-15):** The first Code Mode SDK now supports paged `catalog` reads (Cube/Bone/Texture/Animation UUID/index discovery; 1–64 items) and metadata-only `inspectTexture` / `inspectAnimation` calls. Rust projects source SHA with every query but does not expose raw texture images or opaque Animation content. This enables model-written code to discover imported model identities before a targeted edit; source regressions AUTHORED_NOT_RUN.
 
-**State:** `SOURCE_IN_PROGRESS` on `Rust`, 2026-11-15. No executable/native PASS claimed.
+**State:** `CODE_MODE_HOST_SOURCE_AUTHORED` on `Rust`, 2026-11-15;
+`HOST_NOT_EXECUTED` / `TEST_AUTHORED_NOT_RUN` / `LOCAL_TEST_DEFERRED`.
+The full installed product migration/visual and format acceptance is not
+claimed. Legacy `Local` remains separately intact.
+
+**Code Mode code-path closure:** A first-party trusted Node host and a
+default-deny Deno JavaScript guest now connect one model-facing
+`lazydesigner_code_mode({code})` descriptor to all current first-party Rust
+CLI authoring commands and bounded reads via typed RPC. The source supplies
+an operator CLI, path/SHA-bound project handles, strict output filenames,
+permission callback for each write, no-overwrite Rust publication, and
+source-only negative/positive host tests. No arbitrary CLI, file I/O,
+network, or shell path is exposed to generated code. The host uses an
+external operator-provided Deno binary, not an auto-installed worker.
+This **completes the host/bridge source path for the supported Rust slice**;
+the Rust-native editor's broader P0 features, proven sandbox operation,
+Blockbench round trips and cost-to-accepted-asset remain separate gates.
+See [host integration](../../apps/desktop/code-mode/HOST_INTEGRATION.md).
 
 **Current source increment — Code Mode host admission and structural audit:** All Code Mode write calls now fail closed without a trusted-host `authorizeMutation` callback that approves the exact target, source SHA and (for a batch) serialized plan digest. The host must still enforce actual code sandboxing; model-authored unrestricted Node can bypass a callback. `openRustCodeModeProject` binds a verified source SHA without creating another model engine. Rust CLI `inspect --audit model` returns bounded structural counts for face reference kinds, declared PNG paths, Bone roots and Animation tracks, explicitly marked `UNVERIFIED` for visual quality. Source tests are authored but `NOT_EXECUTED`. The [host integration boundary](../../apps/desktop/code-mode/HOST_INTEGRATION.md) defines the later real PC-local gate.
 

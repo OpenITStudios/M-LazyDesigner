@@ -2,6 +2,17 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**End-to-end Code Mode host SOURCE_AUTHORED (2026-11-15):** The existing
+Rust-first CLI SDK is now called through a trusted Node RPC host and
+permission-denied local Deno code guest. One model-facing code tool exposes
+programmatic New/Edit/Paint PNG import/exports and bounded reads. The
+operator CLI (`npm run code-mode:run -- ...`) defaults to read-only, and
+every write requires an independently hosted authorization callback or
+explicit interactive confirmation. Generated code has no arbitrary host
+filesystem, shell, network or direct Rust access. See
+[Code Mode host integration](code-mode/HOST_INTEGRATION.md).
+**No Deno/Node/Cargo/Windows execution, sandbox proof, release or visual
+quality acceptance was performed** in the ChatGPT/GitHub source phase.
 **Rust Code Mode read batching (2026-11-15; SOURCE_ONLY):** The typed JS/TS
 `inspectBatch` API combines 1–8 focused reads in one SHA-guarded Rust
 `inspect-batch` process and one `EditorSession` open, with strict payload

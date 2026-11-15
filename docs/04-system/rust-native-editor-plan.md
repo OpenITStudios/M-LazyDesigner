@@ -7,8 +7,16 @@
 
 This file owns the **Rust-branch target architecture, transition gates and acceptance matrix**, not the currently installed application. Product outcome and human interaction remain owned by [requirements](../01-product/requirements.md) and [interface UX](../01-product/interface-ux.md); existing source ownership remains mapped by [implementation-map.md](implementation-map.md), and [next-action.md](../05-operations/next-action.md) owns active continuation. Never treat this design as built, tested, installed or accepted.
 
-## 1. Approved outcome and explicit non-goals
+**Rust AI host source extension (2026-11-15):** The intended Code Mode
+composition boundary now has a first-party Deno guest + trusted Node RPC
+host and typed adapter to the existing Rust CLI. This is the supported
+AI-command *source* path, not executable/native verification or approval
+to disable legacy Local. The one Rust model authority, UI/CLI equivalence,
+Blockbench .bbmodel round trip, no-overwrite writes and visual proof gates
+remain unchanged. See
+[Code Mode host implementation](../../apps/desktop/code-mode/HOST_INTEGRATION.md).
 
+## 1. Approved outcome and explicit non-goals
 The user must be able to work in LazyDesigner as though they are working in the **pinned Blockbench UI**, including the supported Edit, Paint and Animate workflows, while the authoritative model engine is independent **Rust**. A completed editable `.bbmodel` from LazyDesigner must open, remain editable and preserve supported asset data in actual Blockbench. Reverse imports from Blockbench must also work. The visible editor must not require Blockbench as its execution host.
 
 | Locked product decision | Required behavior |

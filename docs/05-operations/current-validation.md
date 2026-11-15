@@ -1,5 +1,21 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — End-to-end Rust Code Mode host and guest SOURCE_AUTHORED
+
+On the selected `Rust` branch, the primary agent Code Mode code path now has
+first-party Node host RPC (`host.mjs`), a fixed Deno permission-denied
+JavaScript guest (`sandbox-worker.mjs`), an operator CLI (`run.mjs`) and a
+single model-facing tool descriptor. It exposes the supported first-party
+Rust CLI New/Inspect/Apply/Import PNG/Export PNG/Export Geometry operations, including New-model bootstrap without an existing .bbmodel,
+through bounded opaque project handles and stable typed method names.
+Guest code never receives user model paths, child process commands or
+operator approval functions; writes require external host authorization
+and fresh same-directory output names. Positive/negative source regressions
+cover routed reads, approval refusal, successful Rust receipt/handle
+continuation, unknown RPC denial and output traversal. All Node/Deno/Cargo
+regressions are AUTHORED_NOT_RUN. The Deno permission boundary, actual
+Windows behavior, Blockbench visual/format parity and usage/token metrics
+remain NOT_EXECUTED/UNVERIFIED. GitHub commit/source is NOT local proof.
 ## 2026-11-15 — Rust Code Mode read-batch source integration (SOURCE_ONLY)
 
 The headless Rust CLI adds `inspect-batch --input <model.bbmodel> --queries
