@@ -48,6 +48,16 @@ pub fn png(path: &Path) -> Result<()> {
     }
 }
 
+/// Bedrock Entity geometry outputs are named *.geo.json, not generic JSON.
+pub fn geometry_json(path: &Path) -> Result<()> {
+    if path.file_name().and_then(|name| name.to_str())
+        .is_some_and(|name| name.to_ascii_lowercase().ends_with(".geo.json")) {
+        Ok(())
+    } else {
+        Err(fail("GEOMETRY_OUTPUT_EXTENSION_REQUIRED"))
+    }
+}
+
 /// Output must be a new sibling of the input. This protects references that
 /// Blockbench wrote relative to the original project directory.
 pub fn same_directory(input: &Path, output: &Path) -> Result<()> {
@@ -67,6 +77,12 @@ pub fn publish_new(path: &Path, data: &[u8], limit: usize) -> Result<()> {
 /// PNG export shares the existing exclusive, no-overwrite writer.
 pub fn publish_new_png(path: &Path, data: &[u8], limit: usize) -> Result<()> {
     png(path)?;
+    publish_new_bytes(path, data, limit)
+}
+
+/// Geometry export uses the same exclusive no-overwrite publisher as .bbmodel.
+pub fn publish_new_geometry(path: &Path, data: &[u8], limit: usize) -> Result<()> {
+    geometry_json(path)?;
     publish_new_bytes(path, data, limit)
 }
 
@@ -133,6 +149,27 @@ mod tests {
         assert_eq!(fs::read(&exported).unwrap(), b"bounded-contents");
         fs::remove_file(original).unwrap();
         fs::remove_file(exported).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn geometry_export_requires_geo_json_and_never_overwrites_original() {
+        let dir = std::env::temp_dir()
+            .join(format!("lazydesigner-geometry-export-{:016x}", rand::rng().next_u64()));
+        fs::create_dir(&dir).unwrap();
+        let existing = dir.join("old.geo.json");
+        fs::write(&existing, b"keep").unwrap();
+        assert_eq!(publish_new_geometry(&existing, b"replace", 4096).unwrap_err(),
+            "OUTPUT_ALREADY_EXISTS");
+        assert_eq!(fs::read(&existing).unwrap(), b"keep");
+        assert_eq!(publish_new_geometry(&dir.join("wrong.json"), b"x", 4096).unwrap_err(),
+            "GEOMETRY_OUTPUT_EXTENSION_REQUIRED");
+        assert_eq!(geometry_json(Path::new("armor.GEO.JSON")), Ok(()));
+        let output = dir.join("new.geo.json");
+        publish_new_geometry(&output, b"{\"geometry\":true}", 4096).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), b"{\"geometry\":true}");
+        fs::remove_file(output).unwrap();
+        fs::remove_file(existing).unwrap();
         fs::remove_dir(dir).unwrap();
     }
 

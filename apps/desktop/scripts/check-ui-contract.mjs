@@ -14,6 +14,8 @@ const brand = read('branding/lazydesigner-ld-master.svg').trim();
 const tauriBrand = read('src-tauri/app-icon.svg').trim();
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
 const rustEditor = read('src/RustEditorPage.svelte');
+const rustHost = read('src-tauri/src/main.rs');
+const rustAdapter = read('src-tauri/src/desktop_authoring.rs');
 
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
@@ -36,6 +38,11 @@ check(rustEditor.includes('function openLegacyWorkspace()') &&
   rustEditor.includes('onclick={openLegacyWorkspace}'),
   'Legacy navigation must not bypass the Rust unsaved-close guard');
 
+check(rustHost.includes('desktop_authoring::rust_editor_export_bedrock_geometry,') &&
+  rustAdapter.includes('pub async fn rust_editor_export_bedrock_geometry(') &&
+  rustEditor.includes("'rust_editor_export_bedrock_geometry'") &&
+  rustEditor.includes('onclick={() => void exportGeometry()}'),
+  'Rust Bedrock Geometry exporter must be wired from native handler through UI');
 check(brand === tauriBrand, 'Tauri icon source diverged from the approved LD master');
 check(config.bundle?.windows?.nsis?.installerIcon === 'icons/icon.ico', 'NSIS installer icon path changed');
 check(config.bundle?.icon?.includes('icons/icon.ico'), 'Windows bundle ICO missing');

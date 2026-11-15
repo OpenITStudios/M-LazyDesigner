@@ -7,8 +7,10 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 mod bbmodel;
+mod geometry;
 mod paint;
 pub mod storage;
+pub use geometry::export_bedrock_geometry;
 
 /// The exact generated-texture gate shared by Rust edits and Tauri UI projection.
 pub fn paint_texture_editable(texture: &Value) -> bool { paint::editable(texture) }

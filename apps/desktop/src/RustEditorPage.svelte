@@ -346,6 +346,24 @@
     }
     onLegacy();
   }
+  type GeometryExportReceipt = { sha256: string; byteCount: number };
+  async function exportGeometry() {
+    if (!snapshot || busy || loading || paintStroke) return;
+    const epoch = snapshot.epoch;
+    const revision = snapshot.revision;
+    busy = true; closeMenus(); error = '';
+    try {
+      const receipt = await invoke<GeometryExportReceipt | null>(
+        'rust_editor_export_bedrock_geometry',
+        { expectedEpoch: epoch, expectedRevision: revision },
+      );
+      if (receipt) {
+        notice = 'Bedrock geometry exported (' + receipt.byteCount +
+          ' bytes). The editable .bbmodel and history remain unchanged.';
+      }
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
   async function saveCopy() {
     if (!snapshot || busy) return;
     busy = true; closeMenus(); error = '';
@@ -1859,6 +1877,11 @@
                 <button role="menuitem" onclick={requestNew} disabled={busy || loading}>New Model <kbd>Ctrl+N</kbd></button>
                 <button role="menuitem" onclick={requestOpen} disabled={busy || loading}>Open Model… <kbd>Ctrl+O</kbd></button>
                 <button role="menuitem" onclick={() => void saveCopy()} disabled={!snapshot || busy}>Save Copy… <kbd>Ctrl+Shift+S</kbd></button>
+                <button role="menuitem" onclick={() => void exportGeometry()}
+                  disabled={!snapshot || busy || loading || !!paintStroke}
+                  title="Export a separate Minecraft Bedrock geometry JSON. This does not replace your editable .bbmodel.">
+                  Export Bedrock Geometry…
+                </button>
                 <div class="menu-rule"></div>
                 <button role="menuitem" onclick={openLegacyWorkspace}>Legacy Workspace</button>
               {:else if item === 'edit'}
@@ -1926,6 +1949,9 @@
       <button disabled={busy} onclick={requestNew}>New</button>
       <button disabled={busy} onclick={requestOpen}>Open</button>
       <button disabled={!snapshot || busy} onclick={() => void saveCopy()}>Save Copy</button>
+      <button disabled={!snapshot || busy || loading || !!paintStroke}
+        title="Export separate Minecraft Bedrock geometry without changing the editable .bbmodel"
+        onclick={() => void exportGeometry()}>Export Geo</button>
     </div>
     <div class="tool-separator"></div>
     <div class="tool-group" role="group" aria-label="Edit operations">

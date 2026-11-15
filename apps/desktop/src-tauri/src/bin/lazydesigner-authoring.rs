@@ -2,11 +2,11 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, AuthoringDocument, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, AuthoringDocument, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use lazydesigner::authoring::storage::{bbmodel, png, publish_new, publish_new_png, read_bounded, same_directory};
+use lazydesigner::authoring::storage::{bbmodel, png, geometry_json, publish_new, publish_new_png, publish_new_geometry, read_bounded, same_directory};
 use rand::RngCore;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
@@ -161,7 +161,28 @@ fn execute() -> Result<Value> {
                 "summary":session.summary()
             }))
         }
-        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG_EXPORT_PNG")),
+        "export-geometry" => {
+            option_set(&options, &["--input", "--output", "--expected-sha256"])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let output = PathBuf::from(option(&options, "--output")?);
+            geometry_json(&output)?;
+            same_directory(&input, &output)?;
+            let (original, source_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let session = EditorSession::open(&original)?;
+            let bytes = export_bedrock_geometry(session.document())?;
+            if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != source_sha {
+                return Err(fail("SOURCE_CHANGED_DURING_EXPORT"));
+            }
+            publish_new_geometry(&output, &bytes, MAX_MODEL_BYTES)?;
+            Ok(json!({
+                "status":"OK", "source_sha256":source_sha,
+                "output_sha256":sha256(&bytes), "bytes":bytes.len(),
+                "format":"minecraft:geometry", "summary":session.summary()
+            }))
+        }
+        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG_EXPORT_PNG_EXPORT_GEOMETRY")),
     }
 }
 
@@ -193,6 +214,32 @@ mod tests {
         fs::remove_file(target).unwrap();
         fs::remove_dir(folder).unwrap();
     }
+    #[test]
+    fn bedrock_geometry_export_follows_verified_source_and_no_overwrite() {
+        let dir = std::env::temp_dir().join(
+            format!("lazydesigner-cli-geometry-{:016x}", rand::rng().next_u64()));
+        fs::create_dir(&dir).unwrap();
+        let input = dir.join("model.bbmodel");
+        let output = dir.join("model.geo.json");
+        let original = include_bytes!("../../fixtures/bedrock-basic.bbmodel");
+        fs::write(&input, original).unwrap();
+        assert_eq!(read_verified_source(&input, &"f".repeat(64)).unwrap_err(),
+            "SOURCE_SHA256_STALE");
+        let (source, expected_sha) = read_verified_source(&input, &sha256(original)).unwrap();
+        let session = EditorSession::open(&source).unwrap();
+        let bytes = export_bedrock_geometry(session.document()).unwrap();
+        same_directory(&input, &output).unwrap();
+        publish_new_geometry(&output, &bytes, MAX_MODEL_BYTES).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), bytes);
+        assert_eq!(publish_new_geometry(&output, &bytes, MAX_MODEL_BYTES).unwrap_err(),
+            "OUTPUT_ALREADY_EXISTS");
+        assert_eq!(expected_sha, sha256(original));
+        assert_eq!(fs::read(&input).unwrap(), original);
+        fs::remove_file(output).unwrap();
+        fs::remove_file(input).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
     #[test]
     fn png_export_reuses_sha_guard_and_never_overwrites() {
         let dir = std::env::temp_dir().join(
