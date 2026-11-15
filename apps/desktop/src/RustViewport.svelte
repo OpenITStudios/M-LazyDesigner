@@ -43,6 +43,8 @@
   const failedTextureSources = new Set<string>();
   const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
   let pivots = new Map<string, THREE.Group>();
+  // Existing Bone scene nodes and bind rotations, not a mutable asset model.
+  let bonePivots = new Map<string, { pivot: THREE.Group; bindRotation: Vec3 }>();
   let drag: {
     uuid: string; pivot: THREE.Group; mode: GizmoMode;
     start: THREE.Vector3; rotationStart: THREE.Quaternion; anglesStart: Vec3;
@@ -136,6 +138,21 @@
     scheduleRender();
   }
 
+  // During time scrubbing/playback update only Bone transforms; rebuilding
+  // every BoxGeometry and GPU material at 60 FPS would be unnecessarily costly.
+  function applyPreviewPose(pose: Record<string, Vec3> | null) {
+    for (const [uuid, { pivot, bindRotation }] of bonePivots) {
+      const offset = pose?.[uuid];
+      pivot.rotation.set(
+        deg(bindRotation[0] + (offset?.[0] ?? 0)),
+        deg(bindRotation[1] + (offset?.[1] ?? 0)),
+        deg(bindRotation[2] + (offset?.[2] ?? 0)),
+        'ZYX',
+      );
+    }
+    scheduleRender();
+  }
+
   function rebuild(
     currentCubes: CubeView[], currentBones: BoneView[],
     currentHierarchy: HierarchyNode[], currentSelection: string | null,
@@ -143,7 +160,6 @@
     _sides: ('front' | 'double' | null)[] = texturePreviewSides,
     _resolution: [number, number] = textureResolution,
     _previewTextureIndex: number | null = previewTextureIndex,
-    _boneRotations: Record<string, Vec3> | null = previewBoneRotations,
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
     if (!modelRoot || drag || mutationPending) return;
@@ -155,6 +171,7 @@
     }
     pickMeshes = [];
     pivots = new Map();
+    bonePivots = new Map();
     const cubesById = new Map(currentCubes.map((cube) => [cube.uuid, cube] as const));
     const bonesById = new Map(currentBones.map((bone) => [bone.uuid, bone] as const));
 
@@ -225,15 +242,11 @@
           if (!bone) continue;
           const pivot = new THREE.Group();
           pivot.position.copy(vector(bone.origin).sub(vector(parentOrigin)));
-          // Blockbench BoneAnimator.displayRotation adds evaluated Euler offsets
-          // to the bind-pose Bone rotation; this is display-only.
-          const offset = _boneRotations?.[bone.uuid];
-          pivot.rotation.set(
-            deg(bone.rotation[0] + (offset?.[0] ?? 0)),
-            deg(bone.rotation[1] + (offset?.[1] ?? 0)),
-            deg(bone.rotation[2] + (offset?.[2] ?? 0)),
-            'ZYX',
-          );
+          // Preserve the Rust bind pose; the admitted preview offset is
+          // applied in-place on top of it by applyPreviewPose().
+          bonePivots.set(bone.uuid, {
+            pivot, bindRotation: [...bone.rotation] as Vec3,
+          });
           parent.add(pivot);
           visit(node.children, pivot, bone.origin);
         }
@@ -241,6 +254,7 @@
     };
 
     visit(currentHierarchy, modelRoot, [0, 0, 0]);
+    applyPreviewPose(previewBoneRotations);
     syncGizmo(canTransform, transformMode);
     scheduleRender();
   }
@@ -365,7 +379,8 @@
 
   $: if (ready) rebuild(cubes, bones, hierarchy, selectedId,
     texturePreviewSources, texturePreviewSides, textureResolution,
-    previewTextureIndex, previewBoneRotations);
+    previewTextureIndex);
+  $: if (ready) applyPreviewPose(previewBoneRotations);
   $: if (ready) syncGizmo(canTransform, transformMode);
 
   onMount(() => {
@@ -436,6 +451,7 @@
       modelRoot = null;
       pickMeshes = [];
       pivots.clear();
+      bonePivots.clear();
     };
   });
 </script>

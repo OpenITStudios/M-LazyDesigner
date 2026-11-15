@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
   import { projectedBoneRotationPose } from './rustAnimationPose';
+  import { advanceOncePlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
@@ -38,6 +39,11 @@
   let newAnimationLength = 1;
   let animationTime = 0;
   let animationRotation: Vec3 = [0, 0, 0];
+  // View-only requestAnimationFrame playback; it never writes to the Rust model.
+  let playbackActive = false;
+  let playbackFrame: number | null = null;
+  let playbackPreviousTimestamp: number | null = null;
+  let playbackSource: { epoch: number; revision: number; animationUuid: string } | null = null;
   let paintTextureIndex = 0;
   let paintColor = '#e53935';
   let paintAlpha = 255;
@@ -132,8 +138,67 @@
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
 
+  // One-shot playback is admitted only for the current static linear rotation
+  // projection. Stale snapshots, hidden windows and unsupported clips pause.
+  function pauseAnimationPlayback() {
+    if (playbackFrame !== null) window.cancelAnimationFrame(playbackFrame);
+    playbackFrame = null;
+    playbackPreviousTimestamp = null;
+    playbackSource = null;
+    playbackActive = false;
+  }
+  function stopAnimationPlayback() {
+    pauseAnimationPlayback();
+    animationTime = 0;
+  }
+  function animationPlaybackTick(timestamp: number) {
+    playbackFrame = null;
+    const current = selectedAnimation;
+    if (!playbackActive || !playbackSource || !snapshot || busy || loading ||
+        newDialog || confirmDiscard || paintStroke ||
+        document.hidden || workspaceMode !== 'animate' ||
+        snapshot.epoch !== playbackSource.epoch ||
+        snapshot.revision !== playbackSource.revision ||
+        !current?.previewSupported || current.uuid !== playbackSource.animationUuid ||
+        current.rotationKeyframes.length === 0) {
+      pauseAnimationPlayback();
+      return;
+    }
+    const elapsed = playbackPreviousTimestamp === null
+      ? 0 : Math.max(0, timestamp - playbackPreviousTimestamp);
+    playbackPreviousTimestamp = timestamp;
+    const next = advanceOncePlayhead(animationTime, elapsed, current.length);
+    if (!next) { pauseAnimationPlayback(); return; }
+    animationTime = next.time;
+    if (next.finished) {
+      // Pinned Blockbench 'once' playback resets to the start and pauses.
+      pauseAnimationPlayback();
+      return;
+    }
+    playbackFrame = window.requestAnimationFrame(animationPlaybackTick);
+  }
+  function toggleAnimationPlayback() {
+    if (playbackActive) { pauseAnimationPlayback(); return; }
+    if (!snapshot || busy || loading || newDialog || confirmDiscard ||
+        workspaceMode !== 'animate' || document.hidden ||
+        !selectedAnimation?.previewSupported ||
+        selectedAnimation.rotationKeyframes.length === 0 ||
+        selectedAnimation.length <= 0) return;
+    playbackSource = {
+      epoch: snapshot.epoch, revision: snapshot.revision,
+      animationUuid: selectedAnimation.uuid,
+    };
+    if (animationTime >= selectedAnimation.length) animationTime = 0;
+    playbackPreviousTimestamp = null;
+    playbackActive = true;
+    playbackFrame = window.requestAnimationFrame(animationPlaybackTick);
+  }
+  function onAnimationVisibilityChanged() {
+    if (document.hidden) pauseAnimationPlayback();
+  }
   function selectWorkspace(mode: WorkspaceMode) {
     if (!canChangeWorkspace(Boolean(snapshot), busy, loading, Boolean(paintStroke))) return;
+    if (mode !== workspaceMode) pauseAnimationPlayback();
     workspaceMode = mode;
     closeMenus();
   }
@@ -167,6 +232,9 @@
     else error = 'The native authoring operation could not be completed.';
   }
   function accept(next: EditorSnapshot) {
+    // Any document receipt invalidates the frame-clock identity. Resume is
+    // always explicit; never replay a stale animation after Undo/Open/Save.
+    pauseAnimationPlayback();
     // The index identifies an atlas only within its owning Rust session.
     // A new model can have the same texture count but different texture data.
     paintTextureIndex = reconcilePaintTextureSelection(
@@ -352,6 +420,7 @@
     newAnimationLength = value;
   }
   function updateAnimationTime(text: string) {
+    pauseAnimationPlayback();
     const value = parseFiniteEditorNumber(text);
     if (value === null || value < 0 || !selectedAnimation || value > selectedAnimation.length) {
       error = 'Keyframe time must be inside the selected animation.';
@@ -360,6 +429,7 @@
     animationTime = value;
   }
   function updateAnimationAxis(axis: number, text: string) {
+    pauseAnimationPlayback();
     const value = parseFiniteEditorNumber(text);
     if (value === null || Math.abs(value) > 100_000) {
       error = 'Rotation must be a finite angle within the supported limit.';
@@ -937,8 +1007,15 @@
       if (height && Number.isFinite(height)) editorHeight = height;
     });
     observer.observe(editorBody);
+    document.addEventListener('visibilitychange', onAnimationVisibilityChanged);
+    window.addEventListener('blur', pauseAnimationPlayback);
     void load();
-    return () => observer.disconnect();
+    return () => {
+      pauseAnimationPlayback();
+      document.removeEventListener('visibilitychange', onAnimationVisibilityChanged);
+      window.removeEventListener('blur', pauseAnimationPlayback);
+      observer.disconnect();
+    };
   });
 </script>
 
@@ -1051,7 +1128,7 @@
   <section class="animate-workspace" aria-label="Rust animation keyframe editor">
     <div class="animate-heading">
       <strong>Animate · Rotation keyframes</strong>
-      <span>Rust-owned .bbmodel · Static linear rotation pose scrubbing only · No playback</span>
+      <span>Rust-owned .bbmodel · Once-only numeric rotation preview · No effects or Molang</span>
     </div>
     {#if snapshot}
       <div class="animate-create">
@@ -1072,6 +1149,7 @@
             <button type="button" class:active={selectedAnimation?.uuid === animation.uuid}
               aria-pressed={selectedAnimation?.uuid === animation.uuid}
               onclick={() => {
+                pauseAnimationPlayback();
                 selectedAnimationId = animation.uuid;
                 selectedKeyframeUuid = null;
                 animationTime = 0;
@@ -1091,13 +1169,25 @@
           </div>
           <p class="hint">Select a Bone in the Outliner, set time and rotation, then add a keyframe. Existing unsupported tracks remain read-only.</p>
           {#if selectedAnimation.previewSupported}
+            <div class="animate-playback-controls" role="group" aria-label="Rotation pose playback controls">
+              <button type="button" aria-pressed={playbackActive}
+                disabled={busy || loading || selectedAnimation.length <= 0 ||
+                  selectedAnimation.rotationKeyframes.length === 0}
+                onclick={toggleAnimationPlayback}>
+                {playbackActive ? 'Pause' : 'Play'}
+              </button>
+              <button type="button" disabled={busy || (!playbackActive && animationTime === 0)}
+                onclick={stopAnimationPlayback}>Stop</button>
+              <span>Once · 1× · {animationTime.toFixed(2)}s / {selectedAnimation.length}s</span>
+            </div>
             <label class="animate-scrub">Scrub rotation pose: {animationTime.toFixed(2)}s
               <input type="range" min="0" max={selectedAnimation.length}
                 step="0.01" bind:value={animationTime}
+                oninput={pauseAnimationPlayback}
                 disabled={busy || selectedAnimation.length <= 0}
                 aria-label="Scrub static rotation pose"/>
             </label>
-            <p class="hint">Preview combines linear rotation offsets with each Bone bind pose; no automatic playback.</p>
+            <p class="hint">Play/Pause previews only supported numeric linear Bone rotations. No sound, effects, Molang, loop or controller evaluation.</p>
           {:else}
             <p class="hint">Pose preview unavailable: this Animation contains unsupported tracks, expressions or interpolation. Original data is preserved.</p>
           {/if}
@@ -1128,6 +1218,7 @@
                 aria-pressed={selectedKeyframe?.uuid === frame.uuid}
                 title={'Select rotation keyframe at ' + frame.time + ' seconds'}
                 onclick={() => {
+                  pauseAnimationPlayback();
                   selectedKeyframeUuid = frame.uuid;
                   selectedId = null;
                   selectedBoneId = frame.boneUuid;
@@ -1618,7 +1709,9 @@
       workspaceMode === 'paint'
         ? 'Paint atlas · one stroke per Rust Undo · visual parity unverified'
         : workspaceMode === 'animate'
-        ? 'Animate · static rotation pose scrubbing only · playback not implemented'
+        ? playbackActive
+          ? 'Animate · once-only static rotation playback · source-only; visual parity unverified'
+          : 'Animate · Play/Pause/Stop numeric rotation subset · advanced tracks unsupported'
         : selectedId && transformTool === 'translate'
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
         : selectedId && transformTool === 'rotate'

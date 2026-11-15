@@ -732,3 +732,35 @@
   width: 100%;
   accent-color: #3e90ff;
 }
+
+/* UI-only playback controls for admitted numeric rotation-only clips. */
+.rust-editor .animate-playback-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rust-editor .animate-playback-controls button {
+  padding: 6px 12px;
+  border: 1px solid #4c5766;
+  border-radius: 3px;
+  background: #2b323c;
+  color: #d9dfe7;
+  cursor: pointer;
+}
+.rust-editor .animate-playback-controls button[aria-pressed="true"] {
+  background: #314e75;
+  border-color: #5596e6;
+}
+.rust-editor .animate-playback-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.rust-editor .animate-playback-controls button:focus-visible {
+  outline: 2px solid #3e90ff;
+  outline-offset: 2px;
+}
+.rust-editor .animate-playback-controls span {
+  color: #a4acb9;
+  font-variant-numeric: tabular-nums;
+}
