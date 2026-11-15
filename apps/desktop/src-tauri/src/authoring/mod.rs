@@ -152,6 +152,7 @@ pub enum EditOperation {
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
     SetAnimationLength { animation_uuid: String, length: f64 },
+    SetAnimationLoopMode { animation_uuid: String, mode: String },
     ScaleAnimationTimeline { animation_uuid: String, factor: f64 },
     AddBoneRotationKeyframe {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
@@ -933,17 +934,33 @@ fn editable_transform_frame(frame: &Value) -> bool {
     ] else { return false; };
     valid_animation_transform_value(channel, [x, y, z])
 }
+/// The exact saved Blockbench v5.2.1 animation loop variants.
+fn saved_animation_loop(animation: &Value) -> Option<&str> {
+    match animation.get("loop") {
+        None => Some("once"),
+        Some(Value::String(mode)) if matches!(mode.as_str(), "once" | "loop" | "hold") =>
+            Some(mode.as_str()),
+        _ => None,
+    }
+}
+
 fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
     if !animation.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
        !animation.as_object().is_some_and(|obj| obj.keys().all(|key|
-        matches!(key.as_str(), "uuid" | "name" | "loop" | "length" | "animators"))) ||
-       animation.get("loop").and_then(Value::as_str).unwrap_or("once") != "once" {
+        matches!(key.as_str(), "uuid" | "name" | "loop" | "length" | "animators"))) {
         return false;
     }
+    let Some(loop_mode) = saved_animation_loop(animation) else {
+        return false;
+    };
     let Some(length) = animation.get("length").and_then(Value::as_f64)
         .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v)) else {
         return false;
     };
+    // A looping or held clip with zero duration has no stable time mapping.
+    if length == 0.0 && loop_mode != "once" {
+        return false;
+    }
     let Some(tracks) = animation.get("animators").and_then(Value::as_object) else {
         return false;
     };
@@ -1267,6 +1284,8 @@ pub fn inspect_transform_track(
         "scope":"linear_bone_transform", "recognized":true,
         "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
         "bone_uuid":bone_uuid, "channel":channel,
+        "loop_mode":saved_animation_loop(animation).unwrap_or("once"),
+        "clip_length":animation["length"],
         "total_frames":total, "offset":offset,
         "next_offset":if end < total {Some(end)} else {None},
         "keyframes":selected
@@ -2024,6 +2043,37 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             }));
             Ok(uuid.clone())
         }
+        EditOperation::SetAnimationLoopMode { animation_uuid, mode } => {
+            // Only numeric-linear Bone clips with no opaque fields can
+            // change their playback policy. Source-backed Blockbench v5.2.1
+            // stores exactly once, loop, hold in the .bbmodel clip.
+            if !matches!(mode.as_str(), "once" | "loop" | "hold") {
+                return Err(fail("ANIMATION_LOOP_MODE_INVALID"));
+            }
+            let matches: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, item)| item.get("uuid").and_then(Value::as_str)
+                    == Some(animation_uuid.as_str()))
+                .map(|(index, _)| index).collect();
+            let index = match matches.as_slice() {
+                [] => return Err(fail("ANIMATION_NOT_FOUND")),
+                [index] => *index,
+                _ => return Err(fail("ANIMATION_ID_AMBIGUOUS")),
+            };
+            let clip = &doc.animation_assets[index];
+            if !editable_transform_clip(clip, &doc.bones) {
+                return Err(fail("ANIMATION_LOOP_EDIT_UNSUPPORTED"));
+            }
+            let duration = clip.get("length").and_then(Value::as_f64)
+                .ok_or_else(|| fail("ANIMATION_LOOP_EDIT_UNSUPPORTED"))?;
+            if duration == 0.0 && mode != "once" {
+                return Err(fail("ANIMATION_LOOP_LENGTH_INVALID"));
+            }
+            if saved_animation_loop(clip) == Some(mode.as_str()) {
+                return Ok(animation_uuid.clone());
+            }
+            doc.animation_assets[index]["loop"] = json!(mode);
+            Ok(animation_uuid.clone())
+        }
         EditOperation::SetAnimationLength { animation_uuid, length } => {
             if !length.is_finite() || !(0.0..=3600.0).contains(length) {
                 return Err(fail("ANIMATION_LENGTH_INVALID"));
@@ -2042,6 +2092,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             // byte-for-byte. No keyframe may be discarded by shortening.
             if !editable_transform_clip(animation, &doc.bones) {
                 return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+            }
+            if *length == 0.0 && saved_animation_loop(animation) != Some("once") {
+                return Err(fail("ANIMATION_LOOP_LENGTH_INVALID"));
             }
             let animators = animation.get("animators").and_then(Value::as_object)
                 .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;

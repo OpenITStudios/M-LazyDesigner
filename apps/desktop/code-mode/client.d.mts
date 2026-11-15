@@ -40,6 +40,7 @@ export type EditOperation =
   | { op: "remove_empty_bone"; uuid: string }
   | { op: "create_animation"; uuid: string; name: string; length: number }
   | { op: "set_animation_length"; animation_uuid: string; length: number }
+  | { op: "set_animation_loop_mode"; animation_uuid: string; mode: "once" | "loop" | "hold" }
   | { op: "scale_animation_timeline"; animation_uuid: string; factor: number }
   | { op: "add_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
   | { op: "update_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
@@ -293,6 +294,9 @@ export interface TransformTrackInspection {
   bone_uuid: string;
   channel: "rotation" | "position" | "scale";
   reason?: "OPAQUE_OR_UNSUPPORTED_KEYFRAMES";
+  /** Only present on admitted numeric linear clips; not live playback proof. */
+  loop_mode?: "once" | "loop" | "hold";
+  clip_length?: number;
   total_frames: number | null;
   offset?: number;
   next_offset: number | null;

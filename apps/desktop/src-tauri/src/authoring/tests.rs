@@ -139,6 +139,140 @@ fn transform_keyframes_reject_unknown_molang_negative_scale_and_cross_channel_ed
     assert!(!opaque.can_undo());
 }
 
+// Source-authored only. Blockbench loop/hold playback remains NOT_EXECUTED.
+#[test]
+fn animation_loop_modes_roundtrip_three_channel_authoring_and_retime() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009841";
+    const POS: &str = "00000000-0000-4000-8000-000000009842";
+    const ROT: &str = "00000000-0000-4000-8000-000000009843";
+    const SCALE: &str = "00000000-0000-4000-8000-000000009844";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreateAnimation {
+            uuid:ANIM.into(), name:"walk".into(), length:2.0
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:POS.into(), channel:"position".into(),
+            time:0.5, value:[1.0, 2.0, 3.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:ROT.into(), channel:"rotation".into(),
+            time:1.0, value:[0.0, 60.0, 0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:SCALE.into(), channel:"scale".into(),
+            time:1.5, value:[1.0, 1.25, 1.0],
+        },
+    ]).unwrap();
+    let original = session.document().clone();
+    session.apply(1, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"loop".into(),
+    }]).unwrap();
+    let looped = session.document().clone();
+    assert_eq!(looped.animation_assets[0]["loop"], json!("loop"));
+    let before_frames = looped.animation_assets[0]["animators"][BONE]["keyframes"].clone();
+    session.apply(2, &[
+        EditOperation::UpdateBoneTransformKeyframe {
+            animation_uuid:ANIM.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:SCALE.into(), channel:"scale".into(),
+            time:1.75, value:[1.0, 1.5, 1.0],
+        },
+        EditOperation::ScaleAnimationTimeline {
+            animation_uuid:ANIM.into(), factor:0.5,
+        },
+    ]).unwrap();
+    let changed = session.document().clone();
+    assert_eq!(changed.animation_assets[0]["loop"], json!("loop"));
+    assert_eq!(changed.animation_assets[0]["length"], json!(1.0));
+    let after_frames = &changed.animation_assets[0]["animators"][BONE]["keyframes"];
+    assert_eq!(after_frames[0]["data_points"], before_frames[0]["data_points"]);
+    assert_eq!(after_frames[0]["time"], json!(0.25));
+    assert_eq!(after_frames[1]["time"], json!(0.5));
+    assert_eq!(after_frames[2]["time"], json!(0.875));
+    let track = inspect_transform_track(&changed, ANIM, BONE, "scale", 0, 16).unwrap();
+    assert_eq!(track["recognized"], json!(true));
+    assert_eq!(track["loop_mode"], json!("loop"));
+    assert_eq!(track["clip_length"], json!(1.0));
+    assert_eq!(track["visual_verdict"], json!("UNVERIFIED"));
+    session.apply(3, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"hold".into(),
+    }]).unwrap();
+    assert_eq!(session.document().animation_assets[0]["loop"], json!("hold"));
+    let held: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(held["animations"][0]["loop"], json!("hold"));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+    session.undo(4).unwrap();
+    assert_eq!(session.document(), &changed);
+    session.undo(5).unwrap();
+    assert_eq!(session.document(), &looped);
+    session.undo(6).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(7).unwrap();
+    assert_eq!(session.document(), &looped);
+    session.apply(8, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"once".into(),
+    }]).unwrap();
+    assert_eq!(session.document().animation_assets[0]["loop"], json!("once"));
+}
+
+#[test]
+fn animation_loop_modes_refuse_zero_length_opaque_imports_and_bad_metadata() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009845";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid:ANIM.into(), name:"idle".into(), length:0.0,
+    }]).unwrap();
+    let empty = session.document().clone();
+    assert_eq!(session.apply(1, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"loop".into(),
+    }]).unwrap_err(), "ANIMATION_LOOP_LENGTH_INVALID");
+    assert_eq!(session.apply(1, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"bounce".into(),
+    }]).unwrap_err(), "ANIMATION_LOOP_MODE_INVALID");
+    assert_eq!(session.apply(1, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:"unknown".into(), mode:"hold".into(),
+    }]).unwrap_err(), "ANIMATION_NOT_FOUND");
+    assert_eq!(session.document(), &empty);
+    session.apply(1, &[
+        EditOperation::SetAnimationLength { animation_uuid:ANIM.into(), length:1.0 },
+        EditOperation::SetAnimationLoopMode { animation_uuid:ANIM.into(), mode:"loop".into() },
+    ]).unwrap();
+    let looping = session.document().clone();
+    assert_eq!(session.apply(2, &[EditOperation::SetAnimationLength {
+        animation_uuid:ANIM.into(), length:0.0,
+    }]).unwrap_err(), "ANIMATION_LOOP_LENGTH_INVALID");
+    assert_eq!(session.apply(2, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"loop".into(),
+    }]).unwrap_err(), "EDIT_NO_OP");
+    let mut invalid = looping.clone();
+    invalid.animation_assets[0]["loop"] = json!(42);
+    let mut malformed = EditorSession::from_document(invalid.clone()).unwrap();
+    assert_eq!(malformed.apply(0, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"once".into(),
+    }]).unwrap_err(), "ANIMATION_LOOP_EDIT_UNSUPPORTED");
+    assert_eq!(malformed.document(), &invalid);
+    let mut opaque = looping.clone();
+    opaque.animation_assets[0]["markers"] = json!([{"time": 0.5}]);
+    let mut unknown = EditorSession::from_document(opaque.clone()).unwrap();
+    assert_eq!(unknown.apply(0, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"hold".into(),
+    }]).unwrap_err(), "ANIMATION_LOOP_EDIT_UNSUPPORTED");
+    assert_eq!(unknown.document(), &opaque);
+    let mut duplicates = looping.clone();
+    duplicates.animation_assets.push(looping.animation_assets[0].clone());
+    let mut ambiguous = EditorSession::from_document(duplicates.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0, &[EditOperation::SetAnimationLoopMode {
+        animation_uuid:ANIM.into(), mode:"hold".into(),
+    }]).unwrap_err(), "ANIMATION_ID_AMBIGUOUS");
+    assert_eq!(ambiguous.document(), &duplicates);
+    assert_eq!(session.document(), &looping);
+    assert_eq!(session.summary().revision, 2);
+}
+
 // SOURCE-AUTHORED_ONLY: source is committed; Cargo/Blockbench not executed.
 #[test]
 fn animation_timeline_scale_retimes_three_numeric_bone_channels_atomically() {

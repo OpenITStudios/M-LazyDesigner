@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Source-backed Animation loop and hold editing (SOURCE_ONLY)
+
+Pinned official `JannisX11/blockbench@e2ede0809ee6bc91f374ac7e00d34cffbdf86a14` Animation source confirms saved `once/loop/hold` variants. Rust now authors `SetAnimationLoopMode` for strictly supported numeric-linear Bone clips, preserves the mode through keyframe add/update/remove, length adjustments and proportional retiming, and refuses malformed/duplicate/opaque imported loops or zero-duration loop/hold. Code Mode track inspection includes the admitted `loop_mode` and `clip_length` while retaining UNVERIFIED visual status. Tauri pose projection still marks non-once loops preview-unsupported by design, not a successful playback preview. Authored Rust regression checks three channels, mode switches, .bbmodel reimport and Undo/Redo, plus refusal and atomic no-op. Tests NOT_EXECUTED; native Blockbench loop playback/export remains UNVERIFIED.
+
 ## 2026-11-16 — Linear rectangle-coverage construction for UV isolation (SOURCE_ONLY)
 
 Reviewed IsolateCubeBoxUv atlas placement against many overlapping Cube UV references. Replaced per-face pixel loops in the occupancy stage with 2D rectangle-corner updates plus one bounded atlas prefix pass, retaining exact nonblank RGBA checks and per-face candidate verification. Added a repeated-duplicate source regression for unchanged original bitmap, first-fit output, and editable bbmodel reimport. Complexity improvement is source reasoning, not a measured performance PASS; Cargo/native Blockbench tests remain AUTHORED_NOT_RUN/UNVERIFIED.

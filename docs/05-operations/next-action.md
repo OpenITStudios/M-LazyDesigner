@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Animation source continuation (2026-11-16):** `set_animation_loop_mode` now covers Blockbench's pinned `once/loop/hold` clip modes for admitted numeric-linear Bone tracks; other supported edit/retiming operations preserve the declared playback mode. Strict importer/edit admission refuses malformed/opaque loop metadata and zero-duration looping, never silently interpreting unknown fields as once. Code Mode inspection reports the supported loop mode and length; Tauri preview does not claim loop/hold parity. Regression source AUTHORED_NOT_RUN and native Blockbench acceptance pending. Continue asset-first Geometry/Texturing/Animation correctness, UI/UX last.
+
 **Atlas isolation scalability (2026-11-16):** Refined Box UV island occupancy to use rectangle-corner updates and a single atlas prefix pass instead of re-marking each pixel for every overlapping Cube face. Keeps first-fit and blank-image admission intact, with repeated-duplicate regression authored but NOT_EXECUTED. No measured speedup or native Blockbench proof. Continue source-ready Geometry/Texture/Animation export correctness; UI last.
 
 **Geometry/Texture authoring (2026-11-16):** `isolate_cube_box_uv` now plans first-fit independent atlas space for a copied Cube, copies the old face texture pixels into the new island and updates only the selected Cube's Box UV offset in one atomic transaction. The original shared atlas pixels remain unchanged; afterwards guarded Paint can color the isolated Cube independently. Source tests AUTHORED_NOT_RUN; no native Blockbench compatibility/benchmark claim. Continue Geometry/Texturing/Animation and editable Blockbench export, UI last.
