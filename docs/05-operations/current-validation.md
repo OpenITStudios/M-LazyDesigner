@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust Code Mode host/guest transform-channel consumer closure (SOURCE_ONLY)
+
+The Code Mode host RPC dispatch, Deno guest method allowlist, host type declarations and source regression cases now expose the same SHA-bound transform-channel inspector as CLI and typed SDK. The UI-only EditOperation contract also acknowledges the three Geometry pivot/inflate operations for consistency, without shipping new controls. No tests/guest execution or native Blockbench validation performed.
+
 ## 2026-11-15 — Rust numeric Bone transform-channel read (SOURCE_ONLY)
 
 First-party `inspect_transform_track` projects Position/Rotation/Scale keyframes from fully admitted numeric linear clips. It refuses ambiguous/unknown/opaque source clips and does not echo raw animation JSON. CLI direct + inspect-batch, typed Code Mode client and bound project helpers share the read. Authored Rust/JS regressions are NOT_EXECUTED; visual playback, .bbmodel export in Blockbench and token benefits remain UNVERIFIED.

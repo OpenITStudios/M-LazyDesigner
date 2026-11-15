@@ -221,6 +221,11 @@ export async function createCodeModeHost({
       args.animationUuid, args.boneUuid, {
         offset: args.offset, limit: args.limit,
       }),
+    inspectAnimationTransformTrack: async (args) =>
+      selected(args).inspectAnimationTransformTrack(
+        args.animationUuid, args.boneUuid, args.channel, {
+          offset: args.offset, limit: args.limit,
+        }),
     audit: async (args) => selected(args).audit(),
     newModel: async (args) => {
       requireObject(args);

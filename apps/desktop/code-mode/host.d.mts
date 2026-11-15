@@ -38,6 +38,10 @@ export interface CodeModeGuestAPI {
     project: string; animationUuid: string; boneUuid: string;
     offset?: number; limit?: number;
   }): Promise<InspectReceipt>;
+  inspectAnimationTransformTrack(args: {
+    project: string; animationUuid: string; boneUuid: string;
+    channel: "rotation" | "position" | "scale"; offset?: number; limit?: number;
+  }): Promise<InspectReceipt>;
   audit(args: { project: string }): Promise<InspectReceipt>;
   newModel(args: { output: string; name: string; modelIdentifier: string }):
     Promise<CodeModeProjectReference & { receipt: OutputReceipt }>;

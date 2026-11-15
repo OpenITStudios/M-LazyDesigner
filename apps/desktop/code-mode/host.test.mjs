@@ -254,6 +254,43 @@ test('Code Mode host runs only one guest at a time', () =>
     assert.equal(spawned, 1);
   }));
 
+test('Code Mode host exposes Position/Rotation/Scale inspect through the guest allowlist', () =>
+  fixture(async (input) => {
+    const calls = [];
+    const host = await createCodeModeHost({
+      rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+      runner: async (args) => {
+        calls.push(args);
+        if (args.includes('--track-channel')) {
+          return { status: 'OK', sha256: HASH, summary: SUMMARY,
+            track: { scope: 'linear_bone_transform', recognized: true,
+              channel: 'position', total_frames: 0, keyframes: [] } };
+        }
+        return { status: 'OK', sha256: HASH, summary: SUMMARY };
+      },
+      spawnImpl: () => fakeGuest({
+        method: 'inspectAnimationTransformTrack',
+        args: { project: 'p0', animationUuid: 'clip', boneUuid: 'bone',
+          channel: 'position', offset: 0, limit: 2 },
+      }, (result) => {
+        assert.equal(result.ok, true);
+        assert.equal(result.result.track.channel, 'position');
+        return { inspected: result.result.track.recognized };
+      }),
+    });
+    const result = await host.execute({ code:
+      "return await codemode.inspectAnimationTransformTrack({project:'p0',animationUuid:'clip',boneUuid:'bone',channel:'position'});" });
+    assert.equal(result.value.inspected, true);
+    assert.equal(result.rpc_calls, 1);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[1], [
+      'inspect', '--input', input,
+      '--animation-uuid', 'clip', '--bone-uuid', 'bone',
+      '--track-channel', 'position', '--frame-offset', '0', '--frame-limit', '2',
+      '--expected-sha256', HASH,
+    ]);
+  }));
+
 test('Code Mode host rejects exited guest with pending approval and denies late approval', () =>
   fixture(async (input) => {
     const calls = [];

@@ -88,7 +88,7 @@ return {
 };
 ~~~
 
-When bootstrapping from an output directory, the guest starts with a null initial project handle and must call newModel to create the first .bbmodel; the returned handle is p0. When opening an existing project, codemode.initial.project starts at p0. Each successful New, Apply or Import PNG returns a new opaque project handle and pinned file SHA. The guest cannot open arbitrary files. The model does not own a separate in-memory scene. It can call the following bounded host methods: projectInfo, inspect, catalog, inspectBatch, inspectCubeSurfaces, inspectCubeFaceAlpha, inspectTexture, inspectTextureAlpha, inspectAnimation, inspectAnimationTrack, audit, newModel, apply, importPng, exportPng, exportGeometry.
+When bootstrapping from an output directory, the guest starts with a null initial project handle and must call newModel to create the first .bbmodel; the returned handle is p0. When opening an existing project, codemode.initial.project starts at p0. Each successful New, Apply or Import PNG returns a new opaque project handle and pinned file SHA. The guest cannot open arbitrary files. The model does not own a separate in-memory scene. It can call the following bounded host methods: projectInfo, inspect, catalog, inspectBatch, inspectCubeSurfaces, inspectCubeFaceAlpha, inspectTexture, inspectTextureAlpha, inspectAnimation, inspectAnimationTrack, inspectAnimationTransformTrack, audit, newModel, apply, importPng, exportPng, exportGeometry.
 
 For importPng, the PNG path must be **preselected by the trusted host**. The guest may supply a new model sibling name, texture UUID and name, but cannot read arbitrary PNG paths.
 
