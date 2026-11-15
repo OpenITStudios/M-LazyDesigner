@@ -737,8 +737,21 @@ mod tests {
 
         doc = original.clone();
         doc.meta.box_uv = Some(true);
+        let box_report = inspect_cube_uv_alpha(&doc, &cube_id).unwrap();
+        assert_eq!(box_report["scope"], json!("derived_box_face_uv_alpha"));
+        assert_eq!(box_report["faces"][0]["uv_source"], json!("derived_box"));
+        assert_eq!(box_report["faces"][0]["uv"], json!([4.0, 4.0, 8.0, 8.0]));
+        assert_eq!(box_report["faces"][0]["saved_uv"], json!([0.0, 0.0, 4.0, 4.0]));
+        assert_eq!(box_report["faces"][0]["alpha"]["region"]["scope"],
+            json!("derived_box_uv_alpha_pixels"));
+        assert_eq!(box_report["faces"][0]["alpha"]["region"]["transparent_pixels"], json!(16));
+        doc.meta.extra.insert("box_uv_float_size".into(), json!(true));
         assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
-            ["faces"][0]["alpha"]["reason"], json!("BOX_UV_UNSUPPORTED"));
+            ["faces"][0]["alpha"]["reason"], json!("BOX_UV_RULES_UNSUPPORTED"));
+        doc.meta.extra.remove("box_uv_float_size");
+        doc.cubes[0].extra.insert("mirror_uv".into(), json!("not-bool"));
+        assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
+            ["faces"][0]["alpha"]["reason"], json!("BOX_UV_RULES_UNSUPPORTED"));
         doc = original.clone();
         doc.cubes[0].extra.insert("autouv".into(), json!(1));
         assert_eq!(inspect_cube_uv_alpha(&doc, &cube_id).unwrap()
@@ -754,6 +767,54 @@ mod tests {
         assert!(inspect_cube_uv_alpha(&doc, &cube_id).is_err());
         assert_eq!(inspect_cube_uv_alpha(&original, "nonexistent-cube").unwrap_err(),
             "CUBE_NOT_FOUND");
+    }
+
+    // Source-authored only. The normal new Bedrock model uses Box UV.
+    // An alpha measurement here says nothing about 3D face visibility.
+    #[test]
+    fn box_uv_alpha_uses_derived_face_net_and_preserves_imported_source() {
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Box alpha", "box_alpha").unwrap()
+        ).unwrap();
+        let bone: lazydesigner::authoring::Bone = serde_json::from_value(json!({
+            "uuid":"00000000-0000-4000-8000-000000000801",
+            "name":"root", "origin":[0,0,0]
+        })).unwrap();
+        let mut cube: lazydesigner::authoring::Cube = serde_json::from_value(
+            serde_json::from_slice::<Value>(include_bytes!("../../fixtures/bedrock-basic.bbmodel"))
+            .unwrap()["elements"][0].clone()).unwrap();
+        cube.uuid = "00000000-0000-4000-8000-000000000802".into();
+        let id = "00000000-0000-4000-8000-000000000803";
+        session.apply(0, &[
+            EditOperation::SetEmptyAtlasResolution { width: 32, height: 32 },
+            EditOperation::AddBone { bone, parent_uuid: None },
+            EditOperation::AddCube {
+                cube, bone_uuid: "00000000-0000-4000-8000-000000000801".into()
+            },
+            EditOperation::CreatePaintTexture { uuid:id.into(), name:"box.png".into() },
+            EditOperation::AssignCubeTexture {
+                cube_uuid:"00000000-0000-4000-8000-000000000802".into(),
+                texture_uuid:id.into(),
+            },
+            EditOperation::PaintTexturePixel {
+                texture_index:0, x:4, y:4, rgba:[10,20,30,255]
+            },
+        ]).unwrap();
+        let original = session.document().clone();
+        let report = inspect_cube_uv_alpha(&original,
+            "00000000-0000-4000-8000-000000000802").unwrap();
+        assert_eq!(report["scope"], json!("derived_box_face_uv_alpha"));
+        assert_eq!(report["faces"][0]["side"], json!("north"));
+        assert_eq!(report["faces"][0]["uv"], json!([4.0,4.0,8.0,8.0]));
+        assert_eq!(report["faces"][0]["alpha"]["region"]["opaque_pixels"], json!(1));
+        assert_eq!(report["faces"][0]["alpha"]["region"]["transparent_pixels"], json!(15));
+        assert_eq!(report["faces"][1]["side"], json!("east"));
+        assert_eq!(report["faces"][1]["alpha"]["region"]["opaque_pixels"], json!(0));
+        assert_eq!(report["face_coverage_verdict"], json!("UNVERIFIED"));
+        assert_eq!(session.document(), &original);
+        let reimported = EditorSession::open(&session.export().unwrap()).unwrap();
+        assert_eq!(reimported.document(), &original);
+        assert!(report.to_string().find("data:image/png").is_none());
     }
 
     // Authored-only verification: decode behavior/native runtime NOT_EXECUTED.

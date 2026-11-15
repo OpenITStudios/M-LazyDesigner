@@ -1269,18 +1269,39 @@ pub fn inspect_paint_alpha(doc: &AuthoringDocument, texture_uuid: &str) -> Resul
     }))
 }
 
-/// Inspect six saved *manual* Cube face UV regions against the Rust Paint
-/// PNG decoder, once per unique referenced texture. This is source evidence:
-/// a visible 3D face, effective Bedrock material and full texturing quality
-/// still require native observation. Unknown mappings fail closed per face.
+/// Inspect six Cube face UV regions against the Rust Paint PNG decoder,
+/// once per unique referenced texture. For Box UV, recompute the face
+/// rectangles from the authoritative bounds/net offset on a *copy* rather
+/// than trusting possibly stale imported face rectangles. This is alpha
+/// evidence for UV pixels, never a native visual or paint-quality verdict.
+/// Unsafe UV rules refuse rather than fabricating observed coverage.
 pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result<Value> {
     let surface = inspect_cube_surfaces(doc, cube_uuid)?;
     let uv = &surface["uv"];
+    let box_uv = uv["box_uv"].as_bool() == Some(true);
+    let cube = doc.cubes.iter().find(|cube| cube.uuid == cube_uuid)
+        .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+    // The current Box UV net uses integer dimension semantics. Imported
+    // float-grid or malformed mirroring flags are not silently approximated.
+    let unsafe_box_rules = [
+        cube.extra.get("box_uv_float_size"),
+        doc.meta.extra.get("box_uv_float_size"),
+        doc.extensions.get("box_uv_float_size"),
+    ].into_iter().flatten().any(|flag| flag != &Value::Bool(false)) ||
+        cube.extra.get("mirror_uv").is_some_and(|v| !v.is_boolean());
+    let derived_box = if box_uv && !unsafe_box_rules &&
+        uv["per_texture_rules"].as_bool() != Some(true) {
+        let mut copy = cube.clone();
+        refresh_box_uv(&mut copy)?;
+        Some(copy)
+    } else {
+        None
+    };
     let global_reason = if uv["per_texture_rules"].as_bool() == Some(true) {
         Some("PER_TEXTURE_UV_RULES_UNSUPPORTED")
-    } else if uv["box_uv"].as_bool() == Some(true) {
-        Some("BOX_UV_UNSUPPORTED")
-    } else if uv["auto_uv"].as_u64() != Some(0) {
+    } else if box_uv && derived_box.is_none() {
+        Some("BOX_UV_RULES_UNSUPPORTED")
+    } else if !box_uv && uv["auto_uv"].as_u64() != Some(0) {
         Some("AUTO_UV_UNSUPPORTED")
     } else {
         None
@@ -1310,8 +1331,13 @@ pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result
         ) {
             reason = Some("UNSUPPORTED_TEXTURE_FORMAT_OR_METADATA");
         }
-        let rect: [f64; 4] = serde_json::from_value(face["uv"].clone())
+        let saved_rect: [f64; 4] = serde_json::from_value(face["uv"].clone())
             .map_err(|_| fail("CUBE_INSPECT_FACES_INVALID"))?;
+        let rect = if let Some(box_cube) = &derived_box {
+            face_uv(box_cube, side)?
+        } else {
+            saved_rect
+        };
         let stats = if let Some(message) = reason {
             json!({"status":"unsupported","reason":message})
         } else {
@@ -1325,7 +1351,12 @@ pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result
             let png = decoded.iter().find(|(i, _)| *i == texture_index)
                 .ok_or_else(|| fail("PAINT_UV_CACHE_INCONSISTENT"))?;
             match paint::uv_region_alpha_stats(&png.1, width, height, rect) {
-                Ok(region) => json!({"status":"measured","region":region}),
+                Ok(mut region) => {
+                    if derived_box.is_some() {
+                        region["scope"] = json!("derived_box_uv_alpha_pixels");
+                    }
+                    json!({"status":"measured","region":region})
+                },
                 Err(code) if matches!(code.as_str(),
                     "PAINT_UV_RECT_NON_INTEGRAL" |
                     "PAINT_UV_RECT_OUT_OF_BOUNDS" |
@@ -1341,11 +1372,15 @@ pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result
             "texture_index":index,
             "texture_uuid":face["texture_uuid"],
             "uv":rect,
+            "saved_uv":saved_rect,
+            "uv_source":if derived_box.is_some() { "derived_box" } else { "saved_manual" },
             "alpha":stats
         }));
     }
     let report = json!({
-        "scope":"saved_manual_face_uv_alpha",
+        "scope":if derived_box.is_some() {
+            "derived_box_face_uv_alpha"
+        } else { "saved_manual_face_uv_alpha" },
         "cube_uuid":cube_uuid,
         "visual_verdict":"UNVERIFIED",
         "effective_material":"UNVERIFIED",

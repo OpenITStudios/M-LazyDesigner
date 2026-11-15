@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Default Box UV texturing inspection:** The source-level six-face RGBA alpha inspector now supports conservatively derived Box UV coordinates for explicitly referenced, supported atlas textures. The generated Box UV state is recomputed on a copy rather than reading imported stale face fields. Unsupported float-size, unknown mirroring or per-texture metadata fail closed; `face_coverage_verdict` stays UNVERIFIED. This directly reduces one texture blindspot without altering UI. Tests AUTHORED_NOT_RUN; actual Blockbench export still pending.
+
 **Integrated source acceptance fixture:** The single Rust model authority now has one authored-not-run regression covering New → Geometry (Cube/Bone pivots/Inflate) → Paint (RGBA8 PNG and Cube link) → Animate (Position/Rotation/Scale) → .bbmodel export/reopen plus Undo/rollback. The remaining work is actual missing supported asset capabilities and later user-authorized native Blockbench/format/visual proof, not UI mimicry.
 
 **Animation source increment:** Code Mode now reads all three supported Bone transform channels through bounded SHA-pinned Rust inspection, rather than only Rotation. Existing rotation inspection remains. Opaque/Molang clips refuse full-track interpretation. Source regression authored, NOT_EXECUTED; advanced animation authoring/export and native Blockbench proof remain unfinished.

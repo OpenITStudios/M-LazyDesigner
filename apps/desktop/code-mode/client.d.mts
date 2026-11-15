@@ -163,9 +163,10 @@ export interface TextureAlphaInspection {
   texture_index: number;
   inspection: SupportedTextureAlpha | UnsupportedTextureAlpha;
 }
-/** Alpha histogram of exact integral saved Face UV pixels only. */
+/** Exact alpha histogram of a saved manual or reconstructed Box UV region.
+ * Neither variant is evidence of face visibility, quality or material parity. */
 export interface SavedUvPixelRegion {
-  scope: "saved_manual_uv_alpha_pixels";
+  scope: "saved_manual_uv_alpha_pixels" | "derived_box_uv_alpha_pixels";
   sampled_pixels: number;
   transparent_pixels: number;
   translucent_pixels: number;
@@ -178,12 +179,14 @@ export interface CubeFaceAlphaEvidence {
   texture_index: number | null;
   texture_uuid: string | null;
   uv: Vec4;
+  saved_uv: Vec4;
+  uv_source: "saved_manual" | "derived_box";
   alpha:
     | { status: "measured"; region: SavedUvPixelRegion }
     | { status: "unsupported"; reason: string };
 }
 export interface CubeFaceAlphaInspection {
-  scope: "saved_manual_face_uv_alpha";
+  scope: "saved_manual_face_uv_alpha" | "derived_box_face_uv_alpha";
   cube_uuid: string;
   visual_verdict: "UNVERIFIED";
   effective_material: "UNVERIFIED";

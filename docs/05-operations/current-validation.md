@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Box UV alpha gap closed in source (SOURCE_ONLY)
+
+The default Rust Box UV model was not eligible for existing six-face alpha inspection. The Rust inspector now derives Box UV face rectangles on a transient Cube copy, records saved vs derived UV and counts exact RGBA8 sampled atlas pixels through the existing decoder. Per-texture rules and unsafe float/mirror metadata refuse; the actual model is never changed and the output does not claim visible-face coverage. CLI/Code Mode types and regression fixture cover positive/negative cases (TEST_AUTHORED_NOT_RUN). Native Blockbench visual/export and build tests remain UNVERIFIED/DEFERRED.
+
 ## 2026-11-15 — New/Geometry/Paint/Animate/Save/Open integrated source fixture (NOT_EXECUTED)
 
 One Rust `EditorSession` source regression now composes empty project, Cube/Bone pivots/Inflate, generated RGBA8 texture assignment+fill, three Bone transform channels, `.bbmodel` export/reimport, per-channel inspection, atomic rollback and Undo/Redo. This is TEST_AUTHORED_NOT_RUN, not a Windows executable run or evidence that actual Blockbench can open/replay the result. The mandatory native Blockbench output acceptance remains UNVERIFIED.
