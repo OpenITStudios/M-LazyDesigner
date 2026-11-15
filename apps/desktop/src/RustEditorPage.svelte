@@ -649,8 +649,9 @@
   }
 
   async function newPaintTexture() {
-    if (!snapshot || busy || snapshot.textureResolution.some(size => size > 256)) {
-      error = 'Paint supports new RGBA8 textures up to 256 × 256 pixels.';
+    if (!snapshot || busy || loading || !!paintStroke || workspaceMode !== 'paint' ||
+        !snapshot.paintTextureAddable) {
+      error = 'New Paint textures require a supported atlas, fewer than 16 textures, and no per-texture UV rules.';
       return;
     }
     const before = snapshot.textureNames.length;
@@ -681,7 +682,8 @@
   }
 
   async function importPngTexture() {
-    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint') return;
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
+        !snapshot.paintTextureAddable) return;
     const epoch = snapshot.epoch;
     const revision = snapshot.revision;
     const previousCount = snapshot.textureNames.length;
@@ -1247,13 +1249,11 @@
             <p class="hint">Choose the atlas size before importing PNG or adding model elements; existing model UV is never resized implicitly.</p>
           {/if}
           <button type="button" onclick={() => void newPaintTexture()} disabled={busy || loading ||
-            snapshot.textureResolution.some(size => size > 256)}>
+            !!paintStroke || !snapshot.paintTextureAddable}>
             New RGBA8 Texture
           </button>
           <button type="button" onclick={() => void importPngTexture()}
-            disabled={busy || loading || !!paintStroke ||
-              snapshot.textureResolution.some(size => size > 256) ||
-              snapshot.textureNames.length >= 16}
+            disabled={busy || loading || !!paintStroke || !snapshot.paintTextureAddable}
             title="Choose a local RGBA8 PNG with the same dimensions as this project; the source file is never modified">
             Import PNG…
           </button>

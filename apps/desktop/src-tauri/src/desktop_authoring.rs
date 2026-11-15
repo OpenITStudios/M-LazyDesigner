@@ -3,8 +3,8 @@
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
-    storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, can_set_empty_atlas_resolution, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
-    OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES,
+    storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, can_set_empty_atlas_resolution, can_add_paint_texture, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rand::RngCore;
@@ -103,6 +103,7 @@ pub struct EditorSnapshot {
     paint_adoptable_textures: Vec<bool>,
     texture_resolution: [u32; 2],
     atlas_resolution_editable: bool,
+    paint_texture_addable: bool,
     animation_count: usize,
     animations: Vec<AnimationView>,
     preview_scope: &'static str,
@@ -194,7 +195,6 @@ fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
     // Bound *decoded* aggregate exposure as well as the encoded data URI.
     // Compression alone cannot authorize dozens of large GPU textures.
     const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
-    const MAX_TEXTURES: usize = 16;
     // Share the Rust authoring refusal gate with this read-only UV preview.
     // Opaque or malformed per-texture flags must not imply a safe atlas grid.
     let per_texture = has_per_texture_uv_rules(doc);
@@ -204,7 +204,7 @@ fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
     let expected_height = doc.resolution.height;
     let mut admitted = 0usize;
     doc.texture_assets.iter().map(|texture| {
-        if per_texture || admitted >= MAX_TEXTURES { return None; }
+        if per_texture || admitted >= MAX_PAINT_TEXTURES { return None; }
         let (source, width, height) = embedded_png_preview_candidate(texture)?;
         // This renderer uses project-level UV coordinates. If the PNG has
         // another size or declares another UV grid, showing it would imply
@@ -377,6 +377,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             ).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             atlas_resolution_editable: can_set_empty_atlas_resolution(doc),
+            paint_texture_addable: can_add_paint_texture(doc),
             animation_count: doc.animation_assets.len(),
             animations: animation_views(doc),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
@@ -1149,6 +1150,30 @@ mod tests {
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
     }
 
+
+    #[test]
+    fn paint_addition_projection_follows_shared_rust_admission_gate() {
+        let empty = AuthoringDocument::new_bedrock("Paint", "paint").unwrap();
+        let store = EditorStore {
+            epoch: 4,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(empty.clone()).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        assert!(project(&store).unwrap().paint_texture_addable);
+
+        let mut per_texture = empty;
+        per_texture.extensions.insert("per_texture_uv_size".into(), json!(true));
+        let store = EditorStore {
+            epoch: 5,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(per_texture).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        assert!(!project(&store).unwrap().paint_texture_addable);
+    }
 
     #[test]
     fn empty_atlas_editability_projection_changes_when_model_has_cubes() {

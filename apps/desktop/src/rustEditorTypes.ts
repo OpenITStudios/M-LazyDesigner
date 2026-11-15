@@ -79,6 +79,7 @@ export type EditorSnapshot = {
   paintAdoptableTextures: boolean[];
   textureResolution: [number, number];
   atlasResolutionEditable: boolean;
+  paintTextureAddable: boolean;
   animationCount: number;
   animations: AnimationView[];
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';

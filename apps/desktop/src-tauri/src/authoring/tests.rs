@@ -14,6 +14,64 @@ fn sample_cube(uuid: &str) -> Cube {
     serde_json::from_value(value["elements"][0].clone()).unwrap()
 }
 
+// Authored regression only. Tests remain held and are NOT_EXECUTED.
+#[test]
+fn generated_paint_texture_limit_matches_import_preview_and_history() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Paint limit", "paint_limit").unwrap()
+    ).unwrap();
+    assert!(can_add_paint_texture(session.document()));
+    let operations: Vec<EditOperation> = (0..MAX_PAINT_TEXTURES).map(|index|
+        EditOperation::CreatePaintTexture {
+            uuid: format!("00000000-0000-4000-8000-{:012x}", 500 + index),
+            name: format!("paint-{index}.png"),
+        }
+    ).collect();
+    let receipt = session.apply(0, &operations).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(session.document().texture_assets.len(), MAX_PAINT_TEXTURES);
+    assert!(!can_add_paint_texture(session.document()));
+    let created = session.document().clone();
+    assert_eq!(session.apply(1, &[EditOperation::CreatePaintTexture {
+        uuid: "00000000-0000-4000-8000-000000000600".into(),
+        name: "overflow.png".into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_COUNT_LIMIT");
+    assert_eq!(session.document(), &created);
+    assert_eq!(session.summary().revision, 1);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        created);
+    session.undo(1).unwrap();
+    assert_eq!(session.document().texture_assets.len(), 0);
+    assert!(can_add_paint_texture(session.document()));
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &created);
+    assert!(!can_add_paint_texture(session.document()));
+}
+
+#[test]
+fn generated_and_imported_paint_refuse_unsupported_uv_rules_and_id_conflicts() {
+    let mut with_rules = AuthoringDocument::new_bedrock("Rules", "rules").unwrap();
+    with_rules.extensions.insert("per_texture_uv_size".into(), json!(true));
+    let mut session = EditorSession::from_document(with_rules.clone()).unwrap();
+    let id = "00000000-0000-4000-8000-000000000700";
+    assert!(!can_add_paint_texture(session.document()));
+    assert_eq!(session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: id.into(), name: "generated.png".into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(session.apply(0, &[EditOperation::ImportPaintTexture {
+        uuid: id.into(), name: "imported.png".into(), source: "not-an-image".into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(session.document(), &with_rules);
+    assert_eq!(session.summary().revision, 0);
+
+    let mut with_cube = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let before = with_cube.document().clone();
+    assert_eq!(with_cube.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: CUBE.into(), name: "duplicate-identity.png".into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_ID_INVALID");
+    assert_eq!(with_cube.document(), &before);
+}
+
 #[test]
 fn paint_rectangle_fills_inclusive_reversed_corners_with_one_undo_step() {
     let mut session = EditorSession::from_document(

@@ -22,6 +22,8 @@ pub const MAX_MODEL_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_PLAN_BYTES: usize = 64 * 1024;
 /// Maximum native/import-png PNG file size before embedded base64 encoding.
 pub const MAX_IMPORT_PNG_BYTES: usize = 1024 * 1024;
+/// Shared bound for native Paint creation/import and the supported 3D preview.
+pub const MAX_PAINT_TEXTURES: usize = 16;
 const MAX_ELEMENTS: usize = 65_536;
 const MAX_OPERATIONS: usize = 128;
 const MAX_HISTORY: usize = 32;
@@ -812,6 +814,27 @@ fn editable_rotation_track(track: &Value) -> bool {
 /// Changing atlas dimensions with authored Cubes or texture/animation data
 /// would require native UV remapping. Keep this setting confined to a simple
 /// empty Bedrock model with no imported opaque authoring metadata.
+/// Shared admission for new generated/imported Paint assets. Never infer
+/// that a project with per-texture UV rules fits the one-atlas Paint editor.
+fn check_paint_texture_addition(doc: &AuthoringDocument) -> Result<()> {
+    if has_per_texture_uv_rules(doc) {
+        return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
+    }
+    if doc.texture_assets.len() >= MAX_PAINT_TEXTURES {
+        return Err(fail("PAINT_TEXTURE_COUNT_LIMIT"));
+    }
+    if !(1..=256).contains(&doc.resolution.width) ||
+       !(1..=256).contains(&doc.resolution.height) {
+        return Err(fail("PAINT_DIMENSIONS_UNSUPPORTED"));
+    }
+    Ok(())
+}
+
+/// Read-only eligibility used by the Tauri UI. Mutations recheck this gate.
+pub fn can_add_paint_texture(doc: &AuthoringDocument) -> bool {
+    check_paint_texture_addition(doc).is_ok()
+}
+
 pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {
     doc.cubes.is_empty() && doc.bones.is_empty() &&
     doc.texture_assets.is_empty() && doc.animation_assets.is_empty() &&
@@ -1259,12 +1282,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok("project-resolution".into())
         }
         EditOperation::ImportPaintTexture { uuid, name, source } => {
-            if has_per_texture_uv_rules(doc) {
-                return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
-            }
-            // Only the bounded editable atlas subset has a safe preview/paint
-            // contract. Existing imported project assets are not rewritten.
-            if doc.texture_assets.len() >= 16 { return Err(fail("PAINT_TEXTURE_COUNT_LIMIT")); }
+            // Existing imported project assets are never rewritten to admit
+            // an unsupported Paint/UV configuration.
+            check_paint_texture_addition(doc)?;
             if !valid_uuid(uuid) || doc.cubes.iter().any(|cube| cube.uuid == *uuid) ||
                doc.bones.iter().any(|bone| bone.uuid == *uuid) ||
                doc.texture_assets.iter().chain(doc.animation_assets.iter())
@@ -1295,8 +1315,11 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(cube_uuid.clone())
         }
         EditOperation::CreatePaintTexture { uuid, name } => {
-            if !valid_uuid(uuid) || doc.texture_assets.len() >= MAX_ELEMENTS ||
-                doc.texture_assets.iter().any(|texture| texture.get("uuid").and_then(Value::as_str) == Some(uuid)) {
+            check_paint_texture_addition(doc)?;
+            if !valid_uuid(uuid) || doc.cubes.iter().any(|cube| cube.uuid == *uuid) ||
+               doc.bones.iter().any(|bone| bone.uuid == *uuid) ||
+               doc.texture_assets.iter().chain(doc.animation_assets.iter())
+                 .any(|asset| asset.get("uuid").and_then(Value::as_str) == Some(uuid.as_str())) {
                 return Err(fail("PAINT_TEXTURE_ID_INVALID"));
             }
             // Bedrock project resolution is the atlas size for this initial
