@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Semantic Cube UV face paint batch (SOURCE_ONLY)
+
+Rust `PaintCubeUvFaces` now maps 1–6 explicitly named Cube faces into their strict UV-pixel rectangles using saved manual UV or a transient derived Box UV net; one PNG `paint::rectangles` invocation writes the ordered colors. Every face must reference the exact existing editable Texture UUID/index. Read-only UV alpha statistics share the same integral pixel-bounds helper. Missing/disabled/duplicate faces, mismatched texture references, Auto UV, per-texture rules, float-sized Box nets and unsafe RGBA8 imports refuse. Positive/negative source regressions cover a six-face default Box atlas, RGB pixels, source-only UV alpha, Undo/Redo, no-op, manual UV, unsafe inputs and an approved Code Mode one-operation plan. `TEST_AUTHORED_NOT_RUN`; native Blockbench output, visual coverage and comparative speed remain UNVERIFIED. Shared atlas islands may intentionally affect other model faces; no exclusive-paint claim.
+
 ## 2026-11-16 — All-channel numeric Animation clip retiming (SOURCE_ONLY)
 
 `ScaleAnimationTimeline` authors proportional changes to complete once-only Rotation/Position/Scale keyframe times and clip duration through the same Rust EditOperation/Undo/.bbmodel authority. It refuses invalid factors (0.1–10 only), duration overflow, ambiguous animation UUID, opaque/imported interpolated content and time collisions introduced by scaling. Regression source covers 3-channel time/UUID/payload preservation, SHA-independent read-after-write inspection, export/reimport, Undo/Redo, malformed factor, collision and atomic refusal. This is TEST_AUTHORED_NOT_RUN; no Windows/Blockbench playback or measured end-to-end efficiency.

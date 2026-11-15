@@ -126,6 +126,16 @@ pub struct PaintRectangleStep {
     pub erase: bool,
 }
 
+/// Selects one declared Cube face, not a screen-space paint coordinate.
+/// Shared atlas UV islands can still affect other Cubes using those pixels.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CubeFacePaintPatch {
+    pub face: String,
+    pub rgba: [u8; 4],
+    pub erase: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditOperation {
@@ -187,6 +197,9 @@ pub enum EditOperation {
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
     PaintTextureRectangle { texture_index: usize, from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool },
     PaintTextureRectangles { texture_index: usize, rectangles: Vec<PaintRectangleStep> },
+    PaintCubeUvFaces {
+        cube_uuid: String, texture_uuid: String, faces: Vec<CubeFacePaintPatch>,
+    },
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
 }
 
@@ -2376,6 +2389,68 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 rectangles)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::PaintCubeUvFaces { cube_uuid, texture_uuid, faces } => {
+            // Paint up to six explicit semantic Cube faces on one validated
+            // atlas, in caller order and through one existing PNG transaction.
+            // This does not claim exclusive face ownership of shared UV pixels.
+            if faces.is_empty() || faces.len() > FACE_NAMES.len() {
+                return Err(fail("PAINT_CUBE_FACES_SIZE_INVALID"));
+            }
+            if has_per_texture_uv_rules(doc) {
+                return Err(fail("PAINT_CUBE_UV_RULESET_UNSUPPORTED"));
+            }
+            let texture_index = doc.texture_assets.iter().position(|texture|
+                texture.get("uuid").and_then(Value::as_str) == Some(texture_uuid))
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            let original_cube = doc.cubes.iter().find(|cube| cube.uuid == *cube_uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let mut projected = original_cube.clone();
+            if cube_box_uv(original_cube, doc.meta.box_uv.unwrap_or(false)) {
+                if check_box_uv_repack_rules(doc, original_cube).is_err() {
+                    return Err(fail("PAINT_CUBE_UV_RULESET_UNSUPPORTED"));
+                }
+                // Never trust stale cached rectangles from an imported Cube.
+                // The derived Box net is local; this is not a geometry edit.
+                refresh_box_uv(&mut projected)?;
+            } else if cube_auto_uv(original_cube)? != 0 {
+                return Err(fail("PAINT_CUBE_AUTO_UV_UNSUPPORTED"));
+            }
+            let mut seen = HashSet::new();
+            let mut steps = Vec::with_capacity(faces.len());
+            for patch in faces {
+                if !FACE_NAMES.contains(&patch.face.as_str()) ||
+                   !seen.insert(patch.face.as_str()) {
+                    return Err(fail("PAINT_CUBE_FACE_DUPLICATE_OR_UNKNOWN"));
+                }
+                let surface = projected.faces.get(&patch.face)
+                    .and_then(Value::as_object)
+                    .ok_or_else(|| fail("PAINT_CUBE_FACE_INVALID"))?;
+                if surface.get("enabled").is_some_and(|v| v != &Value::Bool(true)) {
+                    return Err(fail("PAINT_CUBE_FACE_DISABLED"));
+                }
+                // Face-level null/false/unset means no explicit atlas target,
+                // even if Bedrock's runtime chooses a default texture.
+                let linked = match surface.get("texture") {
+                    Some(Value::String(uuid)) => uuid == texture_uuid,
+                    Some(Value::Number(number)) =>
+                        number.as_u64() == Some(texture_index as u64),
+                    _ => false,
+                };
+                if !linked { return Err(fail("PAINT_CUBE_FACE_TEXTURE_MISMATCH")); }
+                let uv = face_uv(&projected, &patch.face)?;
+                let (from, end) = paint::uv_pixel_rectangle(
+                    doc.resolution.width, doc.resolution.height, uv)?;
+                steps.push(PaintRectangleStep {
+                    from, to: [end[0] - 1, end[1] - 1],
+                    rgba: patch.rgba, erase: patch.erase,
+                });
+            }
+            let bitmap = doc.texture_assets.get_mut(texture_index)
+                .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::rectangles(bitmap, doc.resolution.width,
+                doc.resolution.height, &steps)?;
+            Ok(texture_uuid.clone())
         }
         EditOperation::PaintTextureFill { texture_index, at, rgba, erase } => {
             let texture = doc.texture_assets.get_mut(*texture_index)

@@ -174,6 +174,38 @@ test('Code Mode routes supported transform-channel reads and refuses unknown cha
   assert.equal(calls.length, before);
 });
 
+test('Code Mode forwards a semantic Cube-face paint batch as one approved Rust operation', async () => {
+  let plan;
+  const patches = [
+    { face: 'north', rgba: [200, 40, 30, 255], erase: false },
+    { face: 'up', rgba: [40, 80, 200, 255], erase: false },
+  ];
+  const operation = {
+    op: 'paint_cube_uv_faces', cube_uuid: 'cube-1',
+    texture_uuid: 'atlas-1', faces: patches,
+  };
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: (request) => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async (args) => {
+      plan = JSON.parse(await readFile(args[args.indexOf('--plan') + 1], 'utf8'));
+      return { status: 'OK', mutation: { revision: 1, operation_count: 1,
+        changed_uuids: ['atlas-1'] } };
+    },
+  });
+  await client.apply({
+    input: '/abs/model.bbmodel', output: '/abs/model-faces.bbmodel',
+    expectedSha256: SHA, operations: [operation],
+  });
+  assert.deepEqual(plan, { expected_revision: 0, operations: [operation] });
+  assert.deepEqual(approvals[0].operationKinds, ['paint_cube_uv_faces']);
+  assert.equal(approvals[0].operationCount, 1);
+});
+
 test('CLI failures are not reported as successful model mutations', async () => {
   const client = createRustCodeModeClient({
     binary: BIN, authorizeMutation: async () => true,

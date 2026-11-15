@@ -125,16 +125,13 @@ pub(super) fn decode_for_uv_inspection(
     decode_rgba8_source(texture, width, height)
 }
 
-/// Counts alpha categories inside a *saved manual UV pixel rectangle*.
-/// Exact integer pixel boundaries only; no UV tiling, interpolation, effective
-/// material or visible-face paint coverage is inferred. Reversed UV is allowed
-/// since reversing a rectangle does not change its alpha histogram.
-pub(super) fn uv_region_alpha_stats(
-    rgba: &[u8], width: u32, height: u32, uv: [f64; 4],
-) -> Result<Value> {
-    if size(width, height)? != rgba.len() {
-        return Err("PAINT_UV_BITMAP_INVALID".into());
-    }
+/// Convert a face's integral atlas UV into a nonempty half-open pixel box.
+/// The same admission governs both source-only alpha inspection and
+/// semantic face painting, including mirrored/reversed UV coordinates.
+pub(super) fn uv_pixel_rectangle(
+    width: u32, height: u32, uv: [f64; 4],
+) -> Result<([u32; 2], [u32; 2])> {
+    let _ = size(width, height)?;
     if !uv.iter().all(|n| n.is_finite() && *n == n.round()) {
         return Err("PAINT_UV_RECT_NON_INTEGRAL".into());
     }
@@ -149,11 +146,25 @@ pub(super) fn uv_region_alpha_stats(
     if x0 == x1 || y0 == y1 {
         return Err("PAINT_UV_RECT_ZERO_AREA".into());
     }
+    Ok(([x0 as u32, y0 as u32], [x1 as u32, y1 as u32]))
+}
+
+/// Counts alpha categories inside a *saved manual UV pixel rectangle*.
+/// Exact integer pixel boundaries only; no UV tiling, interpolation, effective
+/// material or visible-face paint coverage is inferred. Reversed UV is allowed
+/// since reversing a rectangle does not change its alpha histogram.
+pub(super) fn uv_region_alpha_stats(
+    rgba: &[u8], width: u32, height: u32, uv: [f64; 4],
+) -> Result<Value> {
+    if size(width, height)? != rgba.len() {
+        return Err("PAINT_UV_BITMAP_INVALID".into());
+    }
+    let ([x0, y0], [x1, y1]) = uv_pixel_rectangle(width, height, uv)?;
     let mut transparent = 0_u32;
     let mut translucent = 0_u32;
     let mut opaque = 0_u32;
-    for y in (y0 as u32)..(y1 as u32) {
-        for x in (x0 as u32)..(x1 as u32) {
+    for y in y0..y1 {
+        for x in x0..x1 {
             let index = ((y * width + x) * 4 + 3) as usize;
             match rgba[index] {
                 0 => transparent += 1,
@@ -169,7 +180,7 @@ pub(super) fn uv_region_alpha_stats(
         "transparent_pixels":transparent,
         "translucent_pixels":translucent,
         "opaque_pixels":opaque,
-        "pixel_rect":[x0 as u32, y0 as u32, x1 as u32, y1 as u32]
+        "pixel_rect":[x0, y0, x1, y1]
     }))
 }
 

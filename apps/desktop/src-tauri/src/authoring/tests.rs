@@ -951,6 +951,141 @@ fn rust_png_export_rejects_opaque_invalid_and_per_texture_uv_assets() {
         "PAINT_TEXTURE_RULESET_UNSUPPORTED");
 }
 
+// SOURCE_AUTHORED_NOT_RUN: semantic Cube face painting with one Rust PNG
+// transaction, not visual face-coverage evidence from native Blockbench.
+#[test]
+fn paint_cube_uv_faces_colors_six_derived_box_net_regions_with_one_undo() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Face Colors", "face_colors").unwrap()).unwrap();
+    const TEX: &str = "00000000-0000-4000-8000-000000009871";
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 32, height: 32 },
+        EditOperation::AddBone {
+            bone: serde_json::from_value(json!({
+                "uuid": BONE, "name": "body", "origin": [0,0,0]
+            })).unwrap(), parent_uuid: None,
+        },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: BONE.into() },
+        EditOperation::CreatePaintTexture { uuid: TEX.into(), name: "body.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: TEX.into() },
+    ]).unwrap();
+    let before = session.document().clone();
+    let colors: [(&str, [u8; 4], [u32; 2]); 6] = [
+        ("north", [200, 30, 30, 255], [5, 5]),
+        ("south", [30, 200, 30, 255], [13, 5]),
+        ("east", [30, 30, 200, 255], [1, 5]),
+        ("west", [200, 200, 30, 255], [9, 5]),
+        ("up", [30, 200, 200, 255], [5, 1]),
+        ("down", [200, 30, 200, 255], [9, 1]),
+    ];
+    let patches: Vec<_> = colors.iter().map(|(face, rgba, _)|
+        CubeFacePaintPatch { face: (*face).into(), rgba: *rgba, erase: false }
+    ).collect();
+    let result = session.apply(1, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid: CUBE.into(), texture_uuid: TEX.into(), faces: patches.clone(),
+    }]).unwrap();
+    assert_eq!(result.revision, 2);
+    assert_eq!(result.operation_count, 1);
+    assert_eq!(result.changed_uuids, vec![TEX.to_owned()]);
+    let saved = session.document().clone();
+    let pixels = paint::decode_for_uv_inspection(&saved.texture_assets[0], 32, 32).unwrap();
+    for (_, rgba, [x, y]) in colors {
+        let offset = ((y * 32 + x) * 4) as usize;
+        assert_eq!(&pixels[offset..offset + 4], &rgba);
+    }
+    let alpha = inspect_cube_uv_alpha(&saved, CUBE).unwrap();
+    assert_eq!(alpha["scope"], json!("derived_box_face_uv_alpha"));
+    for surface in alpha["faces"].as_array().unwrap() {
+        assert_eq!(surface["alpha"]["status"], json!("measured"));
+        assert_eq!(surface["alpha"]["region"]["opaque_pixels"], json!(16));
+        assert_eq!(surface["alpha"]["region"]["transparent_pixels"], json!(0));
+    }
+    assert_eq!(saved.cubes, before.cubes);
+    assert_eq!(saved.bones, before.bones);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.apply(4, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid: CUBE.into(), texture_uuid: TEX.into(), faces: patches,
+    }]).unwrap_err(), "EDIT_NO_OP");
+}
+
+#[test]
+fn paint_cube_uv_faces_rejects_unsafe_uv_missing_links_and_bad_patches_atomically() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009881";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture { uuid: TEX.into(), name: "skin.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid: CUBE.into(), texture_uuid: TEX.into() },
+    ]).unwrap();
+    let initial = session.document().clone();
+    let valid = CubeFacePaintPatch { face: "north".into(),
+        rgba: [10, 20, 30, 255], erase: false };
+    let paint = |faces: Vec<CubeFacePaintPatch>| EditOperation::PaintCubeUvFaces {
+        cube_uuid: CUBE.into(), texture_uuid: TEX.into(), faces,
+    };
+    for (patches, error) in [
+        (Vec::new(), "PAINT_CUBE_FACES_SIZE_INVALID"),
+        (vec![valid.clone(); 7], "PAINT_CUBE_FACES_SIZE_INVALID"),
+        (vec![valid.clone(), valid.clone()], "PAINT_CUBE_FACE_DUPLICATE_OR_UNKNOWN"),
+        (vec![CubeFacePaintPatch { face: "unknown".into(), ..valid.clone() }],
+            "PAINT_CUBE_FACE_DUPLICATE_OR_UNKNOWN"),
+    ] {
+        assert_eq!(session.apply(1, &[paint(patches)]).unwrap_err(), error);
+    }
+    assert_eq!(session.apply(1, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid: CUBE.into(), texture_uuid: "missing".into(), faces: vec![valid.clone()],
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_FOUND");
+    assert_eq!(session.apply(1, &[
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: 0.25 },
+        paint(vec![
+            valid.clone(), CubeFacePaintPatch { face: "south".into(), ..valid.clone() },
+        ]),
+    ]).unwrap().revision, 2);
+    // Existing valid manual face UV remains paintable. Undo back to isolate
+    // subsequent fail-closed checks and prove there is no hidden state.
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &initial);
+    let mut null_face = initial.clone();
+    null_face.cubes[0].faces.get_mut("north").unwrap()["texture"] = Value::Null;
+    let mut absent = EditorSession::from_document(null_face.clone()).unwrap();
+    assert_eq!(absent.apply(0, &[paint(vec![valid.clone()])]).unwrap_err(),
+        "PAINT_CUBE_FACE_TEXTURE_MISMATCH");
+    assert_eq!(absent.document(), &null_face);
+    let mut auto = initial.clone();
+    auto.cubes[0].extra.insert("autouv".into(), json!(1));
+    let mut auto = EditorSession::from_document(auto.clone()).unwrap();
+    assert_eq!(auto.apply(0, &[paint(vec![valid.clone()])]).unwrap_err(),
+        "PAINT_CUBE_AUTO_UV_UNSUPPORTED");
+    let mut rules = initial.clone();
+    rules.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+    let mut rules = EditorSession::from_document(rules.clone()).unwrap();
+    assert_eq!(rules.apply(0, &[paint(vec![valid.clone()])]).unwrap_err(),
+        "PAINT_CUBE_UV_RULESET_UNSUPPORTED");
+    let mut fractional = initial.clone();
+    fractional.cubes[0].faces.get_mut("north").unwrap()["uv"] = json!([0.5,0.0,4.0,4.0]);
+    let mut fractional = EditorSession::from_document(fractional.clone()).unwrap();
+    assert_eq!(fractional.apply(0, &[paint(vec![valid.clone()])]).unwrap_err(),
+        "PAINT_UV_RECT_NON_INTEGRAL");
+    let mut overrun = initial.clone();
+    overrun.cubes[0].faces.get_mut("north").unwrap()["uv"] = json!([0.0,0.0,129.0,4.0]);
+    let mut overrun = EditorSession::from_document(overrun.clone()).unwrap();
+    assert_eq!(overrun.apply(0, &[paint(vec![valid.clone()])]).unwrap_err(),
+        "PAINT_UV_RECT_OUT_OF_BOUNDS");
+    let mut imported = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let old = imported.document().clone();
+    assert_eq!(imported.apply(0, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid: CUBE.into(),
+        texture_uuid: "00000000-0000-4000-8000-000000000101".into(),
+        faces: vec![valid],
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(imported.document(), &old);
+    assert_eq!(session.document(), &initial);
+    assert_eq!(session.summary().revision, 3);
+}
+
 // Source-only: the same PNG decoder is used once for a coherent group
 // of atlas rectangles, retaining deterministic order and one Undo step.
 #[test]

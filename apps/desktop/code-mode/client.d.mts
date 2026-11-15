@@ -8,6 +8,11 @@ export interface PaintRectangleStep {
   rgba: [number, number, number, number];
   erase: boolean;
 }
+export interface CubeFacePaintPatch {
+  face: "north" | "east" | "south" | "west" | "up" | "down";
+  rgba: [number, number, number, number];
+  erase: boolean;
+}
 export interface Cube {
   uuid: string;
   type: "cube";
@@ -67,6 +72,7 @@ export type EditOperation =
   | { op: "paint_texture_brush"; texture_index: number; points: Vec2[]; radius: number; rgba: [number, number, number, number]; erase: boolean }
   | { op: "paint_texture_rectangle"; texture_index: number; from: Vec2; to: Vec2; rgba: [number, number, number, number]; erase: boolean }
   | { op: "paint_texture_rectangles"; texture_index: number; rectangles: PaintRectangleStep[] }
+  | { op: "paint_cube_uv_faces"; cube_uuid: string; texture_uuid: string; faces: CubeFacePaintPatch[] }
   | { op: "paint_texture_fill"; texture_index: number; at: Vec2; rgba: [number, number, number, number]; erase: boolean };
 export interface DocumentSummary {
   revision: number;
