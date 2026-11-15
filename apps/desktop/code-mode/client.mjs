@@ -186,6 +186,18 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
+    async inspectAnimationTrack({
+      input, animationUuid, boneUuid, offset = 0, limit = 32, expectedSha256,
+    }) {
+      return call('inspect', {
+        input: absolute(input, 'input'),
+        'animation-uuid': nonempty(animationUuid, 'animationUuid'),
+        'bone-uuid': nonempty(boneUuid, 'boneUuid'),
+        'frame-offset': wholeNumber(offset, 'offset', 0, 65536),
+        'frame-limit': wholeNumber(limit, 'limit', 1, 64),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
+      });
+    },
     async audit({ input, expectedSha256 }) {
       return call('inspect', {
         input: absolute(input, 'input'), audit: 'model',
@@ -276,6 +288,10 @@ export async function openRustCodeModeProject(client, input) {
     audit: () => client.audit({ input: path, expectedSha256 }),
     inspectTexture: (index) => client.inspectTexture({ input: path, index, expectedSha256 }),
     inspectAnimation: (uuid) => client.inspectAnimation({ input: path, uuid, expectedSha256 }),
+    inspectAnimationTrack: (animationUuid, boneUuid, { offset = 0, limit = 32 } = {}) =>
+      client.inspectAnimationTrack({
+        input: path, animationUuid, boneUuid, offset, limit, expectedSha256,
+      }),
     apply: ({ output, operations }) =>
       client.apply({ input: path, output, expectedSha256, operations }),
     exportPng: ({ output, textureUuid }) =>

@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Code Mode bounded Bone rotation-track inspection (SOURCE_ONLY)
+
+The canonical Rust authoring module now exposes read-only `inspect_rotation_track` for a chosen Animation UUID and Bone UUID. It reuses the current supported linear numeric rotation-frame admission and rejects opaque/Molang or inconsistent imported tracks as `recognized:false` without changing the saved animation. The first-party CLI accepts `inspect --animation-uuid ... --bone-uuid ... --frame-offset N --frame-limit N` (maximum 64 frames) and the typed Code Mode SDK/project exposes `inspectAnimationTrack` with the existing optional source SHA precondition. Returned keys are limited to keyframe UUID, time and numeric XYZ, while visual verdict stays `UNVERIFIED`. Rust and Node regression sources AUTHORED_NOT_RUN; no animation playback, PC host, Windows/Cargo/Node execution or Blockbench round trip is claimed.
+
 ## 2026-11-15 — Code Mode pinned-read source consistency (SOURCE_ONLY)
 
 Rust CLI `inspect` now supports optional `--expected-sha256`, sharing the exact source digest rejection logic used for writes. The JavaScript/TypeScript client threads this precondition through focused Cube/Bone, paginated catalog, texture/animation metadata, and static audit calls created by `openRustCodeModeProject`; legacy unpinned `inspect` remains compatible. This closes the stale-read reasoning gap without a second model cache. Rust/Node regression source AUTHORED_NOT_RUN; no actual file race, code host, native model, or security sandbox executed.

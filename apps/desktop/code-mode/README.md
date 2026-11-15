@@ -59,6 +59,7 @@ Do not copy this into an unrestricted Node process as a substitute for host isol
 - `catalog({input,kind,offset,limit})`: paginated Cube/Bone/Texture/Animation identities, with 1–64 results per page.
 - `inspect({input,uuid})`: focused Cube/Bone fields, not full model JSON.
 - `inspectTexture({input,index})` / `inspectAnimation({input,uuid})`: bounded metadata only, with no bitmap/opaque animation payload.
+- `inspectAnimationTrack({input,animationUuid,boneUuid,offset,limit,expectedSha256})`: bounded (1–64) numeric linear Bone rotation keyframes with UUID/time/XYZ for an exact track. The Rust Core reuses its recognized rotation-frame predicate. Imported Molang or unsupported tracks return `recognized:false`, no opaque keyframe body and `visual_verdict:UNVERIFIED`. The path/SHA-bound project exposes the same method.
 - `audit({input})`: source-derived face-reference, source-type, rig and clip counts. `visual_verdict` remains `UNVERIFIED`: count-based QA does not establish texture coverage, silhouette fidelity or animation correctness.
 - `openRustCodeModeProject(client,input)`: path/SHA-bound helper that exposes the same reads plus preconditioned output methods. It **does not** cache a mutable model in JavaScript.
 - `apply`: one existing Rust transaction (1–128 operations, at most 64 KiB) against an opened CLI document revision 0 and an exact source SHA; a private plan file is created only after host approval.

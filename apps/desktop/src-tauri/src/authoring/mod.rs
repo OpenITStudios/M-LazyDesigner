@@ -816,6 +816,99 @@ fn editable_rotation_track(track: &Value) -> bool {
     track.get("keyframes").and_then(Value::as_array).is_some()
 }
 
+/// Read-only Code Mode projection for one exact Bone rotation track.
+/// Shares the existing Rust editable-frame admission instead of interpreting
+/// imported Molang expressions, unknown channels or extended keyframe shapes.
+/// "recognized" identifies only this bounded data representation: it is not
+/// proof of native animation playback, visual fidelity or mutation permission.
+pub fn inspect_rotation_track(
+    doc: &AuthoringDocument,
+    animation_uuid: &str,
+    bone_uuid: &str,
+    offset: usize,
+    limit: usize,
+) -> Result<Value> {
+    if limit == 0 || limit > 64 || offset > MAX_ELEMENTS {
+        return Err(fail("ANIMATION_INSPECT_PAGE_INVALID"));
+    }
+    if !doc.bones.iter().any(|bone| bone.uuid == bone_uuid) {
+        return Err(fail("ANIMATION_BONE_NOT_FOUND"));
+    }
+    let animation = doc.animation_assets.iter()
+        .find(|a| a.get("uuid").and_then(Value::as_str) == Some(animation_uuid))
+        .ok_or_else(|| fail("ANIMATION_NOT_FOUND"))?;
+    let track = animation.get("animators").and_then(Value::as_object)
+        .and_then(|items| items.get(bone_uuid))
+        .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+    let Some(frames) = track.get("keyframes").and_then(Value::as_array) else {
+        return Ok(json!({
+            "scope":"unsupported_animation_track",
+            "recognized":false, "reason":"OPAQUE_OR_UNSUPPORTED_KEYFRAMES",
+            "visual_verdict":"UNVERIFIED", "keyframes":[],
+            "total_frames":null, "next_offset":null,
+            "animation_uuid":animation_uuid, "bone_uuid":bone_uuid
+        }));
+    };
+    let total = frames.len();
+    let duration = animation.get("length").and_then(Value::as_f64)
+        .filter(|n| n.is_finite() && (0.0..=3600.0).contains(n));
+    let mut times = Vec::new();
+    let mut ids = HashSet::new();
+    let mut recognized = editable_rotation_track(track) &&
+        duration.is_some() && total <= 4096;
+    if recognized {
+        for frame in frames {
+            let time = frame.get("time").and_then(Value::as_f64);
+            let id = frame.get("uuid").and_then(Value::as_str);
+            if !editable_rotation_frame(frame) ||
+               !time.is_some_and(|n| n <= duration.unwrap_or(0.0)) ||
+               !id.is_some_and(|value| ids.insert(value.to_owned())) {
+                recognized = false;
+                break;
+            }
+            times.push(time.unwrap_or(0.0));
+        }
+        if recognized {
+            times.sort_by(|a, b| a.total_cmp(b));
+            recognized = !times.windows(2).any(|pair| (pair[1] - pair[0]).abs() <= 1e-6);
+        }
+    }
+    if !recognized {
+        return Ok(json!({
+            "scope":"unsupported_animation_track",
+            "recognized":false, "reason":"OPAQUE_OR_UNSUPPORTED_KEYFRAMES",
+            "visual_verdict":"UNVERIFIED", "keyframes":[],
+            "total_frames":total, "next_offset":null,
+            "animation_uuid":animation_uuid, "bone_uuid":bone_uuid
+        }));
+    }
+    let mut keyframes = Vec::new();
+    let end = offset.saturating_add(limit).min(total);
+    for frame in frames.iter().skip(offset).take(limit) {
+        let point = &frame["data_points"][0];
+        let axis = |name: &str| -> Result<f64> {
+            match point.get(name) {
+                Some(Value::String(value)) => value.parse::<f64>().map_err(|_| fail("ANIMATION_INSPECT_AXIS_INVALID")),
+                Some(Value::Number(value)) => value.as_f64().ok_or_else(|| fail("ANIMATION_INSPECT_AXIS_INVALID")),
+                _ => Err(fail("ANIMATION_INSPECT_AXIS_INVALID")),
+            }
+        };
+        keyframes.push(json!({
+            "uuid":frame["uuid"],
+            "time":frame["time"],
+            "rotation":[axis("x")?, axis("y")?, axis("z")?]
+        }));
+    }
+    Ok(json!({
+        "scope":"linear_bone_rotation",
+        "recognized":true, "visual_verdict":"UNVERIFIED",
+        "animation_uuid":animation_uuid, "bone_uuid":bone_uuid,
+        "total_frames":total, "offset":offset,
+        "next_offset":if end < total { Some(end) } else { None },
+        "keyframes":keyframes
+    }))
+}
+
 /// Changing atlas dimensions with authored Cubes or texture/animation data
 /// would require native UV remapping. Keep this setting confined to a simple
 /// empty Bedrock model with no imported opaque authoring metadata.

@@ -41,7 +41,7 @@ Programmatic use does not imply a new model engine, second document registry, or
 | --- | --- | --- |
 | Geometry | Rust typed Cube/Bone operations and focused read | Complete inspection/diff/diagnostics and native Blockbench interoperability |
 | UV/Texturing | Bounded PNG/face operations | Coverage proof for all visible/hidden sides, advanced texture consistency and pixel fidelity |
-| Animation | Existing Rust rotation keyframe operations | Broader channels, playback/effects fidelity, safe export and native replay |
+| Animation | Rust rotation keyframe edits and bounded source-derived keyframe inspection for a recognized Bone track (unknown imported tracks fail closed) | Broader channels, actual playback/effects fidelity, safe export and native replay |
 | Quality | Existing Skills and inspection references preserved | Representative model tasks, 6-angle+close-up review, user acceptance |
 | Security | Typed CLI bridge, no in-process JS eval, Rust guards | Host sandbox/permission proof, cancellation and uncertain-outcome recovery |
 | Efficiency | Compact result projection and programmatic batching | Actual tokens, latency, retries, corrections and cost per accepted asset |

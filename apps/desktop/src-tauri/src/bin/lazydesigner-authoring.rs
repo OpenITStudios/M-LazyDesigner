@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -271,7 +271,7 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--audit", "--expected-sha256"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--bone-uuid", "--frame-offset", "--frame-limit", "--audit", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
@@ -282,8 +282,16 @@ fn execute() -> Result<Value> {
             }
             let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--audit"]
                 .iter().filter(|key| options.contains_key(*key)).count();
-            if query_count > 1 || (!options.contains_key("--list") &&
-                (options.contains_key("--offset") || options.contains_key("--limit"))) {
+            if query_count > 1 ||
+                (!options.contains_key("--list") &&
+                    (options.contains_key("--offset") || options.contains_key("--limit"))) ||
+                (!options.contains_key("--animation-uuid") &&
+                    (options.contains_key("--bone-uuid") ||
+                     options.contains_key("--frame-offset") ||
+                     options.contains_key("--frame-limit"))) ||
+                (!options.contains_key("--bone-uuid") &&
+                    (options.contains_key("--frame-offset") ||
+                     options.contains_key("--frame-limit"))) {
                 return Err(fail("INSPECT_QUERY_CONFLICT"));
             }
             if let Some(uuid) = options.get("--uuid") {
@@ -304,9 +312,19 @@ fn execute() -> Result<Value> {
                 Ok(json!({"status":"OK","sha256":digest,
                     "summary":session.summary(),"asset":asset}))
             } else if let Some(uuid) = options.get("--animation-uuid") {
-                let asset = inspect_asset(session.document(), "animation", uuid)?;
-                Ok(json!({"status":"OK","sha256":digest,
-                    "summary":session.summary(),"asset":asset}))
+                if let Some(bone_uuid) = options.get("--bone-uuid") {
+                    let offset = options.get("--frame-offset").map(|s|s.parse::<usize>())
+                        .transpose().map_err(|_| fail("ANIMATION_INSPECT_PAGE_INVALID"))?.unwrap_or(0);
+                    let limit = options.get("--frame-limit").map(|s|s.parse::<usize>())
+                        .transpose().map_err(|_| fail("ANIMATION_INSPECT_PAGE_INVALID"))?.unwrap_or(32);
+                    let track = inspect_rotation_track(session.document(), uuid, bone_uuid, offset, limit)?;
+                    Ok(json!({"status":"OK","sha256":digest,
+                        "summary":session.summary(),"track":track}))
+                } else {
+                    let asset = inspect_asset(session.document(), "animation", uuid)?;
+                    Ok(json!({"status":"OK","sha256":digest,
+                        "summary":session.summary(),"asset":asset}))
+                }
             } else if let Some(scope) = options.get("--audit") {
                 if scope != "model" { return Err(fail("INSPECT_AUDIT_UNSUPPORTED")); }
                 Ok(json!({"status":"OK","sha256":digest,
@@ -440,7 +458,43 @@ fn main() {
 mod tests {
     use super::*;
 
-    // Source-authored only; Cargo/local execution is held.
+    // Source-authored only; Cargo/local execution remains on hold.
+    #[test]
+    fn code_mode_recognized_rotation_track_has_uuid_time_and_numeric_axes() {
+        let mut session = EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let bone = session.document().bones[0].uuid.clone();
+        let anim = "00000000-0000-4000-8000-000000000701";
+        let key = "00000000-0000-4000-8000-000000000702";
+        session.apply(0, &[
+            EditOperation::CreateAnimation { uuid: anim.into(), name: "inspection".into(), length: 2.0 },
+            EditOperation::AddBoneRotationKeyframe {
+                animation_uuid: anim.into(), bone_uuid: bone.clone(),
+                keyframe_uuid: key.into(), time: 1.0, rotation: [0.0, 35.0, 0.0],
+            }
+        ]).unwrap();
+        let original = session.document().clone();
+        let track = inspect_rotation_track(session.document(), anim, &bone, 0, 16).unwrap();
+        assert_eq!(track["recognized"], json!(true));
+        assert_eq!(track["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(track["total_frames"], json!(1));
+        assert_eq!(track["keyframes"][0]["uuid"], json!(key));
+        assert_eq!(track["keyframes"][0]["time"], json!(1.0));
+        assert_eq!(track["keyframes"][0]["rotation"], json!([0.0, 35.0, 0.0]));
+        assert!(track["next_offset"].is_null());
+        assert_eq!(session.document(), &original);
+        assert_eq!(inspect_rotation_track(session.document(), anim, &bone, 0, 65).unwrap_err(),
+            "ANIMATION_INSPECT_PAGE_INVALID");
+        let mut opaque = original.clone();
+        opaque.animation_assets[0]["animators"][bone.as_str()]["keyframes"][0]["data_points"][0]["x"] =
+            json!("query.head_yaw");
+        let restricted = inspect_rotation_track(&opaque, anim, &bone, 0, 8).unwrap();
+        assert_eq!(restricted["recognized"], json!(false));
+        assert!(restricted["keyframes"].as_array().unwrap().is_empty());
+        assert_eq!(opaque.animation_assets[0]["animators"][bone.as_str()]["keyframes"][0]["data_points"][0]["x"],
+            json!("query.head_yaw"));
+    }
+
     #[test]
     fn code_mode_read_sha_gate_rejects_stale_and_malformed_expected_hash() {
         let actual = "a".repeat(64);

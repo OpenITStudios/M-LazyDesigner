@@ -150,6 +150,39 @@ test('client can request a SHA-pinned read without changing legacy unpinned read
   assert.equal(calls.length, 1);
 });
 
+test('Code Mode inspects bounded numeric Bone rotation frames without exposing opaque tracks', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      return {
+        status: 'OK', sha256: SHA, summary: { revision: 0 },
+        track: { scope: 'linear_bone_rotation', recognized: true,
+          visual_verdict: 'UNVERIFIED', total_frames: 1, next_offset: null,
+          animation_uuid: 'animation-1', bone_uuid: 'bone-1',
+          keyframes: [{ uuid: 'key-1', time: 1, rotation: [0, 25, 0] }] },
+      };
+    },
+  });
+  const result = await client.inspectAnimationTrack({
+    input: '/abs/model.bbmodel', animationUuid: 'animation-1',
+    boneUuid: 'bone-1', offset: 0, limit: 16, expectedSha256: SHA,
+  });
+  assert.deepEqual(calls[0], [
+    'inspect', '--input', '/abs/model.bbmodel',
+    '--animation-uuid', 'animation-1', '--bone-uuid', 'bone-1',
+    '--frame-offset', '0', '--frame-limit', '16', '--expected-sha256', SHA,
+  ]);
+  assert.deepEqual(result.track.keyframes[0].rotation, [0, 25, 0]);
+  assert.equal(result.track.visual_verdict, 'UNVERIFIED');
+  await assert.rejects(client.inspectAnimationTrack({
+    input: '/abs/model.bbmodel', animationUuid: 'animation-1',
+    boneUuid: 'bone-1', limit: 65,
+  }));
+  assert.equal(calls.length, 1);
+});
+
 test('Code Mode static model audit is read-only and explicit about unverified visuals', async () => {
   const client = createRustCodeModeClient({
     binary: BIN, runner: async (argv) => {
@@ -182,6 +215,7 @@ test('path/SHA bound project reuses its identity without automatic mutation', as
   const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
   assert.equal(project.expectedSha256, SHA);
   await project.catalog('cubes', { limit: 1 });
+  await project.inspectAnimationTrack('animation-1', 'bone-1', { limit: 4 });
   const receipt = await project.apply({
     output: '/abs/model-next.bbmodel',
     operations: [{ op: 'translate_cube', uuid: 'cube-1', delta: [2, 0, 0] }],
@@ -189,7 +223,9 @@ test('path/SHA bound project reuses its identity without automatic mutation', as
   assert.equal(receipt.source_sha256, project.expectedSha256);
   assert.equal(calls.filter((argv) => argv[0] === 'apply').length, 1);
   const readCalls = calls.filter((argv) => argv[0] === 'inspect');
-  assert.equal(readCalls.length, 2);
+  assert.equal(readCalls.length, 3);
   assert.equal(readCalls[0].includes('--expected-sha256'), false);
   assert.equal(readCalls[1][readCalls[1].indexOf('--expected-sha256') + 1], SHA);
+  assert.equal(readCalls[2][readCalls[2].indexOf('--expected-sha256') + 1], SHA);
+  assert.equal(readCalls[2][readCalls[2].indexOf('--frame-limit') + 1], '4');
 });

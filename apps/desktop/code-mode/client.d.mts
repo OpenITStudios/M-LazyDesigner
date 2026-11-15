@@ -91,6 +91,18 @@ export interface InspectAsset {
   source_kind?: "embedded_png" | "external_or_other" | "unavailable";
   [key: string]: unknown;
 }
+export interface RotationTrackInspection {
+  scope: "linear_bone_rotation" | "unsupported_animation_track";
+  recognized: boolean;
+  visual_verdict: "UNVERIFIED";
+  animation_uuid: string;
+  bone_uuid: string;
+  reason?: "OPAQUE_OR_UNSUPPORTED_KEYFRAMES";
+  total_frames: number | null;
+  offset?: number;
+  next_offset: number | null;
+  keyframes: Array<{ uuid: string; time: number; rotation: Vec3 }>;
+}
 export interface StaticModelAudit {
   scope: "static_metadata_only";
   visual_verdict: "UNVERIFIED";
@@ -113,6 +125,7 @@ export interface InspectReceipt {
   catalog?: CatalogPage;
   asset?: InspectAsset;
   audit?: StaticModelAudit;
+  track?: RotationTrackInspection;
 }
 export interface MutationReceipt {
   revision: number;
@@ -139,6 +152,10 @@ export interface RustCodeModeClient {
   catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number; expectedSha256?: string }): Promise<InspectReceipt & { catalog: CatalogPage }>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectAnimation(input: { input: string; uuid: string; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
+  inspectAnimationTrack(input: {
+    input: string; animationUuid: string; boneUuid: string;
+    offset?: number; limit?: number; expectedSha256?: string;
+  }): Promise<InspectReceipt & { track: RotationTrackInspection }>;
   audit(input: { input: string; expectedSha256?: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
   apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
@@ -180,6 +197,9 @@ export interface RustCodeModeProject {
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
   inspectAnimation(uuid: string): Promise<InspectReceipt & {asset: InspectAsset}>;
+  inspectAnimationTrack(
+    animationUuid: string, boneUuid: string, options?: {offset?: number; limit?: number}
+  ): Promise<InspectReceipt & {track: RotationTrackInspection}>;
   apply(input: { output: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   exportPng(input: { output: string; textureUuid: string }): Promise<OutputReceipt>;
   exportGeometry(input: { output: string }): Promise<OutputReceipt>;
