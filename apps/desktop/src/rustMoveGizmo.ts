@@ -19,3 +19,18 @@ export function planCubeLocalTranslation(
   if (delta.every((value) => Math.abs(value) <= 1e-6)) return null;
   return { op: 'translate_cube', uuid, delta };
 }
+
+// Convert a local Euler rotation gesture to the existing Rust rotation edit.
+// Unchanged axes keep their exact authored values rather than GPU float noise.
+export function planCubeLocalRotation(
+  uuid: string, start: readonly number[], end: readonly number[],
+): Extract<EditOperation, { op: 'set_cube_rotation' }> | null {
+  if (!uuid || start.length !== 3 || end.length !== 3 ||
+      !start.every(Number.isFinite) || !end.every(Number.isFinite) ||
+      !end.every(v => Math.abs(v) <= 100_000)) return null;
+  const rotation = end.map((v, i) => Math.abs(v - start[i]) <= 1e-5
+    ? start[i] : Math.round(v * 10000) / 10000) as Vec3;
+  if (!rotation.every(v => Number.isFinite(v) && Math.abs(v) <= 100_000) ||
+      rotation.every((v, i) => Math.abs(v - start[i]) <= 1e-5)) return null;
+  return { op: 'set_cube_rotation', uuid, rotation };
+}

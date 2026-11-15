@@ -26,8 +26,8 @@
   let snapshot: EditorSnapshot | null = null;
   let selectedId: string | null = null;
   let selectedBoneId: string | null = null;
-  // Move is the only implemented viewport gizmo. No fabricated Rotate/Scale.
-  let moveTool = true;
+  // UI-only tool selection. Geometry and history remain Rust-owned.
+  let transformTool: 'translate' | 'rotate' | null = 'translate';
   let selectedFace = 'north';
   let workspaceMode: WorkspaceMode = 'edit';
   let paintTextureIndex = 0;
@@ -255,11 +255,21 @@
   async function moveFromViewport(uuid: string, delta: Vec3): Promise<boolean> {
     // A pointer gesture may request one Rust edit. The viewport never mutates
     // the authored document and must restore its preview on any refusal.
-    if (!snapshot || !moveTool || busy || selectedId !== uuid) return false;
+    if (!snapshot || transformTool !== 'translate' || busy || selectedId !== uuid) return false;
     const next = await command('rust_editor_apply', {
       expectedEpoch: snapshot.epoch,
       expectedRevision: snapshot.revision,
       operations: [{ op: 'translate_cube', uuid, delta }],
+    });
+    await tick();
+    return next !== null;
+  }
+  async function rotateFromViewport(uuid: string, rotation: Vec3): Promise<boolean> {
+    if (!snapshot || transformTool !== 'rotate' || busy || selectedId !== uuid) return false;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch,
+      expectedRevision: snapshot.revision,
+      operations: [{ op: 'set_cube_rotation', uuid, rotation }],
     });
     await tick();
     return next !== null;
@@ -1238,16 +1248,20 @@
           title="Delete the selected Cube or an empty Bone; Undo restores it"
           onclick={() => void deleteSelected()}>Delete</button>
       {/if}
-      <button disabled={!snapshot?.canUndo || busy onclick={() => history('undo')}>Undo</button>
+      <button disabled={!snapshot?.canUndo || busy} onclick={() => history('undo')}>Undo</button>
       <button disabled={!snapshot?.canRedo || busy} onclick={() => history('redo')}>Redo</button>
     </div>
     <div class="tool-separator"></div>
     {#if workspaceMode === 'edit'}
       <div class="tool-group" role="group" aria-label="Viewport transform tools">
-        <button class:active={moveTool} aria-pressed={moveTool}
+        <button class:active={transformTool === 'translate'} aria-pressed={transformTool === 'translate'}
           title="Move the selected Cube with the 3D gizmo"
           disabled={!snapshot || busy || loading}
-          onclick={() => moveTool = !moveTool}>Move</button>
+          onclick={() => transformTool = transformTool === 'translate' ? null : 'translate'}>Move</button>
+        <button class:active={transformTool === 'rotate'} aria-pressed={transformTool === 'rotate'}
+          title="Rotate the selected Cube with the 3D gizmo"
+          disabled={!snapshot || busy || loading}
+          onclick={() => transformTool = transformTool === 'rotate' ? null : 'rotate'}>Rotate</button>
       </div>
     {/if}
     <div class="tool-spacer"></div>
@@ -1289,8 +1303,9 @@
           textureResolution={snapshot.textureResolution}
           previewTextureIndex={paintTextureIndex}
           {selectedId} onSelect={selectCube}
-          canMove={workspaceMode === 'edit' && moveTool && !busy && !loading && !newDialog && !confirmDiscard}
-          onTranslate={moveFromViewport}/>
+          transformMode={workspaceMode === 'edit' ? transformTool : null}
+          canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard}
+          onTranslate={moveFromViewport} onRotate={rotateFromViewport}/>
       {:else}
         <div class="empty-editor">
           <h2>{loading ? 'Loading editor…' : 'No model open'}</h2>
@@ -1340,8 +1355,10 @@
       : snapshot ? (
       workspaceMode === 'paint'
         ? 'Paint atlas · one stroke per Rust Undo · visual parity unverified'
-        : selectedId && moveTool
+        : selectedId && transformTool === 'translate'
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
+        : selectedId && transformTool === 'rotate'
+        ? 'Rotate gizmo · release to commit one Rust edit · visual parity unverified'
         : 'Embedded PNG preview subset · visual parity unverified'
     ) : 'Native Rust authoring core')}</span>
     <span>{snapshot ? 'Revision ' + snapshot.revision + (snapshot.dirty ? ' · Unsaved' : '') : 'Edit mode'}</span>

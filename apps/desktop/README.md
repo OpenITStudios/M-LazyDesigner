@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust Edit Rotate gizmo (2026-11-15; SOURCE_ONLY):** The existing Three.js viewport now uses its single TransformControls instance for Move and Rotate; the Rotate tool commits one `set_cube_rotation` through the canonical Rust session and restores Rust snapshots on refusal/cancel. Svelte tool selection is transient, not a second model state; the previous Undo toolbar button's missing attribute brace was corrected. Node source regression tests authored NOT_EXECUTED. Native pointer interaction and Blockbench 1:1 parity remain UNVERIFIED.
+
 **Rust Edit hierarchy actions (2026-11-15; SOURCE_ONLY):** The existing Edit toolbar/menu can add a Bone (nested under the selected Bone or at the root), select it in the Outliner, and delete a selected Cube or empty Bone through the same Rust authoring session used by CLI. Rust refuses removal when imported opaque payloads explicitly reference the target UUID. Undo/Redo, `.bbmodel` output, and other model/texture data stay Rust-owned. Source regression tests NOT_EXECUTED; these are not full Blockbench Outliner interactions or native 1:1 proof.
 
 **Shared per-texture UV safety (2026-11-15; SOURCE_ONLY):** The Rust Auto UV remapping and read-only Tauri PNG preview now use the same per-texture ruleset guard. Present non-boolean `per_texture_uv_size` metadata refuses project-grid preview and unsafe UV remapping instead of being interpreted as absent; explicit `false` remains permitted without other rules. Source-authored Rust/Tauri regressions are NOT_EXECUTED. No imported `.bbmodel` normalization, CLI/Tauri command schema change or native compatibility proof.

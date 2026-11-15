@@ -3,7 +3,7 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   import { TransformControls } from 'three/addons/controls/TransformControls.js';
-  import { planCubeLocalTranslation } from './rustMoveGizmo';
+  import { planCubeLocalTranslation, planCubeLocalRotation } from './rustMoveGizmo';
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide } from './rustTextureProjection';
@@ -19,9 +19,12 @@
   export let previewTextureIndex: number | null = null;
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
-  // Called once per completed gesture. Preview movement never writes the model.
+  // One canonical Rust edit per completed 3D transform; preview never owns data.
+  type GizmoMode = 'translate' | 'rotate';
   export let onTranslate: (uuid: string, delta: Vec3) => Promise<boolean> = async () => false;
-  export let canMove = false;
+  export let onRotate: (uuid: string, rotation: Vec3) => Promise<boolean> = async () => false;
+  export let transformMode: GizmoMode | null = 'translate';
+  export let canTransform = false;
 
   let host: HTMLDivElement;
   let canvas: HTMLCanvasElement;
@@ -38,7 +41,10 @@
   const failedTextureSources = new Set<string>();
   const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
   let pivots = new Map<string, THREE.Group>();
-  let drag: { uuid: string; pivot: THREE.Group; start: THREE.Vector3 } | null = null;
+  let drag: {
+    uuid: string; pivot: THREE.Group; mode: GizmoMode;
+    start: THREE.Vector3; rotationStart: THREE.Quaternion; anglesStart: Vec3;
+  } | null = null;
   let mutationPending = false;
   let skipPick = false;
   let frameRequest = 0;
@@ -111,10 +117,14 @@
   function deg(value: number) { return THREE.MathUtils.degToRad(value); }
   function vector(v: Vec3) { return new THREE.Vector3(v[0], v[1], v[2]); }
 
-  function syncGizmo(allowed: boolean) {
+  function syncGizmo(allowed: boolean, mode: GizmoMode | null) {
     if (!gizmo) return;
+    if (mode && !drag) {
+      gizmo.setMode(mode);
+      gizmo.setSpace(mode === 'rotate' ? 'local' : 'world');
+    }
     const pivot = selectedId ? pivots.get(selectedId) : undefined;
-    if (pivot && allowed && !mutationPending && !drag) {
+    if (pivot && allowed && mode && !mutationPending && !drag) {
       if (gizmo.object !== pivot) gizmo.attach(pivot);
       gizmo.enabled = true;
     } else {
@@ -220,7 +230,7 @@
     };
 
     visit(currentHierarchy, modelRoot, [0, 0, 0]);
-    syncGizmo(canMove);
+    syncGizmo(canTransform, transformMode);
     scheduleRender();
   }
 
@@ -252,8 +262,15 @@
 
   function onGizmoDown() {
     const pivot = selectedId ? pivots.get(selectedId) : undefined;
-    if (!pivot || !gizmo || gizmo.object !== pivot || !canMove || mutationPending) return;
-    drag = { uuid: selectedId!, pivot, start: pivot.position.clone() };
+    const cube = selectedId ? cubes.find((item) => item.uuid === selectedId) : undefined;
+    if (!pivot || !cube || !gizmo || gizmo.object !== pivot ||
+        !canTransform || !transformMode || mutationPending) return;
+    drag = {
+      uuid: cube.uuid, pivot, mode: transformMode,
+      start: pivot.position.clone(),
+      rotationStart: pivot.quaternion.clone(),
+      anglesStart: [...cube.rotation] as Vec3,
+    };
     skipPick = true;
     mouseStart = null;
     if (controls) controls.enabled = false;
@@ -264,24 +281,33 @@
     const gesture = drag;
     drag = null;
     if (!gesture) return;
-    const edit = planCubeLocalTranslation(
-      gesture.uuid,
-      [gesture.start.x, gesture.start.y, gesture.start.z],
-      [gesture.pivot.position.x, gesture.pivot.position.y, gesture.pivot.position.z],
-    );
-    if (!edit || gesture.uuid !== selectedId || !canMove) {
+    const edit = gesture.mode === 'translate'
+      ? planCubeLocalTranslation(
+          gesture.uuid,
+          [gesture.start.x, gesture.start.y, gesture.start.z],
+          [gesture.pivot.position.x, gesture.pivot.position.y, gesture.pivot.position.z],
+        )
+      : gesture.rotationStart.angleTo(gesture.pivot.quaternion) > 1e-6
+        ? planCubeLocalRotation(gesture.uuid, gesture.anglesStart, [
+            THREE.MathUtils.radToDeg(gesture.pivot.rotation.x),
+            THREE.MathUtils.radToDeg(gesture.pivot.rotation.y),
+            THREE.MathUtils.radToDeg(gesture.pivot.rotation.z),
+          ])
+        : null;
+    if (!edit || gesture.uuid !== selectedId || !canTransform ||
+        gesture.mode !== transformMode) {
       rebuild(cubes, bones, hierarchy, selectedId);
       return;
     }
     mutationPending = true;
     if (gizmo) gizmo.enabled = false;
-    // The parent awaits the Rust receipt and the Svelte snapshot update.
-    // Any rejected/stale/failed edit restores the last authoritative view.
+    // Rust commits exactly one transform command; failures restore the snapshot.
     void (async () => {
       try {
-        await onTranslate(edit.uuid, edit.delta);
+        if (edit.op === 'translate_cube') await onTranslate(edit.uuid, edit.delta);
+        else await onRotate(edit.uuid, edit.rotation);
       } catch {
-        // No second write or automatic retry: restore the Rust projection.
+        // No speculative retry or model mutation in the viewport.
       } finally {
         mutationPending = false;
         rebuild(cubes, bones, hierarchy, selectedId);
@@ -327,7 +353,7 @@
   }
 
   $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, texturePreviewSides, textureResolution, previewTextureIndex);
-  $: if (ready) syncGizmo(canMove);
+  $: if (ready) syncGizmo(canTransform, transformMode);
 
   onMount(() => {
     let observer: ResizeObserver | null = null;
@@ -403,7 +429,7 @@
 
 <div class="view" bind:this={host} aria-label="3D model viewport">
   <canvas bind:this={canvas} tabindex="0" onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={pointerCancel}
-    aria-label="Geometry preview with supported embedded PNG textures. Select a Cube, drag its Move gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
+    aria-label="Geometry preview with supported embedded PNG textures. Select a Cube and use its Move or Rotate gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>
   {/if}
