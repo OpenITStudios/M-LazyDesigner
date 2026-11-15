@@ -2,24 +2,26 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
-## Rust native editor P0 — Cube/Bone naming and Outliner workflow (2026-11-15)
+## Rust native editor P0 — Paint/viewport alpha-cutout correctness (2026-11-15)
 
-**Current source work:** Add `rename_node` to the canonical Rust
-`EditOperation` for Cube and Bone, and expose it in the Svelte Edit
-Inspector (with F2 focus) and typed Code Mode SDK. It preserves UUIDs/Outliner order,
-atomically synchronizes known Bone animator display names keyed by Bone
-UUID, rejects conflicting/ambiguous imported track names and remains
-Undo/Redo/Save Copy-aware. Native geometric, texture and animation data
-are not rewritten. Source regression cases AUTHORED_NOT_RUN.
+**Current source work:** The Svelte/Three.js viewport uses the same
+`0.01` sampled texture alpha cutoff as the pinned Blockbench 5.2.1
+fragment shader. A texel below this threshold is discarded before it
+can write depth and falsely occlude a Cube behind it. The viewport
+also ignores an asynchronous texture-load completion from a stale
+Paint/Undo/Redo cache entry. The native Rust Paint/UV/document owners,
+existing material fallback, and image source bytes are unchanged.
 
-**Prior P0 correction:** A separate canonical saved-model content SHA
-already reconciles dirty status across Open, Edit, Undo, Redo and Save
-Copy while the raw on-disk source SHA independently protects files.
+**Prior P0 work:** Rust-owned Cube/Bone rename (with known Bone animator
+display-name sync) and content-based saved-checkpoint tracking are
+source committed. All related regressions remain AUTHORED_NOT_RUN.
 
-**Continuation:** Focus next on material New/Edit/Paint/Animate/Save
-Copy/Open gaps in the Rust editor and relevant UI/CLI consumers. Preserve
-the Code Mode source bridge and the Local legacy product. Do not start
-held localtest/CI or claim native/Blockbench visual parity from source.
+**Continuation:** Keep building the coherent Rust New/Edit/Paint/Animate/
+Save Copy/Open workflows and their real consumers; identify larger
+data/fidelity gaps before adding small visual polish. Full transparency
+sorting, advanced material shaders and native Blockbench render parity
+remain UNVERIFIED. Preserve Code Mode host source, legacy Local MCP
+and all local/CI holds.
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 

@@ -1,5 +1,26 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust viewport texture alpha cutout and stale-load guard (SOURCE_ONLY)
+
+The Rust Svelte/Three.js viewport now applies a `0.01` texture
+`alphaTest` using the shared `BEDROCK_PREVIEW_ALPHA_TEST` constant.
+This matches the discard threshold in pinned Blockbench 5.2.1
+`js/shaders/texture.frag.glsl`: alpha values below `0.01` do not
+produce a fragment (including zero-alpha texels that would otherwise
+write depth and mask faces behind them). Non-textured fallback materials
+retain their existing behavior. The texture loader's success callback
+now schedules a redraw only if the indexed cache entry still belongs
+to that exact request, so late Paint/Undo/Redo image loads cannot
+cause stale preview redraws. This changes only derived GPU/view state;
+Rust-owned geometry, PNG bytes, UV, history and `.bbmodel` persist
+unchanged. Node regression source was authored for the threshold and
+same-URI stale request scenarios; `TEST_AUTHORED_NOT_RUN`. Native
+WebGL/Windows transparency, material ordering, layered/emissive
+modes, actual visual parity and user acceptance remain UNVERIFIED.
+
+Source reference: https://github.com/JannisX11/blockbench/blob/e2ede0809ee6bc91f374ac7e00d34cffbdf86a14/js/shaders/texture.frag.glsl
+Three.js depth/alpha context: https://threejs.org/manual/pages/transparency.html
+
 ## 2026-11-15 — Rust editor Cube/Bone rename transaction (SOURCE_ONLY)
 
 The canonical Rust `EditOperation::RenameNode` now accepts a bounded

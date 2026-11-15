@@ -21,3 +21,31 @@ test('removed or replaced texture entry ignores old asynchronous callbacks', () 
   assert.equal(isActiveTextureRequest(cache, 1, original), false);
   assert.equal(isActiveTextureRequest(cache, 0, original), false);
 });
+
+test('only an active texture load may schedule its result after Paint and Undo', () => {
+  const current = new Map();
+  const first = { source: 'rgba-a', texture: {} };
+  let frames = 0;
+  const completed = (entry) => {
+    if (isActiveTextureRequest(current, 0, entry)) frames++;
+  };
+  current.set(0, first);
+  const second = { source: 'rgba-b', texture: {} };
+  current.set(0, second);
+  completed(first);
+  assert.equal(frames, 0);
+  completed(second);
+  assert.equal(frames, 1);
+
+  // An Undo can restore an identical encoded PNG, but its request identity
+  // differs from a previously disposed GPU resource.
+  const restored = { source: first.source, texture: {} };
+  current.set(0, restored);
+  completed(first);
+  assert.equal(frames, 1);
+  completed(restored);
+  assert.equal(frames, 2);
+  current.clear();
+  completed(restored);
+  assert.equal(frames, 2);
+});

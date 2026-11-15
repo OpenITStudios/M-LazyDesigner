@@ -6,7 +6,7 @@
   import { planCubeLocalTranslation, planCubeLocalRotation, planCubeLocalScale } from './rustMoveGizmo';
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
-  import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide } from './rustTextureProjection';
+  import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
 
   export let cubes: CubeView[] = [];
@@ -90,7 +90,13 @@
     const entry = { source, texture: null as THREE.Texture | null };
     const texture = new THREE.TextureLoader().load(
       source,
-      scheduleRender,
+      () => {
+        // A previous Paint/Undo/Redo image can finish loading after the
+        // source or index is replaced. Never render a superseded resource.
+        if (isActiveTextureRequest(textureCache, index, entry)) {
+          scheduleRender();
+        }
+      },
       undefined,
       () => {
         if (!isActiveTextureRequest(textureCache, index, entry)) return;
@@ -228,6 +234,10 @@
               map: texture,
               color: texture ? 0xffffff : active ? 0x80b8ef : COLORS[cube.color % COLORS.length],
               transparent: Boolean(texture),
+              // Blockbench 5.2.1 discards sampled alpha < 0.01. In the
+              // Rust preview this also prevents invisible texels from
+              // writing depth and hiding other modeled faces behind them.
+              alphaTest: texture ? BEDROCK_PREVIEW_ALPHA_TEST : 0,
               opacity: texture ? 1 : 0.94,
               // Respect the pinned default double-side texture preview,
               // with explicit per-texture front-side overrides.

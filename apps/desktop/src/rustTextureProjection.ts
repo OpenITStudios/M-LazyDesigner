@@ -2,6 +2,13 @@
 // This never owns, writes or normalizes authoritative Rust model data.
 import type { CubeFace } from './rustEditorTypes';
 
+// Pinned Blockbench 5.2.1 js/shaders/texture.frag.glsl discards samples
+// where sampled alpha < 0.01. The native WebGL preview must perform
+// the same cutout step *before* depth-writing; otherwise fully transparent
+// pixels can conceal Cube faces behind them. Nonzero/translucent pixels
+// still follow Three.js's approximate transparency rendering.
+export const BEDROCK_PREVIEW_ALPHA_TEST = 0.01;
+
 // Blockbench v5.2.1 Cube.updateFaces excludes a face only when its
 // texture is null. The saved `enabled` metadata is not a geometry switch.
 export function isCubeFacePresent(face: CubeFace | undefined): boolean {

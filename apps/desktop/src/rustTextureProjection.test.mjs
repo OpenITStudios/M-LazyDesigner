@@ -1,7 +1,21 @@
 // Node 24 source regression; NOT_EXECUTED under the repository hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isCubeFacePresent, textureIndexForFace, faceUvCoordinates, supportedFaceUvRotation, bedrockDefaultTextureIndex, bedrockTextureForFace } from './rustTextureProjection.ts';
+import { isCubeFacePresent, textureIndexForFace, faceUvCoordinates, supportedFaceUvRotation, bedrockDefaultTextureIndex, bedrockTextureForFace, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection.ts';
+
+test('pinned Blockbench shader discards zero-alpha texels before depth rendering', () => {
+  // Blockbench 5.2.1 js/shaders/texture.frag.glsl:
+  // if (color.a < 0.01) discard;
+  // Matches Three.js MeshLambertMaterial alphaTest used in RustViewport.
+  assert.equal(BEDROCK_PREVIEW_ALPHA_TEST, 0.01);
+  assert.equal(0 / 255 < BEDROCK_PREVIEW_ALPHA_TEST, true);
+  assert.equal(1 / 255 < BEDROCK_PREVIEW_ALPHA_TEST, true);
+  assert.equal(2 / 255 < BEDROCK_PREVIEW_ALPHA_TEST, true);
+  assert.equal(3 / 255 < BEDROCK_PREVIEW_ALPHA_TEST, false);
+  assert.equal(128 / 255 < BEDROCK_PREVIEW_ALPHA_TEST, false);
+  assert.equal(255 / 255 < BEDROCK_PREVIEW_ALPHA_TEST, false);
+  // This tests the source cutoff, not native GPU depth/alpha behavior.
+});
 
 test('only null face references remove geometry; enabled metadata does not', () => {
   assert.equal(isCubeFacePresent(undefined), false);

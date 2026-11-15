@@ -1,5 +1,14 @@
 # LazyDesigner Desktop
 
+**Rust native Paint viewport cutout (2026-11-15; SOURCE_ONLY):**
+The Three.js preview now uses the pinned Blockbench 5.2.1 texture
+fragment cutoff `alphaTest = 0.01`, avoiding zero-alpha pixels
+concealing otherwise visible model faces through depth writes.
+Async image loads from superseded texture cache entries no longer
+schedule obsolete redraws after Paint/Undo/Redo. Rust-authored model,
+textures, Undo and Save Copy are unaffected; source regressions
+AUTHORED_NOT_RUN and native WebGL/Blockbench rendering UNVERIFIED.
+
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
 **Rust editor Outliner naming (2026-11-15; SOURCE_ONLY):** The native Edit
