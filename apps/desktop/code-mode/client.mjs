@@ -105,6 +105,70 @@ function serializePlan(operations) {
   return payload;
 }
 
+// Multiple focused read selectors, using one Rust document load. The program
+// host still owns filesystem permissions; this is not an OS sandbox.
+const INSPECTION_QUERY_FIELDS = Object.freeze({
+  cube: ['uuid'],
+  cube_surfaces: ['uuid'],
+  cube_face_alpha: ['uuid'],
+  catalog: ['category', 'offset', 'limit'],
+  texture: ['index'],
+  texture_alpha: ['uuid'],
+  animation: ['uuid'],
+  animation_track: ['animation_uuid', 'bone_uuid', 'offset', 'limit'],
+  audit: [],
+});
+
+function serializeInspectionQueries(requests) {
+  if (!Array.isArray(requests) || requests.length < 1 || requests.length > 8) {
+    throw new TypeError('Inspection batch must contain 1 through 8 selectors');
+  }
+  const selected = requests.map((query) => {
+    if (!query || typeof query !== 'object' || Array.isArray(query)) {
+      throw new TypeError('Inspection selector must be an object');
+    }
+    const kind = nonempty(query.kind, 'kind');
+    const allowed = Object.hasOwn(INSPECTION_QUERY_FIELDS, kind)
+      ? INSPECTION_QUERY_FIELDS[kind] : null;
+    if (!allowed || Object.keys(query).some((key) =>
+      key !== 'kind' && !allowed.includes(key))) {
+      throw new TypeError('Unknown inspection selector or field');
+    }
+    const output = { kind };
+    for (const field of allowed) {
+      if (query[field] === undefined) continue;
+      const value = query[field];
+      if (field === 'offset' || field === 'limit' || field === 'index') {
+        output[field] = Number(wholeNumber(
+          value, field, field === 'limit' ? 1 : 0,
+          field === 'limit' ? 64 : 65536,
+        ));
+      } else if (field === 'category') {
+        if (!['cubes', 'bones', 'textures', 'animations'].includes(value)) {
+          throw new TypeError('Unknown catalog category');
+        }
+        output.category = value;
+      } else {
+        output[field] = nonempty(value, field);
+        if (Buffer.byteLength(output[field], 'utf8') > 128) {
+          throw new TypeError('Inspection UUID is too long');
+        }
+      }
+    }
+    for (const field of allowed) {
+      if (!['offset', 'limit'].includes(field) && output[field] === undefined) {
+        throw new TypeError('Missing required inspection selector field: ' + field);
+      }
+    }
+    return output;
+  });
+  const encoded = JSON.stringify({ requests: selected });
+  if (Buffer.byteLength(encoded, 'utf8') > PLAN_LIMIT) {
+    throw new TypeError('INSPECT_BATCH_SIZE_INVALID');
+  }
+  return encoded;
+}
+
 /**
  * A programmatic API intended to be imported into an agent host's code sandbox.
  * This module NEVER evals model-generated code or starts a listening server.
@@ -175,6 +239,23 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         'face-alpha-uuid': nonempty(cubeUuid, 'cubeUuid'),
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
+    },
+    async inspectBatch({ input, expectedSha256, requests }) {
+      const source = absolute(input, 'input');
+      const digest = hash(expectedSha256);
+      const payload = serializeInspectionQueries(requests);
+      // Query-only data, not an edit plan. Temporary file is private and is
+      // cleaned even if the Rust process reports a refusal or fails.
+      const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-read-batch-'));
+      const file = join(directory, 'queries.json');
+      try {
+        await writeFile(file, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        return await call('inspect-batch', {
+          input: source, queries: file, 'expected-sha256': digest,
+        });
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
     },
     async catalog({ input, kind, offset = 0, limit = 32, expectedSha256 }) {
       if (!['cubes', 'bones', 'textures', 'animations'].includes(kind)) {
@@ -308,6 +389,8 @@ export async function openRustCodeModeProject(client, input) {
       client.inspectCubeSurfaces({ input: path, cubeUuid, expectedSha256 }),
     inspectCubeFaceAlpha: (cubeUuid) =>
       client.inspectCubeFaceAlpha({ input: path, cubeUuid, expectedSha256 }),
+    inspectBatch: (requests) =>
+      client.inspectBatch({ input: path, expectedSha256, requests }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),

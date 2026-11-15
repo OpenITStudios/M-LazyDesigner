@@ -257,6 +257,112 @@ fn inspect_model_audit(doc: &AuthoringDocument) -> Value {
     })
 }
 
+/// Read-only Code Mode query batch. A single model read and Rust parse answer
+/// several focused questions. Unknown fields/shapes refuse, not auto-correct.
+/// Each query reuses existing canonical source projections; no new authoring
+/// state, mutation path, arbitrary JS execution or direct bitmap response.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InspectBatchInput {
+    requests: Vec<InspectBatchQuery>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum InspectBatchQuery {
+    Cube { uuid: String },
+    CubeSurfaces { uuid: String },
+    CubeFaceAlpha { uuid: String },
+    Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
+    Texture { index: usize },
+    TextureAlpha { uuid: String },
+    Animation { uuid: String },
+    AnimationTrack {
+        animation_uuid: String, bone_uuid: String,
+        offset: Option<usize>, limit: Option<usize>,
+    },
+    Audit,
+}
+
+const MAX_INSPECT_BATCH_QUERIES: usize = 8;
+const MAX_INSPECT_BATCH_RESULT_BYTES: usize = 96 * 1024;
+
+fn batch_id(value: &str) -> Result<&str> {
+    if value.is_empty() || value.len() > 128 ||
+       value.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(fail("INSPECT_BATCH_ID_INVALID"));
+    }
+    Ok(value)
+}
+
+fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> Result<Vec<Value>> {
+    if requests.is_empty() || requests.len() > MAX_INSPECT_BATCH_QUERIES {
+        return Err(fail("INSPECT_BATCH_SIZE_INVALID"));
+    }
+    let mut results = Vec::with_capacity(requests.len());
+    for query in requests {
+        let entry = match query {
+            InspectBatchQuery::Cube { uuid } => {
+                let element = focused_element(doc, batch_id(&uuid)?)?;
+                json!({"kind":"cube","element":element})
+            },
+            InspectBatchQuery::CubeSurfaces { uuid } => {
+                let surfaces = inspect_cube_surfaces(doc, batch_id(&uuid)?)?;
+                json!({"kind":"cube_surfaces","surfaces":surfaces})
+            },
+            InspectBatchQuery::CubeFaceAlpha { uuid } => {
+                let face_alpha = inspect_cube_uv_alpha(doc, batch_id(&uuid)?)?;
+                json!({"kind":"cube_face_alpha","face_alpha":face_alpha})
+            },
+            InspectBatchQuery::Catalog { category, offset, limit } => {
+                let offset = offset.unwrap_or(0);
+                let limit = limit.unwrap_or(32);
+                if offset > 65_536 || limit == 0 || limit > 64 {
+                    return Err(fail("INSPECT_BATCH_PAGE_INVALID"));
+                }
+                let catalog = inspect_catalog(doc, &category, offset, limit)?;
+                json!({"kind":"catalog","catalog":catalog})
+            },
+            InspectBatchQuery::Texture { index } => {
+                if index > 65_536 { return Err(fail("INSPECT_BATCH_INDEX_INVALID")); }
+                let asset = inspect_asset(doc, "texture", &index.to_string())?;
+                json!({"kind":"texture","asset":asset})
+            },
+            InspectBatchQuery::TextureAlpha { uuid } => {
+                let alpha = inspect_paint_alpha(doc, batch_id(&uuid)?)?;
+                json!({"kind":"texture_alpha","alpha":alpha})
+            },
+            InspectBatchQuery::Animation { uuid } => {
+                let asset = inspect_asset(doc, "animation", batch_id(&uuid)?)?;
+                json!({"kind":"animation","asset":asset})
+            },
+            InspectBatchQuery::AnimationTrack {
+                animation_uuid, bone_uuid, offset, limit,
+            } => {
+                let offset = offset.unwrap_or(0);
+                let limit = limit.unwrap_or(32);
+                if offset > 65_536 || limit == 0 || limit > 64 {
+                    return Err(fail("INSPECT_BATCH_PAGE_INVALID"));
+                }
+                let track = inspect_rotation_track(
+                    doc, batch_id(&animation_uuid)?, batch_id(&bone_uuid)?, offset, limit,
+                )?;
+                json!({"kind":"animation_track","track":track})
+            },
+            InspectBatchQuery::Audit => {
+                json!({"kind":"audit","audit":inspect_model_audit(doc)})
+            },
+        };
+        results.push(entry);
+    }
+    if serde_json::to_vec(&results)
+        .map_err(|_| fail("INSPECT_BATCH_SERIALIZE_FAILED"))?.len()
+        > MAX_INSPECT_BATCH_RESULT_BYTES {
+        return Err(fail("INSPECT_BATCH_RESULT_TOO_LARGE"));
+    }
+    Ok(results)
+}
+
 fn execute() -> Result<Value> {
     let (command, options) = arguments()?;
     match command.as_str() {
@@ -344,6 +450,31 @@ fn execute() -> Result<Value> {
             } else {
                 Ok(json!({"status":"OK","sha256":digest,"summary":session.summary()}))
             }
+        }
+        "inspect-batch" => {
+            option_set(&options, &["--input", "--queries", "--expected-sha256"])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let (bytes, actual_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            // One model open across all bounded, read-only selectors.
+            let session = EditorSession::open(&bytes)?;
+            let query_bytes = read_bounded(
+                Path::new(option(&options, "--queries")?), MAX_PLAN_BYTES
+            )?;
+            let queries: InspectBatchInput = serde_json::from_slice(&query_bytes)
+                .map_err(|_| fail("INSPECT_BATCH_INVALID"))?;
+            let results = inspect_batch(session.document(), queries.requests)?;
+            let response = json!({
+                "status":"OK","sha256":actual_sha,
+                "summary":session.summary(),"results":results
+            });
+            if serde_json::to_vec(&response)
+                .map_err(|_| fail("INSPECT_BATCH_SERIALIZE_FAILED"))?.len()
+                > MAX_INSPECT_BATCH_RESULT_BYTES {
+                return Err(fail("INSPECT_BATCH_RESULT_TOO_LARGE"));
+            }
+            Ok(response)
         }
         "apply" => {
             option_set(&options, &["--input", "--output", "--plan", "--expected-sha256"])?;
@@ -469,6 +600,60 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Source-authored CLI/Rust proof only; Cargo/native execution is held.
+    #[test]
+    fn code_mode_inspect_batch_projects_multiple_reads_from_one_immutable_document() {
+        let doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")
+        ).unwrap();
+        let before = doc.clone();
+        let uuid = doc.cubes[0].uuid.clone();
+        let json = format!(r#"{{"requests":[
+            {{"kind":"catalog","category":"cubes","limit":1}},
+            {{"kind":"cube","uuid":"{uuid}"}},
+            {{"kind":"cube_surfaces","uuid":"{uuid}"}},
+            {{"kind":"audit"}}
+        ]}}"#);
+        let plan: InspectBatchInput = serde_json::from_str(&json).unwrap();
+        let entries = inspect_batch(&doc, plan.requests).unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[0]["kind"], json!("catalog"));
+        assert_eq!(entries[0]["catalog"]["total"], json!(1));
+        assert_eq!(entries[1]["kind"], json!("cube"));
+        assert_eq!(entries[1]["element"]["uuid"], json!(uuid));
+        assert_eq!(entries[2]["surfaces"]["faces"].as_array().unwrap().len(), 6);
+        assert_eq!(entries[3]["audit"]["visual_verdict"], json!("UNVERIFIED"));
+        assert!(serde_json::to_string(&entries).unwrap().find("data:image/png").is_none());
+        assert_eq!(doc, before);
+    }
+
+    #[test]
+    fn code_mode_inspect_batch_rejects_unknown_and_oversized_shapes() {
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"unknown"}]}"#
+        ).is_err());
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"audit","untrusted":"data"}]}"#
+        ).is_err());
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"cube","uuid":"a","invalid":true}]}"#
+        ).is_err());
+        let doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        let empty = inspect_batch(&doc, Vec::new()).unwrap_err();
+        assert_eq!(empty, "INSPECT_BATCH_SIZE_INVALID");
+        let too_many = std::iter::repeat_with(|| InspectBatchQuery::Audit)
+            .take(9).collect();
+        assert_eq!(inspect_batch(&doc, too_many).unwrap_err(),
+            "INSPECT_BATCH_SIZE_INVALID");
+        let one = vec![InspectBatchQuery::Catalog {
+            category: "cubes".into(), offset: None, limit: Some(65),
+        }];
+        assert_eq!(inspect_batch(&doc, one).unwrap_err(),
+            "INSPECT_BATCH_PAGE_INVALID");
+    }
 
     // Rust/CLI regression source only; no Cargo or native execution claimed.
     #[test]

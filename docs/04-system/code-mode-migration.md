@@ -28,8 +28,19 @@ Legacy Local: Gateway -> Runtime -> Blockbench (preserved separately).
 
 Programmatic use does not imply a new model engine, second document registry, or a remote API server.
 
-## Source-integrated first slice
+## Programmatic read batching — 2026-11-15 (SOURCE_ONLY)
 
+The Rust Code Mode client now supports `inspectBatch` with existing selectors.
+One `inspect-batch` CLI invocation hashes and reads the `.bbmodel` once,
+opens one canonical Rust session, and projects up to eight bounded results:
+catalog, focused Cube, UV/alpha, texture, animation/track and model audit.
+Unknown selectors, stale SHA and oversized requests/results fail closed.
+The legacy individual `inspect` commands remain available for one-shot reads.
+This is a source-level reduction in repeated file opens/process launches,
+not a measured speed, token or accepted-asset improvement. The host runtime
+and native visual acceptance remain unverified; regressions NOT_EXECUTED.
+
+## Source-integrated first slice
 - [Code Mode client](../../apps/desktop/code-mode/README.md): `createRustCodeModeClient` exposes `newModel`, `inspect`, `apply`, `importPng`, `exportPng`, `exportGeometry`; `client.d.mts` declares the complete supported Rust operation union. The SDK calls the existing CLI via `execFile` with `shell:false`, a bounded timeout/output, and absolute paths. Path/SHA-bound project reads now also pass an optional Rust CLI `inspect --expected-sha256` precondition and fail closed on stale assets, rather than silently mixing different file revisions.
 - CLI `inspect --input ... --uuid ...` now returns compact Cube/Bone transforms, parent UUID, per-face UV and texture references, and file SHA. It **does not** send embedded image bytes, opaque extensions, whole model JSON or a duplicated asset store. Existing `inspect --input` remains available.
 - Mutations use one Rust `EditPlan` (1–128 operations, ≤64 KiB) with source SHA precondition and exclusive new sibling publish. On failure/timeouts, no automatic replay; inspect resulting state first.

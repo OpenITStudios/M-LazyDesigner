@@ -221,6 +221,34 @@ export interface InspectReceipt {
   audit?: StaticModelAudit;
   track?: RotationTrackInspection;
 }
+/** One host-authored read batch; unknown selectors fail closed in JS/Rust. */
+export type InspectBatchQuery =
+  | { kind: "cube"; uuid: string }
+  | { kind: "cube_surfaces"; uuid: string }
+  | { kind: "cube_face_alpha"; uuid: string }
+  | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
+  | { kind: "texture"; index: number }
+  | { kind: "texture_alpha"; uuid: string }
+  | { kind: "animation"; uuid: string }
+  | { kind: "animation_track"; animation_uuid: string; bone_uuid: string; offset?: number; limit?: number }
+  | { kind: "audit" };
+export type InspectBatchResult =
+  | { kind: "cube"; element: FocusedElement }
+  | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
+  | { kind: "cube_face_alpha"; face_alpha: CubeFaceAlphaInspection }
+  | { kind: "catalog"; catalog: CatalogPage }
+  | { kind: "texture"; asset: InspectAsset }
+  | { kind: "texture_alpha"; alpha: TextureAlphaInspection }
+  | { kind: "animation"; asset: InspectAsset }
+  | { kind: "animation_track"; track: RotationTrackInspection }
+  | { kind: "audit"; audit: StaticModelAudit };
+export interface InspectBatchReceipt {
+  status: "OK";
+  sha256: string;
+  summary: DocumentSummary;
+  /** 1–8 results; same order as requests; no mutations. */
+  results: InspectBatchResult[];
+}
 export interface MutationReceipt {
   revision: number;
   operation_count: number;
@@ -249,6 +277,9 @@ export interface RustCodeModeClient {
   inspectCubeFaceAlpha(input: {
     input: string; cubeUuid: string; expectedSha256?: string;
   }): Promise<InspectReceipt & { face_alpha: CubeFaceAlphaInspection }>;
+  inspectBatch(input: {
+    input: string; expectedSha256: string; requests: InspectBatchQuery[];
+  }): Promise<InspectBatchReceipt>;
   catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number; expectedSha256?: string }): Promise<InspectReceipt & { catalog: CatalogPage }>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectTextureAlpha(input: {
@@ -298,6 +329,7 @@ export interface RustCodeModeProject {
   inspect(uuid: string): Promise<InspectReceipt>;
   inspectCubeSurfaces(cubeUuid: string): Promise<InspectReceipt & {surfaces: CubeSurfaceInspection}>;
   inspectCubeFaceAlpha(cubeUuid: string): Promise<InspectReceipt & {face_alpha: CubeFaceAlphaInspection}>;
+  inspectBatch(requests: InspectBatchQuery[]): Promise<InspectBatchReceipt>;
   catalog(kind: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<InspectReceipt & {catalog: CatalogPage}>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;

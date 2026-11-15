@@ -68,6 +68,75 @@ test('Code Mode catalog and metadata inspection remain read-only and bounded', a
   assert.equal(calls.length, 3);
 });
 
+test('Code Mode batches focused read selectors into a single Rust CLI call', async () => {
+  const calls = [];
+  let queryFile;
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      assert.equal(argv[0], 'inspect-batch');
+      assert.equal(argv[argv.indexOf('--expected-sha256') + 1], SHA);
+      queryFile = argv[argv.indexOf('--queries') + 1];
+      const payload = JSON.parse(await readFile(queryFile, 'utf8'));
+      assert.deepEqual(payload, { requests: [
+        { kind: 'catalog', category: 'cubes', limit: 3 },
+        { kind: 'cube_surfaces', uuid: 'cube-1' },
+        { kind: 'cube_face_alpha', uuid: 'cube-1' },
+        { kind: 'audit' },
+      ] });
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 },
+        results: [
+          { kind: 'catalog', catalog: { entries: [], total: 1, next_offset: null } },
+          { kind: 'cube_surfaces', surfaces: { cube_uuid: 'cube-1',
+            visual_verdict: 'UNVERIFIED' } },
+          { kind: 'cube_face_alpha', face_alpha: { face_count: 6,
+            visual_verdict: 'UNVERIFIED' } },
+          { kind: 'audit', audit: { visual_verdict: 'UNVERIFIED' } },
+        ] };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const before = calls.length;
+  const result = await project.inspectBatch([
+    { kind: 'catalog', category: 'cubes', limit: 3 },
+    { kind: 'cube_surfaces', uuid: 'cube-1' },
+    { kind: 'cube_face_alpha', uuid: 'cube-1' },
+    { kind: 'audit' },
+  ]);
+  assert.equal(calls.length - before, 1);
+  assert.equal(result.results.length, 4);
+  assert.equal(result.results[2].face_alpha.visual_verdict, 'UNVERIFIED');
+  await assert.rejects(readFile(queryFile, 'utf8'), (error) => error.code === 'ENOENT');
+});
+
+test('Code Mode rejects unknown or excessive read batches before starting the CLI', async () => {
+  let calls = 0;
+  const client = createRustCodeModeClient({
+    binary: BIN, runner: async () => { calls++; return { status: 'OK' }; },
+  });
+  const base = { input: '/abs/model.bbmodel', expectedSha256: SHA };
+  const invalid = [
+    [],
+    Array.from({ length: 9 }, () => ({ kind: 'audit' })),
+    [{ kind: 'unknown' }],
+    [{ kind: 'audit', unrelated: true }],
+    [{ kind: 'cube', uuid: '' }],
+    [{ kind: 'catalog', category: 'objects' }],
+    [{ kind: 'catalog', category: 'cubes', limit: 65 }],
+    [{ kind: 'animation_track', animation_uuid: 'a' }],
+    [{ kind: 'texture', index: -1 }],
+  ];
+  for (const requests of invalid) {
+    await assert.rejects(client.inspectBatch({ ...base, requests }));
+  }
+  await assert.rejects(client.inspectBatch({
+    input: '/abs/model.bbmodel', expectedSha256: 'bad',
+    requests: [{ kind: 'audit' }],
+  }));
+  assert.equal(calls, 0);
+});
+
 test('invalid SHA, nonfinite fields and unbounded batches fail before invoking CLI', async () => {
   let count = 0;
   const client = createRustCodeModeClient({ binary: BIN, runner: async () => {

@@ -1,5 +1,16 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust Code Mode read-batch source integration (SOURCE_ONLY)
+
+The headless Rust CLI adds `inspect-batch --input <model.bbmodel> --queries
+<private-queries.json> --expected-sha256 <digest>` for 1–8 typed read selectors.
+It bounds a query file to 64 KiB, reads/validates the source once, opens one
+`EditorSession`, reuses the canonical Cube/Texture/UV/Animation/audit owners
+and caps the full JSON result at 96 KiB. The typed JS client and SHA-bound
+project add `inspectBatch`, writing and removing a private query file only.
+Source positive and negative regressions AUTHORED_NOT_RUN. No saved model
+mutation, new asset engine, public MCP route or alternate sandbox. Actual
+latency/tokens, Node/Cargo/Windows, code host and visual QA NOT_EXECUTED.
 ## 2026-11-15 — Code Mode six-face saved UV-region alpha inspection (SOURCE_ONLY)
 
 Canonical Rust `inspect_cube_uv_alpha` combines the existing `inspect_cube_surfaces` reference semantics with the original Paint full PNG decoder; it reuses decoded RGBA8 bytes for multiple faces referencing the same image within one transient read. The read-only CLI `inspect --face-alpha-uuid` and typed Code Mode `inspectCubeFaceAlpha` return six per-face records under the existing optional SHA guard. Only exact integer-coordinate manual UV rectangles, explicit index/UUID references and a supported embedded atlas are measured. Unsupported Box/Auto/per-texture UV, absent/null/false references, advanced PNG metadata, non-integral/out-of-bounds/zero-area regions are reported with per-face reasons; a corrupt *admitted* PNG remains an explicit error rather than fabricated coverage. Alpha count is only evidence for saved UV pixels, not the actual effective material, hidden/visible rendered face, artistic fidelity or a PASS. The results always state `visual_verdict`, `effective_material`, and `face_coverage_verdict` as `UNVERIFIED`. Rust/Node regressions AUTHORED_NOT_RUN; no Cargo, Node, native Windows/Blockbench, code-host sandbox or cost/token measurement executed.

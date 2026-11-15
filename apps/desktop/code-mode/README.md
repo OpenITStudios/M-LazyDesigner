@@ -53,8 +53,35 @@ console.log({
 
 Do not copy this into an unrestricted Node process as a substitute for host isolation. The example's `approvedCubeUuid` is a placeholder: an actual UUID must come from the bounded catalog and the approved asset plan.
 
-### API behavior
+### Batch inspection: one model load for several focused reads
 
+For Code Mode reasoning across a catalog, Cube UVs, Paint data and audit,
+`project.inspectBatch(requests)` dispatches one SHA-verified, read-only Rust
+`inspect-batch` command and one canonical `EditorSession::open`.
+The batch does not mutate the project or execute model-written code.
+
+```js
+const report = await project.inspectBatch([
+  { kind: 'catalog', category: 'cubes', limit: 8 },
+  { kind: 'cube_surfaces', uuid: approvedCubeUuid },
+  { kind: 'cube_face_alpha', uuid: approvedCubeUuid },
+  { kind: 'audit' },
+]);
+console.log(report.results.map(({ kind }) => kind));
+```
+
+`approvedCubeUuid` must come from an actual user-authorized asset selection,
+not an invented ID. The real agent host still owns process sandboxing.
+Supported kinds: `cube`, `cube_surfaces`, `cube_face_alpha`, `catalog`,
+`texture`, `texture_alpha`, `animation`, `animation_track`, `audit`.
+
+- Bounds: 1–8 typed selectors, 64 KiB private request JSON, 96 KiB result.
+- Safety: refuse stale SHA, unknown fields, over-limit pages and invalid assets.
+- Compatibility: previous focused read CLI commands remain unchanged.
+- Proof: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN. No actual speed, token or
+  quality measurements; rendered material and visual verdicts remain UNVERIFIED.
+
+### API behavior
 - `inspect({input})`: summary + source SHA.
 - `catalog({input,kind,offset,limit})`: paginated Cube/Bone/Texture/Animation identities, with 1–64 results per page.
 - `inspect({input,uuid})`: focused Cube/Bone fields, not full model JSON.

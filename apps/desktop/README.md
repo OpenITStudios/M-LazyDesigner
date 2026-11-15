@@ -2,6 +2,12 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust Code Mode read batching (2026-11-15; SOURCE_ONLY):** The typed JS/TS
+`inspectBatch` API combines 1–8 focused reads in one SHA-guarded Rust
+`inspect-batch` process and one `EditorSession` open, with strict payload
+bounds. No new public MCP, model state, external dependency or sandbox was
+added. Visual verdict UNVERIFIED; regressions AUTHORED_NOT_RUN, and no
+latency, token or native functional improvement is claimed.
 **Code Mode saved Cube Face UV alpha (2026-11-15; SOURCE_ONLY):** `inspectCubeFaceAlpha` and `inspect --face-alpha-uuid` combine saved Cube UV/reference interpretation with the full Rust Paint PNG decoder for a bounded six-face source alpha histogram, decoding each supported unique RGBA8 texture only once per request. Unrecognized UV rules, invalid/out-of-atlas pixel rectangles and no explicit image reference return per-face refusal, not a false visual PASS. Face coverage/effective material/native rendering remain `UNVERIFIED`; Rust/Node regressions AUTHORED_NOT_RUN.
 
 **Code Mode decoded atlas alpha inspection (2026-11-15; SOURCE_ONLY):** Rust `inspect_paint_alpha` reuses Paint's full RGBA8 PNG decoder for read-only transparent/translucent/opaque counts and a fixed 8×8 pixel-density summary; CLI `inspect --alpha-uuid`, typed SDK and SHA-bound project helper expose it without sending raw texture data. Imported advanced/per-texture UV assets refuse or report unsupported. No false inference of UV face coverage or visual quality is made; Node/Rust tests AUTHORED_NOT_RUN, and Windows/Blockbench native QA remains UNVERIFIED.

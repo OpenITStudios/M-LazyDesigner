@@ -4,6 +4,14 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 
+**Read-batch integration (SOURCE_ONLY):** The Code Mode SDK now combines up
+to eight existing inspections in a single SHA-bound Rust CLI invocation and
+one authoring document open, with result and request caps. This avoids
+repeated source parsing by source design, not proven runtime token savings.
+Node/Rust regressions AUTHORED_NOT_RUN; tests/CI and native host on hold.
+Next acceptance is the real PC-local Code Mode host security/permissions,
+then format/visual QA before any legacy Local cutover. Do not add a second
+engine or router merely to reduce public tool count.
 **Saved Face UV alpha diagnosis (SOURCE_ONLY):** The canonical Rust Code Mode read now joins existing Cube face references to the real decoded Paint RGBA8 atlas in one six-face read (`inspect --face-alpha-uuid`, SDK `inspectCubeFaceAlpha`), decoding each unique referenced PNG once per request. Exact integral manual UV rectangles return pixel-category counts; unknown/no-reference, Box/Auto/per-texture UV, out-of-bounds and advanced textures fail closed with per-face reasons. This is *saved source UV region evidence*, not real Blockbench face coverage or painted appearance; verdicts remain `UNVERIFIED`. Rust/Node regression source AUTHORED_NOT_RUN. Remaining source milestone: ensure functional Code Mode host integration and complete project-specific acceptance without a second routing system or premature Local cutover; local PC native tests/visual approval remain on hold.
 
 **Paint alpha semantic-read increment (SOURCE_ONLY):** Rust Code Mode can now inspect one validated embedded RGBA8 PNG via the original decoder, returning transparent/translucent/opaque counts plus compact 8×8 alpha distribution, with explicit unsupported behavior for advanced formats/UV rules. CLI `inspect --alpha-uuid`, typed SDK `inspectTextureAlpha` and path/SHA-bound project helper use the same Rust document and keep raw pixels private. This supports locating possibly unpainted atlas regions but cannot certify real UV face coverage or visual quality; Node/Rust regression source AUTHORED_NOT_RUN. Remaining source work should target meaningful semantic QA/correctness gaps and safe native host cutover, not another separate engine or unverifiable token-savings claims.
