@@ -114,6 +114,7 @@ export type EditOperation =
   | { op: 'set_cube_stretch'; uuid: string; stretch: Vec3 }
   | { op: 'set_cube_mirror_uv'; uuid: string; mirrored: boolean }
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
+  | { op: 'scale_animation_timeline'; animation_uuid: string; factor: number }
   | { op: 'add_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'update_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'remove_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel }

@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — All-channel numeric Animation clip retiming (SOURCE_ONLY)
+
+`ScaleAnimationTimeline` authors proportional changes to complete once-only Rotation/Position/Scale keyframe times and clip duration through the same Rust EditOperation/Undo/.bbmodel authority. It refuses invalid factors (0.1–10 only), duration overflow, ambiguous animation UUID, opaque/imported interpolated content and time collisions introduced by scaling. Regression source covers 3-channel time/UUID/payload preservation, SHA-independent read-after-write inspection, export/reimport, Undo/Redo, malformed factor, collision and atomic refusal. This is TEST_AUTHORED_NOT_RUN; no Windows/Blockbench playback or measured end-to-end efficiency.
+
 ## 2026-11-16 — Bounded multi-rectangle Paint bitmap transaction (SOURCE_ONLY)
 
 The Rust Paint engine now applies up to 64 ordered rectangle fills/erasures to a supported embedded RGBA8 PNG in one decode/encode. Single Rectangle preserves its API by delegating to the same owner. Canonical `PaintTextureRectangles` is available to CLI, Tauri and typed Code Mode, with no new editor UI. Test source covers ordered overlaps, actual 8x8 saved pixels, transparent erasure, final no-op, malformed/extreme input, unsupported imported assets, Undo and editable `.bbmodel` reimport. Tests AUTHORED_NOT_RUN, Windows/Blockbench visual proof and measured efficiency remain UNVERIFIED.

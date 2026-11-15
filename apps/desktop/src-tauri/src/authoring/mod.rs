@@ -138,6 +138,7 @@ pub enum EditOperation {
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
     SetAnimationLength { animation_uuid: String, length: f64 },
+    ScaleAnimationTimeline { animation_uuid: String, factor: f64 },
     AddBoneRotationKeyframe {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
         time: f64, rotation: [f64; 3],
@@ -1954,6 +1955,57 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 }
             }
             doc.animation_assets[index]["length"] = json!(length);
+            Ok(animation_uuid.clone())
+        }
+        EditOperation::ScaleAnimationTimeline { animation_uuid, factor } => {
+            // Numeric linear, once-only Animation tracks can be retimed in a
+            // single transaction. No keyframe payload, UUID, Bone identity,
+            // channel or interpolation is rewritten or guessed.
+            if !factor.is_finite() || !(0.1..=10.0).contains(factor) {
+                return Err(fail("ANIMATION_TIMELINE_FACTOR_INVALID"));
+            }
+            let matches: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, asset)| asset.get("uuid").and_then(Value::as_str)
+                    == Some(animation_uuid.as_str())).map(|(index, _)| index).collect();
+            let index = match matches.as_slice() {
+                [] => return Err(fail("ANIMATION_NOT_FOUND")),
+                [index] => *index,
+                _ => return Err(fail("ANIMATION_ID_AMBIGUOUS")),
+            };
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_TIMELINE_UNSUPPORTED"));
+            }
+            let original_length = doc.animation_assets[index]["length"].as_f64()
+                .ok_or_else(|| fail("ANIMATION_TIMELINE_LENGTH_UNSUPPORTED"))?;
+            let new_length = original_length * factor;
+            if original_length <= 0.0 ||
+               !new_length.is_finite() || !(0.0..=3600.0).contains(&new_length) {
+                return Err(fail("ANIMATION_TIMELINE_LENGTH_UNSUPPORTED"));
+            }
+            if *factor == 1.0 { return Ok(animation_uuid.clone()); }
+            let tracks = doc.animation_assets[index].get_mut("animators")
+                .and_then(Value::as_object_mut)
+                .ok_or_else(|| fail("ANIMATION_TIMELINE_UNSUPPORTED"))?;
+            for track in tracks.values_mut() {
+                let frames = track.get_mut("keyframes").and_then(Value::as_array_mut)
+                    .ok_or_else(|| fail("ANIMATION_TIMELINE_UNSUPPORTED"))?;
+                for frame in frames {
+                    let time = frame.get("time").and_then(Value::as_f64)
+                        .ok_or_else(|| fail("ANIMATION_TIMELINE_UNSUPPORTED"))?;
+                    let scaled = time * factor;
+                    if !scaled.is_finite() || scaled > new_length {
+                        return Err(fail("ANIMATION_TIMELINE_LENGTH_UNSUPPORTED"));
+                    }
+                    frame["time"] = json!(scaled);
+                }
+            }
+            doc.animation_assets[index]["length"] = json!(new_length);
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                // E.g. scale would collapse distinct same-channel keyframe
+                // times below the strict admission threshold. The parent
+                // EditorSession discards this entire draft on refusal.
+                return Err(fail("ANIMATION_TIMELINE_AFTER_SCALE_UNSUPPORTED"));
+            }
             Ok(animation_uuid.clone())
         }
         EditOperation::AddBoneRotationKeyframe {

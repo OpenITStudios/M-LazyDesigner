@@ -139,6 +139,120 @@ fn transform_keyframes_reject_unknown_molang_negative_scale_and_cross_channel_ed
     assert!(!opaque.can_undo());
 }
 
+// SOURCE-AUTHORED_ONLY: source is committed; Cargo/Blockbench not executed.
+#[test]
+fn animation_timeline_scale_retimes_three_numeric_bone_channels_atomically() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009851";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreateAnimation { uuid: ANIM.into(), name: "walk".into(), length: 2.0 },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009852".into(),
+            channel: "position".into(), time: 0.5, value: [1.0, 2.0, 3.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009853".into(),
+            channel: "rotation".into(), time: 1.0, value: [0.0, 90.0, 0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009854".into(),
+            channel: "scale".into(), time: 1.5, value: [1.0, 1.5, 1.0],
+        },
+    ]).unwrap();
+    let before = session.document().clone();
+    let source_keyframes = before.animation_assets[0]["animators"][BONE]["keyframes"]
+        .as_array().unwrap().clone();
+    let receipt = session.apply(1, &[EditOperation::ScaleAnimationTimeline {
+        animation_uuid: ANIM.into(), factor: 0.5,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.operation_count, 1);
+    let saved = session.document().clone();
+    assert_eq!(saved.animation_assets[0]["length"], json!(1.0));
+    let frames = saved.animation_assets[0]["animators"][BONE]["keyframes"]
+        .as_array().unwrap();
+    assert_eq!(frames.len(), 3);
+    for (i, expected_time) in [0.25, 0.5, 0.75].iter().enumerate() {
+        assert_eq!(frames[i]["time"], json!(expected_time));
+        assert_eq!(frames[i]["uuid"], source_keyframes[i]["uuid"]);
+        assert_eq!(frames[i]["channel"], source_keyframes[i]["channel"]);
+        assert_eq!(frames[i]["data_points"], source_keyframes[i]["data_points"]);
+        assert_eq!(frames[i]["interpolation"], source_keyframes[i]["interpolation"]);
+    }
+    for (channel, time) in [("position", 0.25), ("rotation", 0.5), ("scale", 0.75)] {
+        let inspected = inspect_transform_track(&saved, ANIM, BONE, channel, 0, 16).unwrap();
+        assert_eq!(inspected["recognized"], json!(true));
+        assert_eq!(inspected["keyframes"][0]["time"], json!(time));
+    }
+    assert_eq!(saved.cubes, before.cubes);
+    assert_eq!(saved.bones, before.bones);
+    assert_eq!(saved.texture_assets, before.texture_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.apply(4, &[EditOperation::ScaleAnimationTimeline {
+        animation_uuid: ANIM.into(), factor: 1.0,
+    }]).unwrap_err(), "EDIT_NO_OP");
+}
+
+#[test]
+fn animation_timeline_scale_refuses_opaque_input_overflow_and_close_keyframes() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009861";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreateAnimation { uuid: ANIM.into(), name: "walk".into(), length: 1000.0 },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009862".into(),
+            channel: "rotation".into(), time: 0.0, value: [0.0, 0.0, 0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: "00000000-0000-4000-8000-000000009863".into(),
+            channel: "rotation".into(), time: 0.000002, value: [0.0, 30.0, 0.0],
+        },
+    ]).unwrap();
+    let saved = session.document().clone();
+    for factor in [0.0, -1.0, f64::NAN, f64::INFINITY, 0.01, 11.0] {
+        assert_eq!(session.apply(1, &[
+            EditOperation::ScaleAnimationTimeline { animation_uuid: ANIM.into(), factor },
+        ]).unwrap_err(), "ANIMATION_TIMELINE_FACTOR_INVALID");
+    }
+    assert_eq!(session.apply(1, &[
+        EditOperation::ScaleAnimationTimeline { animation_uuid: ANIM.into(), factor: 4.0 },
+    ]).unwrap_err(), "ANIMATION_TIMELINE_LENGTH_UNSUPPORTED");
+    assert_eq!(session.apply(1, &[
+        EditOperation::ScaleAnimationTimeline { animation_uuid: ANIM.into(), factor: 0.1 },
+    ]).unwrap_err(), "ANIMATION_TIMELINE_AFTER_SCALE_UNSUPPORTED");
+    assert_eq!(session.apply(1, &[
+        EditOperation::ScaleAnimationTimeline { animation_uuid: "missing".into(), factor: 2.0 },
+    ]).unwrap_err(), "ANIMATION_NOT_FOUND");
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.summary().revision, 1);
+    let mut opaque = saved.clone();
+    opaque.animation_assets[0]["animators"][BONE]["keyframes"][0]
+        ["data_points"][0]["x"] = json!("query.head_yaw");
+    let mut unsupported = EditorSession::from_document(opaque.clone()).unwrap();
+    assert_eq!(unsupported.apply(0, &[
+        EditOperation::ScaleAnimationTimeline { animation_uuid: ANIM.into(), factor: 0.5 },
+    ]).unwrap_err(), "ANIMATION_TIMELINE_UNSUPPORTED");
+    assert_eq!(unsupported.document(), &opaque);
+    assert_eq!(unsupported.summary().revision, 0);
+
+    let mut duplicate = saved.clone();
+    duplicate.animation_assets.push(saved.animation_assets[0].clone());
+    let mut duplicate_session = EditorSession::from_document(duplicate.clone()).unwrap();
+    assert_eq!(duplicate_session.apply(0, &[
+        EditOperation::ScaleAnimationTimeline { animation_uuid: ANIM.into(), factor: 0.5 },
+    ]).unwrap_err(), "ANIMATION_ID_AMBIGUOUS");
+    assert_eq!(duplicate_session.document(), &duplicate);
+}
+
 // SOURCE-AUTHORED: existing Rust tests remain NOT_EXECUTED.
 #[test]
 fn animation_length_edit_is_atomic_reversible_and_keeps_keyframe_payload() {
