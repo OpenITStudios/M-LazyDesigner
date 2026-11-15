@@ -79,6 +79,7 @@ pub struct AnimationView {
     name: String,
     length: f64,
     rotation_keyframes: Vec<RotationKeyframeView>,
+    preview_supported: bool,
 }
 
 #[derive(Serialize)]
@@ -237,34 +238,76 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
             .unwrap_or("Unnamed Animation").to_owned();
         let length = animation.get("length")?.as_f64()
             .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v))?;
-        let mut rotation_keyframes = Vec::new();
+        // Only a fully understood rotation-only/linear shape may drive a pose.
+        // Unknown Blockbench tracks are still preserved but cannot be faked.
+        let mut preview_supported = animation.as_object().is_some_and(|map|
+            map.keys().all(|key| matches!(key.as_str(),
+                "uuid" | "name" | "loop" | "length" | "animators"))) &&
+            animation.get("loop").and_then(Value::as_str).unwrap_or("once") == "once";
+        let mut rotation_keyframes: Vec<RotationKeyframeView> = Vec::new();
         if let Some(animators) = animation.get("animators").and_then(Value::as_object) {
             for (bone_uuid, track) in animators {
-                if !doc.bones.iter().any(|bone| bone.uuid == *bone_uuid) { continue; }
-                if let Some(frames) = track.get("keyframes").and_then(Value::as_array) {
-                    for frame in frames.iter().take(2048) {
-                        if frame.get("channel").and_then(Value::as_str) != Some("rotation") {
-                            continue;
-                        }
-                        let Some(id) = frame.get("uuid").and_then(Value::as_str) else { continue; };
-                        let Some(time) = frame.get("time").and_then(Value::as_f64)
-                            .filter(|t| t.is_finite() && *t >= 0.0 && *t <= length) else { continue; };
-                        let Some(values) = frame.get("data_points").and_then(Value::as_array)
-                            .and_then(|points| points.first()) else { continue; };
-                        let [Some(x), Some(y), Some(z)] = [
-                            static_animation_axis(values.get("x")),
-                            static_animation_axis(values.get("y")),
-                            static_animation_axis(values.get("z")),
-                        ] else { continue; };
-                        rotation_keyframes.push(RotationKeyframeView {
-                            uuid: id.to_owned(), bone_uuid: bone_uuid.clone(), time,
-                            rotation: [x, y, z],
-                        });
+                if !doc.bones.iter().any(|bone| bone.uuid == *bone_uuid) ||
+                   !track.as_object().is_some_and(|map| map.keys().all(|key|
+                        matches!(key.as_str(), "name" | "type" | "keyframes"))) ||
+                   track.get("type").and_then(Value::as_str) != Some("bone") {
+                    preview_supported = false;
+                    continue;
+                }
+                let Some(frames) = track.get("keyframes").and_then(Value::as_array) else {
+                    preview_supported = false;
+                    continue;
+                };
+                if frames.len() > 2048 { preview_supported = false; }
+                for frame in frames.iter().take(2048) {
+                    if frame.get("channel").and_then(Value::as_str) != Some("rotation") ||
+                       frame.get("interpolation").and_then(Value::as_str) != Some("linear") ||
+                       !frame.as_object().is_some_and(|map| map.keys().all(|key| matches!(
+                           key.as_str(), "uuid" | "channel" | "time" | "interpolation" | "data_points"
+                       ))) {
+                        preview_supported = false;
+                        continue;
                     }
+                    let Some(id) = frame.get("uuid").and_then(Value::as_str) else {
+                        preview_supported = false; continue;
+                    };
+                    let Some(time) = frame.get("time").and_then(Value::as_f64)
+                        .filter(|t| t.is_finite() && *t >= 0.0 && *t <= length) else {
+                        preview_supported = false; continue;
+                    };
+                    let Some(points) = frame.get("data_points").and_then(Value::as_array) else {
+                        preview_supported = false; continue;
+                    };
+                    if points.len() != 1 ||
+                       !points[0].as_object().is_some_and(|map| map.keys().all(|key|
+                           matches!(key.as_str(), "x" | "y" | "z"))) {
+                        preview_supported = false;
+                        continue;
+                    }
+                    let [Some(x), Some(y), Some(z)] = [
+                        static_animation_axis(points[0].get("x")),
+                        static_animation_axis(points[0].get("y")),
+                        static_animation_axis(points[0].get("z")),
+                    ] else {
+                        preview_supported = false; continue;
+                    };
+                    if rotation_keyframes.iter().any(|existing|
+                        existing.bone_uuid == *bone_uuid && (existing.time - time).abs() <= 1e-6) {
+                        preview_supported = false;
+                        continue;
+                    }
+                    if rotation_keyframes.len() >= 2048 {
+                        preview_supported = false;
+                        continue;
+                    }
+                    rotation_keyframes.push(RotationKeyframeView {
+                        uuid: id.to_owned(), bone_uuid: bone_uuid.clone(), time,
+                        rotation: [x, y, z],
+                    });
                 }
             }
-        }
-        Some(AnimationView { uuid, name, length, rotation_keyframes })
+        } else { preview_supported = false; }
+        Some(AnimationView { uuid, name, length, rotation_keyframes, preview_supported })
     }).collect()
 }
 
@@ -950,6 +993,38 @@ mod tests {
         assert_eq!(snapshot.animations[0].rotation_keyframes[0].uuid, key);
         assert_eq!(snapshot.animations[0].rotation_keyframes[0].rotation, [0.0, 90.0, 0.0]);
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
+    }
+
+
+    #[test]
+    fn pose_preview_requires_entire_animation_to_be_linear_and_static() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        let id = "00000000-0000-4000-8000-000000000320";
+        let bone = "00000000-0000-4000-8000-000000000001";
+        doc.animation_assets.push(json!({
+            "uuid": id, "name": "rotation", "loop": "once", "length": 1.0,
+            "animators": {}
+        }));
+        doc.animation_assets[0]["animators"][bone] = json!({
+            "name": "root_bone", "type": "bone", "keyframes": [
+                {"uuid": "00000000-0000-4000-8000-000000000321",
+                 "channel": "rotation", "time": 0.0, "interpolation": "linear",
+                 "data_points": [{"x": "0", "y": "0", "z": "0"}]}
+            ]
+        });
+        let view = animation_views(&doc);
+        assert!(view[0].preview_supported);
+        let before = doc.clone();
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]["interpolation"] = json!("bezier");
+        assert!(!animation_views(&doc)[0].preview_supported);
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]["interpolation"] = json!("linear");
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]["data_points"][0]["y"] = json!("query.anything");
+        assert!(!animation_views(&doc)[0].preview_supported);
+        doc.animation_assets[0] = before.animation_assets[0].clone();
+        doc.animation_assets[0]["animators"]["effects"] = json!({"keyframes":[]});
+        assert!(!animation_views(&doc)[0].preview_supported);
     }
 
 }

@@ -17,6 +17,8 @@
   export let textureResolution: [number, number] = [16, 16];
   // View-only selection: null means first available Bedrock texture.
   export let previewTextureIndex: number | null = null;
+  // Derived Animate-only pose offsets. Never updates the Rust document.
+  export let previewBoneRotations: Record<string, Vec3> | null = null;
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
@@ -141,6 +143,7 @@
     _sides: ('front' | 'double' | null)[] = texturePreviewSides,
     _resolution: [number, number] = textureResolution,
     _previewTextureIndex: number | null = previewTextureIndex,
+    _boneRotations: Record<string, Vec3> | null = previewBoneRotations,
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
     if (!modelRoot || drag || mutationPending) return;
@@ -222,7 +225,15 @@
           if (!bone) continue;
           const pivot = new THREE.Group();
           pivot.position.copy(vector(bone.origin).sub(vector(parentOrigin)));
-          pivot.rotation.set(deg(bone.rotation[0]), deg(bone.rotation[1]), deg(bone.rotation[2]), 'ZYX');
+          // Blockbench BoneAnimator.displayRotation adds evaluated Euler offsets
+          // to the bind-pose Bone rotation; this is display-only.
+          const offset = _boneRotations?.[bone.uuid];
+          pivot.rotation.set(
+            deg(bone.rotation[0] + (offset?.[0] ?? 0)),
+            deg(bone.rotation[1] + (offset?.[1] ?? 0)),
+            deg(bone.rotation[2] + (offset?.[2] ?? 0)),
+            'ZYX',
+          );
           parent.add(pivot);
           visit(node.children, pivot, bone.origin);
         }
@@ -352,7 +363,9 @@
     onSelect(hits.length ? String(hits[0].object.userData.cubeUuid) : null);
   }
 
-  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId, texturePreviewSources, texturePreviewSides, textureResolution, previewTextureIndex);
+  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId,
+    texturePreviewSources, texturePreviewSides, textureResolution,
+    previewTextureIndex, previewBoneRotations);
   $: if (ready) syncGizmo(canTransform, transformMode);
 
   onMount(() => {

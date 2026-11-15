@@ -56,6 +56,8 @@ export type AnimationView = {
   name: string;
   length: number;
   rotationKeyframes: RotationKeyframeView[];
+  // True only when Tauri recognizes every animation/track field for static pose.
+  previewSupported: boolean;
 };
 
 export type EditorSnapshot = {

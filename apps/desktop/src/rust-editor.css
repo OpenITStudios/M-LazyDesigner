@@ -720,3 +720,15 @@
 .rust-editor .animate-workspace button:focus-visible, .rust-editor .animate-workspace input:focus-visible {
   outline: 2px solid #3e90ff; outline-offset: 2px;
 }
+
+.rust-editor .animate-scrub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(100%, 520px);
+  color: #d9dfe7;
+}
+.rust-editor .animate-scrub input[type="range"] {
+  width: 100%;
+  accent-color: #3e90ff;
+}

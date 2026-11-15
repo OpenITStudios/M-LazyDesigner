@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
+  import { projectedBoneRotationPose } from './rustAnimationPose';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
@@ -120,6 +121,9 @@
   $: selectedCube = snapshot?.cubes.find((cube) => cube.uuid === selectedId) ?? null;
   $: selectedAnimation = snapshot?.animations.find((animation) => animation.uuid === selectedAnimationId)
     ?? snapshot?.animations[0] ?? null;
+  // UI-only time selection drives a read-only Bone pose; no Rust mutation.
+  $: previewBoneRotations = workspaceMode === 'animate'
+    ? projectedBoneRotationPose(selectedAnimation, animationTime) : null;
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
 
@@ -163,7 +167,10 @@
     paintTextureIndex = reconcilePaintTextureSelection(
       snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
     );
-    if (snapshot && snapshot.epoch !== next.epoch) selectedAnimationId = null;
+    if (snapshot && snapshot.epoch !== next.epoch) {
+      selectedAnimationId = null;
+      animationTime = 0;
+    }
     snapshot = next;
     if (selectedAnimationId && !next.animations.some((animation) => animation.uuid === selectedAnimationId)) {
       selectedAnimationId = null;
@@ -987,7 +994,7 @@
   <section class="animate-workspace" aria-label="Rust animation keyframe editor">
     <div class="animate-heading">
       <strong>Animate · Rotation keyframes</strong>
-      <span>Rust-owned .bbmodel · Bind-pose 3D preview only · Playback not implemented</span>
+      <span>Rust-owned .bbmodel · Static linear rotation pose scrubbing only · No playback</span>
     </div>
     {#if snapshot}
       <div class="animate-create">
@@ -1022,6 +1029,17 @@
             <span>Length {selectedAnimation.length}s · {selectedAnimation.rotationKeyframes.length} supported rotation keyframes</span>
           </div>
           <p class="hint">Select a Bone in the Outliner, set time and rotation, then add a keyframe. Existing unsupported tracks remain read-only.</p>
+          {#if selectedAnimation.previewSupported}
+            <label class="animate-scrub">Scrub rotation pose: {animationTime.toFixed(2)}s
+              <input type="range" min="0" max={selectedAnimation.length}
+                step="0.01" bind:value={animationTime}
+                disabled={busy || selectedAnimation.length <= 0}
+                aria-label="Scrub static rotation pose"/>
+            </label>
+            <p class="hint">Preview combines linear rotation offsets with each Bone bind pose; no automatic playback.</p>
+          {:else}
+            <p class="hint">Pose preview unavailable: this Animation contains unsupported tracks, expressions or interpolation. Original data is preserved.</p>
+          {/if}
           <div class="animate-keyframe-editor">
             <label>Time (seconds)
               <input type="number" min="0" max={selectedAnimation.length} step="any"
@@ -1453,6 +1471,7 @@
           texturePreviewSides={snapshot.texturePreviewSides}
           textureResolution={snapshot.textureResolution}
           previewTextureIndex={paintTextureIndex}
+          previewBoneRotations={previewBoneRotations}
           {selectedId} onSelect={selectCube}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
           canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard}
@@ -1507,7 +1526,7 @@
       workspaceMode === 'paint'
         ? 'Paint atlas · one stroke per Rust Undo · visual parity unverified'
         : workspaceMode === 'animate'
-        ? 'Animate · Rust-owned rotation keyframes · playback not implemented'
+        ? 'Animate · static rotation pose scrubbing only · playback not implemented'
         : selectedId && transformTool === 'translate'
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
         : selectedId && transformTool === 'rotate'
