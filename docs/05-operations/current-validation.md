@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Linear rectangle-coverage construction for UV isolation (SOURCE_ONLY)
+
+Reviewed IsolateCubeBoxUv atlas placement against many overlapping Cube UV references. Replaced per-face pixel loops in the occupancy stage with 2D rectangle-corner updates plus one bounded atlas prefix pass, retaining exact nonblank RGBA checks and per-face candidate verification. Added a repeated-duplicate source regression for unchanged original bitmap, first-fit output, and editable bbmodel reimport. Complexity improvement is source reasoning, not a measured performance PASS; Cargo/native Blockbench tests remain AUTHORED_NOT_RUN/UNVERIFIED.
+
 ## 2026-11-16 — Painted Box UV island isolation for cloned Cube (SOURCE_ONLY)
 
 Added `IsolateCubeBoxUv` using a bounded integral atlas occupancy search and the existing owned RGBA8 PNG codec. It moves one Cube's Box UV net to free atlas pixels, copying each existing face's original colors without deleting pixels still referenced by its source Cube. Source tests cover duplicate/isolated face UV, original/copy pixel equality, independent guarded repaint, .bbmodel reimport, Undo/Redo, insufficient space, unknown implicit links and imported not-owned assets. Tests AUTHORED_NOT_RUN; runtime Blockbench UV/pixel interpretation and performance remain UNVERIFIED.

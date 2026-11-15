@@ -81,10 +81,10 @@ pub(super) fn plan_box_uv_isolation(
     let max_x = source.iter().map(|s|s.1[0]).max().unwrap_or(0);
     let max_y = source.iter().map(|s|s.1[1]).max().unwrap_or(0);
     let (net_w,net_h) = (max_x-min_x,max_y-min_y);
-    let mut occupied = vec![false;(w*h) as usize];
-    for (i,pixel) in bitmap.chunks_exact(4).enumerate() {
-        occupied[i] = pixel != [0,0,0,0];
-    }
+    let stride = w as usize + 1;
+    // Rectangle-corner deltas avoid writing each atlas pixel once per Cube.
+    // Large repeated UV islands cost O(face_count), not O(face_areas).
+    let mut coverage = vec![0i32; stride * (h as usize + 1)];
     // Every explicit face referring to this atlas reserves its exact pixels.
     // Missing/default links may still resolve to this atlas in Blockbench.
     for other in &doc.cubes {
@@ -109,20 +109,31 @@ pub(super) fn plan_box_uv_isolation(
             }
             let (from,to) = rectangle(doc,projected_other.as_ref().unwrap(),side)
                 .map_err(|_| "UV_ATLAS_OTHER_UV_UNSUPPORTED".to_string())?;
-            for y in from[1]..to[1] {
-                for x in from[0]..to[0] {
-                    occupied[(y*w+x) as usize] = true;
-                }
-            }
+            let x0 = from[0] as usize;
+            let y0 = from[1] as usize;
+            let x1 = to[0] as usize;
+            let y1 = to[1] as usize;
+            coverage[y0 * stride + x0] += 1;
+            coverage[y0 * stride + x1] -= 1;
+            coverage[y1 * stride + x0] -= 1;
+            coverage[y1 * stride + x1] += 1;
         }
     }
-    // Summed area makes each candidate-face overlap check constant time,
-    // with a bounded 256x256 scan instead of a pixel-by-pixel search.
-    let stride = w as usize + 1;
+    // Resolve the corner deltas in one 2D prefix pass and merge with exact
+    // original PNG occupancy. Even fully transparent alpha with nonzero RGB
+    // is reserved: a model must not erase unreferenced authored data.
     let mut sum = vec![0u32;stride * (h as usize + 1)];
     for y in 0..h as usize {
         for x in 0..w as usize {
-            sum[(y+1)*stride+x+1] = u32::from(occupied[y*w as usize+x]) +
+            let idx = y * stride + x;
+            let mut count = coverage[idx];
+            if x > 0 { count += coverage[idx - 1]; }
+            if y > 0 { count += coverage[idx - stride]; }
+            if x > 0 && y > 0 { count -= coverage[idx - stride - 1]; }
+            coverage[idx] = count;
+            let p = (y * w as usize + x) * 4;
+            let blocked = count > 0 || bitmap[p..p+4] != [0,0,0,0];
+            sum[(y+1)*stride+x+1] = u32::from(blocked) +
                 sum[y*stride+x+1] + sum[(y+1)*stride+x] - sum[y*stride+x];
         }
     }

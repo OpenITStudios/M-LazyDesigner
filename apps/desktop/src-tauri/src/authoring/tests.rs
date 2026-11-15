@@ -1192,6 +1192,46 @@ fn isolate_duplicate_box_uv_copies_existing_face_pixels_and_supports_guarded_pai
     assert_eq!(session.document(),&isolated);
 }
 
+// SOURCE-AUTHORED: repeated Cube aliases occupy one face pixel rectangle
+// regardless of how many Cubes refer to it; occupancy is bounded by atlas.
+#[test]
+fn isolate_cube_uv_handles_many_duplicate_references_without_repainting_source() {
+    const TEX:&str="00000000-0000-4000-8000-000000009975";
+    let mut session=EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Copies","copies").unwrap()).unwrap();
+    session.apply(0,&[
+        EditOperation::SetEmptyAtlasResolution {width:32,height:32},
+        EditOperation::AddBone {bone:serde_json::from_value(json!({
+            "uuid":BONE,"name":"root","origin":[0,0,0]
+        })).unwrap(),parent_uuid:None},
+        EditOperation::AddCube {cube:sample_cube(CUBE),bone_uuid:BONE.into()},
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"skin.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    let mut duplicates=Vec::new();
+    for index in 10..40 {
+        duplicates.push(EditOperation::DuplicateCube {
+            source_uuid:CUBE.into(),
+            new_uuid:format!("00000000-0000-4000-8000-00000000{:04}",index),
+        });
+    }
+    session.apply(1,&duplicates).unwrap();
+    let before=session.document().clone();
+    let selected="00000000-0000-4000-8000-000000000010";
+    session.apply(2,&[EditOperation::IsolateCubeBoxUv {
+        cube_uuid:selected.into(),texture_uuid:TEX.into()
+    }]).unwrap();
+    let after=session.document();
+    assert_eq!(after.cubes.len(),31);
+    assert_eq!(after.cubes.iter().find(|c|c.uuid==selected).unwrap()
+        .uv_offset,Some([16.0,0.0]));
+    assert_eq!(before.texture_assets,after.texture_assets);
+    assert_eq!(inspect_cube_uv_sharing(after,selected,TEX).unwrap()
+        ["declared_overlap_pairs"],json!(0));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *after);
+}
+
 #[test]
 fn isolate_box_uv_refuses_full_or_unknown_atlas_without_partial_mutation() {
     const TEX:&str="00000000-0000-4000-8000-000000009973";
