@@ -10,37 +10,61 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+The SDK is ready for a **host-provided** Code Mode program. `openRustCodeModeProject` binds a path and observed file SHA-256 so later writes cannot silently target a changed source. Normal inspection is read-only:
+
 ```js
-import { createRustCodeModeClient } from './client.mjs';
+import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs';
 
 const ld = createRustCodeModeClient({
   binary: '/absolute/path/to/lazydesigner-authoring',
 });
-const model = await ld.inspect({ input: '/absolute/path/to/model.bbmodel' });
-const part = await ld.inspect({
-  input: '/absolute/path/to/model.bbmodel',
-  uuid: 'an-existing-cube-or-bone-uuid',
+const project = await openRustCodeModeProject(
+  ld, '/absolute/path/to/model.bbmodel',
+);
+const firstPage = await project.catalog('cubes', { limit: 16 });
+const audit = await project.audit();
+console.log({
+  sha256: project.expectedSha256,
+  firstCubeIds: firstPage.catalog.entries.map(({ uuid }) => uuid),
+  faceLinks: audit.audit.faces,
+  visualVerification: audit.audit.visual_verdict,
 });
-const next = await ld.apply({
-  input: '/absolute/path/to/model.bbmodel',
-  output: '/absolute/path/to/model-next.bbmodel',
-  expectedSha256: model.sha256,
-  operations: [{
-    op: 'translate_cube', uuid: part.element.uuid, delta: [1, 0, 0],
-  }],
-});
-console.log({ nextSha: next.output_sha256, changed: next.mutation.changed_uuids });
 ```
 
-The example is **illustrative, not executed**: an actual project, UUID, approved mutation and installed binary are prerequisites. A mutation must not automatically replay after an unknown process result; inspect the source/output state first.
+The sample is illustrative, **NOT_EXECUTED**, and presumes an authorized local host and already-built first-party Rust CLI.
 
-- `inspect({input})`: summary plus source SHA.
-- `catalog({input,kind,offset,limit})`: bounded, paginated Cube/Bone/texture/animation identities (≤64 entries per request) for discovering imported asset IDs without loading the whole model.
-- `inspect({input,uuid})`: bounded focused Cube/Bone state, not full model/blob echo.
-- `inspectTexture({input,index})` / `inspectAnimation({input,uuid})`: bounded metadata only. Embedded bitmap data and opaque animation JSON are never echoed.
-- `newModel`, `apply`, `importPng`, `exportPng`, `exportGeometry`: wrappers over existing Rust CLI commands; always explicit paths and preconditions.
-- `apply`: a bounded array of existing Rust `EditOperation` variants as one transaction, against `expected_revision:0` for a newly opened CLI session. The CLI enforces the source SHA again and publishes a new sibling without overwrite.
-- `runner`: test-only or trusted-agent-host call seam; it **does not** make an arbitrary script secure.
+### Write authorization (trusted host only)
+
+All `newModel`, `apply`, `importPng`, `exportPng`, and `exportGeometry` operations **deny by default** unless the trusted host supplies `authorizeMutation`, which must return exactly `true` for each action. Approval receives the exact output path, source SHA and (for edit plans) operation types/count and a SHA-256 digest of the serialized plan. This callback is a guardrail and audit hook, **not** a security sandbox: untrusted scripts running with unrestricted Node/OS privileges can bypass it or directly run executables. A real host must isolate model-authored programs and inject a preconfigured client rather than trusting an agent-supplied authorizer.
+
+Only after the host confirms a specific mutation, a host-supplied project can call:
+
+```js
+// `project` was created by the trusted host; the host owns authorization.
+const candidate = await project.apply({
+  output: '/absolute/path/to/model-candidate.bbmodel',
+  operations: [{ op: 'translate_cube', uuid: approvedCubeUuid, delta: [1, 0, 0] }],
+});
+console.log({
+  outputSha256: candidate.output_sha256,
+  changed: candidate.mutation.changed_uuids,
+});
+```
+
+Do not copy this into an unrestricted Node process as a substitute for host isolation. The example's `approvedCubeUuid` is a placeholder: an actual UUID must come from the bounded catalog and the approved asset plan.
+
+### API behavior
+
+- `inspect({input})`: summary + source SHA.
+- `catalog({input,kind,offset,limit})`: paginated Cube/Bone/Texture/Animation identities, with 1–64 results per page.
+- `inspect({input,uuid})`: focused Cube/Bone fields, not full model JSON.
+- `inspectTexture({input,index})` / `inspectAnimation({input,uuid})`: bounded metadata only, with no bitmap/opaque animation payload.
+- `audit({input})`: source-derived face-reference, source-type, rig and clip counts. `visual_verdict` remains `UNVERIFIED`: count-based QA does not establish texture coverage, silhouette fidelity or animation correctness.
+- `openRustCodeModeProject(client,input)`: path/SHA-bound helper that exposes the same reads plus preconditioned output methods. It **does not** cache a mutable model in JavaScript.
+- `apply`: one existing Rust transaction (1–128 operations, at most 64 KiB) against an opened CLI document revision 0 and an exact source SHA; a private plan file is created only after host approval.
+- `importPng`, `exportPng`, `exportGeometry`: first-party CLI operations and non-overwriting output. Never auto-retry after unknown outcome.
+
+See [local agent host integration](HOST_INTEGRATION.md) for required sandbox and approval boundaries.
 
 ## Transition boundary
 

@@ -5,6 +5,7 @@
  * Source-authored; local/native execution NOT_EXECUTED.
  */
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -61,31 +62,32 @@ function parseResponse(raw) {
   return response;
 }
 async function runBinary(binary, args) {
+  // Parse success outside the process-transport catch. Malformed or oversized
+  // successful responses must not be misreported as an unavailable executable.
+  let stdout;
   try {
-    const { stdout } = await execFileAsync(binary, args, {
+    ({ stdout } = await execFileAsync(binary, args, {
       shell: false, timeout: 45000, maxBuffer: OUTPUT_LIMIT,
       windowsHide: true, encoding: 'utf8',
-    });
-    return parseResponse(stdout);
+    }));
   } catch (error) {
-    // A timeout or nonzero exit is never a successful mutation, even if the
-    // process emitted a partial/early OK. Do not auto-retry uncertain effects.
-    if (error?.killed || error?.signal) {
+    // A timeout, signal, or truncated stdout leaves the effect uncertain.
+    // Never retry mutations automatically.
+    if (error?.killed || error?.signal ||
+        error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
       throw new Error('CODE_MODE_CLI_OUTCOME_UNKNOWN', { cause: error });
     }
     if (typeof error?.stdout === 'string' && error.stdout.trim()) {
-      try {
-        const response = JSON.parse(error.stdout);
-        if (response?.status === 'ERROR' && typeof response.code === 'string') {
-          throw new Error(response.code, { cause: error });
-        }
-      } catch (nested) {
-        if (nested instanceof Error && nested.cause === error) throw nested;
+      let result;
+      try { result = JSON.parse(error.stdout); } catch {}
+      if (result?.status === 'ERROR' && typeof result.code === 'string') {
+        throw new Error(result.code, { cause: error });
       }
       throw new Error('CODE_MODE_CLI_OUTCOME_UNKNOWN', { cause: error });
     }
     throw new Error('CODE_MODE_CLI_UNAVAILABLE', { cause: error });
   }
+  return parseResponse(stdout);
 }
 function serializePlan(operations) {
   if (!Array.isArray(operations) || operations.length < 1 || operations.length > 128) {
@@ -108,14 +110,29 @@ function serializePlan(operations) {
  * This module NEVER evals model-generated code or starts a listening server.
  * Native mutation/persistence permission is owned by the agent host and Rust.
  *
- * `runner` is only a trusted-host dependency-injection seam for source regressions.
+ * `runner` and `authorizeMutation` MUST be supplied only by trusted host code.
+ * This is defense in depth, NOT a sandbox: a model-controlled unrestricted
+ * Node process could instantiate a client with a dishonest callback or call
+ * the binary directly. The host must isolate the code and supply a fixed SDK.
  */
-export function createRustCodeModeClient({ binary, runner } = {}) {
+export function createRustCodeModeClient({ binary, runner, authorizeMutation } = {}) {
   absolute(binary, 'binary');
   if (runner !== undefined && typeof runner !== 'function') {
     throw new TypeError('runner must be a function supplied by a trusted host');
   }
+  if (authorizeMutation !== undefined && typeof authorizeMutation !== 'function') {
+    throw new TypeError('authorizeMutation must be a trusted-host function');
+  }
   const invoke = runner ?? ((args) => runBinary(binary, args));
+  async function requestWrite(operation, details) {
+    if (typeof authorizeMutation !== 'function') {
+      throw new Error('CODE_MODE_MUTATION_AUTHORITY_REQUIRED');
+    }
+    const descriptor = Object.freeze({ operation, ...details });
+    if (await authorizeMutation(descriptor) !== true) {
+      throw new Error('CODE_MODE_MUTATION_NOT_APPROVED');
+    }
+  }
   async function call(command, options) {
     const args = optionArgs(command, options);
     const result = await invoke(args);
@@ -128,10 +145,15 @@ export function createRustCodeModeClient({ binary, runner } = {}) {
   }
   return Object.freeze({
     async newModel({ output, name, modelIdentifier }) {
-      return call('new', {
+      const options = {
         output: absolute(output, 'output'), name: nonempty(name, 'name'),
         'model-identifier': nonempty(modelIdentifier, 'modelIdentifier'),
+      };
+      await requestWrite('newModel', {
+        output: options.output, name: options.name,
+        modelIdentifier: options['model-identifier'],
       });
+      return call('new', options);
     },
     async inspect({ input, uuid } = {}) {
       return call('inspect', {
@@ -160,6 +182,9 @@ export function createRustCodeModeClient({ binary, runner } = {}) {
         input: absolute(input, 'input'), 'animation-uuid': nonempty(uuid, 'uuid'),
       });
     },
+    async audit({ input }) {
+      return call('inspect', { input: absolute(input, 'input'), audit: 'model' });
+    },
     async apply({ input, output, expectedSha256, operations }) {
       const options = {
         input: absolute(input, 'input'),
@@ -167,6 +192,13 @@ export function createRustCodeModeClient({ binary, runner } = {}) {
         'expected-sha256': hash(expectedSha256),
       };
       const payload = serializePlan(operations);
+      await requestWrite('apply', {
+        input: options.input, output: options.output,
+        expectedSha256: options['expected-sha256'],
+        operationCount: operations.length,
+        operationKinds: Object.freeze(operations.map((op) => op?.op ?? null)),
+        planSha256: createHash('sha256').update(payload).digest('hex'),
+      });
       const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-code-mode-'));
       const file = join(directory, 'edit.plan.json');
       try {
@@ -177,24 +209,71 @@ export function createRustCodeModeClient({ binary, runner } = {}) {
       }
     },
     async importPng({ input, output, png, uuid, name, expectedSha256 }) {
-      return call('import-png', {
+      const options = {
         input: absolute(input, 'input'), output: absolute(output, 'output'),
         png: absolute(png, 'png'), uuid: nonempty(uuid, 'uuid'),
         name: nonempty(name, 'name'), 'expected-sha256': hash(expectedSha256),
+      };
+      await requestWrite('importPng', {
+        input: options.input, output: options.output, png: options.png,
+        uuid: options.uuid, expectedSha256: options['expected-sha256'],
       });
+      return call('import-png', options);
     },
     async exportPng({ input, output, textureUuid, expectedSha256 }) {
-      return call('export-png', {
+      const options = {
         input: absolute(input, 'input'), output: absolute(output, 'output'),
         'texture-uuid': nonempty(textureUuid, 'textureUuid'),
         'expected-sha256': hash(expectedSha256),
+      };
+      await requestWrite('exportPng', {
+        input: options.input, output: options.output,
+        textureUuid: options['texture-uuid'], expectedSha256: options['expected-sha256'],
       });
+      return call('export-png', options);
     },
     async exportGeometry({ input, output, expectedSha256 }) {
-      return call('export-geometry', {
+      const options = {
         input: absolute(input, 'input'), output: absolute(output, 'output'),
         'expected-sha256': hash(expectedSha256),
+      };
+      await requestWrite('exportGeometry', {
+        input: options.input, output: options.output,
+        expectedSha256: options['expected-sha256'],
       });
+      return call('export-geometry', options);
     },
+  });
+}
+
+/**
+ * Bind a single immutable file/SHA snapshot. Each inspection re-reads the
+ * actual file; each mutation uses the pinned SHA and therefore fails closed
+ * if the source has changed. This is not an in-memory mutable scene cache.
+ */
+export async function openRustCodeModeProject(client, input) {
+  if (!client || typeof client.inspect !== 'function' ||
+      typeof client.apply !== 'function') {
+    throw new TypeError('A trusted Rust Code Mode client is required');
+  }
+  const path = absolute(input, 'input');
+  const snapshot = await client.inspect({ input: path });
+  const expectedSha256 = hash(snapshot.sha256);
+  return Object.freeze({
+    input: path,
+    expectedSha256,
+    summary: snapshot.summary,
+    inspect: (uuid) => client.inspect({ input: path, uuid }),
+    catalog: (kind, { offset = 0, limit = 32 } = {}) =>
+      client.catalog({ input: path, kind, offset, limit }),
+    audit: () => client.audit({ input: path }),
+    inspectTexture: (index) => client.inspectTexture({ input: path, index }),
+    inspectAnimation: (uuid) => client.inspectAnimation({ input: path, uuid }),
+    apply: ({ output, operations }) =>
+      client.apply({ input: path, output, expectedSha256, operations }),
+    exportPng: ({ output, textureUuid }) =>
+      client.exportPng({ input: path, output, textureUuid, expectedSha256 }),
+    exportGeometry: ({ output }) =>
+      client.exportGeometry({ input: path, output, expectedSha256 }),
   });
 }

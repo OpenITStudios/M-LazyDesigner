@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Code Mode host approval and static model audit (2026-11-15; SOURCE_ONLY):** The Rust-first Code Mode SDK now default-denies every write until a trusted host explicitly approves the exact file/output plan; `openRustCodeModeProject` binds source SHA and `inspect --audit model` returns limited structure statistics while leaving visual verdict `UNVERIFIED`. See [host acceptance contract](code-mode/HOST_INTEGRATION.md). This is not an installed code sandbox, native QA result or measured efficiency gain. Regression source AUTHORED_NOT_RUN.
+
 **Code Mode focused discovery (2026-11-15; SOURCE_ONLY):** The Rust-first JS SDK and CLI now provide 1–64-entry paged Cube/Bone/Texture/Animation IDs plus limited Texture/Animation metadata for AI reasoning without loading full `.bbmodel` or PNG/opaque animation bodies. Authored-only Rust/Node regressions, no executed local or runtime proof.
 
 **First-party Rust Code Mode bridge (2026-11-15; SOURCE_ONLY):** The new [code-mode/](code-mode/README.md) SDK and typed declarations let an authorized agent compose Node 24 JS/TS around the existing Rust CLI: inspect by UUID, batch guarded edits, PNG import/export and Bedrock geometry export. The SDK is not a JS sandbox, MCP service or secondary model engine. The CLI's original summary inspection remains compatible. Regression source authored NOT_EXECUTED; no PC-local code host, visual acceptance, token saving or legacy Gateway cutover is claimed.

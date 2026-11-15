@@ -91,6 +91,20 @@ export interface InspectAsset {
   source_kind?: "embedded_png" | "external_or_other" | "unavailable";
   [key: string]: unknown;
 }
+export interface StaticModelAudit {
+  scope: "static_metadata_only";
+  visual_verdict: "UNVERIFIED";
+  faces: {
+    total: number; null_or_absent: number; false_reference: number;
+    numeric_reference: number; uuid_reference: number; other_or_unset_reference: number;
+  };
+  textures: {
+    total: number; embedded_png_declared: number;
+    external_relative_declared: number; unknown_or_other_source: number;
+  };
+  rig: { cubes: number; bones: number; root_bones: number };
+  animation: { clips: number; declared_animator_tracks: number };
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
@@ -98,6 +112,7 @@ export interface InspectReceipt {
   element?: FocusedElement;
   catalog?: CatalogPage;
   asset?: InspectAsset;
+  audit?: StaticModelAudit;
 }
 export interface MutationReceipt {
   revision: number;
@@ -124,13 +139,52 @@ export interface RustCodeModeClient {
   catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt & { catalog: CatalogPage }>;
   inspectTexture(input: { input: string; index: number }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectAnimation(input: { input: string; uuid: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
+  audit(input: { input: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
   apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
   exportPng(input: { input: string; output: string; textureUuid: string; expectedSha256: string }): Promise<OutputReceipt>;
   exportGeometry(input: { input: string; output: string; expectedSha256: string }): Promise<OutputReceipt>;
 }
+/** Exact requested write. The digest binds approval to the serialized Rust plan. */
+export interface MutationRequest {
+  operation: "newModel" | "apply" | "importPng" | "exportPng" | "exportGeometry";
+  input?: string;
+  output: string;
+  name?: string;
+  modelIdentifier?: string;
+  expectedSha256?: string;
+  png?: string;
+  uuid?: string;
+  textureUuid?: string;
+  operationCount?: number;
+  operationKinds?: readonly string[];
+  planSha256?: string;
+}
 export declare function createRustCodeModeClient(options: {
   binary: string;
   /** Trusted host/testing seam. NOT an authorization or security boundary. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
+  /**
+   * Default deny. Must be owned by an independent trusted agent host.
+   * This callback alone does NOT sandbox a model-authored Node script.
+   */
+  authorizeMutation?: (request: Readonly<MutationRequest>) => boolean | Promise<boolean>;
 }): RustCodeModeClient;
+/** A path and SHA-bound read-only view plus guarded output operations. */
+export interface RustCodeModeProject {
+  input: string;
+  expectedSha256: string;
+  summary: DocumentSummary;
+  inspect(uuid: string): Promise<InspectReceipt>;
+  catalog(kind: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<InspectReceipt & {catalog: CatalogPage}>;
+  audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
+  inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
+  inspectAnimation(uuid: string): Promise<InspectReceipt & {asset: InspectAsset}>;
+  apply(input: { output: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
+  exportPng(input: { output: string; textureUuid: string }): Promise<OutputReceipt>;
+  exportGeometry(input: { output: string }): Promise<OutputReceipt>;
+}
+export declare function openRustCodeModeProject(
+  client: RustCodeModeClient, input: string
+): Promise<RustCodeModeProject>;
+

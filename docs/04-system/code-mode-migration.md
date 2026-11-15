@@ -4,6 +4,10 @@
 
 **State:** `SOURCE_IN_PROGRESS` on `Rust`, 2026-11-15. No executable/native PASS claimed.
 
+**Current source increment — Code Mode host admission and structural audit:** All Code Mode write calls now fail closed without a trusted-host `authorizeMutation` callback that approves the exact target, source SHA and (for a batch) serialized plan digest. The host must still enforce actual code sandboxing; model-authored unrestricted Node can bypass a callback. `openRustCodeModeProject` binds a verified source SHA without creating another model engine. Rust CLI `inspect --audit model` returns bounded structural counts for face reference kinds, declared PNG paths, Bone roots and Animation tracks, explicitly marked `UNVERIFIED` for visual quality. Source tests are authored but `NOT_EXECUTED`. The [host integration boundary](../../apps/desktop/code-mode/HOST_INTEGRATION.md) defines the later real PC-local gate.
+
+
+
 ## Product decision and boundary
 
 The maintainer explicitly requested a full Code Mode transition while the independent Rust editor is unfinished. The target is **Code Mode as the default AI composition pattern** for Rust: the agent writes JS/TS that composes typed API calls; the authorized host executes the program under host-owned security; the **single Rust AuthoringDocument** retains semantic authority, validation, revision, Undo/Redo and storage.

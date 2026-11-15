@@ -186,6 +186,72 @@ fn inspect_asset(doc: &AuthoringDocument, kind: &str, key: &str) -> Result<Value
     Ok(detail)
 }
 
+/// Structural counts only. No texture pixels, hidden faces, animation
+/// playback, visual fidelity or user review are inferred from this audit.
+fn inspect_model_audit(doc: &AuthoringDocument) -> Value {
+    let mut null_faces = 0usize;
+    let mut false_refs = 0usize;
+    let mut index_refs = 0usize;
+    let mut uuid_refs = 0usize;
+    let mut other_refs = 0usize;
+    for cube in &doc.cubes {
+        for face in cube.faces.values() {
+            match face.get("texture") {
+                Some(Value::Null) => null_faces += 1,
+                Some(Value::Bool(false)) => false_refs += 1,
+                Some(Value::Number(_)) => index_refs += 1,
+                Some(Value::String(_)) => uuid_refs += 1,
+                _ => other_refs += 1,
+            }
+        }
+    }
+    let mut embedded_png = 0usize;
+    let mut external_relative = 0usize;
+    let mut unknown_source = 0usize;
+    for texture in &doc.texture_assets {
+        if texture.get("source").and_then(Value::as_str)
+            .is_some_and(|s| s.starts_with("data:image/png;base64,")) {
+            embedded_png += 1;
+        } else if texture.get("relative_path").and_then(Value::as_str).is_some() {
+            external_relative += 1;
+        } else {
+            unknown_source += 1;
+        }
+    }
+    let root_bones = doc.hierarchy.iter()
+        .filter(|node| matches!(node, OutlinerNode::Bone(_))).count();
+    let declared_tracks = doc.animation_assets.iter()
+        .filter_map(|animation| animation.get("animators").and_then(Value::as_object))
+        .fold(0usize, |sum, animators| sum.saturating_add(animators.len()));
+    json!({
+        "scope":"static_metadata_only",
+        "visual_verdict":"UNVERIFIED",
+        "faces": {
+            "total":doc.cubes.len().saturating_mul(6),
+            "null_or_absent":null_faces,
+            "false_reference":false_refs,
+            "numeric_reference":index_refs,
+            "uuid_reference":uuid_refs,
+            "other_or_unset_reference":other_refs
+        },
+        "textures": {
+            "total":doc.texture_assets.len(),
+            "embedded_png_declared":embedded_png,
+            "external_relative_declared":external_relative,
+            "unknown_or_other_source":unknown_source
+        },
+        "rig": {
+            "cubes":doc.cubes.len(),
+            "bones":doc.bones.len(),
+            "root_bones":root_bones
+        },
+        "animation": {
+            "clips":doc.animation_assets.len(),
+            "declared_animator_tracks":declared_tracks
+        }
+    })
+}
+
 fn execute() -> Result<Value> {
     let (command, options) = arguments()?;
     match command.as_str() {
@@ -200,13 +266,13 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--audit"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
             let session = EditorSession::open(&bytes)?;
             let digest = sha256(&bytes);
-            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid"]
+            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--audit"]
                 .iter().filter(|key| options.contains_key(*key)).count();
             if query_count > 1 || (!options.contains_key("--list") &&
                 (options.contains_key("--offset") || options.contains_key("--limit"))) {
@@ -233,6 +299,10 @@ fn execute() -> Result<Value> {
                 let asset = inspect_asset(session.document(), "animation", uuid)?;
                 Ok(json!({"status":"OK","sha256":digest,
                     "summary":session.summary(),"asset":asset}))
+            } else if let Some(scope) = options.get("--audit") {
+                if scope != "model" { return Err(fail("INSPECT_AUDIT_UNSUPPORTED")); }
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"audit":inspect_model_audit(session.document())}))
             } else {
                 Ok(json!({"status":"OK","sha256":digest,"summary":session.summary()}))
             }
@@ -361,6 +431,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Source-authored only; Cargo/local execution is held.
+    #[test]
+    fn code_mode_static_audit_counts_reference_shapes_without_visual_claims() {
+        let doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")).unwrap();
+        let original = doc.clone();
+        let report = inspect_model_audit(&doc);
+        assert_eq!(report["scope"], json!("static_metadata_only"));
+        assert_eq!(report["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(report["faces"]["total"], json!(6));
+        assert_eq!(report["faces"]["null_or_absent"], json!(1));
+        assert_eq!(report["faces"]["numeric_reference"], json!(5));
+        assert_eq!(report["textures"]["embedded_png_declared"], json!(1));
+        assert_eq!(report["textures"]["external_relative_declared"], json!(1));
+        assert_eq!(report["animation"]["declared_animator_tracks"], json!(1));
+        assert_eq!(doc, original);
+    }
 
     // Source-authored regression; local execution remains on hold.
     #[test]

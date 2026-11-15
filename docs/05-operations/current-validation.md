@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Code Mode host write-admission and structural audit (SOURCE_ONLY)
+
+Code Mode writes now default-deny unless `authorizeMutation` supplied by trusted host code returns `true` for an exact operation descriptor (including source SHA and edit-plan digest). The SDK retains shell-free bounded Rust CLI execution, recognizes uncertain child failures without automatic replay, and offers `openRustCodeModeProject` for path/SHA-bound composition. Rust `inspect --audit model` counts structural face-reference types, declared embedded/external texture sources, rig roots and animation tracks without echoing raw image or track bodies. Result `visual_verdict=UNVERIFIED`; this is **not** proof of texturing coverage, animation quality, or Blockbench equivalence. Node and Rust regressions AUTHORED_NOT_RUN; no local Codex host, native code sandbox, Cargo/Node build or model telemetry was executed.
+
 ## 2026-11-15 — Rust Code Mode paged discovery extension (SOURCE_ONLY)
 
 CLI `inspect` now accepts `--list` with bounded offset/limit or an explicit texture-index/animation-uuid metadata request. The JS Code Mode SDK exposes `catalog`, `inspectTexture` and `inspectAnimation`; no raw image or opaque animation body is echoed. Authored Rust/Node regressions NOT_EXECUTED. This is source evidence only, not a security sandbox, installed agent, native rendering or efficiency measurement.
