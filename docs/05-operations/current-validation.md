@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Unified Box UV regeneration gate (SOURCE_ONLY)
+
+Diagnosed inconsistent safety admission: `ReframeCube` checked multi-file/per-texture and float-size rules, but `AddCube`, Box-UV `SetCubeBounds`, `ScaleCube`, and `SetBoxUvOffset` could regenerate integer UV rectangles on unsupported imported projects. The canonical Box UV preflight now guards every mutating repack path; existing Reframe/Mirror errors are retained for their callers and supported explicit-false flags still work. Authored regressions cover every previously unguarded operation under both rule families, full transaction rollback following a valid first edit, supported offset/resize/scale and no-loss .bbmodel round trip. `TEST_AUTHORED_NOT_RUN`; native Blockbench/Windows/export and efficiency remain unverified.
+
 ## 2026-11-16 — Single UV-aware translation owner and linear subtree traversal (SOURCE_ONLY)
 
 Refactored Cube Move and Bone subtree Move to use one `translate_cube_in_place` Rust semantic owner, avoiding repeated per-child Vec searches for a nested rig. The authored rollback regression now first applies a valid Inflate operation before forcing an unsupported Auto UV failure, so it exercises a real pending mutation without committing any of it. Expected complexity is a linear pass over Cube/Bone collections plus descendant membership construction, not a measured speed improvement. Existing generic Tauri/CLI/Code Mode schemas are unchanged. TEST_AUTHORED_NOT_RUN; Windows/Blockbench localproof deferred.

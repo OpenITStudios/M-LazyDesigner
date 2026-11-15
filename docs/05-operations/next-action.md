@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Geometry/Texture UV correctness (2026-11-16):** Close the inconsistent Box UV atlas rule gate. All mutation paths that recompute Box UV now check unsupported imported per-texture/multi-file and float-size semantics before touching saved Cube UVs. Add, single-edge resize, Scale and offset join the prior Reframe/Mirror checks, preserving existing public error codes where necessary. Source regressions authored, NOT_EXECUTED. Continue remaining Geometry/Texturing/Animation correctness; actual Blockbench export and visual proof remain UNVERIFIED, UI last.
+
 **Geometry source correctness/efficiency (2026-11-16):** Refined the new `translate_bone_subtree` to share the exact per-Cube UV-aware Move primitive and scan Cube/Bone collections once, instead of repeatedly searching by UUID. Strengthened the atomic negative regression with a valid first edit followed by a rejected Auto UV subtree operation. Source review only, tests AUTHORED_NOT_RUN and real runtime improvement UNVERIFIED. Continue the three asset domains and editable Blockbench output; no UI/UX diversion.
 
 **Geometry source continuation (2026-11-16):** `translate_bone_subtree` now moves one Bone rig subtree's Cubes and nested pivots as a single Rust authoring transaction, preserving existing Paint/UV/Animation data and all unrelated root groups. It reuses `TranslateCube` for the same UV rules instead of inventing a second transform engine. Tests AUTHORED_NOT_RUN; actual Blockbench rig/pose and benchmark results remain UNVERIFIED. Next priority is closing other substantive Geometry/Texturing/Animation and export gaps, without returning to UI/UX work.

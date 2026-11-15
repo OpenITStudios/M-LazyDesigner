@@ -267,22 +267,38 @@ fn optional_rotation(extra: &Map<String, Value>) -> Result<()> {
     Ok(())
 }
 
-/// A full Box UV repack is safe only when there is exactly one project
-/// atlas coordinate system and integer-sized cube nets. Unsupported imported
-/// UV capabilities remain preserved but are not normalized by authoring.
+/// One Box UV recomputation admission used by every mutating consumer,
+/// not only by the newer Reframe operation. An imported multi-file atlas or
+/// float-sized net cannot safely use these integer project-atlas rectangles.
 fn check_box_uv_repack_rules(doc: &AuthoringDocument, cube: &Cube) -> Result<()> {
     if has_per_texture_uv_rules(doc) {
-        return Err(fail("CUBE_REFRAME_UV_RULESET_UNSUPPORTED"));
+        return Err(fail("CUBE_BOX_UV_RULESET_UNSUPPORTED"));
     }
-    let unknown_float_uv = [
+    let unsupported_float_uv = [
         doc.meta.extra.get("box_uv_float_size"),
         doc.extensions.get("box_uv_float_size"),
         cube.extra.get("box_uv_float_size"),
     ].into_iter().flatten().any(|flag| flag != &Value::Bool(false));
-    if unknown_float_uv {
-        return Err(fail("CUBE_REFRAME_BOX_UV_FLOAT_UNSUPPORTED"));
+    if unsupported_float_uv {
+        return Err(fail("CUBE_BOX_UV_FLOAT_UNSUPPORTED"));
     }
     Ok(())
+}
+
+/// Preserve the public refusal codes of already-authored Reframe and
+/// Mirror operations, while sharing a single source-level safety predicate.
+fn box_uv_refusal_for(operation: &str, code: String) -> String {
+    match (operation, code.as_str()) {
+        ("reframe", "CUBE_BOX_UV_RULESET_UNSUPPORTED") =>
+            fail("CUBE_REFRAME_UV_RULESET_UNSUPPORTED"),
+        ("reframe", "CUBE_BOX_UV_FLOAT_UNSUPPORTED") =>
+            fail("CUBE_REFRAME_BOX_UV_FLOAT_UNSUPPORTED"),
+        ("mirror", "CUBE_BOX_UV_RULESET_UNSUPPORTED") =>
+            fail("CUBE_MIRROR_UV_RULESET_UNSUPPORTED"),
+        ("mirror", "CUBE_BOX_UV_FLOAT_UNSUPPORTED") =>
+            fail("CUBE_MIRROR_UV_FLOAT_UNSUPPORTED"),
+        _ => code,
+    }
 }
 
 fn cube_auto_uv(cube: &Cube) -> Result<u8> {
@@ -1523,8 +1539,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             }
             let mut prepared = cube.clone();
             validate_cube(&prepared, &doc.texture_assets)?;
-            // A newly added Box UV Cube needs derived rectangles immediately.
+            // A newly added Box UV Cube must obey the same atlas safety gate
+            // as subsequent Reframe, Scale, Resize, Mirror and UV Offset edits.
             if cube_box_uv(&prepared, doc.meta.box_uv.unwrap_or(false)) {
+                check_box_uv_repack_rules(doc, &prepared)?;
                 refresh_box_uv(&mut prepared)?;
             }
             if !append_child(&mut doc.hierarchy, bone_uuid, &OutlinerNode::Cube(cube.uuid.clone())) {
@@ -1746,8 +1764,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
             let textures = &doc.texture_assets;
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
-            let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
+            let cube_index = doc.cubes.iter().position(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let cube = &doc.cubes[cube_index];
             let auto_uv = cube_auto_uv(cube)?;
             let box_uv = cube_box_uv(cube, project_box_uv);
             let refusal = if box_uv { "CUBE_BOX_UV_RESIZE_UNSUPPORTED" }
@@ -1770,7 +1789,11 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             if auto_uv != 0 && !box_uv && per_texture {
                 return Err(fail("CUBE_UV_TEXTURE_RULESET_UNSUPPORTED"));
             }
+            if box_uv {
+                check_box_uv_repack_rules(doc, cube)?;
+            }
             let (axis, direction) = changed.expect("a bound changed");
+            let cube = &mut doc.cubes[cube_index];
             let prior_size = cube.to[axis] - cube.from[axis];
             cube.from = *from;
             cube.to = *to;
@@ -1799,7 +1822,8 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("CUBE_REFRAME_UV_POLICY_MISMATCH"));
             }
             if box_uv {
-                check_box_uv_repack_rules(doc, &doc.cubes[cube_index])?;
+                check_box_uv_repack_rules(doc, &doc.cubes[cube_index])
+                    .map_err(|code| box_uv_refusal_for("reframe", code))?;
             } else if cube_auto_uv(&doc.cubes[cube_index])? != 0 {
                 return Err(fail("CUBE_REFRAME_AUTO_UV_UNSUPPORTED"));
             }
@@ -1902,27 +1926,19 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             // One semantic operation replaces six manual Box UV edits.
             // Never approximate advanced per-texture or float-sized nets.
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
-            let per_texture_rules = has_per_texture_uv_rules(doc);
-            let project_float_uv = [
-                doc.meta.extra.get("box_uv_float_size"),
-                doc.extensions.get("box_uv_float_size"),
-            ].into_iter().flatten().any(|flag| flag != &Value::Bool(false));
-            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+            let cube_index = doc.cubes.iter().position(|cube| cube.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let cube = &doc.cubes[cube_index];
             if !cube_box_uv(cube, project_box_uv) {
                 return Err(fail("CUBE_MIRROR_BOX_UV_REQUIRED"));
-            }
-            if per_texture_rules {
-                return Err(fail("CUBE_MIRROR_UV_RULESET_UNSUPPORTED"));
-            }
-            if project_float_uv || cube.extra.get("box_uv_float_size")
-                .is_some_and(|flag| flag != &Value::Bool(false)) {
-                return Err(fail("CUBE_MIRROR_UV_FLOAT_UNSUPPORTED"));
             }
             if cube.extra.get("mirror_uv").and_then(Value::as_bool).unwrap_or(false)
                 == *mirrored {
                 return Ok(uuid.clone());
             }
+            check_box_uv_repack_rules(doc, cube)
+                .map_err(|code| box_uv_refusal_for("mirror", code))?;
+            let cube = &mut doc.cubes[cube_index];
             if *mirrored {
                 cube.extra.insert("mirror_uv".into(), Value::Bool(true));
             } else {
@@ -1940,9 +1956,13 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("CUBE_SCALE_INVALID"));
             }
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
-            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+            let cube_index = doc.cubes.iter().position(|cube| cube.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
             if factors.iter().all(|f| *f == 1.0) { return Ok(uuid.clone()); }
+            if cube_box_uv(&doc.cubes[cube_index], project_box_uv) {
+                check_box_uv_repack_rules(doc, &doc.cubes[cube_index])?;
+            }
+            let cube = &mut doc.cubes[cube_index];
             let inflate = cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0);
             let pivot = cube.origin.unwrap_or([0.0, 0.0, 0.0]);
             for axis in 0..3 {
@@ -2524,14 +2544,17 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("BOX_UV_OFFSET_INVALID"));
             }
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
-            let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
+            let cube_index = doc.cubes.iter().position(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let cube = &doc.cubes[cube_index];
             if !cube_box_uv(cube, project_box_uv) {
                 return Err(fail("BOX_UV_MODE_REQUIRED"));
             }
             if cube.uv_offset.unwrap_or([0.0, 0.0]) == *offset {
                 return Ok(uuid.clone());
             }
+            check_box_uv_repack_rules(doc, cube)?;
+            let cube = &mut doc.cubes[cube_index];
             cube.uv_offset = if offset.iter().all(|value| *value == 0.0) {
                 None
             } else {

@@ -2062,6 +2062,118 @@ fn box_uv_offset_rejects_invalid_mode_input_and_noop_without_revision() {
     assert_eq!(session.document(), &original);
 }
 
+// AUTHORED_NOT_RUN: every Rust path that regenerates Box UV must use
+// the same source admission. Imported unknown atlas rules cannot be
+// silently normalized by Add/Resize/Scale/Offset.
+#[test]
+fn box_uv_regeneration_refuses_per_texture_rules_without_partial_edits() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["meta"]["box_uv"] = json!(true);
+    model["meta"]["per_texture_uv_size"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    let original = session.document().clone();
+    let new_cube = "00000000-0000-4000-8000-000000009961";
+    let forbidden = [
+        EditOperation::SetBoxUvOffset { uuid: CUBE.into(), offset: [2.0, 3.0] },
+        EditOperation::SetCubeBounds {
+            uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 4.0, 4.0],
+        },
+        EditOperation::ScaleCube { uuid: CUBE.into(), factors: [1.25, 1.0, 1.0] },
+        EditOperation::AddCube { cube: sample_cube(new_cube), bone_uuid: BONE.into() },
+    ];
+    for op in forbidden {
+        assert_eq!(session.apply(0, &[
+            EditOperation::SetCubeOrigin { uuid: CUBE.into(), origin: [1.0, 2.0, 3.0] },
+            op,
+        ]).unwrap_err(), "CUBE_BOX_UV_RULESET_UNSUPPORTED");
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.summary().revision, 0);
+        assert!(!session.can_undo());
+    }
+    // Historical Reframe/Mirror error contracts are still stable.
+    assert_eq!(session.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 4.0, 4.0],
+        uv_policy: "box_repack".into(),
+    }]).unwrap_err(), "CUBE_REFRAME_UV_RULESET_UNSUPPORTED");
+    assert_eq!(session.apply(0, &[EditOperation::SetCubeMirrorUv {
+        uuid: CUBE.into(), mirrored: true,
+    }]).unwrap_err(), "CUBE_MIRROR_UV_RULESET_UNSUPPORTED");
+    assert_eq!(session.document(), &original);
+}
+
+#[test]
+fn box_uv_regeneration_refuses_float_size_metadata_in_all_entrypoints() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["meta"]["box_uv"] = json!(true);
+    model["meta"]["box_uv_float_size"] = json!(true);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    let original = session.document().clone();
+    let forbidden = [
+        EditOperation::SetBoxUvOffset { uuid: CUBE.into(), offset: [1.0, 0.0] },
+        EditOperation::SetCubeBounds {
+            uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [4.0, 4.0, 5.0],
+        },
+        EditOperation::ScaleCube { uuid: CUBE.into(), factors: [1.5, 1.0, 1.0] },
+        EditOperation::AddCube {
+            cube: sample_cube("00000000-0000-4000-8000-000000009962"),
+            bone_uuid: BONE.into(),
+        },
+    ];
+    for op in forbidden {
+        assert_eq!(session.apply(0, &[op]).unwrap_err(),
+            "CUBE_BOX_UV_FLOAT_UNSUPPORTED");
+        assert_eq!(session.document(), &original);
+    }
+    assert_eq!(session.apply(0, &[EditOperation::ReframeCube {
+        uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [5.0, 4.0, 4.0],
+        uv_policy: "box_repack".into(),
+    }]).unwrap_err(), "CUBE_REFRAME_BOX_UV_FLOAT_UNSUPPORTED");
+    assert_eq!(session.apply(0, &[EditOperation::SetCubeMirrorUv {
+        uuid: CUBE.into(), mirrored: true,
+    }]).unwrap_err(), "CUBE_MIRROR_UV_FLOAT_UNSUPPORTED");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+
+    // Nonstandard imported per-Cube float rules are equally unsupported.
+    model["meta"].as_object_mut().unwrap().remove("box_uv_float_size");
+    model["elements"][0]["box_uv_float_size"] = json!(true);
+    let mut per_cube = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    let before = per_cube.document().clone();
+    assert_eq!(per_cube.apply(0, &[EditOperation::SetBoxUvOffset {
+        uuid: CUBE.into(), offset: [2.0, 3.0],
+    }]).unwrap_err(), "CUBE_BOX_UV_FLOAT_UNSUPPORTED");
+    assert_eq!(per_cube.document(), &before);
+}
+
+#[test]
+fn explicit_false_box_uv_flags_allow_original_resize_scale_and_offset() {
+    let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
+    model["meta"]["box_uv"] = json!(true);
+    model["meta"]["per_texture_uv_size"] = json!(false);
+    model["meta"]["box_uv_float_size"] = json!(false);
+    model["per_texture_uv_size"] = json!(false);
+    model["box_uv_float_size"] = json!(false);
+    let mut session = EditorSession::open(&serde_json::to_vec(&model).unwrap()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[
+        EditOperation::SetBoxUvOffset { uuid: CUBE.into(), offset: [2.0, 3.0] },
+        EditOperation::SetCubeBounds {
+            uuid: CUBE.into(), from: [0.0, 0.0, 0.0], to: [4.0, 4.0, 5.0],
+        },
+        EditOperation::ScaleCube { uuid: CUBE.into(), factors: [1.0, 1.5, 1.0] },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(receipt.operation_count, 3);
+    assert_ne!(session.document().cubes[0].faces, original.cubes[0].faces);
+    assert_eq!(session.document().extensions, original.extensions);
+    let saved = session.document().clone();
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &saved);
+}
+
 #[test]
 fn box_uv_single_edge_resize_updates_offset_and_derived_faces() {
     let mut model: Value = serde_json::from_str(SAMPLE).unwrap();
