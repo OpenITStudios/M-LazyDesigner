@@ -331,6 +331,7 @@ fn main() {
             desktop_authoring::rust_editor_open,
             desktop_authoring::rust_editor_apply,
             desktop_authoring::rust_editor_add_cube,
+            desktop_authoring::rust_editor_add_bone,
             desktop_authoring::rust_editor_undo,
             desktop_authoring::rust_editor_redo,
             desktop_authoring::rust_editor_save_copy

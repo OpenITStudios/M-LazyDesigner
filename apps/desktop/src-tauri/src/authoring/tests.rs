@@ -1175,3 +1175,84 @@ fn explicit_false_per_texture_uv_flags_leave_project_resolution_enabled() {
             *session.document());
     }
 }
+
+#[test]
+fn outliner_structure_creation_removal_and_history_are_one_rust_authority() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Hierarchy", "hierarchy").unwrap()
+    ).unwrap();
+    let root: Bone = serde_json::from_value(json!({
+        "uuid": BONE, "name": "root", "origin": [0,0,0]
+    })).unwrap();
+    let child_id = "00000000-0000-4000-8000-000000000003";
+    let child: Bone = serde_json::from_value(json!({
+        "uuid": child_id, "name": "nested", "origin": [0,2,0]
+    })).unwrap();
+    let receipt = session.apply(0, &[
+        EditOperation::AddBone { bone: root, parent_uuid: None },
+        EditOperation::AddBone { bone: child, parent_uuid: Some(BONE.into()) },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid: child_id.into() },
+    ]).unwrap();
+    assert_eq!(receipt.operation_count, 3);
+    assert_eq!(session.document().cubes.len(), 1);
+    assert_eq!(session.document().bones.len(), 2);
+    let before_removal = session.document().clone();
+    assert_eq!(session.apply(1, &[EditOperation::RemoveEmptyBone {
+        uuid: child_id.into(),
+    }]).unwrap_err(), "BONE_NOT_EMPTY");
+    assert_eq!(session.document(), &before_removal);
+    assert_eq!(session.summary().revision, 1);
+    session.apply(1, &[EditOperation::RemoveCube { uuid: CUBE.into() }]).unwrap();
+    assert!(session.document().cubes.is_empty());
+    assert!(matches!(&session.document().hierarchy[0], OutlinerNode::Bone(group)
+        if matches!(&group.children[0], OutlinerNode::Bone(child) if child.children.is_empty())));
+    let after_cube_removal = session.document().clone();
+    session.apply(2, &[EditOperation::RemoveEmptyBone { uuid: child_id.into() }]).unwrap();
+    assert_eq!(session.document().bones.len(), 1);
+    let reimported = AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap();
+    assert_eq!(reimported, *session.document());
+    session.undo(3).unwrap();
+    assert_eq!(session.document(), &after_cube_removal);
+    session.undo(4).unwrap();
+    assert_eq!(session.document(), &before_removal);
+    session.redo(5).unwrap();
+    session.redo(6).unwrap();
+    assert_eq!(session.document(), &reimported);
+    assert_eq!(session.apply(7, &[EditOperation::RemoveCube {
+        uuid: "absent".into(),
+    }]).unwrap_err(), "CUBE_NOT_FOUND");
+}
+
+#[test]
+fn deleting_referenced_elements_refuses_without_mutating_opaque_assets() {
+    let mut wire: Value = serde_json::from_str(TEXTURED).unwrap();
+    wire["vendor_extension"]["linked_cube"] = json!(CUBE);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::RemoveCube {
+        uuid: CUBE.into(),
+    }]).unwrap_err(), "ELEMENT_OPAQUE_REFERENCES");
+    assert_eq!(session.document(), &original);
+    // The nested bone is referenced by the imported animation payload.
+    assert_eq!(session.apply(0, &[
+        EditOperation::RemoveCube { uuid: "unknown".into() },
+        EditOperation::RemoveEmptyBone { uuid: "00000000-0000-4000-8000-000000000003".into() },
+    ]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+    let saved: Value = serde_json::from_slice(&session.export().unwrap()).unwrap();
+    assert_eq!(saved["animations"], wire["animations"]);
+    assert_eq!(saved["vendor_extension"], wire["vendor_extension"]);
+}
+
+#[test]
+fn deleting_one_cube_in_a_batch_rolls_back_if_later_operation_fails() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[
+        EditOperation::RemoveCube { uuid: CUBE.into() },
+        EditOperation::RemoveCube { uuid: CUBE.into() },
+    ]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+}

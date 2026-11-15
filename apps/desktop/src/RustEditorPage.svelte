@@ -276,6 +276,37 @@
       await tick(); viewport?.frameModel();
     }
   }
+  async function addBone() {
+    if (!snapshot || busy) return;
+    const parentUuid = selectedBoneId;
+    const existing = new Set(snapshot.bones.map((bone) => bone.uuid));
+    const next = await command('rust_editor_add_bone', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      parentUuid,
+    });
+    if (next) {
+      selectedId = null;
+      selectedBoneId = next.bones.find((bone) => !existing.has(bone.uuid))?.uuid ?? null;
+      // A new child must remain reachable in the existing Outliner.
+      if (parentUuid) {
+        const opened = new Set(collapsed);
+        opened.delete(parentUuid);
+        collapsed = opened;
+      }
+    }
+  }
+  async function deleteSelected() {
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'edit') return;
+    const operation: EditOperation | null = selectedId
+      ? { op: 'remove_cube', uuid: selectedId }
+      : selectedBoneId ? { op: 'remove_empty_bone', uuid: selectedBoneId } : null;
+    if (!operation) return;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [operation],
+    });
+    if (next) { selectedId = null; selectedBoneId = null; }
+  }
   function history(direction: 'undo' | 'redo') {
     if (!snapshot) return;
     void command(direction === 'undo' ? 'rust_editor_undo' : 'rust_editor_redo', {
@@ -1144,6 +1175,11 @@
                 <button role="menuitem" onclick={() => history('redo')} disabled={!snapshot?.canRedo || busy}>Redo <kbd>Ctrl+Y</kbd></button>
                 <div class="menu-rule"></div>
                 <button role="menuitem" onclick={() => void addCube()} disabled={!snapshot || busy}>Add Cube</button>
+                <button role="menuitem" onclick={() => void addBone()} disabled={!snapshot || busy}>Add Bone</button>
+                <button role="menuitem" onclick={() => void deleteSelected()}
+                  disabled={!snapshot || busy || (!selectedId && !selectedBoneId)}>
+                  Delete Selected Cube / Empty Bone
+                </button>
               {:else}
                 <button role="menuitem" disabled={!snapshot || busy} onclick={() => { viewport?.frameModel(); closeMenus(); }}>Frame Model</button>
                 <div class="menu-rule"></div>
@@ -1197,8 +1233,12 @@
     <div class="tool-group" role="group" aria-label="Edit operations">
       {#if workspaceMode === 'edit'}
         <button disabled={!snapshot || busy} onclick={() => void addCube()}>Add Cube</button>
+        <button disabled={!snapshot || busy} onclick={() => void addBone()}>Add Bone</button>
+        <button disabled={!snapshot || busy || (!selectedId && !selectedBoneId)}
+          title="Delete the selected Cube or an empty Bone; Undo restores it"
+          onclick={() => void deleteSelected()}>Delete</button>
       {/if}
-      <button disabled={!snapshot?.canUndo || busy} onclick={() => history('undo')}>Undo</button>
+      <button disabled={!snapshot?.canUndo || busy onclick={() => history('undo')}>Undo</button>
       <button disabled={!snapshot?.canRedo || busy} onclick={() => history('redo')}>Redo</button>
     </div>
     <div class="tool-separator"></div>

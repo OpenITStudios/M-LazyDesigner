@@ -69,6 +69,8 @@ export type EditOperation =
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
   | { op: 'set_node_visibility'; uuid: string; visible: boolean }
+  | { op: 'remove_cube'; uuid: string }
+  | { op: 'remove_empty_bone'; uuid: string }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
   | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
   | { op: 'create_paint_texture'; uuid: string; name: string }

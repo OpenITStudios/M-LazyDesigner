@@ -108,6 +108,8 @@ pub struct AuthoringDocument {
 pub enum EditOperation {
     AddBone { bone: Bone, parent_uuid: Option<String> },
     AddCube { cube: Cube, bone_uuid: String },
+    RemoveCube { uuid: String },
+    RemoveEmptyBone { uuid: String },
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
@@ -628,6 +630,62 @@ fn set_visibility(extra: &mut Map<String, Value>, visible: bool) {
     }
 }
 
+// Remove one Outliner entry without flattening siblings or nested Bone data.
+fn remove_outliner_entry(nodes: &mut Vec<OutlinerNode>, uuid: &str) -> bool {
+    if let Some(position) = nodes.iter().position(|node| match node {
+        OutlinerNode::Cube(id) => id == uuid,
+        OutlinerNode::Bone(group) => group.uuid == uuid,
+    }) {
+        nodes.remove(position);
+        return true;
+    }
+    for node in nodes {
+        if let OutlinerNode::Bone(group) = node {
+            if remove_outliner_entry(&mut group.children, uuid) { return true; }
+        }
+    }
+    false
+}
+
+// Opaque extensions can address elements by UUID. Do not leave broken
+// references behind when a user explicitly removes an element.
+fn value_references_uuid(value: &Value, uuid: &str) -> bool {
+    match value {
+        Value::String(text) => text == uuid,
+        Value::Array(items) => items.iter().any(|item| value_references_uuid(item, uuid)),
+        Value::Object(values) => map_references_uuid(values, uuid),
+        _ => false,
+    }
+}
+
+fn map_references_uuid(values: &Map<String, Value>, uuid: &str) -> bool {
+    values.iter().any(|(key, value)| key == uuid || value_references_uuid(value, uuid))
+}
+
+fn outliner_extra_references_uuid(nodes: &[OutlinerNode], uuid: &str) -> bool {
+    nodes.iter().any(|node| match node {
+        OutlinerNode::Cube(_) => false,
+        OutlinerNode::Bone(group) => {
+            (group.uuid != uuid && map_references_uuid(&group.extra, uuid)) ||
+                outliner_extra_references_uuid(&group.children, uuid)
+        }
+    })
+}
+
+fn has_external_uuid_references(doc: &AuthoringDocument, uuid: &str) -> bool {
+    map_references_uuid(&doc.extensions, uuid) ||
+    map_references_uuid(&doc.meta.extra, uuid) ||
+    map_references_uuid(&doc.resolution.extra, uuid) ||
+    doc.texture_assets.iter().chain(&doc.animation_assets)
+        .any(|value| value_references_uuid(value, uuid)) ||
+    doc.cubes.iter().filter(|cube| cube.uuid != uuid)
+        .any(|cube| map_references_uuid(&cube.extra, uuid) ||
+            cube.faces.values().any(|face| value_references_uuid(face, uuid))) ||
+    doc.bones.iter().filter(|bone| bone.uuid != uuid)
+        .any(|bone| map_references_uuid(&bone.extra, uuid)) ||
+    outliner_extra_references_uuid(&doc.hierarchy, uuid)
+}
+
 fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<String> {
     match op {
         EditOperation::AddBone { bone, parent_uuid } => {
@@ -665,6 +723,34 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(cube.uuid.clone())
         }
 
+        EditOperation::RemoveCube { uuid } => {
+            if !doc.cubes.iter().any(|cube| cube.uuid == *uuid) {
+                return Err(fail("CUBE_NOT_FOUND"));
+            }
+            if has_external_uuid_references(doc, uuid) {
+                return Err(fail("ELEMENT_OPAQUE_REFERENCES"));
+            }
+            if !remove_outliner_entry(&mut doc.hierarchy, uuid) {
+                return Err(fail("OUTLINER_CUBE_REFERENCE_INVALID"));
+            }
+            doc.cubes.retain(|cube| cube.uuid != *uuid);
+            Ok(uuid.clone())
+        }
+        EditOperation::RemoveEmptyBone { uuid } => {
+            let group = find_visibility_group(&doc.hierarchy, uuid)
+                .ok_or_else(|| fail("BONE_NOT_FOUND"))?;
+            if !group.children.is_empty() {
+                return Err(fail("BONE_NOT_EMPTY"));
+            }
+            if has_external_uuid_references(doc, uuid) {
+                return Err(fail("ELEMENT_OPAQUE_REFERENCES"));
+            }
+            if !remove_outliner_entry(&mut doc.hierarchy, uuid) {
+                return Err(fail("OUTLINER_BONE_REFERENCE_INVALID"));
+            }
+            doc.bones.retain(|bone| bone.uuid != *uuid);
+            Ok(uuid.clone())
+        }
         EditOperation::SetNodeVisibility { uuid, visible } => {
             if let Some(cube) = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid) {
                 set_visibility(&mut cube.extra, *visible);

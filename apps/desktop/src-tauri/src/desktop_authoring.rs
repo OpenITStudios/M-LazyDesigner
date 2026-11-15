@@ -418,6 +418,37 @@ pub fn rust_editor_add_cube(
     current(&guard)
 }
 
+
+#[tauri::command]
+pub fn rust_editor_add_bone(
+    state: State<'_, EditorState>,
+    expected_epoch: u64,
+    expected_revision: u64,
+    parent_uuid: Option<String>,
+) -> Result<EditorSnapshot, DesktopError> {
+    let mut guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_mut()
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE", "Refresh the model before adding a Bone."));
+    }
+    let origin = if let Some(ref id) = parent_uuid {
+        active.session.document().bones.iter().find(|bone| bone.uuid == *id)
+            .ok_or_else(|| failure("BONE_PARENT_NOT_FOUND", "Select an existing parent Bone."))?
+            .origin.unwrap_or([0.0, 0.0, 0.0])
+    } else { [0.0, 0.0, 0.0] };
+    active.session.apply(expected_revision, &[EditOperation::AddBone {
+        bone: Bone {
+            uuid: create_uuid(), name: "bone".into(),
+            origin: Some(origin), extra: Map::new(),
+        },
+        parent_uuid,
+    }]).map_err(model_failure)?;
+    active.dirty = true;
+    current(&guard)
+}
+
 #[tauri::command]
 pub fn rust_editor_undo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
@@ -759,6 +790,30 @@ mod tests {
         doc.extensions.insert("multi_file_ruleset".into(), json!("textures"));
         assert!(has_per_texture_uv_rules(&doc));
         assert_eq!(texture_preview_sources(&doc), vec![None]);
+    }
+
+
+    #[test]
+    fn new_bone_parent_origin_and_atomic_core_document_are_consistent() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        // This test reviews the typed operation the Add Bone Tauri command invokes.
+        let parent = doc.bones[0].uuid.clone();
+        let parent_origin = doc.bones[0].origin.unwrap_or([0.0, 0.0, 0.0]);
+        let id = "00000000-0000-4000-8000-000000000099";
+        let mut session = EditorSession::from_document(doc.clone()).unwrap();
+        session.apply(0, &[EditOperation::AddBone {
+            bone: Bone {
+                uuid: id.into(), name: "bone".into(),
+                origin: Some(parent_origin), extra: Map::new(),
+            },
+            parent_uuid: Some(parent),
+        }]).unwrap();
+        assert_eq!(session.document().bones.last().unwrap().origin, Some(parent_origin));
+        assert_eq!(session.document().bones.last().unwrap().name, "bone");
+        session.undo(1).unwrap();
+        assert_eq!(session.document(), &doc);
     }
 
 }
