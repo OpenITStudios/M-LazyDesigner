@@ -45,6 +45,14 @@ export function previewRenderSide(side: 'front' | 'double' | null | undefined): 
   return side === 'front' ? 'front' : 'double';
 }
 
+// The same bounded rotations drive read-only UV rendering and Inspector
+// admission. Unknown imported values remain opaque; never show 0 by default.
+export function supportedFaceUvRotation(face: CubeFace | undefined): 0 | 90 | 180 | 270 | null {
+  if (!face) return null;
+  const value: unknown = face.rotation === undefined ? 0 : face.rotation;
+  return value === 0 || value === 90 || value === 180 || value === 270 ? value : null;
+}
+
 // BoxGeometry order is east/west/up/down/south/north, four vertices per face.
 // Match Blockbench 5.2.1 Cube.updateUV's corner order and 90-degree permutation.
 // Texture animation, non-limited wrap and per-texture resolution are excluded.
@@ -56,8 +64,8 @@ export function faceUvCoordinates(
       !resolution.every(n => Number.isFinite(n) && n > 0)) return null;
   const [u0, v0, u1, v1] = face.uv;
   if (![u0, v0, u1, v1].every(Number.isFinite)) return null;
-  const rotation = face.rotation ?? 0;
-  if (typeof rotation !== 'number' || ![0, 90, 180, 270].includes(rotation)) return null;
+  const rotation = supportedFaceUvRotation(face);
+  if (rotation === null) return null;
   const [w, h] = resolution;
   // The pinned Cube.updateUV applies a 1/64 atlas-unit inset in Box UV
   // to mitigate bleeding; signed rectangles preserve the mirrored direction.

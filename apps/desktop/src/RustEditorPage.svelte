@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
   import { projectedBoneRotationPose } from './rustAnimationPose';
+  import { supportedFaceUvRotation } from './rustTextureProjection';
   import { advanceOncePlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
@@ -139,6 +140,7 @@
     ? projectedBoneRotationPose(selectedAnimation, animationTime) : null;
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
+  $: faceRotation = supportedFaceUvRotation(selectedCube?.faces[selectedFace]);
 
   // One-shot playback is admitted only for the current static linear rotation
   // projection. Stale snapshots, hidden windows and unsupported clips pause.
@@ -843,6 +845,18 @@
     if (value === null) { error = 'Enter a finite decimal UV coordinate.'; return; }
     const uv = [...faceUv] as Vec4; uv[index] = value;
     if (uv[index] !== faceUv[index]) apply([{ op: 'set_face_uv', uuid: selectedCube.uuid, face: selectedFace, uv }]);
+  }
+  function uvRotate(text: string) {
+    if (!selectedCube || selectedCube.boxUv || busy || loading || workspaceMode !== 'edit') return;
+    const rotation = Number(text);
+    if (faceRotation === null || ![0, 90, 180, 270].includes(rotation)) {
+      error = 'Unsupported UV rotation. Use 0°, 90°, 180° or 270°.';
+      return;
+    }
+    if (rotation !== faceRotation) {
+      apply([{ op: 'set_face_uv_rotation', uuid: selectedCube.uuid,
+        face: selectedFace, rotation }]);
+    }
   }
   function hotkeys(event: KeyboardEvent) {
     if (event.key === 'Escape' && floatingGesture) {
@@ -1627,6 +1641,22 @@
                     </label>
                   {/each}
                 </div>
+                <div class="uv-fields">
+                  <label><span>UV Rotation</span>
+                    <select aria-label={'UV rotation for ' + selectedFace}
+                      disabled={busy || loading || workspaceMode !== 'edit' || faceRotation === null}
+                      title="Rotate the selected Cube face UV without changing atlas pixels; manual edits disable Auto UV"
+                      value={faceRotation ?? ''}
+                      onchange={(event) => uvRotate(event.currentTarget.value)}>
+                      {#each [0,90,180,270] as degrees}
+                        <option value={degrees}>{degrees}°</option>
+                      {/each}
+                    </select>
+                  </label>
+                </div>
+                {#if faceRotation === null}
+                  <p class="hint">Unsupported imported face rotation is preserved and cannot be edited.</p>
+                {/if}
               {/if}
             </div>
           </div>

@@ -8,6 +8,7 @@ export type CubeFace = {
   // Format-5.0 Blockbench stores Cube face texture UUID strings; older
   // imported numeric references remain represented without normalization.
   texture?: number | string | null | false;
+  rotation?: number;
   [key: string]: unknown;
 };
 
@@ -100,6 +101,7 @@ export type EditOperation =
   | { op: 'reparent_node'; uuid: string; parent_uuid: string | null }
   | { op: 'remove_empty_bone'; uuid: string }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }
+  | { op: 'set_face_uv_rotation'; uuid: string; face: string; rotation: number }
   | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
   | { op: 'create_paint_texture'; uuid: string; name: string }
   | { op: 'enable_imported_paint_texture'; texture_index: number }

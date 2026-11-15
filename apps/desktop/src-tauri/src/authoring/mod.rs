@@ -142,6 +142,7 @@ pub enum EditOperation {
     SetBoneRotation { uuid: String, rotation: [f64; 3] },
     SetNodeVisibility { uuid: String, visible: bool },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
+    SetFaceUvRotation { uuid: String, face: String, rotation: u16 },
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
     CreatePaintTexture { uuid: String, name: String },
     EnableImportedPaintTexture { texture_index: usize },
@@ -1403,6 +1404,44 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 Some(*offset)
             };
             refresh_box_uv(cube)?;
+            Ok(uuid.clone())
+        }
+        EditOperation::SetFaceUvRotation { uuid, face, rotation } => {
+            if !FACE_NAMES.contains(&face.as_str()) ||
+               !matches!(*rotation, 0 | 90 | 180 | 270) {
+                return Err(fail("FACE_UV_ROTATION_INVALID"));
+            }
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            if cube_box_uv(cube, project_box_uv) {
+                return Err(fail("FACE_UV_BOX_MODE_UNSUPPORTED"));
+            }
+            let auto_uv = cube_auto_uv(cube)?;
+            let data = cube.faces.get_mut(face).and_then(Value::as_object_mut)
+                .ok_or_else(|| fail("FACE_NOT_FOUND"))?;
+            // Blockbench CubeFace.rotation defaults to 0, and its save copy
+            // omits default fields. Unsupported existing data is preserved
+            // through refusal, not overwritten or silently normalized.
+            let previous = match data.get("rotation") {
+                None => 0,
+                Some(value) => match value.as_f64() {
+                    Some(n) if [0.0, 90.0, 180.0, 270.0].contains(&n) => n as u16,
+                    _ => return Err(fail("FACE_UV_ROTATION_UNSUPPORTED")),
+                },
+            };
+            if previous != *rotation {
+                if *rotation == 0 {
+                    data.remove("rotation");
+                } else {
+                    data.insert("rotation".into(), json!(rotation));
+                }
+                // Manual face rotation, like manual face coordinates, leaves
+                // Auto UV mode without recalculating unrelated face mapping.
+                if auto_uv != 0 {
+                    cube.extra.insert("autouv".into(), json!(0));
+                }
+            }
             Ok(uuid.clone())
         }
         EditOperation::SetFaceUv { uuid, face, uv } => {

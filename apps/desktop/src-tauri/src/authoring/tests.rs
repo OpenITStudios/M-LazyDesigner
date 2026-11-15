@@ -1022,6 +1022,93 @@ fn uv_sensitive_invalid_face_rotation_fails_without_partial_batch() {
 }
 
 
+// Source-authored regression for the shared CLI/Tauri EditOperation only.
+#[test]
+fn manual_uv_face_rotation_matches_saved_default_and_preserves_assets_and_history() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["elements"][0]["autouv"] = json!(2);
+    wire["elements"][0]["faces"]["north"]["custom"] = json!({"retain":true});
+    wire["vendor"] = json!({"untouched":"yes"});
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    let original_uv = original.cubes[0].faces["north"]["uv"].clone();
+    let receipt = session.apply(0, &[EditOperation::SetFaceUvRotation {
+        uuid: CUBE.into(), face: "north".into(), rotation: 90,
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(session.document().cubes[0].faces["north"]["rotation"], json!(90));
+    assert_eq!(session.document().cubes[0].faces["north"]["uv"], original_uv);
+    assert_eq!(session.document().cubes[0].faces["north"]["custom"], json!({"retain":true}));
+    assert_eq!(session.document().cubes[0].faces["east"], original.cubes[0].faces["east"]);
+    assert_eq!(session.document().cubes[0].extra["autouv"], json!(0));
+    assert_eq!(session.document().texture_assets, original.texture_assets);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+    let saved = session.export().unwrap();
+    let parsed: Value = serde_json::from_slice(&saved).unwrap();
+    assert_eq!(parsed["vendor"], wire["vendor"]);
+    assert_eq!(parsed["elements"][0]["faces"]["north"]["rotation"], json!(90));
+    let reopened = AuthoringDocument::import_bbmodel(&saved).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+    for (revision, rotation) in [(3, 180), (4, 270), (5, 0)] {
+        session.apply(revision, &[EditOperation::SetFaceUvRotation {
+            uuid: CUBE.into(), face: "north".into(), rotation,
+        }]).unwrap();
+    }
+    assert!(session.document().cubes[0].faces["north"].get("rotation").is_none());
+    assert_eq!(session.document().cubes[0].faces["north"]["uv"], original_uv);
+    assert_eq!(session.document().cubes[0].extra["autouv"], json!(0));
+    assert_eq!(session.apply(6, &[EditOperation::SetFaceUvRotation {
+        uuid: CUBE.into(), face: "north".into(), rotation: 0,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.summary().revision, 6);
+}
+
+#[test]
+fn manual_uv_face_rotation_refuses_invalid_box_and_opaque_values_atomically() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    for rotation in [1, 45, 360, u16::MAX] {
+        assert_eq!(session.apply(0, &[EditOperation::SetFaceUvRotation {
+            uuid: CUBE.into(), face: "north".into(), rotation,
+        }]).unwrap_err(), "FACE_UV_ROTATION_INVALID");
+    }
+    assert_eq!(session.apply(0, &[EditOperation::SetFaceUvRotation {
+        uuid: CUBE.into(), face: "upside".into(), rotation: 90,
+    }]).unwrap_err(), "FACE_UV_ROTATION_INVALID");
+    assert_eq!(session.apply(0, &[EditOperation::SetFaceUvRotation {
+        uuid: "missing".into(), face: "north".into(), rotation: 90,
+    }]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.apply(0, &[
+        EditOperation::SetFaceUvRotation { uuid: CUBE.into(), face: "north".into(), rotation: 90 },
+        EditOperation::SetFaceUvRotation { uuid: CUBE.into(), face: "north".into(), rotation: 45 },
+    ]).unwrap_err(), "FACE_UV_ROTATION_INVALID");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+
+    let mut box_wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    box_wire["meta"]["box_uv"] = json!(true);
+    let mut box_session = EditorSession::open(&serde_json::to_vec(&box_wire).unwrap()).unwrap();
+    let box_original = box_session.document().clone();
+    assert_eq!(box_session.apply(0, &[EditOperation::SetFaceUvRotation {
+        uuid: CUBE.into(), face: "north".into(), rotation: 90,
+    }]).unwrap_err(), "FACE_UV_BOX_MODE_UNSUPPORTED");
+    assert_eq!(box_session.document(), &box_original);
+
+    let mut opaque_wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    opaque_wire["elements"][0]["faces"]["north"]["rotation"] = json!(45);
+    let mut opaque = EditorSession::open(&serde_json::to_vec(&opaque_wire).unwrap()).unwrap();
+    let opaque_original = opaque.document().clone();
+    assert_eq!(opaque.apply(0, &[EditOperation::SetFaceUvRotation {
+        uuid: CUBE.into(), face: "north".into(), rotation: 90,
+    }]).unwrap_err(), "FACE_UV_ROTATION_UNSUPPORTED");
+    assert_eq!(opaque.document(), &opaque_original);
+    assert_eq!(opaque.summary().revision, 0);
+}
+
 #[test]
 fn manual_face_uv_edit_disables_auto_uv_and_preserves_opaque_fields() {
     for mode in [1, 2] {

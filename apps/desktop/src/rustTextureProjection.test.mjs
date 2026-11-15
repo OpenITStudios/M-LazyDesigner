@@ -1,7 +1,7 @@
 // Node 24 source regression; NOT_EXECUTED under the repository hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isCubeFacePresent, textureIndexForFace, faceUvCoordinates, bedrockDefaultTextureIndex, bedrockTextureForFace } from './rustTextureProjection.ts';
+import { isCubeFacePresent, textureIndexForFace, faceUvCoordinates, supportedFaceUvRotation, bedrockDefaultTextureIndex, bedrockTextureForFace } from './rustTextureProjection.ts';
 
 test('only null face references remove geometry; enabled metadata does not', () => {
   assert.equal(isCubeFacePresent(undefined), false);
@@ -48,6 +48,20 @@ test('quarter-turn face rotations follow Blockbench Cube.updateUV corner permuta
   assert.deepEqual(faceUvCoordinates({ ...base, rotation: 0 }, resolution), uv);
   assert.equal(faceUvCoordinates({ ...base, rotation: 45 }, resolution), null);
   assert.equal(faceUvCoordinates({ ...base, rotation: '90' }, resolution), null);
+});
+
+test('UV rotation Inspector and viewport share a strict import-safe orientation gate', () => {
+  const base = { uv: [0, 0, 4, 4] };
+  assert.equal(supportedFaceUvRotation(base), 0);
+  for (const degrees of [0, 90, 180, 270]) {
+    assert.equal(supportedFaceUvRotation({ ...base, rotation: degrees }), degrees);
+    assert.notEqual(faceUvCoordinates({ ...base, rotation: degrees }, [16, 16]), null);
+  }
+  for (const rotation of [null, 45, 360, -90, '90', {}, Number.NaN]) {
+    assert.equal(supportedFaceUvRotation({ ...base, rotation }), null);
+    assert.equal(faceUvCoordinates({ ...base, rotation }, [16, 16]), null);
+  }
+  assert.equal(supportedFaceUvRotation(undefined), null);
 });
 
 test('Box UV applies the pinned 1/64 atlas-unit inset with mirrored orientation', () => {
