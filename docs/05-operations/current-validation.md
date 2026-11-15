@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Code Mode pinned-read source consistency (SOURCE_ONLY)
+
+Rust CLI `inspect` now supports optional `--expected-sha256`, sharing the exact source digest rejection logic used for writes. The JavaScript/TypeScript client threads this precondition through focused Cube/Bone, paginated catalog, texture/animation metadata, and static audit calls created by `openRustCodeModeProject`; legacy unpinned `inspect` remains compatible. This closes the stale-read reasoning gap without a second model cache. Rust/Node regression source AUTHORED_NOT_RUN; no actual file race, code host, native model, or security sandbox executed.
+
 ## 2026-11-15 — Code Mode host write-admission and structural audit (SOURCE_ONLY)
 
 Code Mode writes now default-deny unless `authorizeMutation` supplied by trusted host code returns `true` for an exact operation descriptor (including source SHA and edit-plan digest). The SDK retains shell-free bounded Rust CLI execution, recognizes uncertain child failures without automatic replay, and offers `openRustCodeModeProject` for path/SHA-bound composition. Rust `inspect --audit model` counts structural face-reference types, declared embedded/external texture sources, rig roots and animation tracks without echoing raw image or track bodies. Result `visual_verdict=UNVERIFIED`; this is **not** proof of texturing coverage, animation quality, or Blockbench equivalence. Node and Rust regressions AUTHORED_NOT_RUN; no local Codex host, native code sandbox, Cargo/Node build or model telemetry was executed.

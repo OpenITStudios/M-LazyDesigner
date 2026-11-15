@@ -135,11 +135,11 @@ export interface OutputReceipt {
 }
 export interface RustCodeModeClient {
   newModel(input: { output: string; name: string; modelIdentifier: string }): Promise<OutputReceipt>;
-  inspect(input: { input: string; uuid?: string }): Promise<InspectReceipt>;
-  catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt & { catalog: CatalogPage }>;
-  inspectTexture(input: { input: string; index: number }): Promise<InspectReceipt & { asset: InspectAsset }>;
-  inspectAnimation(input: { input: string; uuid: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
-  audit(input: { input: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
+  inspect(input: { input: string; uuid?: string; expectedSha256?: string }): Promise<InspectReceipt>;
+  catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number; expectedSha256?: string }): Promise<InspectReceipt & { catalog: CatalogPage }>;
+  inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
+  inspectAnimation(input: { input: string; uuid: string; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
+  audit(input: { input: string; expectedSha256?: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
   apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
   exportPng(input: { input: string; output: string; textureUuid: string; expectedSha256: string }): Promise<OutputReceipt>;

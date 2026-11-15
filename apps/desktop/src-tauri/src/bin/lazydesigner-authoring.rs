@@ -42,15 +42,20 @@ fn option_set(options: &BTreeMap<String, String>, allowed: &[&str]) -> Result<()
 
 // Apply and import-png share one source-integrity gate. Both publish only
 // a new sibling; neither overwrites or rewrites the selected source model.
-fn read_verified_source(path: &Path, expected_sha: &str) -> Result<(Vec<u8>, String)> {
-    bbmodel(path)?;
-    let bytes = read_bounded(path, MAX_MODEL_BYTES)?;
-    let actual_sha = sha256(&bytes);
+fn ensure_source_sha(actual_sha: &str, expected_sha: &str) -> Result<()> {
     if expected_sha.len() != 64 ||
        !expected_sha.bytes().all(|byte| byte.is_ascii_hexdigit()) ||
        !actual_sha.eq_ignore_ascii_case(expected_sha) {
         return Err(fail("SOURCE_SHA256_STALE"));
     }
+    Ok(())
+}
+
+fn read_verified_source(path: &Path, expected_sha: &str) -> Result<(Vec<u8>, String)> {
+    bbmodel(path)?;
+    let bytes = read_bounded(path, MAX_MODEL_BYTES)?;
+    let actual_sha = sha256(&bytes);
+    ensure_source_sha(&actual_sha, expected_sha)?;
     Ok((bytes, actual_sha))
 }
 
@@ -266,12 +271,15 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--audit"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid", "--audit", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
             let session = EditorSession::open(&bytes)?;
             let digest = sha256(&bytes);
+            if let Some(expected) = options.get("--expected-sha256") {
+                ensure_source_sha(&digest, expected)?;
+            }
             let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid", "--audit"]
                 .iter().filter(|key| options.contains_key(*key)).count();
             if query_count > 1 || (!options.contains_key("--list") &&
@@ -433,6 +441,17 @@ mod tests {
     use super::*;
 
     // Source-authored only; Cargo/local execution is held.
+    #[test]
+    fn code_mode_read_sha_gate_rejects_stale_and_malformed_expected_hash() {
+        let actual = "a".repeat(64);
+        assert!(ensure_source_sha(&actual, &actual).is_ok());
+        assert!(ensure_source_sha(&actual, &actual.to_uppercase()).is_ok());
+        assert_eq!(ensure_source_sha(&actual, &"b".repeat(64)).unwrap_err(),
+            "SOURCE_SHA256_STALE");
+        assert_eq!(ensure_source_sha(&actual, "bad").unwrap_err(),
+            "SOURCE_SHA256_STALE");
+    }
+
     #[test]
     fn code_mode_static_audit_counts_reference_shapes_without_visual_claims() {
         let doc = AuthoringDocument::import_bbmodel(

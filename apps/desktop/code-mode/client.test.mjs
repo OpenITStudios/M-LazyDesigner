@@ -131,6 +131,25 @@ test('denied trusted-host approval cannot invoke Rust or create a plan', async (
   assert.equal(invoked, 0);
 });
 
+test('client can request a SHA-pinned read without changing legacy unpinned reads', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN, runner: async (args) => {
+      calls.push(args);
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 } };
+    },
+  });
+  await client.inspect({ input: '/abs/model.bbmodel', uuid: 'cube-1', expectedSha256: SHA });
+  assert.deepEqual(calls[0], [
+    'inspect', '--input', '/abs/model.bbmodel', '--uuid', 'cube-1',
+    '--expected-sha256', SHA,
+  ]);
+  await assert.rejects(client.inspect({
+    input: '/abs/model.bbmodel', expectedSha256: 'bad-hash',
+  }));
+  assert.equal(calls.length, 1);
+});
+
 test('Code Mode static model audit is read-only and explicit about unverified visuals', async () => {
   const client = createRustCodeModeClient({
     binary: BIN, runner: async (argv) => {
@@ -169,5 +188,8 @@ test('path/SHA bound project reuses its identity without automatic mutation', as
   });
   assert.equal(receipt.source_sha256, project.expectedSha256);
   assert.equal(calls.filter((argv) => argv[0] === 'apply').length, 1);
-  assert.equal(calls.filter((argv) => argv[0] === 'inspect').length, 2);
+  const readCalls = calls.filter((argv) => argv[0] === 'inspect');
+  assert.equal(readCalls.length, 2);
+  assert.equal(readCalls[0].includes('--expected-sha256'), false);
+  assert.equal(readCalls[1][readCalls[1].indexOf('--expected-sha256') + 1], SHA);
 });

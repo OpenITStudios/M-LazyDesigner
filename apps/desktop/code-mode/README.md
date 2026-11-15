@@ -10,7 +10,7 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
-The SDK is ready for a **host-provided** Code Mode program. `openRustCodeModeProject` binds a path and observed file SHA-256 so later writes cannot silently target a changed source. Normal inspection is read-only:
+The SDK is ready for a **host-provided** Code Mode program. `openRustCodeModeProject` binds a path and observed file SHA-256 so subsequent reads and writes fail closed if the source changes. Normal inspection is read-only:
 
 ```js
 import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs';

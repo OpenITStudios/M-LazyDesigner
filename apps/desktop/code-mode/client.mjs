@@ -155,13 +155,14 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
       });
       return call('new', options);
     },
-    async inspect({ input, uuid } = {}) {
+    async inspect({ input, uuid, expectedSha256 } = {}) {
       return call('inspect', {
         input: absolute(input, 'input'),
         ...(uuid === undefined ? {} : { uuid: nonempty(uuid, 'uuid') }),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async catalog({ input, kind, offset = 0, limit = 32 }) {
+    async catalog({ input, kind, offset = 0, limit = 32, expectedSha256 }) {
       if (!['cubes', 'bones', 'textures', 'animations'].includes(kind)) {
         throw new TypeError('Unknown catalog kind');
       }
@@ -169,21 +170,27 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
         input: absolute(input, 'input'), list: kind,
         offset: wholeNumber(offset, 'offset', 0, 65536),
         limit: wholeNumber(limit, 'limit', 1, 64),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async inspectTexture({ input, index }) {
+    async inspectTexture({ input, index, expectedSha256 }) {
       return call('inspect', {
         input: absolute(input, 'input'),
         'texture-index': wholeNumber(index, 'index', 0, 65536),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async inspectAnimation({ input, uuid }) {
+    async inspectAnimation({ input, uuid, expectedSha256 }) {
       return call('inspect', {
         input: absolute(input, 'input'), 'animation-uuid': nonempty(uuid, 'uuid'),
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async audit({ input }) {
-      return call('inspect', { input: absolute(input, 'input'), audit: 'model' });
+    async audit({ input, expectedSha256 }) {
+      return call('inspect', {
+        input: absolute(input, 'input'), audit: 'model',
+        ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
+      });
     },
     async apply({ input, output, expectedSha256, operations }) {
       const options = {
@@ -248,8 +255,8 @@ export function createRustCodeModeClient({ binary, runner, authorizeMutation } =
 
 /**
  * Bind a single immutable file/SHA snapshot. Each inspection re-reads the
- * actual file; each mutation uses the pinned SHA and therefore fails closed
- * if the source has changed. This is not an in-memory mutable scene cache.
+ * actual file with the pinned SHA and fails closed on stale reads; each
+ * mutation uses the same precondition. No mutable JS scene cache is created.
  */
 export async function openRustCodeModeProject(client, input) {
   if (!client || typeof client.inspect !== 'function' ||
@@ -263,12 +270,12 @@ export async function openRustCodeModeProject(client, input) {
     input: path,
     expectedSha256,
     summary: snapshot.summary,
-    inspect: (uuid) => client.inspect({ input: path, uuid }),
+    inspect: (uuid) => client.inspect({ input: path, uuid, expectedSha256 }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
-      client.catalog({ input: path, kind, offset, limit }),
-    audit: () => client.audit({ input: path }),
-    inspectTexture: (index) => client.inspectTexture({ input: path, index }),
-    inspectAnimation: (uuid) => client.inspectAnimation({ input: path, uuid }),
+      client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
+    audit: () => client.audit({ input: path, expectedSha256 }),
+    inspectTexture: (index) => client.inspectTexture({ input: path, index, expectedSha256 }),
+    inspectAnimation: (uuid) => client.inspectAnimation({ input: path, uuid, expectedSha256 }),
     apply: ({ output, operations }) =>
       client.apply({ input: path, output, expectedSha256, operations }),
     exportPng: ({ output, textureUuid }) =>

@@ -30,7 +30,7 @@ Programmatic use does not imply a new model engine, second document registry, or
 
 ## Source-integrated first slice
 
-- [Code Mode client](../../apps/desktop/code-mode/README.md): `createRustCodeModeClient` exposes `newModel`, `inspect`, `apply`, `importPng`, `exportPng`, `exportGeometry`; `client.d.mts` declares the complete supported Rust operation union. The SDK calls the existing CLI via `execFile` with `shell:false`, a bounded timeout/output, and absolute paths.
+- [Code Mode client](../../apps/desktop/code-mode/README.md): `createRustCodeModeClient` exposes `newModel`, `inspect`, `apply`, `importPng`, `exportPng`, `exportGeometry`; `client.d.mts` declares the complete supported Rust operation union. The SDK calls the existing CLI via `execFile` with `shell:false`, a bounded timeout/output, and absolute paths. Path/SHA-bound project reads now also pass an optional Rust CLI `inspect --expected-sha256` precondition and fail closed on stale assets, rather than silently mixing different file revisions.
 - CLI `inspect --input ... --uuid ...` now returns compact Cube/Bone transforms, parent UUID, per-face UV and texture references, and file SHA. It **does not** send embedded image bytes, opaque extensions, whole model JSON or a duplicated asset store. Existing `inspect --input` remains available.
 - Mutations use one Rust `EditPlan` (1–128 operations, ≤64 KiB) with source SHA precondition and exclusive new sibling publish. On failure/timeouts, no automatic replay; inspect resulting state first.
 - Node/Rust regression cases were authored for focused reads, argument/plan bounding, no mutation from inspection, no false success and SHA errors. **NOT_EXECUTED** under the current hold.
