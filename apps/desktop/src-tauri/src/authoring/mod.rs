@@ -1324,6 +1324,11 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(uuid.clone())
         }
         EditOperation::AssignCubeTexture { cube_uuid, texture_uuid } => {
+            // Bedrock multi-file rulesets select textures by element scope.
+            // Do not claim global face-ID assignment changes the material.
+            if has_per_texture_uv_rules(doc) {
+                return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
+            }
             if !doc.texture_assets.iter().any(|asset|
                 asset.get("uuid").and_then(Value::as_str) == Some(texture_uuid.as_str())) {
                 return Err(fail("PAINT_TEXTURE_NOT_FOUND"));

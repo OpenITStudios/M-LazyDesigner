@@ -53,6 +53,8 @@ pub struct CubeView {
     auto_uv: u8,
     color: usize,
     faces: Map<String, Value>,
+    // Read-only resolved texture scope for the supported attachable ruleset.
+    preview_texture_index: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -101,6 +103,8 @@ pub struct EditorSnapshot {
     texture_uuids: Vec<Option<String>>,
     texture_preview_sources: Vec<Option<String>>,
     texture_preview_sides: Vec<Option<&'static str>>,
+    texture_preview_resolutions: Vec<Option<[u32; 2]>>,
+    scoped_texture_preview: bool,
     paint_editable_textures: Vec<bool>,
     paint_adoptable_textures: Vec<bool>,
     paint_exportable_textures: Vec<bool>,
@@ -201,27 +205,88 @@ fn embedded_png_preview_source(texture: &Value) -> Option<String> {
     embedded_png_preview_candidate(texture).map(|(source, _, _)| source)
 }
 
-fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
-    // Bound *decoded* aggregate exposure as well as the encoded data URI.
-    // Compression alone cannot authorize dozens of large GPU textures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreviewUvMode {
+    ProjectAtlas,
+    ScopedAttachable,
+    Unsupported,
+}
+
+/// Pinned Blockbench 5.2.1 enables per-texture UV when an active multi-file
+/// ruleset is selected. Only bedrock_attachable has a reviewed scope resolver.
+/// Unknown rulesets and conflicting optional flags remain read-only fallback.
+fn preview_uv_mode(doc: &AuthoringDocument) -> PreviewUvMode {
+    let attachable = doc.extensions.get("multi_file_ruleset")
+        .and_then(Value::as_str) == Some("bedrock_attachable");
+    if attachable {
+        let flags_are_consistent = [
+            doc.meta.extra.get("per_texture_uv_size"),
+            doc.extensions.get("per_texture_uv_size"),
+        ].into_iter().all(|flag| flag.is_none_or(|value| value == &Value::Bool(true)));
+        if flags_are_consistent {
+            return PreviewUvMode::ScopedAttachable;
+        }
+    }
+    if has_per_texture_uv_rules(doc) { PreviewUvMode::Unsupported }
+    else { PreviewUvMode::ProjectAtlas }
+}
+
+fn preview_uv_axis(texture: &Value, name: &str, project_default: u32) -> Option<u32> {
+    let value = match texture.get(name) {
+        None => project_default,
+        Some(value) => u32::try_from(value.as_u64()?).ok()?,
+    };
+    (1..=4096).contains(&value).then_some(value)
+}
+
+/// Each admitted source carries its actual UV grid separately from PNG pixel
+/// dimensions. The latter only controls decoding and GPU memory budgets.
+fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(String, [u32; 2])>> {
     const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
-    // Share the Rust authoring refusal gate with this read-only UV preview.
-    // Opaque or malformed per-texture flags must not imply a safe atlas grid.
-    let per_texture = has_per_texture_uv_rules(doc);
+    let mode = preview_uv_mode(doc);
     let mut remaining_source_bytes = 4 * 1024 * 1024;
     let mut remaining_pixels = MAX_PROJECTED_PIXELS;
-    let expected_width = doc.resolution.width;
-    let expected_height = doc.resolution.height;
     let mut admitted = 0usize;
     doc.texture_assets.iter().map(|texture| {
-        if per_texture || admitted >= MAX_PAINT_TEXTURES { return None; }
+        if mode == PreviewUvMode::Unsupported || admitted >= MAX_PAINT_TEXTURES {
+            return None;
+        }
         let (source, width, height) = embedded_png_preview_candidate(texture)?;
-        // This renderer uses project-level UV coordinates. If the PNG has
-        // another size or declares another UV grid, showing it would imply
-        // false UV correspondence. Preserve the asset; omit only its preview.
-        if width != expected_width || height != expected_height ||
-            texture.get("uv_width").is_some_and(|value| value.as_u64() != Some(u64::from(expected_width))) ||
-            texture.get("uv_height").is_some_and(|value| value.as_u64() != Some(u64::from(expected_height))) {
+        let uv_grid = match mode {
+            PreviewUvMode::ProjectAtlas => {
+                // Preserve the previous one-atlas preview admission rule.
+                if width != doc.resolution.width || height != doc.resolution.height ||
+                   texture.get("uv_width").is_some_and(|value|
+                       value.as_u64() != Some(u64::from(doc.resolution.width))) ||
+                   texture.get("uv_height").is_some_and(|value|
+                       value.as_u64() != Some(u64::from(doc.resolution.height))) {
+                    return None;
+                }
+                [doc.resolution.width, doc.resolution.height]
+            },
+            PreviewUvMode::ScopedAttachable => {
+                // No external precedence, implicit layers or animation may
+                // be interpreted as a single embedded scoped PNG.
+                if texture.get("path").is_some() ||
+                   texture.get("relative_path").is_some() ||
+                   texture.get("layers_enabled").is_some_and(|v| v != &Value::Bool(false)) ||
+                   texture.get("layers").is_some_and(|v|
+                       v.as_array().is_none_or(|layers| !layers.is_empty())) {
+                    return None;
+                }
+                [
+                    preview_uv_axis(texture, "uv_width", doc.resolution.width)?,
+                    preview_uv_axis(texture, "uv_height", doc.resolution.height)?,
+                ]
+            },
+            PreviewUvMode::Unsupported => return None,
+        };
+        // Pinned Texture.frameCount derives flipbooks from the image/UV
+        // aspect-ratio mismatch. This renderer has no frame extraction.
+        // Equivalent scaled atlases remain safe (e.g. 16x8 pixels, 64x32 UV).
+        if mode == PreviewUvMode::ScopedAttachable &&
+           u64::from(width) * u64::from(uv_grid[1]) !=
+               u64::from(height) * u64::from(uv_grid[0]) {
             return None;
         }
         let pixels = u64::from(width) * u64::from(height);
@@ -229,8 +294,31 @@ fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
         remaining_source_bytes -= source.len();
         remaining_pixels -= pixels;
         admitted += 1;
-        Some(source)
+        Some((source, uv_grid))
     }).collect()
+}
+
+fn scoped_cube_texture_index(
+    doc: &AuthoringDocument, cube: &Cube,
+    assets: &[Option<(String, [u32; 2])>], mode: PreviewUvMode,
+) -> Option<usize> {
+    if mode != PreviewUvMode::ScopedAttachable { return None; }
+    // Pinned bedrock_attachable get_face_texture only overrides the selected
+    // texture when element.scope is a nonzero value with a matching texture.
+    let scope = cube.extra.get("scope")?.as_u64().filter(|v| *v > 0)?;
+    let mut matching = doc.texture_assets.iter().enumerate().filter(|(_, texture)|
+        texture.get("scope").and_then(Value::as_u64) == Some(scope));
+    let (index, _) = matching.next()?;
+    // An ambiguous duplicate scope is not a faithful native preview.
+    if matching.next().is_some() { return None; }
+    assets.get(index)?.as_ref()?;
+    Some(index)
+}
+
+#[cfg(test)]
+fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
+    texture_preview_assets(doc).into_iter()
+        .map(|entry| entry.map(|(source, _)| source)).collect()
 }
 
 // Parse only numeric or simple finite Molang constants. Imported expression
@@ -328,6 +416,8 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
     store.active.as_ref().map(|model| {
         let doc = model.session.document();
         let default_box_uv = doc.meta.box_uv.unwrap_or(false);
+        let preview_assets = texture_preview_assets(doc);
+        let uv_mode = preview_uv_mode(doc);
         EditorSnapshot {
             epoch: store.epoch,
             revision: model.session.summary().revision,
@@ -362,6 +452,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 auto_uv: cube.extra.get("autouv").and_then(Value::as_f64).unwrap_or(0.0) as u8,
                 color: cube.extra.get("color").and_then(Value::as_u64).unwrap_or(0) as usize,
                 faces: cube.faces.clone(),
+                preview_texture_index: scoped_cube_texture_index(doc, cube, &preview_assets, uv_mode),
             }).collect(),
             bones: doc.bones.iter().map(|bone| BoneView {
                 uuid: bone.uuid.clone(),
@@ -377,8 +468,12 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             texture_uuids: doc.texture_assets.iter().map(|texture|
                 texture.get("uuid").and_then(Value::as_str).map(str::to_owned)
             ).collect(),
-            texture_preview_sources: texture_preview_sources(doc),
+            texture_preview_sources: preview_assets.iter().map(|asset|
+                asset.as_ref().map(|(source, _)| source.clone())).collect(),
             texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
+            texture_preview_resolutions: preview_assets.iter().map(|asset|
+                asset.as_ref().map(|(_, resolution)| *resolution)).collect(),
+            scoped_texture_preview: uv_mode == PreviewUvMode::ScopedAttachable,
             paint_editable_textures: doc.texture_assets.iter()
                 .map(paint_texture_editable).collect(),
             paint_adoptable_textures: doc.texture_assets.iter().map(|texture|
@@ -892,6 +987,113 @@ mod tests {
         assert_eq!(texture_preview_sources(&doc), vec![None]);
         doc.texture_assets[0]["uv_height"] = json!(16);
         assert_eq!(texture_preview_sources(&doc), vec![Some(matching)]);
+    }
+
+    // Source-authored regression only; native WebView2/Blockbench is held.
+    #[test]
+    fn scoped_attachable_preview_maps_each_cube_to_its_texture_uv_grid() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        doc.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+        doc.cubes[0].extra.insert("scope".into(), json!(2));
+        let first = png_candidate(8, 16);
+        let second = png_candidate(16, 8);
+        doc.texture_assets = vec![
+            json!({
+                "uuid":"00000000-0000-4000-8000-000000000901",
+                "name":"body.png", "scope":1, "source":first,
+                "uv_width":32, "uv_height":64
+            }),
+            json!({
+                "uuid":"00000000-0000-4000-8000-000000000902",
+                "name":"armor.png", "scope":2, "source":second,
+                "uv_width":64, "uv_height":32
+            })
+        ];
+        let original = doc.clone();
+        let store = EditorStore {
+            epoch: 17,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(doc).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        let preview = project(&store).unwrap();
+        assert!(preview.scoped_texture_preview);
+        assert_eq!(preview.texture_preview_sources, vec![Some(first), Some(second)]);
+        assert_eq!(preview.texture_preview_resolutions,
+            vec![Some([32, 64]), Some([64, 32])]);
+        assert_eq!(preview.cubes[0].preview_texture_index, Some(1));
+        assert_eq!(preview.texture_resolution, [128, 128]);
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
+        // Only the renderer gains a limited, read-only scoped preview.
+        assert!(!can_add_paint_texture(&original));
+        assert!(!paint_texture_exportable(&original, 1));
+    }
+
+    #[test]
+    fn scoped_preview_refuses_duplicate_scopes_opaque_grids_and_other_rulesets() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        doc.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+        doc.cubes[0].extra.insert("scope".into(), json!(2));
+        let source = png_candidate(16, 8);
+        doc.texture_assets = vec![
+            json!({"uuid":"00000000-0000-4000-8000-000000000903",
+                "scope":1, "source":source, "uv_width":64, "uv_height":32}),
+            json!({"uuid":"00000000-0000-4000-8000-000000000904",
+                "scope":2, "source":source, "uv_width":64, "uv_height":32})
+        ];
+        let safe = texture_preview_assets(&doc);
+        assert_eq!(safe[1].as_ref().map(|(_, uv)| *uv), Some([64, 32]));
+        assert_eq!(scoped_cube_texture_index(&doc, &doc.cubes[0], &safe,
+            preview_uv_mode(&doc)), Some(1));
+        // Duplicate texture scopes are ambiguous even when their PNGs match.
+        doc.texture_assets[0]["scope"] = json!(2);
+        let candidates = texture_preview_assets(&doc);
+        assert!(scoped_cube_texture_index(&doc, &doc.cubes[0], &candidates,
+            preview_uv_mode(&doc)).is_none());
+
+        doc.texture_assets[0]["scope"] = json!(1);
+        doc.texture_assets[1]["uv_width"] = json!("64");
+        let invalid = texture_preview_assets(&doc);
+        assert!(invalid[1].is_none());
+        assert!(scoped_cube_texture_index(&doc, &doc.cubes[0], &invalid,
+            preview_uv_mode(&doc)).is_none());
+
+        doc.texture_assets[1]["uv_width"] = json!(64);
+        doc.texture_assets[1]["uv_height"] = json!(64);
+        // Different PNG and UV-grid aspect ratios imply an unsupported
+        // flipbook projection, even if both dimensions are valid integers.
+        assert!(texture_preview_assets(&doc)[1].is_none());
+
+        doc.texture_assets[1].as_object_mut().unwrap().remove("uv_width");
+        doc.texture_assets[1].as_object_mut().unwrap().remove("uv_height");
+        doc.texture_assets[1]["source"] = json!(png_candidate(16, 16));
+        let project_fallback = texture_preview_assets(&doc);
+        assert_eq!(project_fallback[1].as_ref().map(|(_, uv)| *uv), Some([128, 128]));
+
+        doc.texture_assets[1]["relative_path"] = json!("textures/armor.png");
+        assert!(texture_preview_assets(&doc)[1].is_none());
+        doc.texture_assets[1].as_object_mut().unwrap().remove("relative_path");
+        doc.texture_assets[1]["layers"] = json!([{"name":"unflattened"}]);
+        assert!(texture_preview_assets(&doc)[1].is_none());
+        doc.texture_assets[1].as_object_mut().unwrap().remove("layers");
+        doc.cubes[0].extra.remove("scope");
+        assert!(scoped_cube_texture_index(&doc, &doc.cubes[0],
+            &texture_preview_assets(&doc), preview_uv_mode(&doc)).is_none());
+        doc.cubes[0].extra.insert("scope".into(), json!(2));
+
+        doc.meta.extra.insert("per_texture_uv_size".into(), json!(false));
+        assert_eq!(preview_uv_mode(&doc), PreviewUvMode::Unsupported);
+        assert!(texture_preview_assets(&doc).iter().all(Option::is_none));
+        doc.meta.extra.remove("per_texture_uv_size");
+
+        doc.extensions.insert("multi_file_ruleset".into(), json!("unreviewed_ruleset"));
+        assert_eq!(preview_uv_mode(&doc), PreviewUvMode::Unsupported);
+        assert!(texture_preview_assets(&doc).iter().all(Option::is_none));
     }
 
     #[test]

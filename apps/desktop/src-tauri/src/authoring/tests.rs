@@ -1109,6 +1109,29 @@ fn manual_uv_face_rotation_refuses_invalid_box_and_opaque_values_atomically() {
     assert_eq!(opaque.summary().revision, 0);
 }
 
+// Source-authored refusal: scoped texture assignment is not a global
+// Cube-face UUID rewrite in Blockbench's multi-file attachable mode.
+#[test]
+fn scoped_project_refuses_global_cube_texture_assignment_without_changes() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["multi_file_ruleset"] = json!("bedrock_attachable");
+    wire["elements"][0]["scope"] = json!(2);
+    let texture_id = "00000000-0000-4000-8000-000000000901";
+    wire["textures"] = json!([{
+        "uuid":texture_id, "scope":2, "name":"scope.png"
+    }]);
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    assert!(has_per_texture_uv_rules(session.document()));
+    assert_eq!(session.apply(0, &[EditOperation::AssignCubeTexture {
+        cube_uuid: CUBE.into(), texture_uuid: texture_id.into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        original);
+}
+
 #[test]
 fn manual_face_uv_edit_disables_auto_uv_and_preserves_opaque_fields() {
     for mode in [1, 2] {

@@ -732,6 +732,7 @@
 
   async function assignSelectedTexture() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
+        snapshot.scopedTexturePreview ||
         !selectedId || !snapshot.texturePreviewSources[paintTextureIndex]) return;
     const textureUuid = snapshot.textureUuids[paintTextureIndex];
     if (!textureUuid) return;
@@ -1257,7 +1258,8 @@
   <section class="paint-workspace" aria-label="Paint workspace">
     <div class="paint-workspace-heading">
       <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
-      <span>RGBA8 · 256 × 256 maximum · 3D preview follows Paint texture selection</span>
+      <span>RGBA8 · 256 × 256 maximum · {snapshot?.scopedTexturePreview
+        ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
       <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
@@ -1319,11 +1321,15 @@
             </button>
             <button type="button" onclick={() => void assignSelectedTexture()}
               disabled={busy || loading || !!paintStroke || !selectedId ||
+                snapshot.scopedTexturePreview ||
                 !snapshot.textureUuids[paintTextureIndex] ||
                 !snapshot.texturePreviewSources[paintTextureIndex]}
               title="Assign this texture to all non-null faces of the selected Cube; keep face UV and invisible faces unchanged">
               Apply Texture to Cube
             </button>
+            {#if snapshot.scopedTexturePreview}
+              <p class="hint">Scoped attachable materials are preview-only; global Cube texture assignment is unsupported.</p>
+            {/if}
             {#if !selectedId}
               <p class="hint">Select a Cube in the Outliner to apply the chosen texture.</p>
             {/if}
@@ -1951,6 +1957,8 @@
           hierarchy={snapshot.hierarchy}
           texturePreviewSources={snapshot.texturePreviewSources}
           texturePreviewSides={snapshot.texturePreviewSides}
+          texturePreviewResolutions={snapshot.texturePreviewResolutions}
+          scopedTexturePreview={snapshot.scopedTexturePreview}
           textureResolution={snapshot.textureResolution}
           previewTextureIndex={paintTextureIndex}
           previewBoneRotations={previewBoneRotations}

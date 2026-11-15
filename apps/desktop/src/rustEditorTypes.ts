@@ -29,6 +29,8 @@ export type CubeView = {
   autoUv: number;
   color: number;
   faces: Record<string, CubeFace>;
+  // Derived from the pinned attachable multi-file scope mapping.
+  previewTextureIndex: number | null;
 };
 
 export type BoneView = {
@@ -76,6 +78,8 @@ export type EditorSnapshot = {
   textureUuids: (string | null)[];
   texturePreviewSources: (string | null)[];
   texturePreviewSides: ('front' | 'double' | null)[];
+  texturePreviewResolutions: ([number, number] | null)[];
+  scopedTexturePreview: boolean;
   paintEditableTextures: boolean[];
   paintAdoptableTextures: boolean[];
   paintExportableTextures: boolean[];

@@ -14,6 +14,8 @@
   export let hierarchy: HierarchyNode[] = [];
   export let texturePreviewSources: (string | null)[] = [];
   export let texturePreviewSides: ('front' | 'double' | null)[] = [];
+  export let texturePreviewResolutions: ([number, number] | null)[] = [];
+  export let scopedTexturePreview = false;
   export let textureResolution: [number, number] = [16, 16];
   // View-only selection: null means first available Bedrock texture.
   export let previewTextureIndex: number | null = null;
@@ -160,6 +162,8 @@
     currentHierarchy: HierarchyNode[], currentSelection: string | null,
     _sources: (string | null)[] = texturePreviewSources,
     _sides: ('front' | 'double' | null)[] = texturePreviewSides,
+    _resolutions: ([number, number] | null)[] = texturePreviewResolutions,
+    _scopedTexturePreview: boolean = scopedTexturePreview,
     _resolution: [number, number] = textureResolution,
     _previewTextureIndex: number | null = previewTextureIndex,
   ) {
@@ -198,8 +202,17 @@
           geometry.clearGroups();
           for (let faceIndex = 0; faceIndex < FACE_ORDER.length; faceIndex++) {
             const face = cube.faces[FACE_ORDER[faceIndex]];
-            const textureIndex = bedrockTextureForFace(face, previewTextureIndex, texturePreviewSources.length);
-            const rectangle = faceUvCoordinates(face, textureResolution, cube.boxUv);
+            const textureIndex = bedrockTextureForFace(
+              face, previewTextureIndex, texturePreviewSources.length,
+              scopedTexturePreview, cube.previewTextureIndex,
+            );
+            // In the pinned attachable ruleset, Cube scope determines the
+            // material and that texture's UV grid, not the project atlas.
+            const uvResolution = scopedTexturePreview
+              ? (textureIndex === null ? null : texturePreviewResolutions[textureIndex] ?? null)
+              : textureResolution;
+            const rectangle = uvResolution
+              ? faceUvCoordinates(face, uvResolution, cube.boxUv) : null;
             const texture = textureIndex !== null && rectangle
               ? embeddedTexture(textureIndex) : null;
             if (isCubeFacePresent(face)) {
@@ -388,8 +401,8 @@
   }
 
   $: if (ready) rebuild(cubes, bones, hierarchy, selectedId,
-    texturePreviewSources, texturePreviewSides, textureResolution,
-    previewTextureIndex);
+    texturePreviewSources, texturePreviewSides, texturePreviewResolutions,
+    scopedTexturePreview, textureResolution, previewTextureIndex);
   $: if (ready) applyPreviewPose(previewBoneRotations);
   $: if (ready) syncGizmo(canTransform, transformMode);
 

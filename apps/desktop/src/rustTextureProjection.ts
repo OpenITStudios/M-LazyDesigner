@@ -34,8 +34,15 @@ export function bedrockDefaultTextureIndex(
 
 export function bedrockTextureForFace(
   face: CubeFace | undefined, selected: number | null, count: number,
+  scoped = false, scopedIndex: number | null = null,
 ): number | null {
   if (!isCubeFacePresent(face)) return null;
+  if (scoped) {
+    // The native attachable ruleset can select a texture by Cube scope.
+    // Never fall back to global selection on a missing/ambiguous scope.
+    return scopedIndex !== null && Number.isInteger(scopedIndex) &&
+      scopedIndex >= 0 && scopedIndex < count ? scopedIndex : null;
+  }
   return bedrockDefaultTextureIndex(selected, count);
 }
 
@@ -55,7 +62,8 @@ export function supportedFaceUvRotation(face: CubeFace | undefined): 0 | 90 | 18
 
 // BoxGeometry order is east/west/up/down/south/north, four vertices per face.
 // Match Blockbench 5.2.1 Cube.updateUV's corner order and 90-degree permutation.
-// Texture animation, non-limited wrap and per-texture resolution are excluded.
+// Texture animation and non-limited wrap are excluded. A vetted per-texture
+// resolution may be projected for a matched bedrock_attachable scope.
 export function faceUvCoordinates(
   face: CubeFace | undefined, resolution: readonly number[], boxUv = false,
 ): number[] | null {

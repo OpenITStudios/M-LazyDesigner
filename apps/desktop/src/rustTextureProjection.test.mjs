@@ -91,6 +91,19 @@ test('Bedrock single-texture default follows a bounded view selection', () => {
   assert.equal(bedrockDefaultTextureIndex(1.5, 2), 0);
 });
 
+test('scoped attachable preview resolves one texture and its own UV grid', () => {
+  const face = { uv: [8, 4, 16, 12], texture: false };
+  assert.equal(bedrockTextureForFace(face, 0, 2, true, 1), 1);
+  assert.equal(bedrockTextureForFace(face, 1, 2, true, 0), 0);
+  assert.equal(bedrockTextureForFace(face, 0, 2, true, null), null);
+  assert.equal(bedrockTextureForFace(face, 0, 2, true, 3), null);
+  assert.equal(bedrockTextureForFace({ ...face, texture: null }, 0, 2, true, 1), null);
+  assert.equal(bedrockTextureForFace(face, 0, 2), 0);
+  assert.deepEqual(faceUvCoordinates(face, [32, 64]),
+    [0.25, 0.9375, 0.5, 0.9375, 0.25, 0.8125, 0.5, 0.8125]);
+  assert.notDeepEqual(faceUvCoordinates(face, [32, 64]), faceUvCoordinates(face, [16, 16]));
+});
+
 test('Bedrock preview selects one material without rewriting saved face references', () => {
   const indexedFace = { uv: [0, 0, 4, 4], texture: 0 };
   const omittedFace = { uv: [0, 0, 4, 4] };
