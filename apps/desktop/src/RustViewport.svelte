@@ -8,6 +8,7 @@
   import { isActiveTextureRequest } from './rustTextureCache';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
+  import type { BoneTransformPose } from './rustAnimationPose';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
@@ -19,8 +20,9 @@
   export let textureResolution: [number, number] = [16, 16];
   // View-only selection: null means first available Bedrock texture.
   export let previewTextureIndex: number | null = null;
-  // Derived Animate-only pose offsets. Never updates the Rust document.
-  export let previewBoneRotations: Record<string, Vec3> | null = null;
+  // Derived Animate-only linear numeric Bone transforms.
+  // Never updates Rust-authored geometry or animation data.
+  export let previewBoneTransforms: Record<string, BoneTransformPose> | null = null;
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
@@ -47,7 +49,9 @@
   const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
   let pivots = new Map<string, THREE.Group>();
   // Existing Bone scene nodes and bind rotations, not a mutable asset model.
-  let bonePivots = new Map<string, { pivot: THREE.Group; bindRotation: Vec3 }>();
+  let bonePivots = new Map<string, {
+    pivot: THREE.Group; bindRotation: Vec3; bindPosition: Vec3;
+  }>();
   let drag: {
     uuid: string; pivot: THREE.Group; mode: GizmoMode;
     start: THREE.Vector3; rotationStart: THREE.Quaternion;
@@ -150,14 +154,28 @@
 
   // During time scrubbing/playback update only Bone transforms; rebuilding
   // every BoxGeometry and GPU material at 60 FPS would be unnecessarily costly.
-  function applyPreviewPose(pose: Record<string, Vec3> | null) {
-    for (const [uuid, { pivot, bindRotation }] of bonePivots) {
-      const offset = pose?.[uuid];
+  function applyPreviewPose(pose: Record<string, BoneTransformPose> | null) {
+    for (const [uuid, { pivot, bindRotation, bindPosition }] of bonePivots) {
+      const transform = pose?.[uuid];
+      // Single-clip default blend: Position adds to bind position;
+      // Rotation offsets bind angles; Scale multiplies bind scale=1.
+      // Blockbench v5.2.1 BoneAnimator.displayPosition/displayScale.
+      pivot.position.set(
+        bindPosition[0] + (transform?.position[0] ?? 0),
+        bindPosition[1] + (transform?.position[1] ?? 0),
+        bindPosition[2] + (transform?.position[2] ?? 0),
+      );
       pivot.rotation.set(
-        deg(bindRotation[0] + (offset?.[0] ?? 0)),
-        deg(bindRotation[1] + (offset?.[1] ?? 0)),
-        deg(bindRotation[2] + (offset?.[2] ?? 0)),
+        deg(bindRotation[0] + (transform?.rotation[0] ?? 0)),
+        deg(bindRotation[1] + (transform?.rotation[1] ?? 0)),
+        deg(bindRotation[2] + (transform?.rotation[2] ?? 0)),
         'ZYX',
+      );
+      const scale = transform?.scale ?? [1, 1, 1];
+      // Pinned Blockbench substitutes a tiny nonzero value for a zero
+      // preview scale. Negative scale is deliberately unsupported.
+      pivot.scale.set(
+        scale[0] || 0.00001, scale[1] || 0.00001, scale[2] || 0.00001,
       );
     }
     scheduleRender();
@@ -271,6 +289,8 @@
           // applied in-place on top of it by applyPreviewPose().
           bonePivots.set(bone.uuid, {
             pivot, bindRotation: [...bone.rotation] as Vec3,
+            bindPosition: [pivot.position.x, pivot.position.y,
+              pivot.position.z],
           });
           parent.add(pivot);
           visit(node.children, pivot, bone.origin);
@@ -279,7 +299,7 @@
     };
 
     visit(currentHierarchy, modelRoot, [0, 0, 0]);
-    applyPreviewPose(previewBoneRotations);
+    applyPreviewPose(previewBoneTransforms);
     syncGizmo(canTransform, transformMode);
     scheduleRender();
   }
@@ -413,7 +433,7 @@
   $: if (ready) rebuild(cubes, bones, hierarchy, selectedId,
     texturePreviewSources, texturePreviewSides, texturePreviewResolutions,
     scopedTexturePreview, textureResolution, previewTextureIndex);
-  $: if (ready) applyPreviewPose(previewBoneRotations);
+  $: if (ready) applyPreviewPose(previewBoneTransforms);
   $: if (ready) syncGizmo(canTransform, transformMode);
 
   onMount(() => {

@@ -1,5 +1,25 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust editor numeric Bone transform channels (SOURCE_ONLY)
+
+Canonical Rust EditOperation adds bounded linear numeric Position and Scale
+keyframe Add/Update/Remove beside the existing Rotation channel, with
+atomic Undo/Redo and shared AuthoringDocument. Admission requires one
+known once-only clip, Bone identity, recognized frame fields, unique
+UUIDs, distinct channel timestamps, finite values, Scale 0–100, and a
+nontruncating clip length. Imported Molang/Bezier/effects and negative
+scale are refused, never deleted or silently converted.
+
+Tauri adds transformKeyframes while retaining rotationKeyframes for older
+consumers. Svelte can select Rotation/Position/Scale, edit channel values
+and select Bone-channel timeline markers. The Three.js preview uses derived
+linear interpolation with Bone position as bind+offset, Bone rotation as
+bind+offset and Scale as a multiplier, never a Rust document mutation.
+
+Proof: SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED;
+runtime and native Blockbench format/animation/visual parity UNVERIFIED.
+Pinned upstream comparison:
+https://github.com/JannisX11/blockbench/blob/e2ede0809ee6bc91f374ac7e00d34cffbdf86a14/js/animations/timeline_animators.js
 ## 2026-11-15 — Rust Animate clip duration and timeline markers (SOURCE_ONLY)
 
 The canonical Rust AuthoringDocument adds

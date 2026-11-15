@@ -1,7 +1,7 @@
 // Source-authored Node regression only; NOT_EXECUTED under repo test hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectedBoneRotationPose, projectedRotationTimelineRows } from './rustAnimationPose.ts';
+import { projectedBoneRotationPose, projectedBoneTransformPose, projectedRotationTimelineRows, projectedTransformTimelineRows } from './rustAnimationPose.ts';
 
 const rotation = (boneUuid, time, values) => ({
   uuid: `kf-${boneUuid}-${time}`, boneUuid, time, rotation: values,
@@ -87,4 +87,72 @@ test('timeline does not expose malformed or unsupported imported keyframes', () 
     animation([rotation('bone-a', 0, [100001, 0, 0])]), bones,
   ), []);
   assert.deepEqual(projectedRotationTimelineRows(animation([]), bones), []);
+});
+
+
+test('Rotation Position and Scale keyframes linearly interpolate independently', () => {
+  const keys = [
+    { uuid:'rot0', boneUuid:'bone-a', channel:'rotation', time:0, value:[0,0,0] },
+    { uuid:'rot1', boneUuid:'bone-a', channel:'rotation', time:2, value:[0,90,0] },
+    { uuid:'pos0', boneUuid:'bone-a', channel:'position', time:0, value:[0,0,0] },
+    { uuid:'pos1', boneUuid:'bone-a', channel:'position', time:2, value:[4,2,0] },
+    { uuid:'scale0', boneUuid:'bone-a', channel:'scale', time:0, value:[1,1,1] },
+    { uuid:'scale1', boneUuid:'bone-a', channel:'scale', time:2, value:[2,0,1] },
+    { uuid:'child', boneUuid:'bone-b', channel:'position', time:0, value:[1,0,0] },
+  ];
+  const clip = { ...animation([]), transformKeyframes:keys };
+  const before = JSON.stringify(clip);
+  const pose = projectedBoneTransformPose(clip, 1);
+  assert.deepEqual(pose['bone-a'], {
+    rotation: [0,45,0], position: [2,1,0], scale: [1.5,0.5,1],
+  });
+  assert.deepEqual(pose['bone-b'], {
+    rotation: [0,0,0], position: [1,0,0], scale: [1,1,1],
+  });
+  assert.deepEqual(projectedBoneRotationPose(clip,1)['bone-a'], [0,45,0]);
+  assert.equal(Object.getPrototypeOf(pose), null);
+  assert.equal(JSON.stringify(clip),before);
+});
+
+test('per-Bone channel timeline groups and orders by Rust Bone list and time', () => {
+  const clip = {
+    ...animation([]),
+    transformKeyframes: [
+      {uuid:'s1',boneUuid:'bone-b',channel:'scale',time:2,value:[2,2,2]},
+      {uuid:'p1',boneUuid:'bone-a',channel:'position',time:1,value:[1,0,0]},
+      {uuid:'r0',boneUuid:'bone-b',channel:'rotation',time:0,value:[0,0,0]},
+      {uuid:'p0',boneUuid:'bone-a',channel:'position',time:0,value:[0,0,0]},
+    ],
+  };
+  const rows = projectedTransformTimelineRows(clip, [
+    {uuid:'bone-a',name:'Arm'}, {uuid:'bone-b',name:'Head'},
+  ]);
+  assert.deepEqual(rows.map((row)=>[row.boneName,row.channel]),[
+    ['Arm','position'],['Head','rotation'],['Head','scale'],
+  ]);
+  assert.deepEqual(rows[0].frames.map((frame)=>frame.time),[0,1]);
+  assert.deepEqual(projectedRotationTimelineRows(clip,[
+    {uuid:'bone-a',name:'Arm'}, {uuid:'bone-b',name:'Head'},
+  ]).map((row)=>row.boneUuid),['bone-b']);
+});
+
+test('unsupported transform axes and channel/time collisions refuse preview', () => {
+  const valid = {uuid:'k1',boneUuid:'bone',channel:'scale',time:1,value:[1,1,1]};
+  const mk = (frames) => ({...animation([]),transformKeyframes:frames});
+  for(const bad of [
+    {...valid,value:[-1,1,1]},
+    {...valid,value:[101,1,1]},
+    {...valid,value:[Infinity,1,1]},
+    {...valid,channel:'visibility'},
+    {...valid,time:3},
+  ]) {
+    assert.equal(projectedBoneTransformPose(mk([bad]),1),null);
+  }
+  const duplicate={...valid,uuid:'k2',value:[2,2,2]};
+  assert.equal(projectedBoneTransformPose(mk([valid,duplicate]),1),null);
+  const sameUuidDifferentChannel={...valid,channel:'position',value:[0,0,0]};
+  assert.equal(projectedBoneTransformPose(mk([valid,sameUuidDifferentChannel]),1),null);
+  assert.deepEqual(projectedTransformTimelineRows(mk([valid]),[
+    {uuid:'unmatched',name:'Unknown'},
+  ]),[]);
 });

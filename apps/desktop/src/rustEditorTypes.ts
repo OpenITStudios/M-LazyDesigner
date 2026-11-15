@@ -53,12 +53,22 @@ export type RotationKeyframeView = {
   time: number;
   rotation: Vec3;
 };
+/** Linear numeric source channels only, never opaque imported Molang. */
+export type TransformChannel = 'rotation' | 'position' | 'scale';
+export type TransformKeyframeView = {
+  uuid: string;
+  boneUuid: string;
+  channel: TransformChannel;
+  time: number;
+  value: Vec3;
+};
 
 export type AnimationView = {
   uuid: string;
   name: string;
   length: number;
   rotationKeyframes: RotationKeyframeView[];
+  transformKeyframes: TransformKeyframeView[];
   // True only when Tauri recognizes every animation/track field for static pose.
   previewSupported: boolean;
 };
@@ -98,6 +108,9 @@ export type EditOperation =
   | { op: 'scale_cube'; uuid: string; factors: Vec3 }
   | { op: 'set_bone_rotation'; uuid: string; rotation: Vec3 }
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
+  | { op: 'add_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
+  | { op: 'update_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
+  | { op: 'remove_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel }
   | { op: 'update_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: 'remove_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }
   | { op: 'set_node_visibility'; uuid: string; visible: boolean }

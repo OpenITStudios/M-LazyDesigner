@@ -724,7 +724,8 @@
 .rust-editor .animate-create label, .rust-editor .animate-keyframe-editor label {
   display: flex; flex-direction: column; gap: 5px;
 }
-.rust-editor .animate-create input, .rust-editor .animate-keyframe-editor input {
+.rust-editor .animate-create input, .rust-editor .animate-keyframe-editor input,
+.rust-editor .animate-keyframe-editor select {
   max-width: 170px; min-width: 88px; padding: 6px;
   border: 1px solid #526071; border-radius: 3px; background: #272d35; color: #e0e4eb;
 }

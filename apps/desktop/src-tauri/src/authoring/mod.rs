@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod bbmodel;
 mod geometry;
@@ -138,6 +138,18 @@ pub enum EditOperation {
     },
     RemoveBoneRotationKeyframe {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+    },
+    AddBoneTransformKeyframe {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        channel: String, time: f64, value: [f64; 3],
+    },
+    UpdateBoneTransformKeyframe {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        channel: String, time: f64, value: [f64; 3],
+    },
+    RemoveBoneTransformKeyframe {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        channel: String,
     },
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
@@ -791,16 +803,42 @@ fn has_external_uuid_references(doc: &AuthoringDocument, uuid: &str) -> bool {
 
 // The editable subset intentionally excludes unknown interpolation and
 // point extensions. Imported advanced frames remain unmodified.
-fn editable_rotation_frame(frame: &Value) -> bool {
+/// Strict bounded linear transform subset from Blockbench v5.2.1
+/// BoneAnimator: rotation offsets in degrees, position offsets in model
+/// units, and multiplicative scales (identity [1,1,1]). This slice
+/// deliberately refuses negative/excessive scales rather than pretending
+/// to reproduce all mesh winding/material behavior in the 3D preview.
+fn supported_transform_channel(channel: &str) -> bool {
+    matches!(channel, "rotation" | "position" | "scale")
+}
+fn valid_animation_transform_value(channel: &str, value: [f64; 3]) -> bool {
+    if !supported_transform_channel(channel) || !valid_vec3(value) {
+        return false;
+    }
+    channel != "scale" ||
+        value.iter().all(|axis| (0.0..=100.0).contains(axis))
+}
+fn transform_axis(value: Option<&Value>) -> Option<f64> {
+    let numeric = match value? {
+        Value::String(text) => text.parse::<f64>().ok(),
+        Value::Number(number) => number.as_f64(),
+        _ => None,
+    };
+    numeric.filter(|axis| axis.is_finite())
+}
+fn editable_transform_frame(frame: &Value) -> bool {
     let Some(fields) = frame.as_object() else { return false; };
     if !fields.keys().all(|key| matches!(key.as_str(),
         "uuid" | "channel" | "time" | "interpolation" | "data_points")) ||
-       frame.get("channel").and_then(Value::as_str) != Some("rotation") ||
        frame.get("interpolation").and_then(Value::as_str) != Some("linear") ||
        !frame.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
-       !frame.get("time").and_then(Value::as_f64).is_some_and(|v| v.is_finite() && v >= 0.0) {
+       !frame.get("time").and_then(Value::as_f64)
+           .is_some_and(|v| v.is_finite() && v >= 0.0) {
         return false;
     }
+    let Some(channel) = frame.get("channel").and_then(Value::as_str) else {
+        return false;
+    };
     let Some(points) = frame.get("data_points").and_then(Value::as_array) else {
         return false;
     };
@@ -809,14 +847,70 @@ fn editable_rotation_frame(frame: &Value) -> bool {
     if !values.keys().all(|key| matches!(key.as_str(), "x" | "y" | "z")) {
         return false;
     }
-    ["x", "y", "z"].iter().all(|axis| {
-        let number = match values.get(*axis) {
-            Some(Value::String(text)) => text.parse::<f64>().ok(),
-            Some(Value::Number(number)) => number.as_f64(),
-            _ => None,
+    let [Some(x), Some(y), Some(z)] = [
+        transform_axis(values.get("x")), transform_axis(values.get("y")),
+        transform_axis(values.get("z")),
+    ] else { return false; };
+    valid_animation_transform_value(channel, [x, y, z])
+}
+fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
+    if !animation.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
+       !animation.as_object().is_some_and(|obj| obj.keys().all(|key|
+        matches!(key.as_str(), "uuid" | "name" | "loop" | "length" | "animators"))) ||
+       animation.get("loop").and_then(Value::as_str).unwrap_or("once") != "once" {
+        return false;
+    }
+    let Some(length) = animation.get("length").and_then(Value::as_f64)
+        .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v)) else {
+        return false;
+    };
+    let Some(tracks) = animation.get("animators").and_then(Value::as_object) else {
+        return false;
+    };
+    let mut all_ids = HashSet::new();
+    let mut total = 0usize;
+    for (bone_uuid, track) in tracks {
+        let Some(bone) = bones.iter().find(|bone| bone.uuid == *bone_uuid) else {
+            return false;
         };
-        number.is_some_and(|v| v.is_finite() && v.abs() <= LIMIT)
-    })
+        if !editable_rotation_track(track) || track.get("name")
+            .is_some_and(|name| name.as_str() != Some(bone.name.as_str())) {
+            return false;
+        }
+        let Some(frames) = track.get("keyframes").and_then(Value::as_array) else {
+            return false;
+        };
+        total = total.saturating_add(frames.len());
+        if total > 2048 { return false; }
+        let mut times: HashMap<&str, Vec<f64>> = HashMap::new();
+        for frame in frames {
+            if !editable_transform_frame(frame) { return false; }
+            let Some(time) = frame.get("time").and_then(Value::as_f64) else {
+                return false;
+            };
+            if time > length { return false; }
+            let Some(uuid) = frame.get("uuid").and_then(Value::as_str) else {
+                return false;
+            };
+            if !all_ids.insert(uuid) { return false; }
+            let Some(channel) = frame.get("channel").and_then(Value::as_str) else {
+                return false;
+            };
+            times.entry(channel).or_default().push(time);
+        }
+        for values in times.values_mut() {
+            values.sort_by(f64::total_cmp);
+            if values.windows(2).any(|pair| pair[1] - pair[0] <= 1e-6) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn editable_rotation_frame(frame: &Value) -> bool {
+    frame.get("channel").and_then(Value::as_str) == Some("rotation") &&
+        editable_transform_frame(frame)
 }
 
 fn editable_rotation_track(track: &Value) -> bool {
@@ -1551,57 +1645,19 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 // Never choose the first target silently.
                 return Err(fail("ANIMATION_ID_AMBIGUOUS"));
             }
-            // Editing the clip length is only lossless for the same
-            // once-only linear Bone rotation subset as the native preview.
-            // Never silently trim imported effects, Molang, position/scale
-            // channels or opaque keyframe data when shortening a clip.
-            if !animation.as_object().is_some_and(|object| object.keys()
-                .all(|key| matches!(key.as_str(),
-                    "uuid" | "name" | "loop" | "length" | "animators"))) ||
-               animation.get("loop").and_then(Value::as_str).unwrap_or("once") != "once" ||
-               !animation.get("length").and_then(Value::as_f64)
-                   .is_some_and(|value| value.is_finite() && (0.0..=3600.0).contains(&value)) {
+            // All admitted numeric linear transform channels are kept
+            // byte-for-byte. No keyframe may be discarded by shortening.
+            if !editable_transform_clip(animation, &doc.bones) {
                 return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
             }
             let animators = animation.get("animators").and_then(Value::as_object)
                 .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
-            let mut all_ids = HashSet::new();
-            let mut total_frames = 0usize;
-            for (bone_uuid, track) in animators {
-                let Some(bone) = doc.bones.iter().find(|bone| bone.uuid == *bone_uuid) else {
-                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
-                };
-                if !editable_rotation_track(track) ||
-                   track.get("name").is_some_and(|value|
-                       value.as_str() != Some(bone.name.as_str())) {
-                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
-                }
+            for track in animators.values() {
                 let frames = track.get("keyframes").and_then(Value::as_array)
                     .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
-                total_frames = total_frames.saturating_add(frames.len());
-                if total_frames > 2048 {
-                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
-                }
-                let mut times = Vec::with_capacity(frames.len());
-                for frame in frames {
-                    if !editable_rotation_frame(frame) {
-                        return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
-                    }
-                    let time = frame.get("time").and_then(Value::as_f64)
-                        .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
-                    if time > *length {
-                        return Err(fail("ANIMATION_LENGTH_BEFORE_KEYFRAME"));
-                    }
-                    let id = frame.get("uuid").and_then(Value::as_str)
-                        .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
-                    if !all_ids.insert(id) {
-                        return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
-                    }
-                    times.push(time);
-                }
-                times.sort_by(f64::total_cmp);
-                if times.windows(2).any(|pair| pair[1] - pair[0] <= 1e-6) {
-                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                if frames.iter().any(|frame| frame.get("time").and_then(Value::as_f64)
+                    .is_some_and(|time| time > *length)) {
+                    return Err(fail("ANIMATION_LENGTH_BEFORE_KEYFRAME"));
                 }
             }
             doc.animation_assets[index]["length"] = json!(length);
@@ -1717,6 +1773,146 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             }
             frames.remove(index);
             // The session owns a draft; a refusal here rolls back the removal.
+            if has_external_uuid_references(doc, keyframe_uuid) ||
+               doc.cubes.iter().any(|cube| cube.uuid == *keyframe_uuid) ||
+               doc.bones.iter().any(|bone| bone.uuid == *keyframe_uuid) {
+                return Err(fail("ANIMATION_KEYFRAME_REFERENCED"));
+            }
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid, bone_uuid, keyframe_uuid, channel, time, value,
+        } => {
+            if !valid_uuid(keyframe_uuid) || !valid_animation_transform_value(channel, *value) ||
+               !time.is_finite() || *time < 0.0 ||
+               doc.animation_assets.iter().any(|asset|
+                   value_references_uuid(asset, keyframe_uuid)) ||
+               doc.cubes.iter().any(|cube| cube.uuid == *keyframe_uuid) ||
+               doc.bones.iter().any(|bone| bone.uuid == *keyframe_uuid) {
+                return Err(fail("ANIMATION_TRANSFORM_INVALID"));
+            }
+            let bone_name = doc.bones.iter().find(|bone| bone.uuid == *bone_uuid)
+                .map(|bone| bone.name.clone())
+                .ok_or_else(|| fail("ANIMATION_BONE_NOT_FOUND"))?;
+            let matching: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, asset)| asset.get("uuid").and_then(Value::as_str) ==
+                    Some(animation_uuid.as_str())).map(|(i, _)| i).collect();
+            if matching.len() != 1 {
+                return Err(fail(if matching.is_empty() {
+                    "ANIMATION_NOT_FOUND"
+                } else { "ANIMATION_ID_AMBIGUOUS" }));
+            }
+            let index = matching[0];
+            let animation = &doc.animation_assets[index];
+            if !editable_transform_clip(animation, &doc.bones) {
+                return Err(fail("ANIMATION_TRANSFORM_UNSUPPORTED"));
+            }
+            let length = animation.get("length").and_then(Value::as_f64)
+                .ok_or_else(|| fail("ANIMATION_LENGTH_UNSUPPORTED"))?;
+            if *time > length { return Err(fail("ANIMATION_KEYFRAME_TIME_INVALID")); }
+            let animator = doc.animation_assets[index]["animators"].as_object_mut()
+                .ok_or_else(|| fail("ANIMATION_TRACK_UNSUPPORTED"))?;
+            let track = animator.entry(bone_uuid.clone()).or_insert_with(|| json!({
+                "name":bone_name,"type":"bone","keyframes":[]
+            }));
+            let frames = track.get_mut("keyframes").and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_UNSUPPORTED"))?;
+            if frames.len() >= 2048 || frames.iter().any(|frame|
+                frame.get("channel").and_then(Value::as_str) == Some(channel.as_str()) &&
+                frame.get("time").and_then(Value::as_f64)
+                    .is_some_and(|existing| (existing - time).abs() <= 1e-6)) {
+                return Err(fail("ANIMATION_KEYFRAME_CONFLICT"));
+            }
+            frames.push(json!({
+                "uuid":keyframe_uuid, "channel":channel, "time":time,
+                "interpolation":"linear",
+                "data_points":[{
+                    "x":value[0].to_string(), "y":value[1].to_string(),
+                    "z":value[2].to_string()
+                }]
+            }));
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::UpdateBoneTransformKeyframe {
+            animation_uuid, bone_uuid, keyframe_uuid, channel, time, value,
+        } => {
+            if !valid_animation_transform_value(channel, *value) ||
+               !time.is_finite() || *time < 0.0 {
+                return Err(fail("ANIMATION_TRANSFORM_INVALID"));
+            }
+            let matching: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, asset)| asset.get("uuid").and_then(Value::as_str) ==
+                    Some(animation_uuid.as_str())).map(|(i, _)| i).collect();
+            if matching.len() != 1 {
+                return Err(fail(if matching.is_empty() {
+                    "ANIMATION_NOT_FOUND"
+                } else { "ANIMATION_ID_AMBIGUOUS" }));
+            }
+            let index = matching[0];
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_TRANSFORM_UNSUPPORTED"));
+            }
+            let length = doc.animation_assets[index].get("length").and_then(Value::as_f64)
+                .ok_or_else(|| fail("ANIMATION_LENGTH_UNSUPPORTED"))?;
+            if *time > length { return Err(fail("ANIMATION_KEYFRAME_TIME_INVALID")); }
+            let frames = doc.animation_assets[index].get_mut("animators")
+                .and_then(Value::as_object_mut)
+                .and_then(|tracks| tracks.get_mut(bone_uuid))
+                .and_then(|track| track.get_mut("keyframes"))
+                .and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+            let target = frames.iter().position(|frame|
+                frame.get("uuid").and_then(Value::as_str) == Some(keyframe_uuid))
+                .ok_or_else(|| fail("ANIMATION_KEYFRAME_NOT_FOUND"))?;
+            if frames[target].get("channel").and_then(Value::as_str) !=
+               Some(channel.as_str()) {
+                return Err(fail("ANIMATION_KEYFRAME_CHANNEL_MISMATCH"));
+            }
+            if frames.iter().enumerate().any(|(i, frame)| i != target &&
+                frame.get("channel").and_then(Value::as_str) == Some(channel.as_str()) &&
+                frame.get("time").and_then(Value::as_f64)
+                    .is_some_and(|existing| (existing - time).abs() <= 1e-6)) {
+                return Err(fail("ANIMATION_KEYFRAME_CONFLICT"));
+            }
+            frames[target]["time"] = json!(time);
+            frames[target]["data_points"][0] = json!({
+                "x":value[0].to_string(), "y":value[1].to_string(),
+                "z":value[2].to_string()
+            });
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::RemoveBoneTransformKeyframe {
+            animation_uuid, bone_uuid, keyframe_uuid, channel,
+        } => {
+            if !supported_transform_channel(channel) {
+                return Err(fail("ANIMATION_TRANSFORM_INVALID"));
+            }
+            let matching: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, asset)| asset.get("uuid").and_then(Value::as_str) ==
+                    Some(animation_uuid.as_str())).map(|(i, _)| i).collect();
+            if matching.len() != 1 {
+                return Err(fail(if matching.is_empty() {
+                    "ANIMATION_NOT_FOUND"
+                } else { "ANIMATION_ID_AMBIGUOUS" }));
+            }
+            let index = matching[0];
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_TRANSFORM_UNSUPPORTED"));
+            }
+            let frames = doc.animation_assets[index].get_mut("animators")
+                .and_then(Value::as_object_mut)
+                .and_then(|tracks| tracks.get_mut(bone_uuid))
+                .and_then(|track| track.get_mut("keyframes"))
+                .and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+            let target = frames.iter().position(|frame|
+                frame.get("uuid").and_then(Value::as_str) == Some(keyframe_uuid))
+                .ok_or_else(|| fail("ANIMATION_KEYFRAME_NOT_FOUND"))?;
+            if frames[target].get("channel").and_then(Value::as_str) !=
+               Some(channel.as_str()) {
+                return Err(fail("ANIMATION_KEYFRAME_CHANNEL_MISMATCH"));
+            }
+            frames.remove(target);
             if has_external_uuid_references(doc, keyframe_uuid) ||
                doc.cubes.iter().any(|cube| cube.uuid == *keyframe_uuid) ||
                doc.bones.iter().any(|bone| bone.uuid == *keyframe_uuid) {

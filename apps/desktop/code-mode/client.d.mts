@@ -29,6 +29,9 @@ export type EditOperation =
   | { op: "remove_empty_bone"; uuid: string }
   | { op: "create_animation"; uuid: string; name: string; length: number }
   | { op: "set_animation_length"; animation_uuid: string; length: number }
+  | { op: "add_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
+  | { op: "update_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
+  | { op: "remove_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale" }
   | { op: "add_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: "update_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: "remove_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }

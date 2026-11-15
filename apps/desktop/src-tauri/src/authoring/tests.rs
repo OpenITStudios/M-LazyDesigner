@@ -14,6 +14,131 @@ fn sample_cube(uuid: &str) -> Cube {
     serde_json::from_value(value["elements"][0].clone()).unwrap()
 }
 
+// SOURCE-AUTHORED only: Cargo and Blockbench tests remain on hold.
+#[test]
+fn numeric_linear_bone_position_scale_and_rotation_share_one_undoable_transaction() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009601";
+    const POS: &str = "00000000-0000-4000-8000-000000009602";
+    const SCALE: &str = "00000000-0000-4000-8000-000000009603";
+    const ROT: &str = "00000000-0000-4000-8000-000000009604";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid: ANIM.into(), name: "walk".into(), length: 2.0,
+    }]).unwrap();
+    let original = session.document().clone();
+    session.apply(1, &[
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: POS.into(), channel: "position".into(),
+            time: 1.0, value: [1.5, 0.0, 0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: SCALE.into(), channel: "scale".into(),
+            time: 1.0, value: [1.0, 1.4, 1.0],
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: ROT.into(), time: 1.0,
+            rotation: [0.0, 45.0, 0.0],
+        },
+    ]).unwrap();
+    let saved = session.document().clone();
+    let frames = &saved.animation_assets[0]["animators"][BONE]["keyframes"];
+    assert_eq!(frames.as_array().unwrap().len(), 3);
+    assert_eq!(frames[0]["channel"], json!("position"));
+    assert_eq!(frames[1]["channel"], json!("scale"));
+    assert_eq!(frames[2]["channel"], json!("rotation"));
+    assert_eq!(frames[0]["data_points"][0]["x"], json!("1.5"));
+    assert_eq!(frames[1]["data_points"][0]["y"], json!("1.4"));
+    assert_eq!(saved.cubes, original.cubes);
+    assert_eq!(saved.hierarchy, original.hierarchy);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    session.apply(4, &[
+        EditOperation::UpdateBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: SCALE.into(), channel: "scale".into(),
+            time: 1.5, value: [1.0, 2.0, 1.0],
+        },
+        EditOperation::SetAnimationLength {
+            animation_uuid: ANIM.into(), length: 3.0,
+        },
+    ]).unwrap();
+    assert_eq!(session.document().animation_assets[0]["length"], json!(3.0));
+    assert_eq!(session.document().animation_assets[0]["animators"][BONE]
+        ["keyframes"][1]["time"], json!(1.5));
+    let before_remove = session.document().clone();
+    session.apply(5, &[EditOperation::RemoveBoneTransformKeyframe {
+        animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: POS.into(), channel: "position".into(),
+    }]).unwrap();
+    assert_eq!(session.document().animation_assets[0]["animators"][BONE]
+        ["keyframes"].as_array().unwrap().len(), 2);
+    session.undo(6).unwrap();
+    assert_eq!(session.document(), &before_remove);
+}
+
+#[test]
+fn transform_keyframes_reject_unknown_molang_negative_scale_and_cross_channel_edits() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009611";
+    const POS: &str = "00000000-0000-4000-8000-000000009612";
+    const SCALE: &str = "00000000-0000-4000-8000-000000009613";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid: ANIM.into(), name: "walk".into(), length: 2.0,
+    }]).unwrap();
+    let original = session.document().clone();
+    for (channel, value) in [
+        ("mystery", [1.0, 0.0, 0.0]),
+        ("scale", [-1.0, 1.0, 1.0]),
+        ("scale", [101.0, 1.0, 1.0]),
+    ] {
+        assert_eq!(session.apply(1, &[EditOperation::AddBoneTransformKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: POS.into(), channel: channel.into(),
+            time: 1.0, value,
+        }]).unwrap_err(), "ANIMATION_TRANSFORM_INVALID");
+    }
+    assert_eq!(session.document(), &original);
+    session.apply(1, &[EditOperation::AddBoneTransformKeyframe {
+        animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: POS.into(), channel: "position".into(),
+        time: 1.0, value: [1.0, 0.0, 0.0],
+    }]).unwrap();
+    let saved = session.document().clone();
+    assert_eq!(session.apply(2, &[EditOperation::AddBoneTransformKeyframe {
+        animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: SCALE.into(), channel: "position".into(),
+        time: 1.0, value: [2.0, 0.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_CONFLICT");
+    assert_eq!(session.apply(2, &[EditOperation::UpdateBoneTransformKeyframe {
+        animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: POS.into(), channel: "scale".into(),
+        time: 1.0, value: [1.0, 1.0, 1.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_CHANNEL_MISMATCH");
+    assert_eq!(session.apply(2, &[EditOperation::RemoveBoneTransformKeyframe {
+        animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: POS.into(), channel: "rotation".into(),
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_CHANNEL_MISMATCH");
+    assert_eq!(session.document(), &saved);
+    let mut opaque = saved.clone();
+    opaque.animation_assets[0]["animators"][BONE]["keyframes"][0]
+        ["data_points"][0]["x"] = json!("query.head_rotation");
+    let mut opaque = EditorSession::from_document(opaque.clone()).unwrap();
+    assert_eq!(opaque.apply(0, &[EditOperation::AddBoneTransformKeyframe {
+        animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: SCALE.into(), channel: "scale".into(),
+        time: 0.5, value: [1.0, 1.0, 1.0],
+    }]).unwrap_err(), "ANIMATION_TRANSFORM_UNSUPPORTED");
+    assert_eq!(opaque.summary().revision, 0);
+    assert!(!opaque.can_undo());
+}
+
 // SOURCE-AUTHORED: existing Rust tests remain NOT_EXECUTED.
 #[test]
 fn animation_length_edit_is_atomic_reversible_and_keeps_keyframe_payload() {

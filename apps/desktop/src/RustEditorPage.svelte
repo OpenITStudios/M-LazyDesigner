@@ -4,14 +4,14 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
-  import { projectedBoneRotationPose, projectedRotationTimelineRows } from './rustAnimationPose';
+  import { projectedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
   import { supportedFaceUvRotation } from './rustTextureProjection';
   import { advanceOncePlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
-  import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, RotationKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
+  import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
     measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
@@ -40,7 +40,8 @@
   let newAnimationName = 'animation.new';
   let newAnimationLength = 1;
   let animationTime = 0;
-  let animationRotation: Vec3 = [0, 0, 0];
+  let animationChannel: TransformChannel = 'rotation';
+  let animationValue: Vec3 = [0, 0, 0];
   // View-only requestAnimationFrame playback; it never writes to the Rust model.
   let playbackActive = false;
   let playbackFrame: number | null = null;
@@ -133,20 +134,20 @@
   $: selectedBone = snapshot?.bones.find((bone) => bone.uuid === selectedBoneId) ?? null;
   $: selectedAnimation = snapshot?.animations.find((animation) => animation.uuid === selectedAnimationId)
     ?? snapshot?.animations[0] ?? null;
-  $: selectedKeyframe = selectedAnimation?.rotationKeyframes.find(
+  $: selectedKeyframe = selectedAnimation?.transformKeyframes.find(
     (frame) => frame.uuid === selectedKeyframeUuid,
   ) ?? null;
-  $: timelineRows = projectedRotationTimelineRows(
+  $: timelineRows = projectedTransformTimelineRows(
     selectedAnimation, snapshot?.bones ?? [],
   );
-  // UI-only time selection drives a read-only Bone pose; no Rust mutation.
-  $: previewBoneRotations = workspaceMode === 'animate'
-    ? projectedBoneRotationPose(selectedAnimation, animationTime) : null;
+  // UI-only derived transform pose, never a Rust model mutation.
+  $: previewBoneTransforms = workspaceMode === 'animate'
+    ? projectedBoneTransformPose(selectedAnimation, animationTime) : null;
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
   $: faceRotation = supportedFaceUvRotation(selectedCube?.faces[selectedFace]);
 
-  // One-shot playback is admitted only for the current static linear rotation
+  // One-shot playback is admitted only for the strict numeric linear transform
   // projection. Stale snapshots, hidden windows and unsupported clips pause.
   function pauseAnimationPlayback() {
     if (playbackFrame !== null) window.cancelAnimationFrame(playbackFrame);
@@ -168,7 +169,7 @@
         snapshot.epoch !== playbackSource.epoch ||
         snapshot.revision !== playbackSource.revision ||
         !current?.previewSupported || current.uuid !== playbackSource.animationUuid ||
-        current.rotationKeyframes.length === 0) {
+        current.transformKeyframes.length === 0) {
       pauseAnimationPlayback();
       return;
     }
@@ -190,7 +191,7 @@
     if (!snapshot || busy || loading || newDialog || confirmDiscard ||
         workspaceMode !== 'animate' || document.hidden ||
         !selectedAnimation?.previewSupported ||
-        selectedAnimation.rotationKeyframes.length === 0 ||
+        selectedAnimation.transformKeyframes.length === 0 ||
         selectedAnimation.length <= 0) return;
     playbackSource = {
       epoch: snapshot.epoch, revision: snapshot.revision,
@@ -252,6 +253,8 @@
       selectedAnimationId = null;
       selectedKeyframeUuid = null;
       animationTime = 0;
+      animationChannel = 'rotation';
+      animationValue = [0, 0, 0];
     }
     snapshot = next;
     // Only an empty source model can change atlas dimensions; discard stale
@@ -594,13 +597,21 @@
     }
   }
 
-  function selectRotationKeyframe(frame: RotationKeyframeView) {
+  function selectTransformKeyframe(frame: TransformKeyframeView) {
     pauseAnimationPlayback();
     selectedKeyframeUuid = frame.uuid;
     selectedId = null;
     selectedBoneId = frame.boneUuid;
+    animationChannel = frame.channel;
     animationTime = frame.time;
-    animationRotation = [...frame.rotation] as Vec3;
+    animationValue = [...frame.value] as Vec3;
+  }
+  function selectAnimationChannel(channel: TransformChannel) {
+    if (channel === animationChannel) return;
+    pauseAnimationPlayback();
+    animationChannel = channel;
+    selectedKeyframeUuid = null;
+    animationValue = channel === 'scale' ? [1, 1, 1] : [0, 0, 0];
   }
 
   function updateAnimationTime(text: string) {
@@ -615,13 +626,16 @@
   function updateAnimationAxis(axis: number, text: string) {
     pauseAnimationPlayback();
     const value = parseFiniteEditorNumber(text);
-    if (value === null || Math.abs(value) > 100_000) {
-      error = 'Rotation must be a finite angle within the supported limit.';
+    if (value === null || (animationChannel === 'scale'
+      ? value < 0 || value > 100 : Math.abs(value) > 100_000)) {
+      error = animationChannel === 'scale'
+        ? 'Scale must be between 0 and 100 for the supported preview.'
+        : 'Transform value must be finite and inside the supported limit.';
       return;
     }
-    const next = [...animationRotation] as Vec3;
+    const next = [...animationValue] as Vec3;
     next[axis] = value;
-    animationRotation = next;
+    animationValue = next;
   }
   async function createAnimation() {
     if (!snapshot || busy || loading || !newAnimationName.trim()) return;
@@ -634,58 +648,66 @@
       selectedAnimationId = next.animations.find((animation) => !old.has(animation.uuid))?.uuid ?? null;
       selectedKeyframeUuid = null;
       animationTime = 0;
+      animationChannel = 'rotation';
+      animationValue = [0, 0, 0];
     }
   }
-  async function addRotationKeyframe() {
-    if (!snapshot || !selectedAnimation?.previewSupported || !selectedBoneId || busy || loading) return;
+  async function addTransformKeyframe() {
+    if (!snapshot || !selectedAnimation?.previewSupported || !selectedBoneId ||
+        busy || loading || workspaceMode !== 'animate') return;
     if (animationTime < 0 || animationTime > selectedAnimation.length) {
       error = 'Keyframe time must be inside the selected animation.';
       return;
     }
-    // Capture the prior frame IDs before command() refreshes the Rust snapshot.
     const animationUuid = selectedAnimation.uuid;
-    const previously = new Set(selectedAnimation.rotationKeyframes.map((frame) => frame.uuid));
-    const next = await command('rust_editor_add_rotation_keyframe', {
-      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
-      animationUuid, boneUuid: selectedBoneId,
-      time: animationTime, rotation: animationRotation,
-    });
-    if (next) {
-      const animation = next.animations.find((item) => item.uuid === animationUuid);
-      selectedKeyframeUuid = animation?.rotationKeyframes.find(
-        (frame) => !previously.has(frame.uuid),
-      )?.uuid ?? null;
-      notice = 'Rotation keyframe saved in the Rust document.';
-    }
-  }
-  async function updateRotationKeyframe() {
-    if (!snapshot || !selectedAnimation?.previewSupported || !selectedKeyframe || busy || loading) return;
+    const keyframeUuid = crypto.randomUUID();
     const next = await command('rust_editor_apply', {
       expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
       operations: [{
-        op: 'update_bone_rotation_keyframe',
-        animation_uuid: selectedAnimation.uuid,
-        bone_uuid: selectedKeyframe.boneUuid,
-        keyframe_uuid: selectedKeyframe.uuid,
-        time: animationTime, rotation: animationRotation,
+        op: 'add_bone_transform_keyframe', animation_uuid: animationUuid,
+        bone_uuid: selectedBoneId, keyframe_uuid: keyframeUuid,
+        channel: animationChannel, time: animationTime, value: animationValue,
       }],
     });
-    if (next) notice = 'Rotation keyframe updated in the Rust document.';
+    if (next) {
+      selectedKeyframeUuid = next.animations.find((item) =>
+        item.uuid === animationUuid)?.transformKeyframes.find((frame) =>
+        frame.uuid === keyframeUuid)?.uuid ?? null;
+      notice = animationChannel + ' keyframe saved in Rust.';
+    }
   }
-  async function removeRotationKeyframe() {
-    if (!snapshot || !selectedAnimation?.previewSupported || !selectedKeyframe || busy || loading) return;
+  async function updateTransformKeyframe() {
+    if (!snapshot || !selectedAnimation?.previewSupported || !selectedKeyframe ||
+        busy || loading || workspaceMode !== 'animate') return;
     const next = await command('rust_editor_apply', {
       expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
       operations: [{
-        op: 'remove_bone_rotation_keyframe',
+        op: 'update_bone_transform_keyframe',
         animation_uuid: selectedAnimation.uuid,
         bone_uuid: selectedKeyframe.boneUuid,
         keyframe_uuid: selectedKeyframe.uuid,
+        channel: selectedKeyframe.channel,
+        time: animationTime, value: animationValue,
+      }],
+    });
+    if (next) notice = 'Transform keyframe updated in Rust.';
+  }
+  async function removeTransformKeyframe() {
+    if (!snapshot || !selectedAnimation?.previewSupported || !selectedKeyframe ||
+        busy || loading || workspaceMode !== 'animate') return;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{
+        op: 'remove_bone_transform_keyframe',
+        animation_uuid: selectedAnimation.uuid,
+        bone_uuid: selectedKeyframe.boneUuid,
+        keyframe_uuid: selectedKeyframe.uuid,
+        channel: selectedKeyframe.channel,
       }],
     });
     if (next) {
       selectedKeyframeUuid = null;
-      notice = 'Rotation keyframe removed; Undo restores it.';
+      notice = 'Transform keyframe removed; Undo restores it.';
     }
   }
   function history(direction: 'undo' | 'redo') {
@@ -1515,8 +1537,8 @@
 {#snippet animateWorkspace()}
   <section class="animate-workspace" aria-label="Rust animation keyframe editor">
     <div class="animate-heading">
-      <strong>Animate · Rotation keyframes</strong>
-      <span>Rust-owned .bbmodel · Once-only numeric rotation preview · No effects or Molang</span>
+      <strong>Animate · Bone transforms</strong>
+      <span>Rust-owned .bbmodel · Once-only linear Rotation / Position / Scale · No effects or Molang</span>
     </div>
     {#if snapshot}
       <div class="animate-create">
@@ -1541,6 +1563,8 @@
                 selectedAnimationId = animation.uuid;
                 selectedKeyframeUuid = null;
                 animationTime = 0;
+                animationChannel = 'rotation';
+                animationValue = [0, 0, 0];
               }}>
               {animation.name} ({animation.length}s)
             </button>
@@ -1553,7 +1577,7 @@
         <section class="animate-track" aria-label="Selected animation timeline">
           <div class="animate-track-title">
             <strong>{selectedAnimation.name}</strong>
-            <span>Length {selectedAnimation.length}s · {selectedAnimation.rotationKeyframes.length} supported rotation keyframes</span>
+            <span>Length {selectedAnimation.length}s · {selectedAnimation.transformKeyframes.length} supported transform keyframes</span>
           </div>
           <label class="animate-clip-length">Selected clip length (seconds)
             <input type="number" min="0" max="3600" step="any"
@@ -1563,12 +1587,12 @@
               onchange={(event) => void setSelectedAnimationLength(event.currentTarget)}/>
           </label>
           <p class="hint">Length edits are Rust Undo steps. Shortening cannot delete or move existing keyframes; a conflicting length is refused. Unsupported imported tracks stay read-only.</p>
-          <p class="hint">Select a Bone in the Outliner, set time and rotation, then add a keyframe.</p>
+          <p class="hint">Select a Bone, choose a Rotation/Position/Scale channel and enter numeric values. Scale is limited to 0–100; negative scales remain unsupported.</p>
           {#if selectedAnimation.previewSupported}
-            <div class="animate-playback-controls" role="group" aria-label="Rotation pose playback controls">
+            <div class="animate-playback-controls" role="group" aria-label="Bone transform pose playback controls">
               <button type="button" aria-pressed={playbackActive}
                 disabled={busy || loading || selectedAnimation.length <= 0 ||
-                  selectedAnimation.rotationKeyframes.length === 0}
+                  selectedAnimation.transformKeyframes.length === 0}
                 onclick={toggleAnimationPlayback}>
                 {playbackActive ? 'Pause' : 'Play'}
               </button>
@@ -1576,31 +1600,31 @@
                 onclick={stopAnimationPlayback}>Stop</button>
               <span>Once · 1× · {animationTime.toFixed(2)}s / {selectedAnimation.length}s</span>
             </div>
-            <label class="animate-scrub">Scrub rotation pose: {animationTime.toFixed(2)}s
+            <label class="animate-scrub">Scrub Bone pose: {animationTime.toFixed(2)}s
               <input type="range" min="0" max={selectedAnimation.length}
                 step="0.01" bind:value={animationTime}
                 oninput={pauseAnimationPlayback}
                 disabled={busy || selectedAnimation.length <= 0}
-                aria-label="Scrub static rotation pose"/>
+                aria-label="Scrub static Bone transform pose"/>
             </label>
-            <p class="hint">Play/Pause previews only supported numeric linear Bone rotations. No sound, effects, Molang, loop or controller evaluation.</p>
+            <p class="hint">Play/Pause previews only supported numeric linear Bone Rotation, Position and Scale. No sound, effects, Molang, loop or controller evaluation.</p>
             {#if timelineRows.length > 0}
-              <div class="animate-timeline" aria-label="Bone rotation keyframe timeline">
-                {#each timelineRows as row (row.boneUuid)}
+              <div class="animate-timeline" aria-label="Bone transform keyframe timeline">
+                {#each timelineRows as row (row.boneUuid + ':' + row.channel)}
                   <div class="animate-timeline-row">
-                    <span class="animate-timeline-bone" title={row.boneName}>{row.boneName}</span>
+                    <span class="animate-timeline-bone" title={row.boneName + ' · ' + row.channel}>{row.boneName} · {row.channel}</span>
                     <div class="animate-timeline-lane" role="group"
-                      aria-label={'Rotation keyframes for ' + row.boneName}>
+                      aria-label={row.channel + ' keyframes for ' + row.boneName}>
                       {#each row.frames as frame (frame.uuid)}
                         <button type="button" class="animate-timeline-marker"
                           class:active={selectedKeyframeUuid === frame.uuid}
                           aria-pressed={selectedKeyframeUuid === frame.uuid}
-                          aria-label={row.boneName + ' keyframe at ' + frame.time + ' seconds'}
-                          title={row.boneName + ' · ' + frame.time + 's'}
+                          aria-label={row.boneName + ' ' + row.channel + ' keyframe at ' + frame.time + ' seconds'}
+                          title={row.boneName + ' · ' + row.channel + ' · ' + frame.time + 's'}
                           style:left={(selectedAnimation.length > 0
                             ? (frame.time / selectedAnimation.length) * 100 : 0) + '%'}
                           disabled={busy || loading}
-                          onclick={() => selectRotationKeyframe(frame)}></button>
+                          onclick={() => selectTransformKeyframe(frame)}></button>
                       {/each}
                     </div>
                   </div>
@@ -1611,34 +1635,45 @@
             <p class="hint">Pose preview unavailable: this Animation contains unsupported tracks, expressions or interpolation. Original data is preserved.</p>
           {/if}
           <div class="animate-keyframe-editor">
+            <label>Transform channel
+              <select value={animationChannel}
+                disabled={busy || loading || !selectedAnimation.previewSupported}
+                aria-label="Select Bone transform channel"
+                onchange={(event) => selectAnimationChannel(
+                  event.currentTarget.value as TransformChannel)}>
+                <option value="rotation">Rotation (degrees)</option>
+                <option value="position">Position (offset)</option>
+                <option value="scale">Scale (multiplier)</option>
+              </select>
+            </label>
             <label>Time (seconds)
               <input type="number" min="0" max={selectedAnimation.length} step="any"
                 value={animationTime} disabled={busy}
                 onchange={(event) => updateAnimationTime(event.currentTarget.value)}/>
             </label>
             {#each [0, 1, 2] as axis}
-              <label>Rotation {AXES[axis]}
-                <input type="number" step="any" value={animationRotation[axis]} disabled={busy}
+              <label>{animationChannel} {AXES[axis]}
+                <input type="number" step="any" value={animationValue[axis]} disabled={busy}
                   onchange={(event) => updateAnimationAxis(axis, event.currentTarget.value)}/>
               </label>
             {/each}
             <button type="button" disabled={busy || !selectedBoneId || !selectedAnimation.previewSupported}
-              onclick={() => void addRotationKeyframe()}>Add Bone Rotation Keyframe</button>
+              onclick={() => void addTransformKeyframe()}>Add {animationChannel} Keyframe</button>
             <button type="button" disabled={busy || !selectedKeyframe || !selectedAnimation.previewSupported}
-              onclick={() => void updateRotationKeyframe()}>Update Selected Keyframe</button>
+              onclick={() => void updateTransformKeyframe()}>Update Selected Keyframe</button>
             <button type="button" disabled={busy || !selectedKeyframe || !selectedAnimation.previewSupported}
               title="Remove only the selected supported keyframe; Undo restores it"
-              onclick={() => void removeRotationKeyframe()}>Delete Selected Keyframe</button>
+              onclick={() => void removeTransformKeyframe()}>Delete Selected Keyframe</button>
           </div>
           <p class="hint">Target Bone: {snapshot.bones.find((bone) => bone.uuid === selectedBoneId)?.name ?? 'Select a Bone in Outliner'}</p>
-          <div class="animate-keyframe-list" aria-label="Existing supported rotation keyframes">
-            {#each selectedAnimation.rotationKeyframes as frame}
+          <div class="animate-keyframe-list" aria-label="Existing supported transform keyframes">
+            {#each selectedAnimation.transformKeyframes as frame}
               <button type="button" class:active={selectedKeyframe?.uuid === frame.uuid}
                 aria-pressed={selectedKeyframe?.uuid === frame.uuid}
-                title={'Select rotation keyframe at ' + frame.time + ' seconds'}
-                onclick={() => selectRotationKeyframe(frame)}>
+                title={'Select ' + frame.channel + ' keyframe at ' + frame.time + ' seconds'}
+                onclick={() => selectTransformKeyframe(frame)}>
                 {frame.time}s · {snapshot.bones.find((bone) => bone.uuid === frame.boneUuid)?.name ?? frame.boneUuid}
-                · [{frame.rotation.join(', ')}]
+                · {frame.channel} [{frame.value.join(', ')}]
               </button>
             {/each}
           </div>
@@ -2150,7 +2185,7 @@
           scopedTexturePreview={snapshot.scopedTexturePreview}
           textureResolution={snapshot.textureResolution}
           previewTextureIndex={paintTextureIndex}
-          previewBoneRotations={previewBoneRotations}
+          previewBoneTransforms={previewBoneTransforms}
           {selectedId} onSelect={selectCube}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
           canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard}
@@ -2208,7 +2243,7 @@
         : workspaceMode === 'animate'
         ? playbackActive
           ? 'Animate · once-only static rotation playback · source-only; visual parity unverified'
-          : 'Animate · Play/Pause/Stop numeric rotation subset · advanced tracks unsupported'
+          : 'Animate · Play/Pause/Stop numeric Bone transforms · advanced tracks unsupported'
         : selectedId && transformTool === 'translate'
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
         : selectedId && transformTool === 'rotate'

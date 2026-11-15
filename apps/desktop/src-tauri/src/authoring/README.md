@@ -1,5 +1,16 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Rust Bone transform channels (2026-11-15; SOURCE_ONLY):**
+AddBoneTransformKeyframe, UpdateBoneTransformKeyframe and
+RemoveBoneTransformKeyframe allow numeric linear Rotation, Position
+and Scale under the canonical EditOperation/EditorSession history.
+The editable_transform_clip gate checks known Bone/frame metadata,
+unique keyframe UUIDs, noncolliding per-channel times, and bounded
+Scale 0–100. Unknown imported animation data remains unchanged and
+is not promoted to a writable native preview. SetAnimationLength
+checks all admitted channels; existing rotation-only operations remain.
+Source tests are authored but NOT_EXECUTED; native Blockbench parity
+UNVERIFIED.
 **Animation duration editing (2026-11-15; SOURCE_ONLY):**
 The shared Rust `SetAnimationLength` operation adjusts a selected
 UUID-addressed supported clip duration as one atomic, Undoable

@@ -2,6 +2,24 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Rust native editor P0 — Bone Position/Scale/Rotation channels (2026-11-15)
+
+**Current source work:** Extend the canonical Rust EditOperation with
+add_bone_transform_keyframe, update_bone_transform_keyframe and
+remove_bone_transform_keyframe for numeric linear Rotation, Position and
+Scale. Previous rotation-specific operations remain available. Tauri
+projects the three supported channels without normalizing opaque imports.
+The Svelte Animate UI edits channel-specific values and timeline markers;
+Three.js applies the read-only Bone bind+position, bind+rotation and
+scale multiplier to the derived viewport pose only.
+Scale is conservatively limited to 0–100, without negative mirroring.
+Animation length updates preserve every recognized channel keyframe.
+Unknown Molang, Bezier, effects and other imported data remain untouched.
+Rust/Tauri/Node regression source AUTHORED_NOT_RUN.
+
+**Continuation:** Continue native Rust P0 New/Edit/Paint/Animate/Save/Open
+source work. Do not switch back to Code Mode feature growth or imply native
+runtime/Blockbench visual parity. Keep CI/localtest holds and Local intact.
 ## Rust native editor P0 — bounded Animation length and timeline (2026-11-15)
 
 **Current source work:** Add `set_animation_length` to the one Rust

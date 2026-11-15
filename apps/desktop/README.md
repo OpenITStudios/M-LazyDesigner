@@ -1,5 +1,14 @@
 # LazyDesigner Desktop
 
+**Rust Animate Bone Position/Scale (2026-11-15; SOURCE_ONLY):**
+Atomic Rust transform keyframe edits now cover numeric linear Rotation,
+Position and nonnegative Scale, with existing rotation APIs retained.
+The Animate UI has channel selection and per-channel Bone timeline markers.
+Tauri projects only recognized clips; Three.js previews read-only
+position/rotation/scale transforms without rewriting saved source.
+Imported Molang, Bezier/effects and negative scale are not approximated.
+All regression source AUTHORED_NOT_RUN; Windows/Blockbench/native proof
+UNVERIFIED.
 **Rust Animate duration and Bone timeline (2026-11-15; SOURCE_ONLY):**
 The native Animate workspace now edits a selected supported clip length
 through Rust `set_animation_length`, with Undo/Redo, refusal rather
