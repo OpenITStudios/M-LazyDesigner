@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -274,6 +274,7 @@ enum InspectBatchQuery {
     CubeSurfaces { uuid: String },
     CubeFaceAlpha { uuid: String },
     CubeUvSharing { uuid: String, texture_uuid: String },
+    ModelTextureCoverage { offset: Option<usize>, limit: Option<usize> },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
     TextureAlpha { uuid: String },
@@ -323,6 +324,11 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 let uv_sharing = inspect_cube_uv_sharing(
                     doc, batch_id(&uuid)?, batch_id(&texture_uuid)?)?;
                 json!({"kind":"cube_uv_sharing","uv_sharing":uv_sharing})
+            },
+            InspectBatchQuery::ModelTextureCoverage { offset, limit } => {
+                let coverage = inspect_model_texture_coverage(doc,
+                    offset.unwrap_or(0), limit.unwrap_or(4))?;
+                json!({"kind":"model_texture_coverage","coverage":coverage})
             },
             InspectBatchQuery::Catalog { category, offset, limit } => {
                 let offset = offset.unwrap_or(0);
@@ -681,6 +687,34 @@ mod tests {
         }];
         assert_eq!(inspect_batch(&doc, one).unwrap_err(),
             "INSPECT_BATCH_PAGE_INVALID");
+    }
+
+    // Rust/CLI source regression only. Coverage pages are bounded and
+    // returned through the existing one-document batch parser.
+    #[test]
+    fn code_mode_batch_model_texture_coverage_is_read_only_and_paged() {
+        let doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        let original = doc.clone();
+        let input: InspectBatchInput = serde_json::from_str(
+            r#"{"requests":[{"kind":"model_texture_coverage","offset":0,"limit":1}]}"#
+        ).unwrap();
+        let inspected = inspect_batch(&doc, input.requests).unwrap();
+        assert_eq!(inspected[0]["kind"], json!("model_texture_coverage"));
+        assert_eq!(inspected[0]["coverage"]["scope"],
+            json!("saved_face_texture_coverage_page"));
+        assert_eq!(inspected[0]["coverage"]["reviewed_cubes"], json!(1));
+        assert_eq!(inspected[0]["coverage"]["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(doc, original);
+        assert_eq!(inspect_batch(&doc, vec![
+            InspectBatchQuery::ModelTextureCoverage {
+                offset: Some(0), limit: Some(9)
+            }
+        ]).unwrap_err(), "TEXTURE_COVERAGE_PAGE_INVALID");
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"model_texture_coverage","uuid":"untrusted"}]}"#
+        ).is_err());
     }
 
     // Rust/CLI regression source only; no Cargo or native execution claimed.

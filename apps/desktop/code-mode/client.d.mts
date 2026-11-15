@@ -238,6 +238,40 @@ export interface CubeUvSharingInspection {
   report_truncated: boolean;
   overlaps: CubeUvOverlap[];
 }
+/** Bounded source-only face review, not rendered face/texture acceptance. */
+export interface TextureCoverageFace {
+  side: CubeFaceSurface["side"];
+  reference_kind: CubeFaceSurface["reference_kind"];
+  texture_uuid: string | null;
+  status:
+    | "absent_declared" | "no_explicit_texture" | "implicit_texture_unresolved"
+    | "mapping_unsupported" | "fully_transparent_pixels"
+    | "partially_transparent_pixels" | "translucent_pixels"
+    | "measured_nontransparent_pixels";
+  reason: string | null;
+  alpha_pixels: null | {
+    sampled: number; transparent: number; translucent: number; opaque: number;
+  };
+}
+export interface TextureCoverageCube {
+  cube_uuid: string;
+  review_candidates: number;
+  faces: TextureCoverageFace[];
+}
+export interface ModelTextureCoveragePage {
+  scope: "saved_face_texture_coverage_page";
+  visual_verdict: "UNVERIFIED";
+  face_coverage_verdict: "UNVERIFIED";
+  total_cubes: number;
+  offset: number;
+  limit: number;
+  reviewed_cubes: number;
+  review_candidates: number;
+  fully_transparent_faces: number;
+  unresolved_reference_or_mapping_faces: number;
+  next_offset: number | null;
+  cubes: TextureCoverageCube[];
+}
 export interface RotationTrackInspection {
   scope: "linear_bone_rotation" | "unsupported_animation_track";
   recognized: boolean;
@@ -285,6 +319,7 @@ export interface InspectReceipt {
   surfaces?: CubeSurfaceInspection;
   face_alpha?: CubeFaceAlphaInspection;
   uv_sharing?: CubeUvSharingInspection;
+  coverage?: ModelTextureCoveragePage;
   alpha?: TextureAlphaInspection;
   catalog?: CatalogPage;
   asset?: InspectAsset;
@@ -297,6 +332,7 @@ export type InspectBatchQuery =
   | { kind: "cube_surfaces"; uuid: string }
   | { kind: "cube_face_alpha"; uuid: string }
   | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
+  | { kind: "model_texture_coverage"; offset?: number; limit?: number }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
@@ -309,6 +345,7 @@ export type InspectBatchResult =
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
   | { kind: "cube_face_alpha"; face_alpha: CubeFaceAlphaInspection }
   | { kind: "cube_uv_sharing"; uv_sharing: CubeUvSharingInspection }
+  | { kind: "model_texture_coverage"; coverage: ModelTextureCoveragePage }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }

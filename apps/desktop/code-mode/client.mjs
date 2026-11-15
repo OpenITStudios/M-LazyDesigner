@@ -115,6 +115,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   cube_surfaces: ['uuid'],
   cube_face_alpha: ['uuid'],
   cube_uv_sharing: ['uuid', 'texture_uuid'],
+  model_texture_coverage: ['offset', 'limit'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
   texture_alpha: ['uuid'],
@@ -146,7 +147,7 @@ function serializeInspectionQueries(requests) {
       if (field === 'offset' || field === 'limit' || field === 'index') {
         output[field] = Number(wholeNumber(
           value, field, field === 'limit' ? 1 : 0,
-          field === 'limit' ? 64 : 65536,
+          field === 'limit' ? (kind === 'model_texture_coverage' ? 8 : 64) : 65536,
         ));
       } else if (field === 'channel') {
         if (!['rotation', 'position', 'scale'].includes(value)) {

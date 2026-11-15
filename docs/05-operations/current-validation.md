@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Paged model-wide source Texture coverage review (SOURCE_ONLY)
+
+Added canonical read-only Rust `inspect_model_texture_coverage` to classify six saved face texture/UV alpha statuses for up to 8 Cubes per request. It uses existing `inspect_cube_uv_alpha` for validated Box/Manual UV and RGBA8 decoding; null faces are absent by declaration rather than called blindspots, while false/unset links and invalid UV/texture metadata are flagged for review. Transparent, mixed-alpha and opaque source pixels are counted separately, never equated to visible painted mesh faces. Wired through the existing Rust CLI inspect-batch and typed Code Mode selector with a hard max page of 8 and bounded results. Positive/negative Rust and JS tests AUTHORED_NOT_RUN; Windows/Blockbench visual/format proof and efficiency remain UNVERIFIED.
+
 ## 2026-11-16 — Guarded Cube UV face painting (SOURCE_ONLY)
 
 The opt-in `PaintCubeUvFacesGuarded` operation rejects source-level positive-area overlap for selected faces, or any unresolved/implicit atlas reference, before reusing the existing Rust RGBA8 Paint operation. The older Paint path is unchanged for explicitly intended shared atlases. Source regression covers isolated positive Paint/Undo/.bbmodel reimport, cross-Cube duplicate alias refusal after a staged valid Inflate, deliberate legacy shared Paint, unknown references, fractional manual UV and float Box UV. No UI or Code Mode host changes. TEST_AUTHORED_NOT_RUN; native Blockbench fidelity and performance remain UNVERIFIED.

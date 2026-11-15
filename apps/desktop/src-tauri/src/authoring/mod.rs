@@ -10,7 +10,9 @@ mod bbmodel;
 mod geometry;
 mod paint;
 mod uv_sharing;
+mod texture_coverage;
 pub use uv_sharing::inspect_cube_uv_sharing;
+pub use texture_coverage::inspect_model_texture_coverage;
 pub mod storage;
 pub use geometry::export_bedrock_geometry;
 

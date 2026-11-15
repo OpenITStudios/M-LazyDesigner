@@ -1119,6 +1119,103 @@ fn guarded_cube_face_paint_rejects_implicit_and_unknown_uv_mappings() {
     assert_eq!(session.document().texture_assets, doc.texture_assets);
 }
 
+// AUTHORED_NOT_RUN: an agent can ask about several Cube faces in one
+// bounded Rust read without claiming that nontransparent pixels are visible.
+#[test]
+fn model_texture_coverage_pages_alpha_references_and_undo_without_source_mutation() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009981";
+    const OTHER: &str = "00000000-0000-4000-8000-000000009982";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Coverage", "coverage").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 32, height: 32 },
+        EditOperation::AddBone {
+            bone: serde_json::from_value(json!({
+                "uuid":BONE, "name":"body", "origin":[0,0,0]
+            })).unwrap(),
+            parent_uuid: None,
+        },
+        EditOperation::AddCube { cube: sample_cube(CUBE), bone_uuid:BONE.into() },
+        EditOperation::CreatePaintTexture { uuid:TEX.into(), name:"atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(), texture_uuid:TEX.into() },
+    ]).unwrap();
+    let blank = session.document().clone();
+    let initial = inspect_model_texture_coverage(&blank, 0, 4).unwrap();
+    assert_eq!(initial["reviewed_cubes"], json!(1));
+    assert_eq!(initial["fully_transparent_faces"], json!(6));
+    assert_eq!(initial["next_offset"], Value::Null);
+    assert_eq!(initial["visual_verdict"], json!("UNVERIFIED"));
+    assert_eq!(initial["cubes"][0]["faces"][0]["status"],
+        json!("fully_transparent_pixels"));
+    assert_eq!(session.document(), &blank);
+
+    session.apply(1, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
+        faces:vec![CubeFacePaintPatch {
+            face:"north".into(), rgba:[70, 90, 120, 255], erase:false,
+        }],
+    }]).unwrap();
+    let saved = session.document().clone();
+    let reviewed = inspect_model_texture_coverage(&saved, 0, 1).unwrap();
+    assert_eq!(reviewed["fully_transparent_faces"], json!(5));
+    assert_eq!(reviewed["cubes"][0]["faces"][0]["status"],
+        json!("measured_nontransparent_pixels"));
+    assert_eq!(reviewed["cubes"][0]["faces"][0]["alpha_pixels"]["opaque"],
+        json!(16));
+    assert_eq!(reviewed["cubes"][0]["faces"][1]["status"],
+        json!("fully_transparent_pixels"));
+    session.apply(2, &[EditOperation::DuplicateCube {
+        source_uuid:CUBE.into(), new_uuid:OTHER.into(),
+    }]).unwrap();
+    let after_copy = session.document().clone();
+    let page = inspect_model_texture_coverage(&after_copy, 0, 1).unwrap();
+    assert_eq!(page["total_cubes"], json!(2));
+    assert_eq!(page["next_offset"], json!(1));
+    let second_page = inspect_model_texture_coverage(&after_copy, 1, 1).unwrap();
+    assert_eq!(second_page["cubes"][0]["cube_uuid"], json!(OTHER));
+    assert_eq!(second_page["next_offset"], Value::Null);
+    assert_eq!(session.document(), &after_copy);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        after_copy);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(), &saved);
+    session.undo(4).unwrap();
+    assert_eq!(session.document(), &blank);
+}
+
+#[test]
+fn model_texture_coverage_preserves_absent_faces_and_refuses_unsupported_pixels() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009983";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture { uuid:TEX.into(), name:"atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(), texture_uuid:TEX.into() },
+    ]).unwrap();
+    let mut doc = session.document().clone();
+    doc.cubes[0].faces["north"]["texture"] = Value::Null;
+    doc.cubes[0].faces["south"]["texture"] = json!(false);
+    doc.cubes[0].faces.get_mut("west").unwrap().as_object_mut()
+        .unwrap().remove("texture");
+    doc.cubes[0].faces["east"]["uv"] = json!([0.5,0.0,4.0,4.0]);
+    let review = inspect_model_texture_coverage(&doc, 0, 4).unwrap();
+    let faces = &review["cubes"][0]["faces"];
+    assert_eq!(faces[0]["status"], json!("absent_declared"));
+    assert_eq!(faces[1]["status"], json!("mapping_unsupported"));
+    assert_eq!(faces[1]["reason"], json!("PAINT_UV_RECT_NON_INTEGRAL"));
+    assert_eq!(faces[2]["status"], json!("no_explicit_texture"));
+    assert_eq!(faces[3]["status"], json!("implicit_texture_unresolved"));
+    assert_eq!(review["unresolved_reference_or_mapping_faces"], json!(3));
+    assert_eq!(review["face_coverage_verdict"], json!("UNVERIFIED"));
+    assert_eq!(session.document().texture_assets, doc.texture_assets);
+    for (offset, limit) in [(0, 0), (0, 9), (65_537, 1)] {
+        assert_eq!(inspect_model_texture_coverage(&doc, offset, limit).unwrap_err(),
+            "TEXTURE_COVERAGE_PAGE_INVALID");
+    }
+    assert_eq!(inspect_model_texture_coverage(&doc, 100, 1).unwrap()
+        ["reviewed_cubes"], json!(0));
+}
+
 // SOURCE_AUTHORED_NOT_RUN: the inspector never mutates model or bitmap.
 #[test]
 fn uv_sharing_detects_cross_cube_aliases_and_respects_half_open_boundaries() {

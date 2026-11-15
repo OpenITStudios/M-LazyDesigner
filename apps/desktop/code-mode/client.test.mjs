@@ -68,6 +68,40 @@ test('Code Mode catalog and metadata inspection remain read-only and bounded', a
   assert.equal(calls.length, 3);
 });
 
+test('Code Mode sends bounded source texture-coverage pages using one read batch', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      const queries = JSON.parse(await readFile(argv[argv.indexOf('--queries') + 1], 'utf8'));
+      assert.deepEqual(queries, { requests: [{
+        kind: 'model_texture_coverage', offset: 0, limit: 2,
+      }] });
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 },
+        results: [{ kind: 'model_texture_coverage', coverage: {
+          scope: 'saved_face_texture_coverage_page', visual_verdict: 'UNVERIFIED',
+          total_cubes: 2, reviewed_cubes: 2, next_offset: null,
+          review_candidates: 1, cubes: [],
+        } }] };
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const result = await project.inspectBatch([
+    { kind: 'model_texture_coverage', offset: 0, limit: 2 },
+  ]);
+  assert.equal(result.results[0].coverage.visual_verdict, 'UNVERIFIED');
+  assert.equal(result.results[0].coverage.review_candidates, 1);
+  assert.equal(calls.length, 1);
+  await assert.rejects(project.inspectBatch([
+    { kind: 'model_texture_coverage', offset: 0, limit: 9 },
+  ]), /limit/);
+  await assert.rejects(project.inspectBatch([
+    { kind: 'model_texture_coverage', offset: 0, limit: 2, unsafe: true },
+  ]), /Unknown inspection selector or field/);
+  assert.equal(calls.length, 1);
+});
+
 test('Code Mode forwards strict explicit UV-sharing selector without allowing unknown query fields', async () => {
   const calls = [];
   const client = createRustCodeModeClient({
