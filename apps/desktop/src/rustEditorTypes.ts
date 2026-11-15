@@ -85,6 +85,7 @@ export type EditOperation =
   | { op: 'translate_cube'; uuid: string; delta: Vec3 }
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
+  | { op: 'set_bone_rotation'; uuid: string; rotation: Vec3 }
   | { op: 'set_node_visibility'; uuid: string; visible: boolean }
   | { op: 'remove_cube'; uuid: string }
   | { op: 'remove_empty_bone'; uuid: string }

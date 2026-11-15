@@ -119,6 +119,7 @@
   }
 
   $: selectedCube = snapshot?.cubes.find((cube) => cube.uuid === selectedId) ?? null;
+  $: selectedBone = snapshot?.bones.find((bone) => bone.uuid === selectedBoneId) ?? null;
   $: selectedAnimation = snapshot?.animations.find((animation) => animation.uuid === selectedAnimationId)
     ?? snapshot?.animations[0] ?? null;
   // UI-only time selection drives a read-only Bone pose; no Rust mutation.
@@ -419,6 +420,17 @@
     angles[axis] = value;
     if (angles[axis] !== selectedCube.rotation[axis]) {
       apply([{ op: 'set_cube_rotation', uuid: selectedCube.uuid, rotation: angles }]);
+    }
+  }
+
+  function boneRotation(axis: number, text: string) {
+    if (!selectedBone || workspaceMode !== 'edit') return;
+    const value = parseFiniteEditorNumber(text);
+    if (value === null) { error = 'Enter a finite decimal Bone rotation angle.'; return; }
+    const angles = [...selectedBone.rotation] as Vec3;
+    angles[axis] = value;
+    if (angles[axis] !== selectedBone.rotation[axis]) {
+      apply([{ op: 'set_bone_rotation', uuid: selectedBone.uuid, rotation: angles }]);
     }
   }
 
@@ -1230,8 +1242,32 @@
               {/if}
             </div>
           </div>
-        {:else if selectedBoneId}
-          <p class="empty-label">Bone selected. Add Cube to this bone.</p>
+        {:else if selectedBone}
+          <div class="property-scroll">
+            <p class="selected-name" title={selectedBone.name}>{selectedBone.name}</p>
+            <div class="property-group">
+              <label>Bone origin (read-only)</label>
+              <p class="hint">{selectedBone.origin.join(', ')}</p>
+            </div>
+            <div class="property-group">
+              <label>Bone bind rotation (degrees)</label>
+              <div class="xyz-fields">
+                {#each [0, 1, 2] as axis}
+                  <label class="axis-input"><span>{AXES[axis]}</span>
+                    <input aria-label={'Bone rotation ' + AXES[axis]}
+                      type="number" step="any"
+                      disabled={busy || workspaceMode !== 'edit'}
+                      title="Change the Bone bind rotation using one Rust Undo transaction"
+                      value={selectedBone.rotation[axis]}
+                      onchange={(event) => boneRotation(axis, event.currentTarget.value)}/>
+                  </label>
+                {/each}
+              </div>
+            </div>
+            <p class="hint">{workspaceMode === 'edit'
+              ? 'Bone bind rotation is stored in Rust and affects its child Cubes.'
+              : 'Switch to Edit to change the bind pose. Animation keyframes remain in Animate.'}</p>
+          </div>
         {:else}
           <p class="empty-label">Select a Cube to edit Position, Size or UV.</p>
         {/if}

@@ -2,6 +2,8 @@
 
 ## Rust-branch native Edit-mode source integration (NOT_EXECUTED)
 
+**Rust Edit Bone bind rotation (2026-11-15; SOURCE_ONLY):** Selected Bones now expose editable XYZ bind-rotation fields in the Edit Inspector, using the shared Rust transaction/Undo/Redo and existing Bone snapshot/3D hierarchy. The same fields are read-only in Animate, which edits keyframes separately. Imported model and animation data remain Rust-owned; Rust regressions authored NOT_EXECUTED. Native Bone pivot/transform fidelity remains UNVERIFIED.
+
 **Rust Animate static rotation scrub (2026-11-15; SOURCE_ONLY):** The existing Animate editor now shows a time slider for fully supported constant linear Bone rotation tracks; Tauri marks complex imported animations as pose-unsupported and the Svelte/Three.js viewport adds derived offsets to Bone bind rotations only for admitted tracks. The real `.bbmodel` source, keyframe transactions, Undo/Redo and CLI stay Rust-owned. The scrubber never writes model data or starts playback; expression evaluation and effects are not implemented. Focused regression source authored NOT_EXECUTED, native visual/format parity unverified.
 
 **Initial Rust Animate editor (2026-11-15; SOURCE_ONLY):** The mode tab now opens a bounded, Rust-backed animation authoring surface. Users can create an Animation, choose a Bone in the Outliner and add a rotation keyframe at an explicit time, using the existing authoritative Rust transaction/Undo and `.bbmodel` codec. The UI lists supported constant keyframes and clearly labels the adjacent 3D view a bind-pose preview; no animation playback, effects, full timeline tools or 1:1 UI claim is made. Tauri and Rust regression source is AUTHORED_NOT_RUN; native compatibility and interaction remain UNVERIFIED.

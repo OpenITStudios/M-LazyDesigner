@@ -118,6 +118,7 @@ pub enum EditOperation {
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
+    SetBoneRotation { uuid: String, rotation: [f64; 3] },
     SetNodeVisibility { uuid: String, visible: bool },
     SetFaceUv { uuid: String, face: String, uv: [f64; 4] },
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
@@ -838,6 +839,22 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 refresh_box_uv(cube)?;
             } else {
                 refresh_auto_uv(cube, auto_uv, resolution, textures, Some((axis, direction)))?;
+            }
+            Ok(uuid.clone())
+        }
+        EditOperation::SetBoneRotation { uuid, rotation } => {
+            if !valid_vec3(*rotation) { return Err(fail("BONE_ROTATION_INVALID")); }
+            let bone = doc.bones.iter_mut().find(|bone| bone.uuid == *uuid)
+                .ok_or_else(|| fail("BONE_NOT_FOUND"))?;
+            let current = bone.extra.get("rotation")
+                .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok())
+                .unwrap_or([0.0, 0.0, 0.0]);
+            if current == *rotation { return Ok(uuid.clone()); }
+            if rotation.iter().all(|value| *value == 0.0) {
+                // A neutral Bone rotation is omitted by pinned Blockbench.
+                bone.extra.remove("rotation");
+            } else {
+                bone.extra.insert("rotation".into(), json!(rotation));
             }
             Ok(uuid.clone())
         }

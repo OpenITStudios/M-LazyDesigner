@@ -1339,3 +1339,47 @@ fn animation_edits_refuse_invalid_targets_and_duplicate_rotation_frames_atomical
     assert_eq!(session.document(), &before);
     assert_eq!(session.summary().revision, 2);
 }
+
+#[test]
+fn bone_rotation_edit_preserves_nested_outliner_opaque_assets_and_history() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let bone_uuid = "00000000-0000-4000-8000-000000000003";
+    let receipt = session.apply(0, &[EditOperation::SetBoneRotation {
+        uuid: bone_uuid.into(), rotation: [0.0, 22.5, -10.0],
+    }]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(session.document().bones[1].extra["rotation"], json!([0.0, 22.5, -10.0]));
+    assert_eq!(session.document().cubes, original.cubes);
+    assert_eq!(session.document().hierarchy, original.hierarchy);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+    let saved = session.export().unwrap();
+    let reopened = AuthoringDocument::import_bbmodel(&saved).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+    session.apply(3, &[EditOperation::SetBoneRotation {
+        uuid: bone_uuid.into(), rotation: [0.0, 0.0, 0.0],
+    }]).unwrap();
+    assert_eq!(session.document().bones[1].extra.get("rotation"), None);
+    assert_eq!(session.document().animation_assets, original.animation_assets);
+}
+
+#[test]
+fn invalid_or_noop_bone_rotation_does_not_consume_a_revision() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    assert_eq!(session.apply(0, &[EditOperation::SetBoneRotation {
+        uuid: BONE.into(), rotation: [f64::NAN, 0.0, 0.0],
+    }]).unwrap_err(), "BONE_ROTATION_INVALID");
+    assert_eq!(session.apply(0, &[EditOperation::SetBoneRotation {
+        uuid: "missing".into(), rotation: [0.0, 45.0, 0.0],
+    }]).unwrap_err(), "BONE_NOT_FOUND");
+    assert_eq!(session.apply(0, &[EditOperation::SetBoneRotation {
+        uuid: BONE.into(), rotation: [0.0, 0.0, 0.0],
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 0);
+}
