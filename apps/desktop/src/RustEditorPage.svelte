@@ -30,6 +30,12 @@
   let transformTool: 'translate' | 'rotate' | null = 'translate';
   let selectedFace = 'north';
   let workspaceMode: WorkspaceMode = 'edit';
+  // UI-only selection and input buffers; animation data is owned by Rust.
+  let selectedAnimationId: string | null = null;
+  let newAnimationName = 'animation.new';
+  let newAnimationLength = 1;
+  let animationTime = 0;
+  let animationRotation: Vec3 = [0, 0, 0];
   let paintTextureIndex = 0;
   let paintColor = '#e53935';
   let paintAlpha = 255;
@@ -112,6 +118,8 @@
   }
 
   $: selectedCube = snapshot?.cubes.find((cube) => cube.uuid === selectedId) ?? null;
+  $: selectedAnimation = snapshot?.animations.find((animation) => animation.uuid === selectedAnimationId)
+    ?? snapshot?.animations[0] ?? null;
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
 
@@ -155,7 +163,11 @@
     paintTextureIndex = reconcilePaintTextureSelection(
       snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
     );
+    if (snapshot && snapshot.epoch !== next.epoch) selectedAnimationId = null;
     snapshot = next;
+    if (selectedAnimationId && !next.animations.some((animation) => animation.uuid === selectedAnimationId)) {
+      selectedAnimationId = null;
+    }
     if (selectedId && !next.cubes.some((cube) => cube.uuid === selectedId)) selectedId = null;
     if (selectedBoneId && !next.bones.some((bone) => bone.uuid === selectedBoneId)) selectedBoneId = null;
     notice = '';
@@ -316,6 +328,58 @@
       operations: [operation],
     });
     if (next) { selectedId = null; selectedBoneId = null; }
+  }
+
+  function updateAnimationLength(text: string) {
+    const value = parseFiniteEditorNumber(text);
+    if (value === null || value <= 0 || value > 3600) {
+      error = 'Animation length must be between 0 and 3600 seconds.';
+      return;
+    }
+    newAnimationLength = value;
+  }
+  function updateAnimationTime(text: string) {
+    const value = parseFiniteEditorNumber(text);
+    if (value === null || value < 0 || !selectedAnimation || value > selectedAnimation.length) {
+      error = 'Keyframe time must be inside the selected animation.';
+      return;
+    }
+    animationTime = value;
+  }
+  function updateAnimationAxis(axis: number, text: string) {
+    const value = parseFiniteEditorNumber(text);
+    if (value === null || Math.abs(value) > 100_000) {
+      error = 'Rotation must be a finite angle within the supported limit.';
+      return;
+    }
+    const next = [...animationRotation] as Vec3;
+    next[axis] = value;
+    animationRotation = next;
+  }
+  async function createAnimation() {
+    if (!snapshot || busy || loading || !newAnimationName.trim()) return;
+    const old = new Set(snapshot.animations.map((animation) => animation.uuid));
+    const next = await command('rust_editor_create_animation', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      name: newAnimationName.trim(), length: newAnimationLength,
+    });
+    if (next) {
+      selectedAnimationId = next.animations.find((animation) => !old.has(animation.uuid))?.uuid ?? null;
+      animationTime = 0;
+    }
+  }
+  async function addRotationKeyframe() {
+    if (!snapshot || !selectedAnimation || !selectedBoneId || busy || loading) return;
+    if (animationTime < 0 || animationTime > selectedAnimation.length) {
+      error = 'Keyframe time must be inside the selected animation.';
+      return;
+    }
+    const next = await command('rust_editor_add_rotation_keyframe', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      animationUuid: selectedAnimation.uuid, boneUuid: selectedBoneId,
+      time: animationTime, rotation: animationRotation,
+    });
+    if (next) notice = 'Rotation keyframe saved in the Rust document.';
   }
   function history(direction: 'undo' | 'redo') {
     if (!snapshot) return;
@@ -918,6 +982,86 @@
   </section>
 {/snippet}
 
+
+{#snippet animateWorkspace()}
+  <section class="animate-workspace" aria-label="Rust animation keyframe editor">
+    <div class="animate-heading">
+      <strong>Animate · Rotation keyframes</strong>
+      <span>Rust-owned .bbmodel · Bind-pose 3D preview only · Playback not implemented</span>
+    </div>
+    {#if snapshot}
+      <div class="animate-create">
+        <label>Animation name
+          <input type="text" bind:value={newAnimationName} maxlength="128" disabled={busy}/>
+        </label>
+        <label>Length (seconds)
+          <input type="number" min="0.001" max="3600" step="any"
+            value={newAnimationLength} disabled={busy}
+            onchange={(event) => updateAnimationLength(event.currentTarget.value)}/>
+        </label>
+        <button type="button" disabled={busy || loading || !newAnimationName.trim()}
+          onclick={() => void createAnimation()}>New Animation</button>
+      </div>
+      {#if snapshot.animations.length}
+        <div class="animate-list" aria-label="Animation selection">
+          {#each snapshot.animations as animation}
+            <button type="button" class:active={selectedAnimation?.uuid === animation.uuid}
+              aria-pressed={selectedAnimation?.uuid === animation.uuid}
+              onclick={() => { selectedAnimationId = animation.uuid; animationTime = 0; }}>
+              {animation.name} ({animation.length}s)
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <p class="hint">Create an Animation to begin. Existing imported animation data remains preserved.</p>
+      {/if}
+      {#if selectedAnimation}
+        <section class="animate-track" aria-label="Selected animation timeline">
+          <div class="animate-track-title">
+            <strong>{selectedAnimation.name}</strong>
+            <span>Length {selectedAnimation.length}s · {selectedAnimation.rotationKeyframes.length} supported rotation keyframes</span>
+          </div>
+          <p class="hint">Select a Bone in the Outliner, set time and rotation, then add a keyframe. Existing unsupported tracks remain read-only.</p>
+          <div class="animate-keyframe-editor">
+            <label>Time (seconds)
+              <input type="number" min="0" max={selectedAnimation.length} step="any"
+                value={animationTime} disabled={busy}
+                onchange={(event) => updateAnimationTime(event.currentTarget.value)}/>
+            </label>
+            {#each [0, 1, 2] as axis}
+              <label>Rotation {AXES[axis]}
+                <input type="number" step="any" value={animationRotation[axis]} disabled={busy}
+                  onchange={(event) => updateAnimationAxis(axis, event.currentTarget.value)}/>
+              </label>
+            {/each}
+            <button type="button" disabled={busy || !selectedBoneId}
+              onclick={() => void addRotationKeyframe()}>Add Bone Rotation Keyframe</button>
+          </div>
+          <p class="hint">Target Bone: {snapshot.bones.find((bone) => bone.uuid === selectedBoneId)?.name ?? 'Select a Bone in Outliner'}</p>
+          <div class="animate-keyframe-list" aria-label="Existing supported rotation keyframes">
+            {#each selectedAnimation.rotationKeyframes as frame}
+              <button type="button"
+                title={'Select rotation keyframe at ' + frame.time + ' seconds'}
+                onclick={() => {
+                  selectedId = null;
+                  selectedBoneId = frame.boneUuid;
+                  animationTime = frame.time;
+                  animationRotation = [...frame.rotation] as Vec3;
+                }}>
+                {frame.time}s · {snapshot.bones.find((bone) => bone.uuid === frame.boneUuid)?.name ?? frame.boneUuid}
+                · [{frame.rotation.join(', ')}]
+              </button>
+            {/each}
+          </div>
+        </section>
+      {/if}
+      {#if snapshot.animationCount > snapshot.animations.length}
+        <p class="hint">Only the first 256 supported Animation records are projected; all source data is preserved.</p>
+      {/if}
+    {/if}
+  </section>
+{/snippet}
+
 {#snippet inspectorDock(side: DockSide | 'float' | 'tabs')}
   <aside class="dock-column inspector-dock"
     id={side === 'float' ? 'float-inspector' : side === 'tabs' ? 'tab-content-inspector' : 'dock-' + side}
@@ -1229,7 +1373,10 @@
       <button class="mode" class:active={workspaceMode === 'paint'}
         aria-pressed={workspaceMode === 'paint'} disabled={!snapshot || busy || !!paintStroke}
         onclick={() => selectWorkspace('paint')}>Paint</button>
-      <button class="mode" disabled title="Animate mode is not implemented yet">Animate</button>
+      <button class="mode" class:active={workspaceMode === 'animate'}
+        aria-pressed={workspaceMode === 'animate'} disabled={!snapshot || busy || !!paintStroke}
+        title="Author bounded Bone rotation keyframes in Rust; playback is not implemented"
+        onclick={() => selectWorkspace('animate')}>Animate</button>
     </div>
   </header>
 
@@ -1290,11 +1437,15 @@
       onlostpointercapture={(event) => finishDockResize(event, true)}
       onkeydown={(event) => keyDockResize('left', event)}></div>
     <main class="editor-viewport" class:paint-mode={workspaceMode === 'paint'}
-      aria-label={workspaceMode === 'paint' ? 'Paint atlas and 3D model preview' : 'Model edit viewport'}>
+      class:animate-mode={workspaceMode === 'animate'}
+      aria-label={workspaceMode === 'paint' ? 'Paint atlas and 3D model preview'
+        : workspaceMode === 'animate' ? 'Animation editor and bind-pose 3D preview' : 'Model edit viewport'}>
       {#if workspaceMode === 'paint'}
         {@render paintWorkspace()}
+      {:else if workspaceMode === 'animate'}
+        {@render animateWorkspace()}
       {/if}
-      <div class="workspace-model-preview" class:paint-preview={workspaceMode === 'paint'}>
+      <div class="workspace-model-preview" class:paint-preview={workspaceMode !== 'edit'}>
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
           hierarchy={snapshot.hierarchy}
@@ -1355,6 +1506,8 @@
       : snapshot ? (
       workspaceMode === 'paint'
         ? 'Paint atlas · one stroke per Rust Undo · visual parity unverified'
+        : workspaceMode === 'animate'
+        ? 'Animate · Rust-owned rotation keyframes · playback not implemented'
         : selectedId && transformTool === 'translate'
         ? 'Move gizmo · release to commit one Rust edit · visual parity unverified'
         : selectedId && transformTool === 'rotate'

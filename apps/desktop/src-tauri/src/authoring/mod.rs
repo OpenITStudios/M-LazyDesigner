@@ -110,6 +110,11 @@ pub enum EditOperation {
     AddCube { cube: Cube, bone_uuid: String },
     RemoveCube { uuid: String },
     RemoveEmptyBone { uuid: String },
+    CreateAnimation { uuid: String, name: String, length: f64 },
+    AddBoneRotationKeyframe {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        time: f64, rotation: [f64; 3],
+    },
     TranslateCube { uuid: String, delta: [f64; 3] },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
@@ -847,6 +852,73 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 cube.extra.insert("rotation".into(), json!(rotation));
             }
             Ok(uuid.clone())
+        }
+        EditOperation::CreateAnimation { uuid, name, length } => {
+            if !valid_uuid(uuid) || name.trim().is_empty() || name.chars().count() > 128 ||
+               name.chars().any(char::is_control) ||
+               !length.is_finite() || !(0.0..=3600.0).contains(length) ||
+               doc.animation_assets.len() >= MAX_ELEMENTS ||
+               doc.animation_assets.iter().any(|a|
+                   a.get("uuid").and_then(Value::as_str) == Some(uuid) ||
+                   a.get("name").and_then(Value::as_str) == Some(name.trim())) ||
+               doc.cubes.iter().any(|c| c.uuid == *uuid) ||
+               doc.bones.iter().any(|b| b.uuid == *uuid) ||
+               doc.texture_assets.iter().any(|t| t.get("uuid").and_then(Value::as_str) == Some(uuid)) {
+                return Err(fail("ANIMATION_CREATION_INVALID"));
+            }
+            doc.animation_assets.push(json!({
+                "uuid": uuid, "name": name.trim(),
+                "loop": "once", "length": length, "animators": {}
+            }));
+            Ok(uuid.clone())
+        }
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid, bone_uuid, keyframe_uuid, time, rotation,
+        } => {
+            if !valid_uuid(keyframe_uuid) || !time.is_finite() || *time < 0.0 ||
+               !valid_vec3(*rotation) ||
+               doc.animation_assets.iter().any(|a| value_references_uuid(a, keyframe_uuid)) ||
+               doc.cubes.iter().any(|c| c.uuid == *keyframe_uuid) ||
+               doc.bones.iter().any(|b| b.uuid == *keyframe_uuid) {
+                return Err(fail("ANIMATION_KEYFRAME_INVALID"));
+            }
+            let bone_name = doc.bones.iter().find(|bone| bone.uuid == *bone_uuid)
+                .map(|bone| bone.name.clone())
+                .ok_or_else(|| fail("ANIMATION_BONE_NOT_FOUND"))?;
+            let animation = doc.animation_assets.iter_mut()
+                .find(|item| item.get("uuid").and_then(Value::as_str) == Some(animation_uuid))
+                .ok_or_else(|| fail("ANIMATION_NOT_FOUND"))?;
+            let length = animation.get("length").and_then(Value::as_f64)
+                .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v))
+                .ok_or_else(|| fail("ANIMATION_LENGTH_UNSUPPORTED"))?;
+            if *time > length { return Err(fail("ANIMATION_KEYFRAME_TIME_INVALID")); }
+            let animators = animation.get_mut("animators").and_then(Value::as_object_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_UNSUPPORTED"))?;
+            let track = animators.entry(bone_uuid.clone()).or_insert_with(|| json!({
+                "name": bone_name, "type": "bone", "keyframes": []
+            }));
+            if track.get("type").is_some_and(|kind| kind.as_str() != Some("bone")) {
+                return Err(fail("ANIMATION_TRACK_UNSUPPORTED"));
+            }
+            let frames = track.get_mut("keyframes").and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_UNSUPPORTED"))?;
+            if frames.len() >= 4096 || frames.iter().any(|frame|
+                frame.get("channel").and_then(Value::as_str) == Some("rotation") &&
+                frame.get("time").and_then(Value::as_f64).is_some_and(|t| (t - time).abs() <= 1e-6)
+            ) {
+                return Err(fail("ANIMATION_KEYFRAME_CONFLICT"));
+            }
+            // Blockbench KeyframeDataPoint's x/y/z fields are Molang strings.
+            frames.push(json!({
+                "uuid": keyframe_uuid, "channel": "rotation", "time": time,
+                "interpolation": "linear",
+                "data_points": [{
+                    "x": rotation[0].to_string(),
+                    "y": rotation[1].to_string(),
+                    "z": rotation[2].to_string()
+                }]
+            }));
+            Ok(keyframe_uuid.clone())
         }
         EditOperation::CreatePaintTexture { uuid, name } => {
             if !valid_uuid(uuid) || doc.texture_assets.len() >= MAX_ELEMENTS ||

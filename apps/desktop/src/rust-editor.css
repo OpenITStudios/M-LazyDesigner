@@ -667,3 +667,56 @@
 }
 .rust-editor .texture-item:hover:not(:disabled),
 .rust-editor .texture-item.active { background: var(--rust-selected); }
+
+/* The Animate subset edits Rust keyframes; the separate 3D view is a bind pose. */
+.rust-editor .editor-viewport.animate-mode {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(140px, 34%);
+}
+.rust-editor .animate-workspace {
+  overflow: auto;
+  min-height: 0;
+  padding: 12px;
+  background: #1e2127;
+  color: #d9dfe7;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rust-editor .animate-heading, .rust-editor .animate-track-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #39414e;
+  padding-bottom: 8px;
+}
+.rust-editor .animate-heading strong { font-size: 15px; }
+.rust-editor .animate-heading span, .rust-editor .animate-track-title span { color: #a4acb9; }
+.rust-editor .animate-create, .rust-editor .animate-keyframe-editor {
+  display: flex; flex-wrap: wrap; align-items: end; gap: 8px;
+}
+.rust-editor .animate-create label, .rust-editor .animate-keyframe-editor label {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.rust-editor .animate-create input, .rust-editor .animate-keyframe-editor input {
+  max-width: 170px; min-width: 88px; padding: 6px;
+  border: 1px solid #526071; border-radius: 3px; background: #272d35; color: #e0e4eb;
+}
+.rust-editor .animate-create button, .rust-editor .animate-keyframe-editor button,
+.rust-editor .animate-list button, .rust-editor .animate-keyframe-list button {
+  padding: 6px 9px; border: 1px solid #4c5766; border-radius: 3px;
+  background: #2b323c; color: inherit; cursor: pointer;
+}
+.rust-editor .animate-create button:disabled, .rust-editor .animate-keyframe-editor button:disabled {
+  opacity: 0.45; cursor: not-allowed;
+}
+.rust-editor .animate-list, .rust-editor .animate-keyframe-list {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.rust-editor .animate-list button.active { background: #314e75; border-color: #5596e6; }
+.rust-editor .animate-track { display: flex; flex-direction: column; gap: 9px; }
+.rust-editor .animate-workspace button:focus-visible, .rust-editor .animate-workspace input:focus-visible {
+  outline: 2px solid #3e90ff; outline-offset: 2px;
+}

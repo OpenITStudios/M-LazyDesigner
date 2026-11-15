@@ -44,6 +44,20 @@ export type HierarchyNode = string | {
   children: HierarchyNode[];
 };
 
+export type RotationKeyframeView = {
+  uuid: string;
+  boneUuid: string;
+  time: number;
+  rotation: Vec3;
+};
+
+export type AnimationView = {
+  uuid: string;
+  name: string;
+  length: number;
+  rotationKeyframes: RotationKeyframeView[];
+};
+
 export type EditorSnapshot = {
   epoch: number;
   revision: number;
@@ -61,6 +75,7 @@ export type EditorSnapshot = {
   paintEditableTextures: boolean[];
   textureResolution: [number, number];
   animationCount: number;
+  animations: AnimationView[];
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';
 };
 

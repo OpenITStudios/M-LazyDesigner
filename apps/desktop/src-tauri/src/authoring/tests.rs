@@ -1256,3 +1256,86 @@ fn deleting_one_cube_in_a_batch_rolls_back_if_later_operation_fails() {
     assert_eq!(session.document(), &original);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn new_animation_and_bone_rotation_keyframe_edit_preserve_document_roundtrip() {
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let id = "00000000-0000-4000-8000-000000000320";
+    let key = "00000000-0000-4000-8000-000000000321";
+    let bone = "00000000-0000-4000-8000-000000000003";
+    let receipt = session.apply(0, &[
+        EditOperation::CreateAnimation {
+            uuid: id.into(), name: "animation.new".into(), length: 1.5,
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: id.into(), bone_uuid: bone.into(), keyframe_uuid: key.into(),
+            time: 0.5, rotation: [0.0, 45.0, -15.0],
+        }
+    ]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(receipt.operation_count, 2);
+    assert_eq!(session.document().animation_assets.len(), original.animation_assets.len() + 1);
+    assert_eq!(session.document().animation_assets[0], original.animation_assets[0]);
+    let new = session.document().animation_assets.last().unwrap();
+    assert_eq!(new["uuid"], json!(id));
+    assert_eq!(new["animators"][bone]["keyframes"][0]["channel"], json!("rotation"));
+    assert_eq!(new["animators"][bone]["keyframes"][0]["data_points"][0]["y"], json!("45"));
+    let exported = session.export().unwrap();
+    let saved: Value = serde_json::from_slice(&exported).unwrap();
+    let source: Value = serde_json::from_str(TEXTURED).unwrap();
+    assert_eq!(saved["textures"], source["textures"]);
+    assert_eq!(saved["animation_controllers"], source["animation_controllers"]);
+    assert_eq!(saved["outliner"], source["outliner"]);
+    let reopened = AuthoringDocument::import_bbmodel(&exported).unwrap();
+    assert_eq!(reopened, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &reopened);
+}
+
+#[test]
+fn animation_edits_refuse_invalid_targets_and_duplicate_rotation_frames_atomically() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let anim = "00000000-0000-4000-8000-000000000320";
+    let key = "00000000-0000-4000-8000-000000000321";
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid: anim.into(), name: "animation.new".into(), length: 1.0,
+    }]).unwrap();
+    let initial = session.document().clone();
+    assert_eq!(session.apply(1, &[EditOperation::CreateAnimation {
+        uuid: "00000000-0000-4000-8000-000000000399".into(),
+        name: "animation.new".into(), length: 1.0,
+    }]).unwrap_err(), "ANIMATION_CREATION_INVALID");
+    assert_eq!(session.apply(1, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: "missing".into(),
+        keyframe_uuid: key.into(), time: 0.0, rotation: [0.0, 5.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_BONE_NOT_FOUND");
+    assert_eq!(session.apply(1, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: key.into(), time: 2.0, rotation: [0.0, 5.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_TIME_INVALID");
+    assert_eq!(session.apply(1, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: key.into(), time: 0.0, rotation: [f64::NAN, 0.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_INVALID");
+    assert_eq!(session.document(), &initial);
+    assert_eq!(session.summary().revision, 1);
+    session.apply(1, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: key.into(), time: 0.0, rotation: [0.0, 5.0, 0.0],
+    }]).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(2, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: "00000000-0000-4000-8000-000000000322".into(),
+        time: 0.0, rotation: [0.0, 90.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_CONFLICT");
+    assert_eq!(session.apply(2, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid: anim.into(), bone_uuid: BONE.into(),
+        keyframe_uuid: key.into(), time: 0.5, rotation: [0.0, 90.0, 0.0],
+    }]).unwrap_err(), "ANIMATION_KEYFRAME_INVALID");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 2);
+}

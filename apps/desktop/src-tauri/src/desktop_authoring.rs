@@ -65,6 +65,24 @@ pub struct BoneView {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RotationKeyframeView {
+    uuid: String,
+    bone_uuid: String,
+    time: f64,
+    rotation: [f64; 3],
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimationView {
+    uuid: String,
+    name: String,
+    length: f64,
+    rotation_keyframes: Vec<RotationKeyframeView>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EditorSnapshot {
     epoch: u64,
     revision: u64,
@@ -82,6 +100,7 @@ pub struct EditorSnapshot {
     paint_editable_textures: Vec<bool>,
     texture_resolution: [u32; 2],
     animation_count: usize,
+    animations: Vec<AnimationView>,
     preview_scope: &'static str,
 }
 
@@ -200,6 +219,55 @@ fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
     }).collect()
 }
 
+// Parse only numeric or simple finite Molang constants. Imported expression
+// tracks remain in the Rust document untouched and are not faked in the UI.
+fn static_animation_axis(value: Option<&Value>) -> Option<f64> {
+    let number = match value? {
+        Value::String(text) => text.parse::<f64>().ok()?,
+        Value::Number(value) => value.as_f64()?,
+        _ => return None,
+    };
+    number.is_finite().then_some(number)
+}
+
+fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
+    doc.animation_assets.iter().take(256).filter_map(|animation| {
+        let uuid = animation.get("uuid")?.as_str()?.to_owned();
+        let name = animation.get("name").and_then(Value::as_str)
+            .unwrap_or("Unnamed Animation").to_owned();
+        let length = animation.get("length")?.as_f64()
+            .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v))?;
+        let mut rotation_keyframes = Vec::new();
+        if let Some(animators) = animation.get("animators").and_then(Value::as_object) {
+            for (bone_uuid, track) in animators {
+                if !doc.bones.iter().any(|bone| bone.uuid == *bone_uuid) { continue; }
+                if let Some(frames) = track.get("keyframes").and_then(Value::as_array) {
+                    for frame in frames.iter().take(2048) {
+                        if frame.get("channel").and_then(Value::as_str) != Some("rotation") {
+                            continue;
+                        }
+                        let Some(id) = frame.get("uuid").and_then(Value::as_str) else { continue; };
+                        let Some(time) = frame.get("time").and_then(Value::as_f64)
+                            .filter(|t| t.is_finite() && *t >= 0.0 && *t <= length) else { continue; };
+                        let Some(values) = frame.get("data_points").and_then(Value::as_array)
+                            .and_then(|points| points.first()) else { continue; };
+                        let [Some(x), Some(y), Some(z)] = [
+                            static_animation_axis(values.get("x")),
+                            static_animation_axis(values.get("y")),
+                            static_animation_axis(values.get("z")),
+                        ] else { continue; };
+                        rotation_keyframes.push(RotationKeyframeView {
+                            uuid: id.to_owned(), bone_uuid: bone_uuid.clone(), time,
+                            rotation: [x, y, z],
+                        });
+                    }
+                }
+            }
+        }
+        Some(AnimationView { uuid, name, length, rotation_keyframes })
+    }).collect()
+}
+
 fn project(store: &EditorStore) -> Option<EditorSnapshot> {
     store.active.as_ref().map(|model| {
         let doc = model.session.document();
@@ -256,6 +324,7 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
                 .map(paint_texture_editable).collect(),
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             animation_count: doc.animation_assets.len(),
+            animations: animation_views(doc),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
         }
     })
@@ -444,6 +513,39 @@ pub fn rust_editor_add_bone(
             origin: Some(origin), extra: Map::new(),
         },
         parent_uuid,
+    }]).map_err(model_failure)?;
+    active.dirty = true;
+    current(&guard)
+}
+
+
+#[tauri::command]
+pub fn rust_editor_create_animation(
+    state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    name: String, length: f64,
+) -> Result<EditorSnapshot, DesktopError> {
+    let mut guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_mut()
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    active.session.apply(expected_revision, &[EditOperation::CreateAnimation {
+        uuid: create_uuid(), name, length,
+    }]).map_err(model_failure)?;
+    active.dirty = true;
+    current(&guard)
+}
+
+#[tauri::command]
+pub fn rust_editor_add_rotation_keyframe(
+    state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    animation_uuid: String, bone_uuid: String, time: f64, rotation: [f64; 3],
+) -> Result<EditorSnapshot, DesktopError> {
+    let mut guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_mut()
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    active.session.apply(expected_revision, &[EditOperation::AddBoneRotationKeyframe {
+        animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
     }]).map_err(model_failure)?;
     active.dirty = true;
     current(&guard)
@@ -814,6 +916,40 @@ mod tests {
         assert_eq!(session.document().bones.last().unwrap().name, "bone");
         session.undo(1).unwrap();
         assert_eq!(session.document(), &doc);
+    }
+
+
+    #[test]
+    fn created_animation_rotation_keyframe_projects_without_mutating_model() {
+        let mut session = EditorSession::open(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        let anim = "00000000-0000-4000-8000-000000000320";
+        let key = "00000000-0000-4000-8000-000000000321";
+        let bone = "00000000-0000-4000-8000-000000000001";
+        session.apply(0, &[
+            EditOperation::CreateAnimation {
+                uuid: anim.into(), name: "animation.new".into(), length: 2.0,
+            },
+            EditOperation::AddBoneRotationKeyframe {
+                animation_uuid: anim.into(), bone_uuid: bone.into(),
+                keyframe_uuid: key.into(), time: 0.5, rotation: [0.0, 90.0, 0.0],
+            },
+        ]).unwrap();
+        let original = session.document().clone();
+        let store = EditorStore {
+            epoch: 3,
+            active: Some(ActiveModel {
+                session, source_path: None, source_sha: None, dirty: true,
+            }),
+        };
+        let snapshot = project(&store).unwrap();
+        assert_eq!(snapshot.animation_count, 1);
+        assert_eq!(snapshot.animations.len(), 1);
+        assert_eq!(snapshot.animations[0].uuid, anim);
+        assert_eq!(snapshot.animations[0].rotation_keyframes[0].uuid, key);
+        assert_eq!(snapshot.animations[0].rotation_keyframes[0].rotation, [0.0, 90.0, 0.0]);
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
     }
 
 }

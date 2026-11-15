@@ -332,6 +332,8 @@ fn main() {
             desktop_authoring::rust_editor_apply,
             desktop_authoring::rust_editor_add_cube,
             desktop_authoring::rust_editor_add_bone,
+            desktop_authoring::rust_editor_create_animation,
+            desktop_authoring::rust_editor_add_rotation_keyframe,
             desktop_authoring::rust_editor_undo,
             desktop_authoring::rust_editor_redo,
             desktop_authoring::rust_editor_save_copy
