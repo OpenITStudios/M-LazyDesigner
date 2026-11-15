@@ -1,5 +1,19 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Code Mode host session/approval lifecycle hardening (SOURCE_ONLY)
+
+The first-party Rust Code Mode Node host now rejects concurrent guest
+executions on one host (`CODE_MODE_HOST_BUSY`). Its execution budget
+pauses only during trusted-host operator approval; approval has a separate
+10-minute timeout. A guest exit during an in-flight RPC produces
+`CODE_MODE_OUTCOME_UNKNOWN_PENDING_RPC` instead of an automatic retry or
+false success. Permission results from operator approval are invalidated
+after the guest exits, preventing delayed authorization from launching Rust
+writes. Focused regression source covers one active guest and late operator
+approval after termination. **SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN**.
+No real Deno/Rust/Node/Windows execution, OS sandbox or native proof is
+claimed, and all repository holds remain active.
+
 ## 2026-11-15 — End-to-end Rust Code Mode host and guest SOURCE_AUTHORED
 
 On the selected `Rust` branch, the primary agent Code Mode code path now has

@@ -4,6 +4,16 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 
+**Code Mode host hardening (SOURCE_ONLY):** The newly authored host now
+serializes one active guest per host, separates operator-approval wait from
+the guest execution timer, limits approval waits, invalidates approvals
+after guest exit and refuses to treat an interrupted RPC as a successful
+mutation. Node regression cases AUTHORED_NOT_RUN. The Rust primary
+agent/SDK/CLI source integration is coherent at this available proof level;
+the remaining distinction is verified OS isolation, native runtime/asset
+acceptance and measured cost per accepted asset in an independently
+selected PC-local phase. Do not run held CI/tests or disable Local MCP.
+
 **Source host integration (2026-11-15):** The model-facing Code Mode
 execution chain is now source-authored on Rust: one agent code tool, support for New-model bootstrap in an approved directory, a fixed
 Deno default-deny JavaScript guest, trusted Node RPC host, typed

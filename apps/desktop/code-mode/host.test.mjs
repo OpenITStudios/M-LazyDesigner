@@ -229,6 +229,69 @@ test('Code Mode can bootstrap New from an approved empty output directory', asyn
   }
 });
 
+test('Code Mode host runs only one guest at a time', () =>
+  fixture(async (input) => {
+    let spawned = 0;
+    const host = await createCodeModeHost({
+      rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+      runner: async () => ({ status: 'OK', sha256: HASH, summary: SUMMARY }),
+      spawnImpl: () => {
+        spawned++;
+        return fakeGuest({ method: 'audit', args: { project: 'p0' } },
+          (reply) => {
+            assert.equal(reply.ok, true);
+            return { auditReady: true };
+          });
+      },
+    });
+    const first = host.execute({ code: 'return await codemode.audit({project:"p0"});' });
+    await assert.rejects(
+      host.execute({ code: 'return "overlapping";' }),
+      /CODE_MODE_HOST_BUSY/,
+    );
+    const result = await first;
+    assert.equal(result.value.auditReady, true);
+    assert.equal(spawned, 1);
+  }));
+
+test('Code Mode host rejects exited guest with pending approval and denies late approval', () =>
+  fixture(async (input) => {
+    const calls = [];
+    let child;
+    let entered;
+    let approveLate;
+    const enteredApproval = new Promise((resolve) => { entered = resolve; });
+    const approvalResult = new Promise((resolve) => { approveLate = resolve; });
+    const host = await createCodeModeHost({
+      rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+      authorizeMutation: async () => {
+        entered();
+        return approvalResult;
+      },
+      runner: async (args) => {
+        calls.push(args[0]);
+        return { status: 'OK', sha256: HASH, summary: SUMMARY };
+      },
+      spawnImpl: () => {
+        child = fakeGuest({ method: 'apply', args: {
+          project: 'p0', output: 'after-timeout.bbmodel',
+          operations: [{ op: 'remove_cube', uuid: 'cube-1' }],
+        } }, () => { throw new Error('Unexpected approved effect'); });
+        return child;
+      },
+    });
+    const inFlight = host.execute({
+      code: 'return await codemode.apply({project:"p0"});',
+    });
+    await enteredApproval;
+    child.kill(); // Simulates lost/terminated guest while approval is open.
+    await assert.rejects(inFlight,
+      /CODE_MODE_OUTCOME_UNKNOWN_PENDING_RPC/);
+    approveLate(true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, ['inspect']); // No Rust apply after guest exits.
+  }));
+
 test('Code Mode rejects unknown guest methods rather than invoking host commands', () =>
   fixture(async (input) => {
     const calls = [];

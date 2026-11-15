@@ -47,6 +47,14 @@ Programmatic use does not imply a new model engine, second document registry, or
 
 ## Programmatic read batching — 2026-11-15 (SOURCE_ONLY)
 
+**Host lifecycle hardening:** The first-party Code Mode host refuses
+overlapping execution on the same bound project, uses a separate
+operator-approval timeout, and invalidates approvals after a guest exit.
+An interrupted pending RPC is explicitly `OUTCOME_UNKNOWN` instead of
+an implicit retry or success. This is implemented source with
+authored-but-unexecuted regressions; Deno OS isolation and local native
+proof remain held.
+
 The Rust Code Mode client now supports `inspectBatch` with existing selectors.
 One `inspect-batch` CLI invocation hashes and reads the `.bbmodel` once,
 opens one canonical Rust session, and projects up to eight bounded results:

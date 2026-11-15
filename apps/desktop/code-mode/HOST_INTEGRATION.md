@@ -109,6 +109,25 @@ No automatic installation or download of Deno/Rust is performed. The user-PC hos
 
 ## Security, limits and proof ceiling
 
+### Session concurrency and delayed approval
+
+A trusted host runs **one Code Mode guest at a time**. Attempts to overlap
+`host.execute` calls fail with `CODE_MODE_HOST_BUSY`; this prevents project
+handle/permission races across concurrent sessions. The guest's active
+90-second execution timer pauses only while a trusted operator approval is
+pending. That approval itself has a bounded 10-minute ceiling. A late approval
+is invalid once the guest exits or times out. Guest termination during a
+pending RPC returns `CODE_MODE_OUTCOME_UNKNOWN_PENDING_RPC`, and the host
+must inspect current files rather than automatically retry a mutation. A
+source-authored regression covers both overlapping calls and approval
+completion after guest termination; neither test has been executed.
+
+The **Deno permission model is not a certified hostile-code isolation layer**.
+Before running independently supplied untrusted scripts, the eventual
+PC-local host must provide and verify suitable OS/process containment and
+maintain the exact no-permissions Deno invocation. This source hardening
+does not release the repository's test/CI hold.
+
 - Deno subprocess flags: run --no-config --no-lock --no-npm --no-remote --no-prompt, with NO --allow-* grants. The guest cannot spawn the Rust CLI itself.
 - Host RPC is fixed and bounded: at most 64 calls, 16 project handles, 128 KiB per message, 1 MiB cumulative stdout, 4 KiB guest stderr, 32 KiB final result and 90 seconds per run. Existing Rust model read/plan limits apply independently.
 - The trusted host validates fresh same-directory output filenames, relies on Rust SHA/revision/no-overwrite gates and requires an externally supplied authorizeMutation callback for every write. Uncertain/timeout effects are never automatically replayed.

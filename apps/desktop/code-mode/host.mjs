@@ -22,6 +22,7 @@ const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_CALLS = 64;
 const MAX_PROJECTS = 16;
 const TIMEOUT_MS = 90000;
+const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 
 function requireAbsolute(value, label) {
   if (typeof value !== 'string' || !isAbsolute(value) ||
@@ -127,15 +128,30 @@ export async function createCodeModeHost({
     await regularFile(requireAbsolute(preselectedPngPath, 'preselectedPngPath'),
       'CODE_MODE_PNG_INPUT');
 
+  // Only one code session may be active per host. Operator approval is
+  // invalidated when that session exits or times out.
+  let activeExecution = null;
   const client = createRustCodeModeClient({
     binary: rustBinary,
     ...(runner ? { runner } : {}),
     authorizeMutation: async (request) => {
-      if (typeof request.output !== 'string') return false;
+      const execution = activeExecution;
+      if (!execution || execution.closed ||
+          typeof request.output !== 'string') return false;
       try { await checkFreshSibling(request.output, folder); }
       catch { return false; }
-      if (typeof authorizeMutation !== 'function') return false;
-      return await authorizeMutation(Object.freeze({ ...request })) === true;
+      if (typeof authorizeMutation !== 'function' ||
+          execution.closed || activeExecution !== execution) return false;
+      execution.pause();
+      let approved;
+      try {
+        approved = await authorizeMutation(Object.freeze({ ...request }));
+      } finally {
+        execution.resume();
+      }
+      // Prevent a delayed approval from reviving a timed-out guest.
+      return approved === true &&
+        !execution.closed && activeExecution === execution;
     },
   });
   const projects = new Map();
@@ -233,6 +249,12 @@ export async function createCodeModeHost({
         Buffer.byteLength(code, 'utf8') > MAX_CODE_BYTES) {
       throw new TypeError('CODE_MODE_SCRIPT_INVALID_OR_OVERSIZE');
     }
+    if (activeExecution) {
+      throw new Error('CODE_MODE_HOST_BUSY');
+    }
+    const execution = { closed: false, pendingApproval: false, pause: () => {}, resume: () => {} };
+    activeExecution = execution;
+    try {
     const start = JSON.stringify({
       type: 'start', code,
       initial: initialRef,
@@ -253,7 +275,7 @@ export async function createCodeModeHost({
             WINDIR: process.env.WINDIR ?? '' } : {}),
       },
     });
-    return new Promise((resolve, reject) => {
+    return await new Promise((resolve, reject) => {
       let closed = false;
       let concluded = null;
       let failure = null;
@@ -261,12 +283,45 @@ export async function createCodeModeHost({
       let stdoutBytes = 0;
       let stderrBytes = 0;
       let calls = 0;
+      let pendingRpc = 0;
       let chain = Promise.resolve();
       const decoder = new StringDecoder('utf8');
-      const timer = setTimeout(() => {
-        failure = new Error('CODE_MODE_OUTCOME_UNKNOWN_TIMEOUT');
+      let remaining = TIMEOUT_MS;
+      let timer = null;
+      let approvalTimer = null;
+      let tick = 0;
+      function abortWith(code) {
+        if (execution.closed) return;
+        failure = new Error(code);
+        execution.closed = true;
         child.kill();
-      }, TIMEOUT_MS);
+      }
+      function resumeClock() {
+        clearTimeout(approvalTimer);
+        approvalTimer = null;
+        execution.pendingApproval = false;
+        if (execution.closed) return;
+        if (remaining <= 0) return abortWith('CODE_MODE_OUTCOME_UNKNOWN_TIMEOUT');
+        tick = Date.now();
+        timer = setTimeout(
+          () => abortWith('CODE_MODE_OUTCOME_UNKNOWN_TIMEOUT'), remaining);
+      }
+      function pauseClock() {
+        if (execution.closed) return;
+        execution.pendingApproval = true;
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+          remaining = Math.max(0, remaining - (Date.now() - tick));
+        }
+        approvalTimer = setTimeout(
+          () => abortWith('CODE_MODE_OPERATOR_APPROVAL_TIMEOUT'),
+          APPROVAL_TIMEOUT_MS,
+        );
+      }
+      execution.pause = pauseClock;
+      execution.resume = resumeClock;
+      resumeClock();
       function send(response) {
         const data = JSON.stringify(response) + '\n';
         if (Buffer.byteLength(data, 'utf8') > MAX_RPC_BYTES) {
@@ -300,6 +355,11 @@ export async function createCodeModeHost({
           concluded = message;
           return;
         }
+        // A queued final result is safe to consume after the child has
+        // exited. A new RPC is not: no guest remains to receive its reply.
+        if (execution.closed) {
+          throw new Error('CODE_MODE_GUEST_SESSION_CLOSED');
+        }
         if (message.type !== 'rpc' || concluded !== null ||
             !Number.isSafeInteger(message.id) || message.id < 1 ||
             typeof message.method !== 'string' ||
@@ -310,13 +370,18 @@ export async function createCodeModeHost({
         if (++calls > MAX_CALLS) {
           throw new Error('CODE_MODE_RPC_BUDGET_EXCEEDED');
         }
+        pendingRpc++;
         try {
-          const value = await actions[message.method](
-            requireObject(message.args[0]));
-          send({ type: 'rpc_result', id: message.id, ok: true, result: value });
-        } catch (error) {
-          send({ type: 'rpc_result', id: message.id, ok: false,
-            code: shortError(error) });
+          try {
+            const value = await actions[message.method](
+              requireObject(message.args[0]));
+            send({ type: 'rpc_result', id: message.id, ok: true, result: value });
+          } catch (error) {
+            send({ type: 'rpc_result', id: message.id, ok: false,
+              code: shortError(error) });
+          }
+        } finally {
+          pendingRpc--;
         }
       }
       child.stdout.on('data', (chunk) => {
@@ -364,8 +429,19 @@ export async function createCodeModeHost({
       });
       child.on('close', (code, signal) => {
         closed = true;
+        execution.closed = true;
         clearTimeout(timer);
+        clearTimeout(approvalTimer);
+        // A child that exits with any RPC still pending has an unknown
+        // effect outcome. Never wait on an approval that might never return.
+        // Late approvals are invalidated by the execution identity check.
+        if (failure) return reject(failure);
+        if (pendingRpc > 0) {
+          return reject(new Error('CODE_MODE_OUTCOME_UNKNOWN_PENDING_RPC'));
+        }
         void chain.then(() => {
+          // A queued frame may fail after 'close' but before the promise
+          // chain settles; never turn a rejected RPC into success.
           if (failure) return reject(failure);
           if (signal || code !== 0) {
             return reject(new Error(
@@ -385,6 +461,10 @@ export async function createCodeModeHost({
       });
       child.stdin.write(start);
     });
+    } finally {
+      execution.closed = true;
+      if (activeExecution === execution) activeExecution = null;
+    }
   }
   return Object.freeze({
     execute,
