@@ -13,6 +13,7 @@ use rand::RngCore;
 use rfd::FileDialog;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use tauri::State;
@@ -358,6 +359,14 @@ fn static_animation_axis(value: Option<&Value>) -> Option<f64> {
 }
 
 fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
+    // Imported clips can share UUIDs; a selected ID must map to exactly
+    // one record before any preview or source editing is admitted.
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for animation in &doc.animation_assets {
+        if let Some(id) = animation.get("uuid").and_then(Value::as_str) {
+            *counts.entry(id).or_insert(0) += 1;
+        }
+    }
     doc.animation_assets.iter().take(256).filter_map(|animation| {
         let uuid = animation.get("uuid")?.as_str()?.to_owned();
         let name = animation.get("name").and_then(Value::as_str)
@@ -366,17 +375,23 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
             .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v))?;
         // Only a fully understood rotation-only/linear shape may drive a pose.
         // Unknown Blockbench tracks are still preserved but cannot be faked.
-        let mut preview_supported = animation.as_object().is_some_and(|map|
-            map.keys().all(|key| matches!(key.as_str(),
-                "uuid" | "name" | "loop" | "length" | "animators"))) &&
+        let mut preview_supported = counts.get(uuid.as_str()) == Some(&1) &&
+            animation.as_object().is_some_and(|map|
+                map.keys().all(|key| matches!(key.as_str(),
+                    "uuid" | "name" | "loop" | "length" | "animators"))) &&
             animation.get("loop").and_then(Value::as_str).unwrap_or("once") == "once";
         let mut rotation_keyframes: Vec<RotationKeyframeView> = Vec::new();
+        let mut keyframe_ids = HashSet::new();
         if let Some(animators) = animation.get("animators").and_then(Value::as_object) {
             for (bone_uuid, track) in animators {
-                if !doc.bones.iter().any(|bone| bone.uuid == *bone_uuid) ||
+                let matching_bone = doc.bones.iter()
+                    .find(|bone| bone.uuid == *bone_uuid);
+                if matching_bone.is_none() ||
                    !track.as_object().is_some_and(|map| map.keys().all(|key|
                         matches!(key.as_str(), "name" | "type" | "keyframes"))) ||
-                   track.get("type").and_then(Value::as_str) != Some("bone") {
+                   track.get("type").and_then(Value::as_str) != Some("bone") ||
+                   track.get("name").is_some_and(|label| label.as_str() !=
+                       matching_bone.map(|bone| bone.name.as_str())) {
                     preview_supported = false;
                     continue;
                 }
@@ -394,9 +409,19 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                         preview_supported = false;
                         continue;
                     }
-                    let Some(id) = frame.get("uuid").and_then(Value::as_str) else {
+                    let Some(id) = frame.get("uuid").and_then(Value::as_str)
+                        .filter(|value| !value.is_empty() && value.len() <= 128 &&
+                            !value.chars().any(|character| character.is_control() ||
+                                character.is_whitespace())) else {
                         preview_supported = false; continue;
                     };
+                    if !keyframe_ids.insert(id.to_owned()) {
+                        // Keyframes are selected/edited by UUID in the UI;
+                        // duplicate identifiers on separate Bones are
+                        // ambiguous even when their timeline times differ.
+                        preview_supported = false;
+                        continue;
+                    }
                     let Some(time) = frame.get("time").and_then(Value::as_f64)
                         .filter(|t| t.is_finite() && *t >= 0.0 && *t <= length) else {
                         preview_supported = false; continue;
@@ -417,6 +442,12 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                     ] else {
                         preview_supported = false; continue;
                     };
+                    if [x, y, z].iter().any(|axis| axis.abs() > 100_000.0) {
+                        // Keep the UI admission equal to the read-only
+                        // pose interpolator's finite axis limit.
+                        preview_supported = false;
+                        continue;
+                    }
                     if rotation_keyframes.iter().any(|existing|
                         existing.bone_uuid == *bone_uuid && (existing.time - time).abs() <= 1e-6) {
                         preview_supported = false;
@@ -433,6 +464,9 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                 }
             }
         } else { preview_supported = false; }
+        // An unsupported imported clip must not publish a misleading
+        // *partial* list as if those frames are safe to manipulate.
+        if !preview_supported { rotation_keyframes.clear(); }
         Some(AnimationView { uuid, name, length, rotation_keyframes, preview_supported })
     }).collect()
 }
@@ -1530,6 +1564,66 @@ mod tests {
         assert!(!animation_views(&doc)[0].preview_supported);
     }
 
+
+    // Authored source regression; local/native playback remains NOT_EXECUTED.
+    #[test]
+    fn animation_projection_refuses_invalid_axes_or_ambiguous_keyframe_ids() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let anim = "00000000-0000-4000-8000-000000009201";
+        let bone = "00000000-0000-4000-8000-000000000001";
+        let key = "00000000-0000-4000-8000-000000009202";
+        doc.animation_assets.push(json!({
+            "uuid": anim, "name": "idle", "loop": "once", "length": 2.0,
+            "animators": {}
+        }));
+        doc.animation_assets[0]["animators"][bone] = json!({
+            "name": "root_bone", "type": "bone", "keyframes": [
+                {"uuid": key, "channel": "rotation", "time": 0.0,
+                 "interpolation": "linear",
+                 "data_points": [{"x": "0", "y": "0", "z": "0"}]}
+            ]
+        });
+        let before = doc.clone();
+        let admitted = animation_views(&doc);
+        assert!(admitted[0].preview_supported);
+        assert_eq!(admitted[0].rotation_keyframes.len(), 1);
+        assert_eq!(doc, before);
+
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["data_points"][0]["x"] = json!("100001");
+        let oversized = animation_views(&doc);
+        assert!(!oversized[0].preview_supported);
+        assert!(oversized[0].rotation_keyframes.is_empty());
+
+        doc = before.clone();
+        doc.animation_assets[0]["animators"][bone]["keyframes"]
+            .as_array_mut().unwrap().push(json!({
+                "uuid": key, "channel": "rotation", "time": 1.0,
+                "interpolation": "linear",
+                "data_points": [{"x": "0", "y": "20", "z": "0"}]
+            }));
+        let duplicate = animation_views(&doc);
+        assert!(!duplicate[0].preview_supported);
+        assert!(duplicate[0].rotation_keyframes.is_empty());
+
+        doc = before.clone();
+        doc.animation_assets[0]["animators"][bone]["name"] = json!("renamed_elsewhere");
+        let mismatched = animation_views(&doc);
+        assert!(!mismatched[0].preview_supported);
+        assert!(mismatched[0].rotation_keyframes.is_empty());
+        // Imported unsupported animation data remains in the Rust document.
+        assert_eq!(doc.animation_assets[0]["animators"][bone]["name"],
+            json!("renamed_elsewhere"));
+
+        doc = before.clone();
+        let conflicting_clip = doc.animation_assets[0].clone();
+        doc.animation_assets.push(conflicting_clip);
+        let ambiguous = animation_views(&doc);
+        assert_eq!(ambiguous.len(), 2);
+        assert!(ambiguous.iter().all(|view|
+            !view.preview_supported && view.rotation_keyframes.is_empty()));
+    }
 
     #[test]
     fn imported_png_paint_adoption_projection_does_not_mutate_assets() {

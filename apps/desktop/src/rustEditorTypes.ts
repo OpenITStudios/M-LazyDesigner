@@ -97,6 +97,7 @@ export type EditOperation =
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
   | { op: 'scale_cube'; uuid: string; factors: Vec3 }
   | { op: 'set_bone_rotation'; uuid: string; rotation: Vec3 }
+  | { op: 'set_animation_length'; animation_uuid: string; length: number }
   | { op: 'update_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: 'remove_bone_rotation_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }
   | { op: 'set_node_visibility'; uuid: string; visible: boolean }

@@ -28,6 +28,7 @@ export type EditOperation =
   | { op: "remove_cube"; uuid: string }
   | { op: "remove_empty_bone"; uuid: string }
   | { op: "create_animation"; uuid: string; name: string; length: number }
+  | { op: "set_animation_length"; animation_uuid: string; length: number }
   | { op: "add_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: "update_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; time: number; rotation: Vec3 }
   | { op: "remove_bone_rotation_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string }

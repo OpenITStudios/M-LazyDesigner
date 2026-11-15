@@ -1,5 +1,18 @@
 # LazyDesigner Desktop
 
+**Rust Animate duration and Bone timeline (2026-11-15; SOURCE_ONLY):**
+The native Animate workspace now edits a selected supported clip length
+through Rust `set_animation_length`, with Undo/Redo, refusal rather
+than truncation of existing keyframes and a refreshed playhead.
+Read-only timeline markers group admitted numeric rotation keyframes
+by Bone and use the existing selection/keyframe editing flow.
+The Rust/Tauri projection refuses ambiguous imported UUIDs, excessive
+rotation axes and mismatched known animator names instead of
+representing partial animation data as a supported preview.
+The same changes are exposed in typed Code Mode edit plans; no second
+animation engine, new export format or live playback proof.
+Regressions AUTHORED_NOT_RUN; actual native acceptance UNVERIFIED.
+
 **Rust native Paint viewport cutout (2026-11-15; SOURCE_ONLY):**
 The Three.js preview now uses the pinned Blockbench 5.2.1 texture
 fragment cutoff `alphaTest = 0.01`, avoiding zero-alpha pixels

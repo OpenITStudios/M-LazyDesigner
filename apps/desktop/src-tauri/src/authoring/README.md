@@ -1,5 +1,18 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Animation duration editing (2026-11-15; SOURCE_ONLY):**
+The shared Rust `SetAnimationLength` operation adjusts a selected
+UUID-addressed supported clip duration as one atomic, Undoable
+EditOperation. It validates all recognized Bone rotation keyframes,
+preserves their timestamps/UUIDs/Molang-free numeric data and
+refuses to shorten before any retained frame. Imported unknown
+animation fields, unsupported tracks, duplicate clip identity and
+ambiguous keyframe identifiers are conservatively refused rather
+than truncated or normalized. The native Tauri/Svelte and typed
+Code Mode consumers share this Rust-owned command. Source
+regression coverage AUTHORED_NOT_RUN; native animation and
+Blockbench round-trip parity UNVERIFIED.
+
 **Rust-owned Cube/Bone name edits (2026-11-15; SOURCE_ONLY):** `RenameNode`
 adds a bounded user-visible name transaction for a selected Cube or
 Bone UUID. The operation preserves existing model geometry, texture

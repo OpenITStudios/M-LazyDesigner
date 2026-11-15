@@ -1,5 +1,31 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust Animate clip duration and timeline markers (SOURCE_ONLY)
+
+The canonical Rust AuthoringDocument adds
+`EditOperation::SetAnimationLength` (`set_animation_length` on the
+Tauri/Code Mode typed interfaces), enforcing finite 0–3600s duration,
+unambiguous clip identity, once-only numeric linear rotation tracks
+and retention of every existing keyframe. Any keyframe beyond the
+requested new duration, unsupported imported metadata or duplicated
+Animation UUID causes an atomic refusal; no automatic trim or
+interpolation conversion occurs. The Svelte Animate workspace now
+exposes a source-backed duration edit and read-only grouped timeline
+markers that select the existing keyframe for editing. On an accepted
+shortening the UI playhead is clamped to the new length; on refusal it
+restores the last Rust-authored duration. The Tauri animation
+projection additionally rejects duplicated keyframe/clip UUIDs,
+mismatched known Bone animator names and rotations above the same
+±100000-degree limit as the view pose calculator. A refused imported
+clip no longer publishes a partial selectable keyframe list.
+
+**Proof:** SOURCE_REVIEWED; Rust/Tauri/UI/TypeScript test cases
+AUTHORED_NOT_RUN. No Cargo, Node, Windows, WebView2 or native Blockbench
+visual/animation playback/format acceptance was executed. Advanced
+Molang, layered tracks, position/scale keyframes, loops and effects
+remain unimplemented or read-only; this change does not imply full
+Blockbench animation feature parity.
+
 ## 2026-11-15 — Rust viewport texture alpha cutout and stale-load guard (SOURCE_ONLY)
 
 The Rust Svelte/Three.js viewport now applies a `0.01` texture

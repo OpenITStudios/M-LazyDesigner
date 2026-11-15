@@ -1,7 +1,7 @@
 // Source-authored Node regression only; NOT_EXECUTED under repo test hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectedBoneRotationPose } from './rustAnimationPose.ts';
+import { projectedBoneRotationPose, projectedRotationTimelineRows } from './rustAnimationPose.ts';
 
 const rotation = (boneUuid, time, values) => ({
   uuid: `kf-${boneUuid}-${time}`, boneUuid, time, rotation: values,
@@ -51,4 +51,40 @@ test('duplicate, invalid and excessive frames fail closed', () => {
   assert.equal(projectedBoneRotationPose(animation([rotation('bone-a', 0, [0, 0])]), 0), null);
   assert.equal(projectedBoneRotationPose(animation([rotation('', 0, [0, 0, 0])]), 0), null);
   assert.equal(projectedBoneRotationPose(animation([rotation('bone-a', 3, [0, 0, 0])]), 0), null);
+});
+
+
+test('timeline rows follow Rust Bone order and sort each Bone keyframe time', () => {
+  const data = animation([
+    rotation('bone-b', 2, [0, 90, 0]),
+    rotation('bone-a', 1, [45, 0, 0]),
+    rotation('bone-a', 0, [0, 0, 0]),
+    rotation('bone-b', 0, [0, 0, 0]),
+  ]);
+  const original = JSON.stringify(data);
+  const rows = projectedRotationTimelineRows(data, [
+    { uuid: 'bone-a', name: 'Arm' },
+    { uuid: 'bone-b', name: 'Head' },
+  ]);
+  assert.deepEqual(rows.map((row) => row.boneUuid), ['bone-a', 'bone-b']);
+  assert.deepEqual(rows[0].frames.map((frame) => frame.time), [0, 1]);
+  assert.deepEqual(rows[1].frames.map((frame) => frame.time), [0, 2]);
+  assert.deepEqual(rows.map((row) => row.boneName), ['Arm', 'Head']);
+  assert.equal(JSON.stringify(data), original);
+});
+
+test('timeline does not expose malformed or unsupported imported keyframes', () => {
+  const bones = [{ uuid: 'bone-a', name: 'Root' }];
+  const valid = rotation('bone-a', 0, [0, 0, 0]);
+  assert.deepEqual(projectedRotationTimelineRows(animation([valid], false), bones), []);
+  assert.deepEqual(projectedRotationTimelineRows(
+    animation([rotation('missing', 0, [0, 0, 0])]), bones,
+  ), []);
+  assert.deepEqual(projectedRotationTimelineRows(
+    animation([valid, { ...valid, time: 1 }]), bones,
+  ), []);
+  assert.deepEqual(projectedRotationTimelineRows(
+    animation([rotation('bone-a', 0, [100001, 0, 0])]), bones,
+  ), []);
+  assert.deepEqual(projectedRotationTimelineRows(animation([]), bones), []);
 });

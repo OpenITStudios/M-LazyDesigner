@@ -2,6 +2,26 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Rust native editor P0 — bounded Animation length and timeline (2026-11-15)
+
+**Current source work:** Add `set_animation_length` to the one Rust
+`EditOperation` authority. It preserves numeric linear Bone rotation
+keyframes, refuses truncation, unknown/opaque channels or metadata,
+ambiguous duplicated Animation UUIDs, and is Undo/Redo/Save Copy
+reversible. The native Svelte Animate workspace gains a guarded clip
+duration input and read-only, per-Bone time markers with keyframe
+selection; neither UI nor Three.js owns or mutates authored tracks.
+The Tauri snapshot now refuses preview for oversized numeric angles,
+duplicate keyframe/clip identities and mismatched Bone track names,
+instead of surfacing misleading partial data. All source regressions
+are AUTHORED_NOT_RUN; native playback and Blockbench format/visual
+parity remain UNVERIFIED.
+
+**Continuation:** Next address material P0 Animate authoring/preview
+and New/Edit/Paint/Save/Open workflow gaps rather than more Code Mode
+protocol polishing. Never auto-delete data from unsupported imported
+animations. Preserve Rust Core authority, `Local`, and held CI/localtest.
+
 ## Rust native editor P0 — Paint/viewport alpha-cutout correctness (2026-11-15)
 
 **Current source work:** The Svelte/Three.js viewport uses the same

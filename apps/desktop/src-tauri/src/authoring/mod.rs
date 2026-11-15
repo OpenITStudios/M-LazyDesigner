@@ -127,6 +127,7 @@ pub enum EditOperation {
     RemoveCube { uuid: String },
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
+    SetAnimationLength { animation_uuid: String, length: f64 },
     AddBoneRotationKeyframe {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
         time: f64, rotation: [f64; 3],
@@ -1535,6 +1536,76 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 "loop": "once", "length": length, "animators": {}
             }));
             Ok(uuid.clone())
+        }
+        EditOperation::SetAnimationLength { animation_uuid, length } => {
+            if !length.is_finite() || !(0.0..=3600.0).contains(length) {
+                return Err(fail("ANIMATION_LENGTH_INVALID"));
+            }
+            let mut matching = doc.animation_assets.iter().enumerate()
+                .filter(|(_, asset)| asset.get("uuid").and_then(Value::as_str)
+                    == Some(animation_uuid));
+            let (index, animation) = matching.next()
+                .ok_or_else(|| fail("ANIMATION_NOT_FOUND"))?;
+            if matching.next().is_some() {
+                // An imported model can contain duplicate Animation UUIDs.
+                // Never choose the first target silently.
+                return Err(fail("ANIMATION_ID_AMBIGUOUS"));
+            }
+            // Editing the clip length is only lossless for the same
+            // once-only linear Bone rotation subset as the native preview.
+            // Never silently trim imported effects, Molang, position/scale
+            // channels or opaque keyframe data when shortening a clip.
+            if !animation.as_object().is_some_and(|object| object.keys()
+                .all(|key| matches!(key.as_str(),
+                    "uuid" | "name" | "loop" | "length" | "animators"))) ||
+               animation.get("loop").and_then(Value::as_str).unwrap_or("once") != "once" ||
+               !animation.get("length").and_then(Value::as_f64)
+                   .is_some_and(|value| value.is_finite() && (0.0..=3600.0).contains(&value)) {
+                return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+            }
+            let animators = animation.get("animators").and_then(Value::as_object)
+                .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
+            let mut all_ids = HashSet::new();
+            let mut total_frames = 0usize;
+            for (bone_uuid, track) in animators {
+                let Some(bone) = doc.bones.iter().find(|bone| bone.uuid == *bone_uuid) else {
+                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                };
+                if !editable_rotation_track(track) ||
+                   track.get("name").is_some_and(|value|
+                       value.as_str() != Some(bone.name.as_str())) {
+                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                }
+                let frames = track.get("keyframes").and_then(Value::as_array)
+                    .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
+                total_frames = total_frames.saturating_add(frames.len());
+                if total_frames > 2048 {
+                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                }
+                let mut times = Vec::with_capacity(frames.len());
+                for frame in frames {
+                    if !editable_rotation_frame(frame) {
+                        return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                    }
+                    let time = frame.get("time").and_then(Value::as_f64)
+                        .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
+                    if time > *length {
+                        return Err(fail("ANIMATION_LENGTH_BEFORE_KEYFRAME"));
+                    }
+                    let id = frame.get("uuid").and_then(Value::as_str)
+                        .ok_or_else(|| fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"))?;
+                    if !all_ids.insert(id) {
+                        return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                    }
+                    times.push(time);
+                }
+                times.sort_by(f64::total_cmp);
+                if times.windows(2).any(|pair| pair[1] - pair[0] <= 1e-6) {
+                    return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
+                }
+            }
+            doc.animation_assets[index]["length"] = json!(length);
+            Ok(animation_uuid.clone())
         }
         EditOperation::AddBoneRotationKeyframe {
             animation_uuid, bone_uuid, keyframe_uuid, time, rotation,

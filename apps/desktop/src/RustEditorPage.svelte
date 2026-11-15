@@ -4,14 +4,14 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
-  import { projectedBoneRotationPose } from './rustAnimationPose';
+  import { projectedBoneRotationPose, projectedRotationTimelineRows } from './rustAnimationPose';
   import { supportedFaceUvRotation } from './rustTextureProjection';
   import { advanceOncePlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
-  import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, Vec3, Vec4 } from './rustEditorTypes';
+  import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, RotationKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
     measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
@@ -136,6 +136,9 @@
   $: selectedKeyframe = selectedAnimation?.rotationKeyframes.find(
     (frame) => frame.uuid === selectedKeyframeUuid,
   ) ?? null;
+  $: timelineRows = projectedRotationTimelineRows(
+    selectedAnimation, snapshot?.bones ?? [],
+  );
   // UI-only time selection drives a read-only Bone pose; no Rust mutation.
   $: previewBoneRotations = workspaceMode === 'animate'
     ? projectedBoneRotationPose(selectedAnimation, animationTime) : null;
@@ -560,6 +563,46 @@
     }
     newAnimationLength = value;
   }
+  async function setSelectedAnimationLength(input: HTMLInputElement) {
+    const selected = selectedAnimation;
+    if (!snapshot || !selected || !selected.previewSupported ||
+        busy || loading || workspaceMode !== 'animate') {
+      if (selected) input.value = String(selected.length);
+      return;
+    }
+    const length = parseFiniteEditorNumber(input.value);
+    if (length === null || length < 0 || length > 3600) {
+      error = 'Clip length must be a finite number between 0 and 3600 seconds.';
+      input.value = String(selected.length);
+      return;
+    }
+    if (length === selected.length) return;
+    pauseAnimationPlayback();
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{
+        op: 'set_animation_length', animation_uuid: selected.uuid, length,
+      }],
+    });
+    // Refuse silently dropping keyframes when shortening; the Rust Core
+    // rejects conflicting lengths and leaves the original clip intact.
+    const updated = next?.animations.find((animation) => animation.uuid === selected.uuid);
+    input.value = String(updated?.length ?? selected.length);
+    if (updated && selectedAnimation?.uuid === selected.uuid) {
+      animationTime = Math.min(animationTime, updated.length);
+      notice = 'Animation length saved. Keyframes and Bone tracks were preserved.';
+    }
+  }
+
+  function selectRotationKeyframe(frame: RotationKeyframeView) {
+    pauseAnimationPlayback();
+    selectedKeyframeUuid = frame.uuid;
+    selectedId = null;
+    selectedBoneId = frame.boneUuid;
+    animationTime = frame.time;
+    animationRotation = [...frame.rotation] as Vec3;
+  }
+
   function updateAnimationTime(text: string) {
     pauseAnimationPlayback();
     const value = parseFiniteEditorNumber(text);
@@ -1512,7 +1555,15 @@
             <strong>{selectedAnimation.name}</strong>
             <span>Length {selectedAnimation.length}s · {selectedAnimation.rotationKeyframes.length} supported rotation keyframes</span>
           </div>
-          <p class="hint">Select a Bone in the Outliner, set time and rotation, then add a keyframe. Existing unsupported tracks remain read-only.</p>
+          <label class="animate-clip-length">Selected clip length (seconds)
+            <input type="number" min="0" max="3600" step="any"
+              aria-label="Edit selected animation length"
+              value={selectedAnimation.length}
+              disabled={busy || loading || !selectedAnimation.previewSupported}
+              onchange={(event) => void setSelectedAnimationLength(event.currentTarget)}/>
+          </label>
+          <p class="hint">Length edits are Rust Undo steps. Shortening cannot delete or move existing keyframes; a conflicting length is refused. Unsupported imported tracks stay read-only.</p>
+          <p class="hint">Select a Bone in the Outliner, set time and rotation, then add a keyframe.</p>
           {#if selectedAnimation.previewSupported}
             <div class="animate-playback-controls" role="group" aria-label="Rotation pose playback controls">
               <button type="button" aria-pressed={playbackActive}
@@ -1533,6 +1584,29 @@
                 aria-label="Scrub static rotation pose"/>
             </label>
             <p class="hint">Play/Pause previews only supported numeric linear Bone rotations. No sound, effects, Molang, loop or controller evaluation.</p>
+            {#if timelineRows.length > 0}
+              <div class="animate-timeline" aria-label="Bone rotation keyframe timeline">
+                {#each timelineRows as row (row.boneUuid)}
+                  <div class="animate-timeline-row">
+                    <span class="animate-timeline-bone" title={row.boneName}>{row.boneName}</span>
+                    <div class="animate-timeline-lane" role="group"
+                      aria-label={'Rotation keyframes for ' + row.boneName}>
+                      {#each row.frames as frame (frame.uuid)}
+                        <button type="button" class="animate-timeline-marker"
+                          class:active={selectedKeyframeUuid === frame.uuid}
+                          aria-pressed={selectedKeyframeUuid === frame.uuid}
+                          aria-label={row.boneName + ' keyframe at ' + frame.time + ' seconds'}
+                          title={row.boneName + ' · ' + frame.time + 's'}
+                          style:left={(selectedAnimation.length > 0
+                            ? (frame.time / selectedAnimation.length) * 100 : 0) + '%'}
+                          disabled={busy || loading}
+                          onclick={() => selectRotationKeyframe(frame)}></button>
+                      {/each}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           {:else}
             <p class="hint">Pose preview unavailable: this Animation contains unsupported tracks, expressions or interpolation. Original data is preserved.</p>
           {/if}
@@ -1562,14 +1636,7 @@
               <button type="button" class:active={selectedKeyframe?.uuid === frame.uuid}
                 aria-pressed={selectedKeyframe?.uuid === frame.uuid}
                 title={'Select rotation keyframe at ' + frame.time + ' seconds'}
-                onclick={() => {
-                  pauseAnimationPlayback();
-                  selectedKeyframeUuid = frame.uuid;
-                  selectedId = null;
-                  selectedBoneId = frame.boneUuid;
-                  animationTime = frame.time;
-                  animationRotation = [...frame.rotation] as Vec3;
-                }}>
+                onclick={() => selectRotationKeyframe(frame)}>
                 {frame.time}s · {snapshot.bones.find((bone) => bone.uuid === frame.boneUuid)?.name ?? frame.boneUuid}
                 · [{frame.rotation.join(', ')}]
               </button>
@@ -1993,7 +2060,7 @@
         onclick={() => selectWorkspace('paint')}>Paint</button>
       <button class="mode" class:active={workspaceMode === 'animate'}
         aria-pressed={workspaceMode === 'animate'} disabled={!snapshot || busy || !!paintStroke}
-        title="Author bounded Bone rotation keyframes in Rust; playback is not implemented"
+        title="Author bounded Bone rotation keyframes in Rust; supported numeric linear rotation playback is a read-only preview"
         onclick={() => selectWorkspace('animate')}>Animate</button>
     </div>
   </header>

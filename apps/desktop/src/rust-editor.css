@@ -745,6 +745,76 @@
   outline: 2px solid #3e90ff; outline-offset: 2px;
 }
 
+/* Source-derived animation timeline: one lane per Bone and bounded
+   keyframe markers. Only the Rust EditOperation modifies clip data. */
+.rust-editor .animate-clip-length {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  color: #c9d4e4;
+  font-size: 12px;
+}
+.rust-editor .animate-clip-length input {
+  max-width: 170px;
+  padding: 6px;
+  border: 1px solid #526071;
+  border-radius: 3px;
+  background: #272d35;
+  color: #e0e4eb;
+  font: inherit;
+}
+.rust-editor .animate-clip-length input:disabled { opacity: 0.55; }
+.rust-editor .animate-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(100%, 650px);
+}
+.rust-editor .animate-timeline-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 120px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 30px;
+}
+.rust-editor .animate-timeline-bone {
+  font-size: 12px;
+  color: #c8d2e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rust-editor .animate-timeline-lane {
+  position: relative;
+  min-height: 24px;
+  margin: 0 9px;
+  border-top: 1px solid #3e4856;
+  border-bottom: 1px solid #3e4856;
+  background: #1e2835;
+}
+.rust-editor .animate-timeline-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid #a6bdd9;
+  border-radius: 2px;
+  background: #50729a;
+  cursor: pointer;
+}
+.rust-editor .animate-timeline-marker.active {
+  border-color: #fff;
+  background: #80b6fa;
+}
+.rust-editor .animate-timeline-marker:focus-visible {
+  outline: 2px solid #3e90ff;
+  outline-offset: 4px;
+}
+.rust-editor .animate-timeline-marker:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .rust-editor .animate-scrub {
   display: flex;
   flex-direction: column;

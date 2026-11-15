@@ -1,6 +1,6 @@
 // Read-only static rotation pose for the bounded Rust Animate source subset.
 // This does not evaluate Molang, effects, loops or quaternion interpolation.
-import type { AnimationView, RotationKeyframeView, Vec3 } from './rustEditorTypes';
+import type { AnimationView, BoneView, RotationKeyframeView, Vec3 } from './rustEditorTypes';
 
 export function projectedBoneRotationPose(
   animation: AnimationView | null | undefined, time: number,
@@ -43,4 +43,37 @@ export function projectedBoneRotationPose(
     }
   }
   return pose;
+}
+
+
+/** Read-only timeline rows, grouped by the authoritative Rust Bone order.
+ * The projection does not change keyframe times or the animation document.
+ * Unsupported imported clips have no selectable/ambiguous markers.
+ */
+export type RotationTimelineRow = {
+  boneUuid: string;
+  boneName: string;
+  frames: RotationKeyframeView[];
+};
+export function projectedRotationTimelineRows(
+  animation: AnimationView | null | undefined,
+  bones: readonly Pick<BoneView, 'uuid' | 'name'>[],
+): RotationTimelineRow[] {
+  if (!animation?.previewSupported ||
+      projectedBoneRotationPose(animation, 0) === null) return [];
+  const byBone = new Map<string, RotationKeyframeView[]>();
+  const knownBones = new Set(bones.map((bone) => bone.uuid));
+  const ids = new Set<string>();
+  for (const frame of animation.rotationKeyframes) {
+    if (!knownBones.has(frame.boneUuid) || ids.has(frame.uuid)) return [];
+    ids.add(frame.uuid);
+    const frames = byBone.get(frame.boneUuid) ?? [];
+    frames.push(frame);
+    byBone.set(frame.boneUuid, frames);
+  }
+  return bones.filter((bone) => byBone.has(bone.uuid)).map((bone) => ({
+    boneUuid: bone.uuid, boneName: bone.name,
+    frames: [...byBone.get(bone.uuid)!].sort((a, b) =>
+      a.time - b.time || a.uuid.localeCompare(b.uuid)),
+  }));
 }

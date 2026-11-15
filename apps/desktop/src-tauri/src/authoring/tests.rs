@@ -14,6 +14,100 @@ fn sample_cube(uuid: &str) -> Cube {
     serde_json::from_value(value["elements"][0].clone()).unwrap()
 }
 
+// SOURCE-AUTHORED: existing Rust tests remain NOT_EXECUTED.
+#[test]
+fn animation_length_edit_is_atomic_reversible_and_keeps_keyframe_payload() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009101";
+    const KEY: &str = "00000000-0000-4000-8000-000000009102";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreateAnimation {
+            uuid: ANIM.into(), name: "idle".into(), length: 1.0,
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: KEY.into(), time: 0.75, rotation: [0.0, 45.0, 0.0],
+        },
+    ]).unwrap();
+    let before = session.document().clone();
+    let frames = before.animation_assets[0]["animators"][BONE]["keyframes"].clone();
+    let receipt = session.apply(1, &[
+        EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length: 2.5 },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 2);
+    assert_eq!(receipt.changed_uuids, vec![ANIM.to_owned()]);
+    let changed = session.document().clone();
+    assert_eq!(changed.animation_assets[0]["length"], json!(2.5));
+    assert_eq!(changed.animation_assets[0]["animators"][BONE]["keyframes"], frames);
+    assert_eq!(changed.cubes, before.cubes);
+    assert_eq!(changed.bones, before.bones);
+    assert_eq!(changed.hierarchy, before.hierarchy);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        changed);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &changed);
+    assert_eq!(session.apply(4, &[
+        EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length: 2.5 },
+    ]).unwrap_err(), "EDIT_NO_OP");
+}
+
+#[test]
+fn animation_length_edit_refuses_truncation_and_unrecognized_tracks_without_partial_write() {
+    const ANIM: &str = "00000000-0000-4000-8000-000000009103";
+    const KEY: &str = "00000000-0000-4000-8000-000000009104";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreateAnimation {
+            uuid: ANIM.into(), name: "walk".into(), length: 2.0,
+        },
+        EditOperation::AddBoneRotationKeyframe {
+            animation_uuid: ANIM.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: KEY.into(), time: 1.5, rotation: [0.0, 15.0, 0.0],
+        },
+    ]).unwrap();
+    let original = session.document().clone();
+    for length in [-1.0, 3601.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(session.apply(1, &[
+            EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length },
+        ]).unwrap_err(), "ANIMATION_LENGTH_INVALID");
+    }
+    assert_eq!(session.apply(1, &[
+        EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length: 1.0 },
+    ]).unwrap_err(), "ANIMATION_LENGTH_BEFORE_KEYFRAME");
+    assert_eq!(session.apply(1, &[
+        EditOperation::SetAnimationLength { animation_uuid: "missing".into(), length: 3.0 },
+    ]).unwrap_err(), "ANIMATION_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+    assert_eq!(session.summary().revision, 1);
+
+    let mut imported = original.clone();
+    imported.animation_assets[0]["animators"][BONE]["keyframes"][0]
+        ["data_points"][0]["x"] = json!("query.head_yaw");
+    let mut imported = EditorSession::from_document(imported.clone()).unwrap();
+    assert_eq!(imported.apply(0, &[
+        EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length: 3.0 },
+    ]).unwrap_err(), "ANIMATION_LENGTH_EDIT_UNSUPPORTED");
+    let source = imported.document().clone();
+    assert_eq!(imported.apply(0, &[
+        EditOperation::TranslateCube { uuid: CUBE.into(), delta: [1.0, 0.0, 0.0] },
+        EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length: 3.0 },
+    ]).unwrap_err(), "ANIMATION_LENGTH_EDIT_UNSUPPORTED");
+    assert_eq!(imported.document(), &source);
+    assert_eq!(imported.summary().revision, 0);
+    assert!(!imported.can_undo());
+
+    let mut duplicate = original.clone();
+    duplicate.animation_assets.push(original.animation_assets[0].clone());
+    let mut duplicated = EditorSession::from_document(duplicate.clone()).unwrap();
+    assert_eq!(duplicated.apply(0, &[
+        EditOperation::SetAnimationLength { animation_uuid: ANIM.into(), length: 3.0 },
+    ]).unwrap_err(), "ANIMATION_ID_AMBIGUOUS");
+    assert_eq!(duplicated.document(), &duplicate);
+    assert_eq!(duplicated.summary().revision, 0);
+}
+
 // SOURCE-AUTHORED ONLY: Rust/Blockbench tests remain NOT_EXECUTED.
 #[test]
 fn node_rename_is_atomic_undoable_and_synchronizes_known_bone_animator_name() {
