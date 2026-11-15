@@ -1,5 +1,7 @@
 # Code Mode migration — Rust-native LazyDesigner
 
+**Source extension (2026-11-15):** The first Code Mode SDK now supports paged `catalog` reads (Cube/Bone/Texture/Animation UUID/index discovery; 1–64 items) and metadata-only `inspectTexture` / `inspectAnimation` calls. Rust projects source SHA with every query but does not expose raw texture images or opaque Animation content. This enables model-written code to discover imported model identities before a targeted edit; source regressions AUTHORED_NOT_RUN.
+
 **State:** `SOURCE_IN_PROGRESS` on `Rust`, 2026-11-15. No executable/native PASS claimed.
 
 ## Product decision and boundary

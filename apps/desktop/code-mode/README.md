@@ -35,7 +35,9 @@ console.log({ nextSha: next.output_sha256, changed: next.mutation.changed_uuids 
 The example is **illustrative, not executed**: an actual project, UUID, approved mutation and installed binary are prerequisites. A mutation must not automatically replay after an unknown process result; inspect the source/output state first.
 
 - `inspect({input})`: summary plus source SHA.
+- `catalog({input,kind,offset,limit})`: bounded, paginated Cube/Bone/texture/animation identities (≤64 entries per request) for discovering imported asset IDs without loading the whole model.
 - `inspect({input,uuid})`: bounded focused Cube/Bone state, not full model/blob echo.
+- `inspectTexture({input,index})` / `inspectAnimation({input,uuid})`: bounded metadata only. Embedded bitmap data and opaque animation JSON are never echoed.
 - `newModel`, `apply`, `importPng`, `exportPng`, `exportGeometry`: wrappers over existing Rust CLI commands; always explicit paths and preconditions.
 - `apply`: a bounded array of existing Rust `EditOperation` variants as one transaction, against `expected_revision:0` for a newly opened CLI session. The CLI enforces the source SHA again and publishes a new sibling without overwrite.
 - `runner`: test-only or trusted-agent-host call seam; it **does not** make an arbitrary script secure.

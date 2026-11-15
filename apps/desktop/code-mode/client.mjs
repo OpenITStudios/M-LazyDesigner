@@ -26,6 +26,12 @@ function absolute(value, name) {
   if (!isAbsolute(value)) throw new TypeError(name + ' must be an absolute path');
   return value;
 }
+function wholeNumber(value, name, min, max) {
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new TypeError(name + ' must be an integer from ' + min + ' to ' + max);
+  }
+  return String(value);
+}
 function hash(value) {
   if (typeof value !== 'string' || !SHA256.test(value)) {
     throw new TypeError('expectedSha256 must be a 64-character hex digest');
@@ -131,6 +137,27 @@ export function createRustCodeModeClient({ binary, runner } = {}) {
       return call('inspect', {
         input: absolute(input, 'input'),
         ...(uuid === undefined ? {} : { uuid: nonempty(uuid, 'uuid') }),
+      });
+    },
+    async catalog({ input, kind, offset = 0, limit = 32 }) {
+      if (!['cubes', 'bones', 'textures', 'animations'].includes(kind)) {
+        throw new TypeError('Unknown catalog kind');
+      }
+      return call('inspect', {
+        input: absolute(input, 'input'), list: kind,
+        offset: wholeNumber(offset, 'offset', 0, 65536),
+        limit: wholeNumber(limit, 'limit', 1, 64),
+      });
+    },
+    async inspectTexture({ input, index }) {
+      return call('inspect', {
+        input: absolute(input, 'input'),
+        'texture-index': wholeNumber(index, 'index', 0, 65536),
+      });
+    },
+    async inspectAnimation({ input, uuid }) {
+      return call('inspect', {
+        input: absolute(input, 'input'), 'animation-uuid': nonempty(uuid, 'uuid'),
       });
     },
     async apply({ input, output, expectedSha256, operations }) {

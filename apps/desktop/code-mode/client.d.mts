@@ -70,11 +70,34 @@ export interface FocusedElement {
   faces?: Record<string, { uv: Vec4 | null; texture: unknown; rotation: number | null }>;
   [key: string]: unknown;
 }
+export interface CatalogEntry {
+  uuid: string | null;
+  name: string | null;
+  kind: "cube" | "bone" | "texture" | "animation";
+  index: number;
+}
+export interface CatalogPage {
+  kind: "cubes" | "bones" | "textures" | "animations";
+  entries: CatalogEntry[];
+  offset: number;
+  total: number;
+  next_offset: number | null;
+}
+export interface InspectAsset {
+  kind: "texture" | "animation";
+  index: number;
+  uuid: string | null;
+  name: string | null;
+  source_kind?: "embedded_png" | "external_or_other" | "unavailable";
+  [key: string]: unknown;
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
   summary: DocumentSummary;
   element?: FocusedElement;
+  catalog?: CatalogPage;
+  asset?: InspectAsset;
 }
 export interface MutationReceipt {
   revision: number;
@@ -98,6 +121,9 @@ export interface OutputReceipt {
 export interface RustCodeModeClient {
   newModel(input: { output: string; name: string; modelIdentifier: string }): Promise<OutputReceipt>;
   inspect(input: { input: string; uuid?: string }): Promise<InspectReceipt>;
+  catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt & { catalog: CatalogPage }>;
+  inspectTexture(input: { input: string; index: number }): Promise<InspectReceipt & { asset: InspectAsset }>;
+  inspectAnimation(input: { input: string; uuid: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
   exportPng(input: { input: string; output: string; textureUuid: string; expectedSha256: string }): Promise<OutputReceipt>;

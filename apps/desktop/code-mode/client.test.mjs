@@ -40,6 +40,25 @@ test('Code Mode delegates a single bounded atomic Rust transaction', async () =>
   assert.equal(receipt.mutation.revision, 1);
 });
 
+test('Code Mode catalog and metadata inspection remain read-only and bounded', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 }, catalog: { entries: [], next_offset: null }, asset: { source_kind: 'embedded_png' } };
+    },
+  });
+  await client.catalog({ input: '/abs/model.bbmodel', kind: 'cubes', limit: 2, offset: 1 });
+  await client.inspectTexture({ input: '/abs/model.bbmodel', index: 0 });
+  await client.inspectAnimation({ input: '/abs/model.bbmodel', uuid: 'an-existing-animation-id' });
+  assert.deepEqual(calls[0], ['inspect', '--input', '/abs/model.bbmodel', '--list', 'cubes', '--offset', '1', '--limit', '2']);
+  assert.deepEqual(calls[1], ['inspect', '--input', '/abs/model.bbmodel', '--texture-index', '0']);
+  assert.deepEqual(calls[2], ['inspect', '--input', '/abs/model.bbmodel', '--animation-uuid', 'an-existing-animation-id']);
+  await assert.rejects(client.catalog({ input: '/abs/model.bbmodel', kind: 'textures', limit: 65 }));
+  assert.equal(calls.length, 3);
+});
+
 test('invalid SHA, nonfinite fields and unbounded batches fail before invoking CLI', async () => {
   let count = 0;
   const client = createRustCodeModeClient({ binary: BIN, runner: async () => {

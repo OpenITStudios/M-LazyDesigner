@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-15 — Rust Code Mode paged discovery extension (SOURCE_ONLY)
+
+CLI `inspect` now accepts `--list` with bounded offset/limit or an explicit texture-index/animation-uuid metadata request. The JS Code Mode SDK exposes `catalog`, `inspectTexture` and `inspectAnimation`; no raw image or opaque animation body is echoed. Authored Rust/Node regressions NOT_EXECUTED. This is source evidence only, not a security sandbox, installed agent, native rendering or efficiency measurement.
+
 ## 2026-11-15 — Rust Code Mode SDK and focused CLI inspection (SOURCE_ONLY)
 
 **Rust Code Mode source integration (2026-11-15):** The maintainer selected Code Mode as the target AI composition interface for `Rust`. `apps/desktop/code-mode/client.mjs` and its declaration expose bounded, programmatic CLI operations for read-only summary/UUID inspection, SHA-guarded atomic model edits, and PNG/geometry output. `lazydesigner-authoring inspect --uuid` adds a compact Cube/Bone projection without raw bitmap/opaque JSON. No model-written code is executed inside the editor; the authorized PC-local agent host must own its sandbox, filesystem permissions, and mutation approval. The existing `Local` MCP Gateway/Control and domain Skills are preserved. Regressions AUTHORED_NOT_RUN; no native or efficiency PASS is claimed. See [Code Mode migration](../04-system/code-mode-migration.md).

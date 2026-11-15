@@ -107,6 +107,85 @@ fn focused_element(doc: &AuthoringDocument, uuid: &str) -> Result<Value> {
     Ok(detail)
 }
 
+/// Only identities and short names are projected. No opaque blob or PNG is sent.
+fn short_name(value: Option<&str>) -> Option<String> {
+    value.map(|name| name.chars().take(160).collect())
+}
+
+fn inspect_catalog(doc: &AuthoringDocument, kind: &str, offset: usize, limit: usize) -> Result<Value> {
+    let mut entries = Vec::new();
+    let total = match kind {
+        "cubes" => doc.cubes.len(),
+        "bones" => doc.bones.len(),
+        "textures" => doc.texture_assets.len(),
+        "animations" => doc.animation_assets.len(),
+        _ => return Err(fail("INSPECT_LIST_KIND_UNKNOWN")),
+    };
+    let end = offset.saturating_add(limit).min(total);
+    if offset < total {
+        for index in offset..end {
+            let entry = match kind {
+                "cubes" => {
+                    let item = &doc.cubes[index];
+                    json!({"uuid":item.uuid,"name":short_name(item.name.as_deref()),"kind":"cube","index":index})
+                }
+                "bones" => {
+                    let item = &doc.bones[index];
+                    json!({"uuid":item.uuid,"name":short_name(Some(&item.name)),"kind":"bone","index":index})
+                }
+                "textures" => {
+                    let item = &doc.texture_assets[index];
+                    json!({"uuid":item.get("uuid"),"name":short_name(item.get("name").and_then(Value::as_str)),"kind":"texture","index":index})
+                }
+                "animations" => {
+                    let item = &doc.animation_assets[index];
+                    json!({"uuid":item.get("uuid"),"name":short_name(item.get("name").and_then(Value::as_str)),"kind":"animation","index":index})
+                }
+                _ => unreachable!(),
+            };
+            entries.push(entry);
+        }
+    }
+    let result = json!({"kind":kind,"entries":entries,"offset":offset,
+        "total":total,"next_offset":if end < total {Some(end)} else {None}});
+    if serde_json::to_vec(&result).map_err(|_| fail("INSPECT_SERIALIZE_FAILED"))?.len() > 32 * 1024 {
+        return Err(fail("INSPECT_RESULT_TOO_LARGE"));
+    }
+    Ok(result)
+}
+
+fn inspect_asset(doc: &AuthoringDocument, kind: &str, key: &str) -> Result<Value> {
+    let (index, asset) = if kind == "texture" {
+        let index = key.parse::<usize>().map_err(|_| fail("INSPECT_TEXTURE_INDEX_INVALID"))?;
+        (index, doc.texture_assets.get(index).ok_or_else(|| fail("INSPECT_TEXTURE_NOT_FOUND"))?)
+    } else {
+        doc.animation_assets.iter().enumerate()
+            .find(|(_, asset)| asset.get("uuid").and_then(Value::as_str) == Some(key))
+            .ok_or_else(|| fail("INSPECT_ANIMATION_NOT_FOUND"))?
+    };
+    let detail = if kind == "texture" {
+        let source_kind = match asset.get("source").and_then(Value::as_str) {
+            Some(value) if value.starts_with("data:image/png;base64,") => "embedded_png",
+            Some(_) => "external_or_other",
+            None => "unavailable",
+        };
+        json!({"kind":"texture","index":index,"uuid":asset.get("uuid"),
+            "name":short_name(asset.get("name").and_then(Value::as_str)),
+            "source_kind":source_kind,"uv_width":asset.get("uv_width"),
+            "uv_height":asset.get("uv_height"),"scope":asset.get("scope"),
+            "render_mode":asset.get("render_mode"),"paint_owner":asset.get("paint_owner")})
+    } else {
+        json!({"kind":"animation","index":index,"uuid":asset.get("uuid"),
+            "name":short_name(asset.get("name").and_then(Value::as_str)),
+            "length":asset.get("length"),
+            "animator_count":asset.get("animators").and_then(Value::as_object).map(|v|v.len())})
+    };
+    if serde_json::to_vec(&detail).map_err(|_| fail("INSPECT_SERIALIZE_FAILED"))?.len() > 16 * 1024 {
+        return Err(fail("INSPECT_RESULT_TOO_LARGE"));
+    }
+    Ok(detail)
+}
+
 fn execute() -> Result<Value> {
     let (command, options) = arguments()?;
     match command.as_str() {
@@ -121,16 +200,39 @@ fn execute() -> Result<Value> {
             Ok(json!({"status":"OK","sha256":sha256(&data),"summary":doc.summary(0)}))
         }
         "inspect" => {
-            option_set(&options, &["--input", "--uuid"])?;
+            option_set(&options, &["--input", "--uuid", "--list", "--offset", "--limit", "--texture-index", "--animation-uuid"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             bbmodel(&input)?;
             let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
             let session = EditorSession::open(&bytes)?;
             let digest = sha256(&bytes);
+            let query_count = ["--uuid", "--list", "--texture-index", "--animation-uuid"]
+                .iter().filter(|key| options.contains_key(*key)).count();
+            if query_count > 1 || (!options.contains_key("--list") &&
+                (options.contains_key("--offset") || options.contains_key("--limit"))) {
+                return Err(fail("INSPECT_QUERY_CONFLICT"));
+            }
             if let Some(uuid) = options.get("--uuid") {
                 let element = focused_element(session.document(), uuid)?;
                 Ok(json!({"status":"OK","sha256":digest,
                     "summary":session.summary(),"element":element}))
+            } else if let Some(kind) = options.get("--list") {
+                let offset = options.get("--offset").map(|s|s.parse::<usize>())
+                    .transpose().map_err(|_| fail("INSPECT_OFFSET_INVALID"))?.unwrap_or(0);
+                let limit = options.get("--limit").map(|s|s.parse::<usize>())
+                    .transpose().map_err(|_| fail("INSPECT_LIMIT_INVALID"))?.unwrap_or(32);
+                if limit == 0 || limit > 64 { return Err(fail("INSPECT_LIMIT_INVALID")); }
+                let catalog = inspect_catalog(session.document(), kind, offset, limit)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"catalog":catalog}))
+            } else if let Some(index) = options.get("--texture-index") {
+                let asset = inspect_asset(session.document(), "texture", index)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"asset":asset}))
+            } else if let Some(uuid) = options.get("--animation-uuid") {
+                let asset = inspect_asset(session.document(), "animation", uuid)?;
+                Ok(json!({"status":"OK","sha256":digest,
+                    "summary":session.summary(),"asset":asset}))
             } else {
                 Ok(json!({"status":"OK","sha256":digest,"summary":session.summary()}))
             }
@@ -261,6 +363,35 @@ mod tests {
     use super::*;
 
     // Source-authored regression; local execution remains on hold.
+    #[test]
+    fn code_mode_catalog_pages_identities_and_retains_model_state() {
+        let source = include_bytes!("../../fixtures/bedrock-basic.bbmodel");
+        let doc = AuthoringDocument::import_bbmodel(source).unwrap();
+        let before = doc.clone();
+        let list = inspect_catalog(&doc, "cubes", 0, 1).unwrap();
+        assert_eq!(list["total"], json!(doc.cubes.len()));
+        assert_eq!(list["entries"][0]["uuid"], json!(doc.cubes[0].uuid));
+        assert_eq!(list["entries"][0]["kind"], json!("cube"));
+        assert_eq!(doc, before);
+        assert_eq!(inspect_catalog(&doc, "unsupported", 0, 32).unwrap_err(),
+            "INSPECT_LIST_KIND_UNKNOWN");
+    }
+
+    #[test]
+    fn code_mode_asset_metadata_is_read_only() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        doc.texture_assets.push(json!({
+            "uuid":"00000000-0000-4000-8000-000000000777",
+            "name":"texture.png","source":"data:image/png;base64,SECRET",
+        }));
+        let texture = inspect_asset(&doc,"texture","0").unwrap();
+        assert_eq!(texture["source_kind"], json!("embedded_png"));
+        assert!(texture.get("source").is_none());
+        assert_eq!(inspect_asset(&doc,"texture","99").unwrap_err(),
+            "INSPECT_TEXTURE_NOT_FOUND");
+    }
+
     #[test]
     fn code_mode_focused_inspect_is_bounded_and_read_only() {
         let source = include_bytes!("../../fixtures/bedrock-basic.bbmodel");

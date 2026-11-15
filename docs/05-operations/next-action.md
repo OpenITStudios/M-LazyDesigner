@@ -4,6 +4,8 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Rust Code Mode migration — current source work (2026-11-15)
 
+**Identifier discovery increment:** The Code Mode SDK and Rust CLI now support bounded paged `cubes|bones|textures|animations` catalog (limit 1–64) and read-only metadata for a specific Texture or Animation. This closes the imported-asset UUID discovery gap in the first slice without a model/bitmap echo. Rust/Node regressions AUTHORED_NOT_RUN; host security/native proof still UNVERIFIED.
+
 **Rust Code Mode source integration (2026-11-15):** The maintainer selected Code Mode as the target AI composition interface for `Rust`. `apps/desktop/code-mode/client.mjs` and its declaration expose bounded, programmatic CLI operations for read-only summary/UUID inspection, SHA-guarded atomic model edits, and PNG/geometry output. `lazydesigner-authoring inspect --uuid` adds a compact Cube/Bone projection without raw bitmap/opaque JSON. No model-written code is executed inside the editor; the authorized PC-local agent host must own its sandbox, filesystem permissions, and mutation approval. The existing `Local` MCP Gateway/Control and domain Skills are preserved. Regressions AUTHORED_NOT_RUN; no native or efficiency PASS is claimed. See [Code Mode migration](../04-system/code-mode-migration.md).
 
 **Continuation:** Preserve the existing Rust vertical slice and proceed to comprehensive agent-host integration and source-backed focused reads for Geometry, Paint, Animate and visual evidence. The Code Mode client is source-authored and callable but does **not** execute untrusted code, replace legacy `Local` MCP, or prove local runtime. No CI/localtest/branch promotion/release; no automatic replay of uncertain mutations.
