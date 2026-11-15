@@ -1014,7 +1014,9 @@ fn bone_subtree_move_refuses_unsafe_child_uv_and_rolls_back_all_changes() {
         uuid: BONE.into(), delta: [3.0, 0.0, 0.0],
     }]).unwrap_err(), "CUBE_UV_TEXTURE_RULESET_UNSUPPORTED");
     assert_eq!(session.apply(0, &[
-        EditOperation::TranslateCube { uuid: CUBE.into(), delta: [0.0, 1.0, 0.0] },
+        // This first edit would be valid on its own; the rejected subtree
+        // move must still revert its Inflate change in the same transaction.
+        EditOperation::SetCubeInflate { uuid: CUBE.into(), inflate: 0.25 },
         EditOperation::TranslateBoneSubtree {
             uuid: BONE.into(), delta: [1.0, 0.0, 0.0],
         },

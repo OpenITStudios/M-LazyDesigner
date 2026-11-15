@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Single UV-aware translation owner and linear subtree traversal (SOURCE_ONLY)
+
+Refactored Cube Move and Bone subtree Move to use one `translate_cube_in_place` Rust semantic owner, avoiding repeated per-child Vec searches for a nested rig. The authored rollback regression now first applies a valid Inflate operation before forcing an unsupported Auto UV failure, so it exercises a real pending mutation without committing any of it. Expected complexity is a linear pass over Cube/Bone collections plus descendant membership construction, not a measured speed improvement. Existing generic Tauri/CLI/Code Mode schemas are unchanged. TEST_AUTHORED_NOT_RUN; Windows/Blockbench localproof deferred.
+
 ## 2026-11-16 — Bone-subtree Geometry translation (SOURCE_ONLY)
 
 `TranslateBoneSubtree` now performs one canonical Rust document transaction to offset a Bone and all nested Bone/Cube geometry. It reuses the existing UV-preserving/recomputing Cube translation owner and adjusts Bone pivots while leaving saved Texture bytes, Animation keyframe payloads, Outliner and unrelated roots unchanged. Regression source covers imported textured/animated fixture preservation, one Undo/Redo, .bbmodel reimport, invalid/zero deltas, unknown Bone and fail-closed imported per-texture Auto UV rollback. CLI/Tauri and typed Code Mode share the EditOperation. Tests AUTHORED_NOT_RUN; no native Blockbench rig, timing or efficiency proof. Receipt changed_uuids includes the selected Bone target, not a full descendant diff.

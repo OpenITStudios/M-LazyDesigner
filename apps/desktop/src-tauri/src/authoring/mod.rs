@@ -1470,6 +1470,33 @@ pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {
     !has_per_texture_uv_rules(doc)
 }
 
+/// The single UV-aware Cube translation primitive for standalone moves and
+/// subtree cohorts. Keeping it on a mutable Cube supports a linear scan of
+/// large hierarchies instead of repeated UUID lookups for every descendant.
+fn translate_cube_in_place(
+    cube: &mut Cube, delta: [f64; 3],
+    per_texture_uv_rules: bool, resolution: [f64; 2],
+    textures: &[Value], project_box_uv: bool,
+) -> Result<()> {
+    if !valid_vec3(delta) { return Err(fail("CUBE_DELTA_INVALID")); }
+    if delta.iter().all(|axis| *axis == 0.0) { return Ok(()); }
+    let auto_uv = cube_auto_uv(cube)?;
+    let box_uv = cube_box_uv(cube, project_box_uv);
+    if !box_uv && auto_uv != 0 && per_texture_uv_rules {
+        return Err(fail("CUBE_UV_TEXTURE_RULESET_UNSUPPORTED"));
+    }
+    for axis in 0..3 {
+        cube.from[axis] += delta[axis];
+        cube.to[axis] += delta[axis];
+    }
+    let origin = cube.origin.get_or_insert([0.0, 0.0, 0.0]);
+    for axis in 0..3 { origin[axis] += delta[axis]; }
+    if !box_uv {
+        refresh_auto_uv(cube, auto_uv, resolution, textures, None)?;
+    }
+    Ok(())
+}
+
 fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<String> {
     match op {
         EditOperation::AddBone { bone, parent_uuid } => {
@@ -1659,28 +1686,14 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(uuid.clone())
         }
         EditOperation::TranslateCube { uuid, delta } => {
-            if !valid_vec3(*delta) { return Err(fail("CUBE_DELTA_INVALID")); }
             let per_texture = has_per_texture_uv_rules(doc);
             let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
             let textures = &doc.texture_assets;
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
             let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
-            if delta.iter().all(|axis| *axis == 0.0) { return Ok(uuid.clone()); }
-            let auto_uv = cube_auto_uv(cube)?;
-            let box_uv = cube_box_uv(cube, project_box_uv);
-            if !box_uv && auto_uv != 0 && per_texture {
-                return Err(fail("CUBE_UV_TEXTURE_RULESET_UNSUPPORTED"));
-            }
-            for axis in 0..3 {
-                cube.from[axis] += delta[axis];
-                cube.to[axis] += delta[axis];
-            }
-            let origin = cube.origin.get_or_insert([0.0, 0.0, 0.0]);
-            for axis in 0..3 { origin[axis] += delta[axis]; }
-            if !box_uv {
-                refresh_auto_uv(cube, auto_uv, resolution, textures, None)?;
-            }
+            translate_cube_in_place(cube, *delta, per_texture,
+                resolution, textures, project_box_uv)?;
             Ok(uuid.clone())
         }
         EditOperation::TranslateBoneSubtree { uuid, delta } => {
@@ -1700,26 +1713,28 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             let mut cube_ids = HashSet::new();
             let mut bone_ids = HashSet::new();
             collect_visibility_targets(group, &mut cube_ids, &mut bone_ids);
-            // Stable source order; no hash iteration decides write order.
-            let affected_cubes: Vec<String> = doc.cubes.iter()
-                .filter(|cube| cube_ids.contains(&cube.uuid))
-                .map(|cube| cube.uuid.clone()).collect();
-            let affected_bones: Vec<String> = doc.bones.iter()
-                .filter(|bone| bone_ids.contains(&bone.uuid))
-                .map(|bone| bone.uuid.clone()).collect();
-            for cube_id in affected_cubes {
-                apply_operation(doc, &EditOperation::TranslateCube {
-                    uuid: cube_id, delta: *delta,
-                })?;
+            // One pass across each source collection, with O(1) expected
+            // subtree membership. All Cube UV behavior stays in the same
+            // translate_cube_in_place owner as a standalone TranslateCube.
+            let per_texture = has_per_texture_uv_rules(doc);
+            let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
+            let project_box_uv = doc.meta.box_uv.unwrap_or(false);
+            for cube in &mut doc.cubes {
+                if cube_ids.contains(&cube.uuid) {
+                    translate_cube_in_place(cube, *delta, per_texture,
+                        resolution, &doc.texture_assets, project_box_uv)?;
+                }
             }
-            for bone_id in affected_bones {
-                let origin = doc.bones.iter().find(|bone| bone.uuid == bone_id)
-                    .and_then(|bone| bone.origin).unwrap_or([0.0, 0.0, 0.0]);
-                let moved: [f64; 3] = std::array::from_fn(|axis|
-                    origin[axis] + delta[axis]);
-                apply_operation(doc, &EditOperation::SetBoneOrigin {
-                    uuid: bone_id, origin: moved,
-                })?;
+            for bone in &mut doc.bones {
+                if bone_ids.contains(&bone.uuid) {
+                    let origin = bone.origin.unwrap_or([0.0, 0.0, 0.0]);
+                    let moved: [f64; 3] = std::array::from_fn(|axis|
+                        origin[axis] + delta[axis]);
+                    if !valid_vec3(moved) {
+                        return Err(fail("BONE_ORIGIN_INVALID"));
+                    }
+                    bone.origin = Some(moved);
+                }
             }
             // The parent EditorSession only commits after validate(),
             // so one bad UV rule or overflow cancels the whole subtree move.
