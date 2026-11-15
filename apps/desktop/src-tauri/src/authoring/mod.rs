@@ -20,6 +20,8 @@ pub fn paint_texture_adoptable(texture: &Value, width: u32, height: u32) -> bool
 
 pub const MAX_MODEL_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_PLAN_BYTES: usize = 64 * 1024;
+/// Maximum native/import-png PNG file size before embedded base64 encoding.
+pub const MAX_IMPORT_PNG_BYTES: usize = 1024 * 1024;
 const MAX_ELEMENTS: usize = 65_536;
 const MAX_OPERATIONS: usize = 128;
 const MAX_HISTORY: usize = 32;
@@ -139,6 +141,8 @@ pub enum EditOperation {
     SetBoxUvOffset { uuid: String, offset: [f64; 2] },
     CreatePaintTexture { uuid: String, name: String },
     EnableImportedPaintTexture { texture_index: usize },
+    ImportPaintTexture { uuid: String, name: String, source: String },
+    AssignCubeTexture { cube_uuid: String, texture_uuid: String },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
@@ -1229,6 +1233,42 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             paint::adopt(texture, width, height)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::ImportPaintTexture { uuid, name, source } => {
+            if has_per_texture_uv_rules(doc) {
+                return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
+            }
+            // Only the bounded editable atlas subset has a safe preview/paint
+            // contract. Existing imported project assets are not rewritten.
+            if doc.texture_assets.len() >= 16 { return Err(fail("PAINT_TEXTURE_COUNT_LIMIT")); }
+            if !valid_uuid(uuid) || doc.cubes.iter().any(|cube| cube.uuid == *uuid) ||
+               doc.bones.iter().any(|bone| bone.uuid == *uuid) ||
+               doc.texture_assets.iter().chain(doc.animation_assets.iter())
+                 .any(|asset| asset.get("uuid").and_then(Value::as_str) == Some(uuid.as_str())) {
+                return Err(fail("PAINT_TEXTURE_ID_INVALID"));
+            }
+            let texture = paint::import_png(
+                uuid, name, source, doc.resolution.width, doc.resolution.height
+            )?;
+            doc.texture_assets.push(texture);
+            Ok(uuid.clone())
+        }
+        EditOperation::AssignCubeTexture { cube_uuid, texture_uuid } => {
+            if !doc.texture_assets.iter().any(|asset|
+                asset.get("uuid").and_then(Value::as_str) == Some(texture_uuid.as_str())) {
+                return Err(fail("PAINT_TEXTURE_NOT_FOUND"));
+            }
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *cube_uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            for face in cube.faces.values_mut() {
+                // A null face is intentionally absent in Blockbench. Never
+                // enable its geometry by assigning another texture.
+                if face.get("texture").is_some_and(Value::is_null) { continue; }
+                let fields = face.as_object_mut()
+                    .ok_or_else(|| fail("CUBE_FACE_DATA_INVALID"))?;
+                fields.insert("texture".into(), Value::String(texture_uuid.clone()));
+            }
+            Ok(cube_uuid.clone())
         }
         EditOperation::CreatePaintTexture { uuid, name } => {
             if !valid_uuid(uuid) || doc.texture_assets.len() >= MAX_ELEMENTS ||

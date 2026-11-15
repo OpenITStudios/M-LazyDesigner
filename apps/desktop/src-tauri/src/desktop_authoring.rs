@@ -4,7 +4,7 @@
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, has_per_texture_uv_rules, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
-    OutlinerNode, MAX_MODEL_BYTES,
+    OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rand::RngCore;
@@ -96,6 +96,7 @@ pub struct EditorSnapshot {
     bones: Vec<BoneView>,
     hierarchy: Vec<OutlinerNode>,
     texture_names: Vec<String>,
+    texture_uuids: Vec<Option<String>>,
     texture_preview_sources: Vec<Option<String>>,
     texture_preview_sides: Vec<Option<&'static str>>,
     paint_editable_textures: Vec<bool>,
@@ -362,6 +363,9 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             texture_names: doc.texture_assets.iter().map(|texture| {
                 texture.get("name").and_then(Value::as_str).unwrap_or("Unnamed texture").to_owned()
             }).collect(),
+            texture_uuids: doc.texture_assets.iter().map(|texture|
+                texture.get("uuid").and_then(Value::as_str).map(str::to_owned)
+            ).collect(),
             texture_preview_sources: texture_preview_sources(doc),
             texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
             paint_editable_textures: doc.texture_assets.iter()
@@ -470,6 +474,46 @@ pub fn rust_editor_apply(
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
     active.dirty = true;
     current(&guard)
+}
+
+/// Read a user-selected PNG entirely inside the native Rust host and
+/// submit it through the exact same validated EditOperation as the CLI.
+/// Canceled dialogs have no effect. Local paths and unvalidated bytes stay
+/// native; admitted embedded image previews follow the existing bounded projection.
+#[tauri::command]
+pub async fn rust_editor_import_paint_png(
+    state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+) -> Result<Option<EditorSnapshot>, DesktopError> {
+    {
+        let guard = lock(&state)?;
+        check_epoch(&guard, expected_epoch)?;
+        let active = guard.active.as_ref()
+            .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+        if active.session.summary().revision != expected_revision {
+            return Err(failure("RUST_EDITOR_REVISION_STALE", "Refresh the model before importing a PNG."));
+        }
+    }
+    let selected = tauri::async_runtime::spawn_blocking(|| {
+        FileDialog::new().add_filter("PNG texture", &["png"]).pick_file()
+    }).await.map_err(|_| failure("RUST_EDITOR_PICKER_FAILED", "PNG picker did not complete."))?;
+    let Some(path) = selected else { return Ok(None); };
+    storage::png(&path).map_err(model_failure)?;
+    let filename = path.file_name().and_then(|name| name.to_str())
+        .ok_or_else(|| failure("PAINT_NAME_INVALID", "The PNG filename is not supported."))?
+        .to_owned();
+    // Bounded read protects both the Rust PNG decoder and the WebView preview.
+    // The source path is not persisted to the Blockbench model.
+    let bytes = storage::read_bounded(&path, MAX_IMPORT_PNG_BYTES).map_err(model_failure)?;
+    let source = format!("data:image/png;base64,{}", STANDARD.encode(bytes));
+    let mut guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_mut()
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    active.session.apply(expected_revision, &[EditOperation::ImportPaintTexture {
+        uuid: create_uuid(), name: filename, source,
+    }]).map_err(model_failure)?;
+    active.dirty = true;
+    current(&guard).map(Some)
 }
 
 // Pinned Blockbench 5.2.1 Cube.init assigns the default texture UUID to
@@ -1078,6 +1122,29 @@ mod tests {
         let mut unsupported = original;
         unsupported.texture_assets[0]["vendor"] = json!({"preserve":true});
         assert!(!texture(&unsupported.texture_assets[0], 128, 128));
+    }
+
+
+    #[test]
+    fn texture_uuid_projection_tracks_exact_import_identity_and_keeps_opaque_entries() {
+        let mut doc = AuthoringDocument::new_bedrock("Textures", "textures").unwrap();
+        let id = "00000000-0000-4000-8000-000000000170";
+        doc.texture_assets = vec![
+            json!({"uuid":id,"name":"import.png"}),
+            json!({"name":"legacy-uuidless.png"}),
+        ];
+        let original = doc.clone();
+        let store = EditorStore {
+            epoch: 1,
+            active: Some(ActiveModel {
+                session: EditorSession::from_document(doc).unwrap(),
+                source_path: None, source_sha: None, dirty: false,
+            }),
+        };
+        let snapshot = project(&store).unwrap();
+        assert_eq!(snapshot.texture_uuids, vec![Some(id.into()), None]);
+        assert_eq!(snapshot.texture_names, vec!["import.png", "legacy-uuidless.png"]);
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
     }
 
 }

@@ -1836,3 +1836,164 @@ fn imported_rgb_png_is_not_silently_converted_to_rgba_paint_data() {
     assert_eq!(session.document(), &before);
     assert_eq!(session.summary().revision, 0);
 }
+
+#[test]
+fn import_png_and_assign_to_cube_use_one_rust_document_and_preserve_original_bytes() {
+    let texture_id = "00000000-0000-4000-8000-000000000170";
+    let mut produced = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("PNG", "png").unwrap()
+    ).unwrap();
+    produced.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: texture_id.into(), name: "source.png".into(),
+    }]).unwrap();
+    let original_source = produced.document().texture_assets[0]["source"].as_str().unwrap().to_string();
+
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let prior = session.document().clone();
+    let receipt = session.apply(0, &[
+        EditOperation::ImportPaintTexture {
+            uuid: texture_id.into(), name: "source.png".into(),
+            source: original_source.clone(),
+        },
+        EditOperation::AssignCubeTexture {
+            cube_uuid: CUBE.into(), texture_uuid: texture_id.into(),
+        },
+    ]).unwrap();
+    assert_eq!(receipt.revision, 1);
+    assert_eq!(receipt.operation_count, 2);
+    assert_eq!(session.document().texture_assets.len(), 1);
+    assert_eq!(session.document().texture_assets[0]["source"], json!(original_source));
+    assert!(paint_texture_editable(&session.document().texture_assets[0]));
+    for (face_name, face) in &session.document().cubes[0].faces {
+        assert_eq!(face["texture"], json!(texture_id), "{face_name}");
+        assert_eq!(face["uv"], prior.cubes[0].faces[face_name]["uv"]);
+    }
+    assert_eq!(session.document().bones, prior.bones);
+    assert_eq!(session.document().hierarchy, prior.hierarchy);
+    assert_eq!(session.document().animation_assets, prior.animation_assets);
+    let saved = session.export().unwrap();
+    let imported = AuthoringDocument::import_bbmodel(&saved).unwrap();
+    assert_eq!(imported, *session.document());
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &prior);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &imported);
+}
+
+#[test]
+fn assigning_texture_preserves_absent_faces_and_opaque_face_extensions() {
+    let mut wire: Value = serde_json::from_str(SAMPLE).unwrap();
+    wire["elements"][0]["faces"]["north"]["texture"] = Value::Null;
+    wire["elements"][0]["faces"]["south"]["vendor"] = json!({"retained": true});
+    let mut session = EditorSession::open(&serde_json::to_vec(&wire).unwrap()).unwrap();
+    let original = session.document().clone();
+    let asset_uuid = "00000000-0000-4000-8000-000000000170";
+    let mut produced = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("PNG", "png").unwrap()
+    ).unwrap();
+    produced.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: asset_uuid.into(), name: "source.png".into(),
+    }]).unwrap();
+    let source = produced.document().texture_assets[0]["source"].as_str().unwrap().to_string();
+    session.apply(0, &[
+        EditOperation::ImportPaintTexture {
+            uuid: asset_uuid.into(), name: "source.png".into(), source,
+        },
+        EditOperation::AssignCubeTexture {
+            cube_uuid: CUBE.into(), texture_uuid: asset_uuid.into(),
+        },
+    ]).unwrap();
+    assert!(session.document().cubes[0].faces["north"]["texture"].is_null());
+    assert_eq!(session.document().cubes[0].faces["south"]["vendor"], json!({"retained":true}));
+    assert_eq!(session.document().cubes[0].faces["south"]["texture"], json!(asset_uuid));
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+}
+
+#[test]
+fn invalid_or_unrepresentable_png_import_refuses_without_creating_assets() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let uuid = "00000000-0000-4000-8000-000000000170";
+    for (source, error) in [
+        ("not-an-embedded-png".to_string(), "PAINT_PNG_SOURCE_INVALID"),
+        ("data:image/png;base64,AAAA".to_string(), "PAINT_PNG_DECODE_FAILED"),
+        (
+            format!("data:image/png;base64,{}", "A".repeat(MAX_IMPORT_PNG_BYTES * 4 / 3 + 10)),
+            "PAINT_PNG_TOO_LARGE",
+        ),
+    ] {
+        assert_eq!(session.apply(0, &[EditOperation::ImportPaintTexture {
+            uuid: uuid.into(), name: "source.png".into(), source,
+        }]).unwrap_err(), error);
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.summary().revision, 0);
+    }
+    assert_eq!(session.apply(0, &[EditOperation::ImportPaintTexture {
+        uuid: CUBE.into(), name: "source.png".into(), source: "invalid".into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_ID_INVALID");
+    assert_eq!(session.apply(0, &[EditOperation::AssignCubeTexture {
+        cube_uuid: CUBE.into(), texture_uuid: uuid.into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_FOUND");
+    assert_eq!(session.apply(0, &[EditOperation::AssignCubeTexture {
+        cube_uuid: "missing".into(), texture_uuid: uuid.into(),
+    }]).unwrap_err(), "PAINT_TEXTURE_NOT_FOUND");
+    assert_eq!(session.document(), &original);
+}
+
+#[test]
+fn invalid_texture_assignment_rolls_back_prior_import_in_same_batch() {
+    let uuid = "00000000-0000-4000-8000-000000000170";
+    let mut produced = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("PNG", "png").unwrap()
+    ).unwrap();
+    produced.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: uuid.into(), name: "source.png".into(),
+    }]).unwrap();
+    let source = produced.document().texture_assets[0]["source"].as_str().unwrap().to_string();
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let before = session.document().clone();
+    assert_eq!(session.apply(0, &[
+        EditOperation::ImportPaintTexture {
+            uuid: uuid.into(), name: "source.png".into(), source,
+        },
+        EditOperation::AssignCubeTexture {
+            cube_uuid: "missing".into(), texture_uuid: uuid.into(),
+        },
+    ]).unwrap_err(), "CUBE_NOT_FOUND");
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.summary().revision, 0);
+}
+
+#[test]
+fn imported_png_dimensions_and_color_depth_are_validated_by_the_shared_decoder() {
+    fn png_source(width: u32, height: u32, color: png::ColorType) -> String {
+        let mut bytes = Vec::new();
+        let channels = if color == png::ColorType::Rgb { 3 } else { 4 };
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, width, height);
+            encoder.set_color(color);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(
+                &vec![0; width as usize * height as usize * channels]
+            ).unwrap();
+        }
+        format!("data:image/png;base64,{}", base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD, &bytes,
+        ))
+    }
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let uuid = "00000000-0000-4000-8000-000000000170";
+    for source in [
+        png_source(16, 16, png::ColorType::Rgba),
+        png_source(128, 128, png::ColorType::Rgb),
+    ] {
+        assert_eq!(session.apply(0, &[EditOperation::ImportPaintTexture {
+            uuid: uuid.into(), name: "imported.png".into(), source,
+        }]).unwrap_err(), "PAINT_PNG_FORMAT_UNSUPPORTED");
+        assert_eq!(session.document(), &original);
+        assert_eq!(session.summary().revision, 0);
+    }
+}

@@ -659,6 +659,46 @@
     if (next) paintTextureIndex = before;
   }
 
+
+  async function importPngTexture() {
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint') return;
+    const epoch = snapshot.epoch;
+    const revision = snapshot.revision;
+    const previousCount = snapshot.textureNames.length;
+    busy = true;
+    closeMenus();
+    error = '';
+    try {
+      // Native Rust owns file selection and validation. The approved embedded
+      // PNG may appear in the existing bounded snapshot preview, not as a path.
+      const next = await invoke<EditorSnapshot | null>('rust_editor_import_paint_png', {
+        expectedEpoch: epoch, expectedRevision: revision,
+      });
+      if (next) {
+        accept(next);
+        paintTextureIndex = previousCount;
+        notice = next.texturePreviewSources[previousCount]
+          ? 'Embedded RGBA8 PNG imported. Select a Cube to assign it; no existing UV was changed.'
+          : 'PNG imported, but preview is unavailable under the current project texture budget.';
+      }
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
+
+  async function assignSelectedTexture() {
+    if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
+        !selectedId || !snapshot.texturePreviewSources[paintTextureIndex]) return;
+    const textureUuid = snapshot.textureUuids[paintTextureIndex];
+    if (!textureUuid) return;
+    const next = await command('rust_editor_apply', {
+      expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
+      operations: [{
+        op: 'assign_cube_texture', cube_uuid: selectedId, texture_uuid: textureUuid,
+      }],
+    });
+    if (next) notice = 'Texture assigned to supported Cube faces. Face UV and hidden faces were preserved.';
+  }
+
   async function enableImportedPaintTexture() {
     if (!snapshot || busy || loading || paintStroke ||
         !snapshot.paintAdoptableTextures[paintTextureIndex] ||
@@ -1169,6 +1209,14 @@
             snapshot.textureResolution.some(size => size > 256)}>
             New RGBA8 Texture
           </button>
+          <button type="button" onclick={() => void importPngTexture()}
+            disabled={busy || loading || !!paintStroke ||
+              snapshot.textureResolution.some(size => size > 256) ||
+              snapshot.textureNames.length >= 16}
+            title="Choose a local RGBA8 PNG with the same dimensions as this project; the source file is never modified">
+            Import PNG…
+          </button>
+          <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 1 MiB); the local file is not modified.</p>
           {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
             snapshot.texturePreviewSources[paintTextureIndex]}
             <button type="button" onclick={() => void enableImportedPaintTexture()}
@@ -1186,6 +1234,16 @@
                 {/each}
               </select>
             </label>
+            <button type="button" onclick={() => void assignSelectedTexture()}
+              disabled={busy || loading || !!paintStroke || !selectedId ||
+                !snapshot.textureUuids[paintTextureIndex] ||
+                !snapshot.texturePreviewSources[paintTextureIndex]}
+              title="Assign this texture to all non-null faces of the selected Cube; keep face UV and invisible faces unchanged">
+              Apply Texture to Cube
+            </button>
+            {#if !selectedId}
+              <p class="hint">Select a Cube in the Outliner to apply the chosen texture.</p>
+            {/if}
           {/if}
           {#if snapshot.paintEditableTextures[paintTextureIndex] &&
             snapshot.texturePreviewSources[paintTextureIndex]}

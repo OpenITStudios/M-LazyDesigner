@@ -38,6 +38,16 @@ pub fn bbmodel(path: &Path) -> Result<()> {
     }
 }
 
+/// A file picker selection is never trusted just because the UI filters PNGs.
+pub fn png(path: &Path) -> Result<()> {
+    if path.extension().and_then(|value| value.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("png")) {
+        Ok(())
+    } else {
+        Err(fail("PNG_EXTENSION_REQUIRED"))
+    }
+}
+
 /// Output must be a new sibling of the input. This protects references that
 /// Blockbench wrote relative to the original project directory.
 pub fn same_directory(input: &Path, output: &Path) -> Result<()> {
@@ -96,4 +106,12 @@ mod tests {
         fs::remove_file(path).unwrap();
         fs::remove_dir(dir).unwrap();
     }
+    #[test]
+    fn png_input_extension_is_checked_even_when_picker_filters() {
+        assert!(png(Path::new("textures/entity.png")).is_ok());
+        assert!(png(Path::new("textures/entity.PNG")).is_ok());
+        assert_eq!(png(Path::new("textures/entity.jpg")).unwrap_err(), "PNG_EXTENSION_REQUIRED");
+        assert_eq!(png(Path::new("textures/entity")).unwrap_err(), "PNG_EXTENSION_REQUIRED");
+    }
+
 }

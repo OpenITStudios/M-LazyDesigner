@@ -2,9 +2,11 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, AuthoringDocument, EditPlan, EditorSession, MAX_MODEL_BYTES, MAX_PLAN_BYTES,
+    sha256, AuthoringDocument, EditOperation, EditPlan, EditorSession,
+    MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES,
 };
-use lazydesigner::authoring::storage::{bbmodel, publish_new, read_bounded, same_directory};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use lazydesigner::authoring::storage::{bbmodel, png, publish_new, read_bounded, same_directory};
 use rand::RngCore;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
@@ -38,6 +40,20 @@ fn option_set(options: &BTreeMap<String, String>, allowed: &[&str]) -> Result<()
     } else { Ok(()) }
 }
 
+// Apply and import-png share one source-integrity gate. Both publish only
+// a new sibling; neither overwrites or rewrites the selected source model.
+fn read_verified_source(path: &Path, expected_sha: &str) -> Result<(Vec<u8>, String)> {
+    bbmodel(path)?;
+    let bytes = read_bounded(path, MAX_MODEL_BYTES)?;
+    let actual_sha = sha256(&bytes);
+    if expected_sha.len() != 64 ||
+       !expected_sha.bytes().all(|byte| byte.is_ascii_hexdigit()) ||
+       !actual_sha.eq_ignore_ascii_case(expected_sha) {
+        return Err(fail("SOURCE_SHA256_STALE"));
+    }
+    Ok((bytes, actual_sha))
+}
+
 fn execute() -> Result<Value> {
     let (command, options) = arguments()?;
     match command.as_str() {
@@ -63,17 +79,11 @@ fn execute() -> Result<Value> {
             option_set(&options, &["--input", "--output", "--plan", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             let output = PathBuf::from(option(&options, "--output")?);
-            bbmodel(&input)?;
             bbmodel(&output)?;
             same_directory(&input, &output)?;
-            let bytes = read_bounded(&input, MAX_MODEL_BYTES)?;
-            let actual_sha = sha256(&bytes);
-            let expected_sha = option(&options, "--expected-sha256")?;
-            if expected_sha.len() != 64 ||
-               !expected_sha.bytes().all(|b| b.is_ascii_hexdigit()) ||
-               !actual_sha.eq_ignore_ascii_case(expected_sha) {
-                return Err(fail("SOURCE_SHA256_STALE"));
-            }
+            let (bytes, actual_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
             let plan_bytes = read_bounded(
                 Path::new(option(&options, "--plan")?), MAX_PLAN_BYTES
             )?;
@@ -92,7 +102,41 @@ fn execute() -> Result<Value> {
                 "summary":session.summary(),"mutation":receipt
             }))
         }
-        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY")),
+        "import-png" => {
+            option_set(&options, &[
+                "--input", "--output", "--png", "--uuid", "--name", "--expected-sha256",
+            ])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let output = PathBuf::from(option(&options, "--output")?);
+            let image = PathBuf::from(option(&options, "--png")?);
+            bbmodel(&output)?;
+            same_directory(&input, &output)?;
+            png(&image)?;
+            let (bytes, source_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let png_bytes = read_bounded(&image, MAX_IMPORT_PNG_BYTES)?;
+            // Only the original embedded image enters Rust model state.
+            // The input file path is never written into the .bbmodel.
+            let source = format!("data:image/png;base64,{}", STANDARD.encode(png_bytes));
+            let mut session = EditorSession::open(&bytes)?;
+            let receipt = session.apply(0, &[EditOperation::ImportPaintTexture {
+                uuid: option(&options, "--uuid")?.to_owned(),
+                name: option(&options, "--name")?.to_owned(),
+                source,
+            }])?;
+            let output_bytes = session.export()?;
+            if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != source_sha {
+                return Err(fail("SOURCE_CHANGED_DURING_APPLY"));
+            }
+            publish_new(&output, &output_bytes, MAX_MODEL_BYTES)?;
+            Ok(json!({
+                "status":"OK", "source_sha256":source_sha,
+                "output_sha256":sha256(&output_bytes), "summary":session.summary(),
+                "mutation":receipt
+            }))
+        }
+        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG")),
     }
 }
 
@@ -124,4 +168,27 @@ mod tests {
         fs::remove_file(target).unwrap();
         fs::remove_dir(folder).unwrap();
     }
+    // Source-only CLI regression: no executable test was run.
+    #[test]
+    fn import_png_and_apply_share_a_sha_guarded_source_reader() {
+        let folder = std::env::temp_dir().join(
+            format!("lazydesigner-import-{:016x}", rand::rng().next_u64())
+        );
+        fs::create_dir(&folder).unwrap();
+        let file = folder.join("source.bbmodel");
+        let bytes = AuthoringDocument::new_bedrock("Source", "source")
+            .unwrap().export_bbmodel().unwrap();
+        fs::write(&file, &bytes).unwrap();
+        let expected = sha256(&bytes);
+        let (verified, got) = read_verified_source(&file, &expected).unwrap();
+        assert_eq!(verified, bytes);
+        assert_eq!(got, expected);
+        assert_eq!(read_verified_source(&file, &"0".repeat(64)).unwrap_err(),
+            "SOURCE_SHA256_STALE");
+        assert_eq!(read_verified_source(&file, "short").unwrap_err(),
+            "SOURCE_SHA256_STALE");
+        fs::remove_file(file).unwrap();
+        fs::remove_dir(folder).unwrap();
+    }
+
 }

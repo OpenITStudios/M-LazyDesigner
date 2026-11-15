@@ -5,6 +5,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use std::io::Cursor;
+use super::MAX_IMPORT_PNG_BYTES;
 
 type Result<T> = std::result::Result<T, String>;
 const PREFIX: &str = "data:image/png;base64,";
@@ -79,23 +80,50 @@ fn size(width: u32, height: u32) -> Result<usize> {
     Ok(width as usize * height as usize * 4)
 }
 
-pub(super) fn create(uuid: &str, name: &str, width: u32, height: u32) -> Result<Value> {
+fn valid_name(name: &str) -> Result<()> {
     if name.trim().is_empty() || name.chars().count() > 80 ||
         name.chars().any(char::is_control) {
         return Err("PAINT_NAME_INVALID".into());
     }
+    Ok(())
+}
+
+fn authored_asset(uuid: &str, name: &str, source: &str) -> Value {
+    json!({
+        "uuid": uuid, "name": name, "source": source,
+        "internal": true, "wrap_mode": "limited",
+        "render_mode": "default", "render_sides": "double",
+        "paint_owner": OWNER,
+    })
+}
+
+pub(super) fn create(uuid: &str, name: &str, width: u32, height: u32) -> Result<Value> {
+    valid_name(name)?;
     let pixels = vec![0; size(width, height)?];
     let source = encode(width, height, &pixels)?;
-    Ok(json!({
-        "uuid": uuid,
-        "name": name,
-        "source": source,
-        "internal": true,
-        "wrap_mode": "limited",
-        "render_mode": "default",
-        "render_sides": "double",
-        "paint_owner": OWNER,
-    }))
+    Ok(authored_asset(uuid, name, &source))
+}
+
+/// One original, embedded RGBA8 PNG per import, never an external path.
+/// No conversion of RGB/palette, APNG, frames or vendor metadata occurs.
+pub(super) fn import_png(
+    uuid: &str, name: &str, source: &str, width: u32, height: u32,
+) -> Result<Value> {
+    valid_name(name)?;
+    let encoded = source.strip_prefix(PREFIX)
+        .ok_or("PAINT_PNG_SOURCE_INVALID")?;
+    if encoded.len() > MAX_IMPORT_PNG_BYTES * 4 / 3 + 8 {
+        return Err("PAINT_PNG_TOO_LARGE".into());
+    }
+    let asset = authored_asset(uuid, name, source);
+    // Decode the complete image before staging it in the Rust document.
+    // Store original bytes verbatim; do not re-encode on import.
+    let _ = decode(&asset, width, height)?;
+    if STANDARD.decode(encoded).map_err(|_| "PAINT_PNG_SOURCE_INVALID")?.len()
+        > MAX_IMPORT_PNG_BYTES {
+        return Err("PAINT_PNG_TOO_LARGE".into());
+    }
+    Ok(asset)
 }
 
 fn decode(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {

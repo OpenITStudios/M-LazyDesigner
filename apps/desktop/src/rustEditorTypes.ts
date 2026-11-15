@@ -72,6 +72,7 @@ export type EditorSnapshot = {
   bones: BoneView[];
   hierarchy: HierarchyNode[];
   textureNames: string[];
+  textureUuids: (string | null)[];
   texturePreviewSources: (string | null)[];
   texturePreviewSides: ('front' | 'double' | null)[];
   paintEditableTextures: boolean[];
@@ -99,6 +100,8 @@ export type EditOperation =
   | { op: 'set_box_uv_offset'; uuid: string; offset: [number, number] }
   | { op: 'create_paint_texture'; uuid: string; name: string }
   | { op: 'enable_imported_paint_texture'; texture_index: number }
+  | { op: 'import_paint_texture'; uuid: string; name: string; source: string }
+  | { op: 'assign_cube_texture'; cube_uuid: string; texture_uuid: string }
   | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
   | { op: 'paint_texture_stroke'; texture_index: number; points: [number, number][]; rgba: [number, number, number, number] }
   | { op: 'paint_texture_brush'; texture_index: number; points: [number, number][]; radius: number; rgba: [number, number, number, number]; erase: boolean }
