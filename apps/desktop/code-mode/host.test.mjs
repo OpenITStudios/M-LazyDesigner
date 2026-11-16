@@ -609,7 +609,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
         const target=step===2?{from:[10,10],to:[12,12]}:
           {from:[2,2],to:[4,4]};
         return fakeGuest({method:'apply',args:{
-          project:'p0',output:step===2?'bad.bbmodel':'good.bbmodel',
+          project:'p0',output:step===2?'bad.bbmodel':
+            step===3?'good.bbmodel':'repeat.bbmodel',
           operations:[{op:'paint_texture_pixel',texture_index:1,
             x:target.from[0],y:target.from[1],rgba:[80,100,120,255]}],
           correctionScope:{
@@ -621,6 +622,11 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             assert.equal(response.ok,false);
             assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
             return {refused:true};
+          }
+          if(step===4){
+            assert.equal(response.ok,false);
+            assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_FRESH_CAPTURE_REQUIRED');
+            return {freshCaptureRequired:true};
           }
           assert.equal(response.ok,true);
           assert.equal(response.result.project,'p1');
@@ -634,6 +640,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(rejected.value.refused,true);
     const permitted=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(permitted.value.edited,true);
+    const repeated=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(repeated.value.freshCaptureRequired,true);
     assert.equal(received.length,1);
     assert.equal(approvals.length,1);
     assert.equal(approvals[0].correctionScope.textureUuid,'tier2-atlas');

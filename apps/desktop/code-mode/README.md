@@ -14,6 +14,12 @@ and Rust scoped mutation check still apply. `ACCEPTED` blocks further
 pixel changes on that reviewed snapshot. `UNVERIFIED`, invalid feedback
 or stale images cannot authorize Paint; with no reviewer configured the
 previous numeric preflight remains, explicitly `NOT_RECORDED`.
+One successful reviewed Paint cohort consumes the selected snapshot
+for the current trusted host session. Additional Paint attempts from the
+old model SHA are refused until a new capture/review is bound to the
+new revision; the existing bounded Rust batch still permits multiple
+coherent operations inside the one authorized transaction. This is not
+a persistent retry registry or an artistic improvement claim.
 No files, images or human verdict are persisted by this mechanism.
 Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.

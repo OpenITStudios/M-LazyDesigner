@@ -342,6 +342,9 @@ export async function createCodeModeHost({
     source, preselectedVisualPair, initialProject?.expectedSha256 ?? null);
   // One ephemeral review state per exact model SHA, not a second asset store.
   const visualPreflights = new Map();
+  // One coherent reviewed correction per source revision. Do not create
+  // multiple variants from a stale, already-rejected capture.
+  const completedReviewedCorrections = new Set();
   const initialRef = Object.freeze(initialProject ? {
     project: 'p0', sha256: initialProject.expectedSha256,
     summary: initialProject.summary,
@@ -546,6 +549,9 @@ export async function createCodeModeHost({
       }
       if (visualPair !== null && pixelEdit &&
           typeof reviewVisualPair === 'function') {
+        if (completedReviewedCorrections.has(p.expectedSha256)) {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_FRESH_CAPTURE_REQUIRED');
+        }
         const feedback = visualPreflights.get(p.expectedSha256);
         if (feedback?.decision === 'ACCEPTED') {
           throw new Error('CODE_MODE_VISUAL_REVIEW_ACCEPTED_PROTECTED');
@@ -564,6 +570,11 @@ export async function createCodeModeHost({
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,
         correctionScope: args.correctionScope });
+      if (visualPair !== null && typeof reviewVisualPair === 'function' && pixelEdit) {
+        // The CLI committed its no-overwrite result. Even if registering
+        // its next handle fails, retrying the same snapshot is unsafe.
+        completedReviewedCorrections.add(p.expectedSha256);
+      }
       return { receipt, ...await register(output) };
     },
     importPng: async (args) => {

@@ -11,8 +11,11 @@ the Deno guest. A rejection needs at least one issue and an explicitly
 selected texture region. The existing Rust-enforced correction scope cannot
 extend outside the reviewer's region or weaken alpha constraints.
 Accepted/unverified feedback blocks guest Paint on the reviewed source;
-absent reviewer preserves the earlier numeric-only contract and clearly
-records NOT_RECORDED. No new public tool, model authority, persistent
+one completed reviewed Paint cohort also consumes that source's image
+evidence within the active host session, preventing repeated sibling
+mutations from a stale rejected snapshot. A new capture/review is required
+for the next source revision. Absent reviewer preserves the earlier
+numeric-only contract and clearly records NOT_RECORDED. No new public tool, model authority, persistent
 approval store or automatic image classifier is created.
 Regression source is AUTHORED_NOT_RUN; actual reviewer adapter, real
 picture viewing, hosted-agent instruction uptake, native material quality
