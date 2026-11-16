@@ -40,6 +40,21 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Material source-image evidence (conditional):** `decision_packet.texture_surface_regions` offers up to six approved, hash-bound **source image** annotations; `box_uv` is normalized in the reference picture, **not** the Blockbench UV atlas or a paint coordinate. Treat `omitted_count > 0` as incomplete discovery, not permission to ignore other surfaces. At a material/identity decision, use the relevant active-stage image IDs with `status(reference_package_path=..., include_reference_images=true, reference_image_ids=...)` **only if the actual approved images are not already in the active review context**. The source metadata alone does not provide material RGB, mapping or visual PASS. Pair the real images with current `get_texture`, mapped `capture_model_views`, and exact Cube-face UV only when the region-to-face identity needs resolution. See the conditional `references/fidelity-styling-verification.md`, not an always-loaded reference corpus.
 
+**Styling completion receipt (Local Blockbench authoring, source-only rule):**
+`paint_texture_transaction` may legitimately apply a BASE fill or a
+tiny identity correction, but its `structuredContent.texture_styling_evidence`
+must now be consulted on material-scale fills/compute. If the affected
+atlas crop reports `BASE_ONLY_CANDIDATE`, do not say Texture Styling
+is done: plan and author the missing VALUE / FORM shadow/highlight
+masses using the approved reference and mapped Cube face. If it reports
+`REVIEW_REQUIRED`, inspect any uniform bands/low value structure/noise
+against the actual shaded model; do not satisfy it by mechanically
+adding random colors. `NOT_EVALUATED` is not PASS. `INTENTIONAL_FLAT`
+is permitted only by existing declared material/face intent, never
+inferred from a receipt. These diagnostics describe the edited atlas
+crop, not the complete texture/3D appearance, and do not authorize
+additional painting. Use fresh source revision and user feedback.
+
 ## Pixel Art Reference Intake
 
 Pixel Art is conditional reference evidence, never a second Texturing workflow. When an approved Pixel Art artifact exists, consume only its compact visual handoff: identity, target grid/scale, authoritative palette/material/marking/alpha/orientation/style constraints, provenance, and blockers.

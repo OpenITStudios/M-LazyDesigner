@@ -1,5 +1,17 @@
 # LazyDesigner Next Action
 
+**Active Local Texturing craft safeguard (2026-11-17; SOURCE_ONLY):**
+Canonical paint receipts now describe changed-crop styling warnings
+for one-color fill (BASE_ONLY_CANDIDATE), horizontal color bands,
+weak value variance and fragmented/noise-first pixel treatment.
+The main reference-declared cluster compiler refuses initial
+styling that lacks actual shadow/highlight roles and value separation,
+but permits focused corrections and intentional flat base work.
+The Texturing specialist must use these as candidate diagnostics
+and still compare real approved reference + shaded mapped model.
+No extra public Gateway tools or false visual PASS; source tests
+AUTHORED_NOT_RUN under held PC/native execution.
+
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
 

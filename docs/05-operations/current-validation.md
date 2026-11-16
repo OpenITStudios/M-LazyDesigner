@@ -1,5 +1,23 @@
 # LazyDesigner Current Validation
 
+## 2026-11-17 — Local Texture value/form completion evidence (SOURCE_ONLY)
+
+The canonical Local `paint_texture_transaction` now computes bounded
+styling candidate evidence from the exact changed atlas crop after
+planning and verified pixel postcondition. A uniform fill is marked
+`BASE_ONLY_CANDIDATE`; horizontal color bands, weak value differences
+or fragmented/checker noise yield review candidates. The receipt
+explicitly has `texture_completion_attested=false` and
+`visual_verdict=UNVERIFIED`. A successful Undo or bitmap revision
+does not imply finished material, and small/intentional flat edits
+remain supported. The reference-backed internal cluster composer
+also refuses INITIAL styling lacking shadow/highlight roles or
+a separated shade ladder; focused single-role corrections are
+unchanged. Tests are AUTHORED_NOT_RUN, CI/PC/native hold applies.
+Neither the diagnostics nor the source composer auto-judge
+form-following artistic quality. Actual approved reference and
+matched shaded Cube views remain necessary before STYLED/complete.
+
 ## 2026-11-14 — Optional Animation CLI diagnosis (source-only)
 
 Bun `analyze:animation` and the existing managed executable source
