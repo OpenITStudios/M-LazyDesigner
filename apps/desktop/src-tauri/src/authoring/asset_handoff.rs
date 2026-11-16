@@ -43,7 +43,6 @@ fn translation_clearance(
     doc: &AuthoringDocument, static_bounds: &Value, saved_bounds: &Value,
 ) -> Value {
     const PIXELS_PER_BLOCK: f64 = 16.0;
-    const EPS: f64 = 1e-8;
     fn unassessed(reason: &str) -> Value {
         json!({
             "scope":"single_clip_numeric_translation_clearance",
@@ -115,9 +114,9 @@ fn translation_clearance(
                         let entry = local.entry(bone_uuid.as_str()).or_insert(0.0);
                         *entry = (*entry).max(magnitude);
                     },
-                    "rotation" if axes.iter().any(|axis| axis.abs() > EPS) =>
+                    "rotation" if axes.iter().any(|axis| *axis != 0.0) =>
                         return unassessed("ANIMATED_ROTATION_UNASSESSED"),
-                    "scale" if axes.iter().any(|axis| (*axis - 1.0).abs() > EPS) =>
+                    "scale" if axes.iter().any(|axis| *axis != 1.0) =>
                         return unassessed("ANIMATED_SCALE_UNASSESSED"),
                     "rotation" | "scale" => {},
                     _ => return unassessed("UNSUPPORTED_CHANNEL"),
@@ -131,7 +130,7 @@ fn translation_clearance(
         }
         maximum_reach = maximum_reach.max(clip_reach);
     }
-    if maximum_reach <= EPS {
+    if maximum_reach == 0.0 {
         return json!({
             "scope":"single_clip_numeric_translation_clearance",
             "status":"no_numeric_translation", "numeric_clips":numeric_clips,
@@ -166,7 +165,7 @@ fn translation_clearance(
     let width_shortfall = (required_width - actual_width).max(0.0);
     let below_shortfall = (actual_low - required_low).max(0.0);
     let above_shortfall = (required_high - actual_high).max(0.0);
-    let review = width_shortfall > EPS || below_shortfall > EPS || above_shortfall > EPS;
+    let review = width_shortfall > 0.0 || below_shortfall > 0.0 || above_shortfall > 0.0;
     json!({
         "scope":"single_clip_numeric_translation_clearance",
         "status":if review { "conservative_margin_shortfall" } else { "source_budget_covered" },
@@ -949,6 +948,17 @@ mod tests {
         let rotated = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
         assert_eq!(rotated["geometry"]["translation_clearance"]["status"],"unassessed");
         assert_eq!(rotated["geometry"]["translation_clearance"]["reason"],
+            "ANIMATED_ROTATION_UNASSESSED");
+        // Even a tiny nonzero rotation cannot be admitted into a strictly
+        // translation-only reach bound for an arbitrarily large rig.
+        session.apply(4, &[EditOperation::UpdateBoneRotationKeyframe {
+            animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:"00000000-0000-4000-8000-000000008203".into(),
+            time:0.5, rotation:[0.0, 1e-10, 0.0],
+        }]).unwrap();
+        let tiny = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(tiny["geometry"]["translation_clearance"]["status"],"unassessed");
+        assert_eq!(tiny["geometry"]["translation_clearance"]["reason"],
             "ANIMATED_ROTATION_UNASSESSED");
         let mut opaque = session.document().clone();
         opaque.animation_assets[0]["unknown_imported"] = json!({"safe":true});
