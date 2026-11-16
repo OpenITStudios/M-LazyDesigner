@@ -906,6 +906,9 @@ export async function createCodeModeHost({
       ]));
       let cursor=0, pages=0, totalCubes=null, inspectedCubes=0;
       let sourceCandidates=0, unresolvedFaces=0;
+      // A six-direction image review cannot erase individually unresolved
+      // saved face observations. Keep each flagged Cube-local face explicit.
+      const attentionFaces=new Map();
       let scanError=null;
       while (pages<32) {
         let receipt;
@@ -923,19 +926,55 @@ export async function createCodeModeHost({
             coverage.total_cubes<0 ||
             (totalCubes!==null && totalCubes!==coverage.total_cubes) ||
             !Number.isSafeInteger(coverage.reviewed_cubes) ||
-            coverage.reviewed_cubes<0 || coverage.reviewed_cubes>8 ||
+            coverage.reviewed_cubes!==Math.min(8,Math.max(0,
+              coverage.total_cubes-cursor)) ||
             !Number.isSafeInteger(coverage.review_candidates) ||
-            !Number.isSafeInteger(coverage.unresolved_reference_or_mapping_faces)) {
+            coverage.review_candidates<0 ||
+            !Number.isSafeInteger(coverage.unresolved_reference_or_mapping_faces) ||
+            coverage.unresolved_reference_or_mapping_faces<0 ||
+            !Array.isArray(coverage.cubes)) {
           scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
         }
+        const pageAttention=new Map();
+        for (const cube of coverage.cubes) {
+          if (typeof cube?.cube_uuid!=='string' ||
+              !Array.isArray(cube.faces)) {
+            scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
+          }
+          for (const face of cube.faces) {
+            if (!['north','east','south','west','up','down'].includes(face?.side) ||
+                typeof face.status!=='string' ||
+                face.status==='measured_nontransparent_pixels' ||
+                face.status==='absent_declared') {
+              scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
+            }
+            const key=JSON.stringify([cube.cube_uuid,face.side]);
+            if (pageAttention.has(key) || attentionFaces.has(key)) {
+              scanError='SOURCE_FACE_SCAN_DUPLICATE_FACE';break;
+            }
+            pageAttention.set(key,{status:face.status,
+              textureUuid:face.texture_uuid??null});
+          }
+          if (scanError)break;
+        }
+        if (scanError)break;
+        if (pageAttention.size!==coverage.review_candidates) {
+          scanError='SOURCE_FACE_SCAN_COUNT_MISMATCH';break;
+        }
+        for (const [key,status] of pageAttention)attentionFaces.set(key,status);
         totalCubes=coverage.total_cubes;
         inspectedCubes+=coverage.reviewed_cubes;
         sourceCandidates+=coverage.review_candidates;
         unresolvedFaces+=coverage.unresolved_reference_or_mapping_faces;
         pages++;
-        if(coverage.next_offset===null){cursor=null;break;}
+        if(coverage.next_offset===null){
+          if(cursor+coverage.reviewed_cubes!==totalCubes) {
+            scanError='SOURCE_FACE_SCAN_CURSOR_INVALID';break;
+          }
+          cursor=null;break;
+        }
         if(!Number.isSafeInteger(coverage.next_offset) ||
-           coverage.next_offset<=cursor ||
+           coverage.next_offset!==cursor+coverage.reviewed_cubes ||
            coverage.next_offset>totalCubes) {
           scanError='SOURCE_FACE_SCAN_CURSOR_INVALID';break;
         }
@@ -945,6 +984,26 @@ export async function createCodeModeHost({
       if (cursor!==null) blocked.push('SOURCE_FACE_SCAN_INCOMPLETE');
       if (totalCubes===0) blocked.push('NO_MODEL_SURFACES');
       if (unresolvedFaces>0) blocked.push('SOURCE_FACE_REFERENCES_NEED_REVIEW');
+      const reviewerFaces=new Map(feedback.reviewedFaces.map(item=>[
+        JSON.stringify([item.cubeUuid,item.face]),item,
+      ]));
+      let attentionUnreviewed=0;
+      for (const [key,source] of attentionFaces) {
+        const reviewed=reviewerFaces.get(key);
+        if (!reviewed ||
+            (source.textureUuid!==null &&
+             source.textureUuid!==reviewed.textureUuid) ||
+            (source.status==='fully_transparent_pixels' &&
+             reviewed.style!=='INTENTIONAL_TRANSPARENT')) {
+          attentionUnreviewed++;
+        }
+      }
+      if (sourceCandidates!==attentionFaces.size) {
+        blocked.push('SOURCE_FACE_SCAN_COUNT_MISMATCH');
+      }
+      if (attentionUnreviewed>0) {
+        blocked.push('SOURCE_ATTENTION_FACES_UNREVIEWED');
+      }
       let inspectedFaces=0, flatExceptions=0, transparentExceptions=0, styleWarnings=0;
       // The reviewer selected these actual Cube face/material identities;
       // the model-written guest cannot cherry-pick only non-flat faces.
@@ -1006,6 +1065,8 @@ export async function createCodeModeHost({
         blockers:blocked,
         face_scan:{scanned_cubes:inspectedCubes,total_cubes:totalCubes,
           source_review_candidates:sourceCandidates,
+          source_attention_faces_reviewed:attentionFaces.size-attentionUnreviewed,
+          source_attention_faces_unreviewed:attentionUnreviewed,
           unresolved_source_faces:unresolvedFaces,
           complete:cursor===null && !scanError},
         material_faces:{scope:'reviewer_selected_cube_faces_only',

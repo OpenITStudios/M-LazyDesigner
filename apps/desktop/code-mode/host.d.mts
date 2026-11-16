@@ -34,7 +34,10 @@ export interface CodeModeTexturingReadinessReceipt {
   blockers:string[];
   face_scan:{
     scanned_cubes:number;total_cubes:number|null;
-    source_review_candidates:number;unresolved_source_faces:number;
+    source_review_candidates:number;
+    source_attention_faces_reviewed:number;
+    source_attention_faces_unreviewed:number;
+    unresolved_source_faces:number;
     complete:boolean;
   }|null;
   material_faces:{

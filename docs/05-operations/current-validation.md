@@ -1,5 +1,17 @@
 # LazyDesigner Current Validation
 
+## 2026-11-17 — Source attention-face reconciliation (SOURCE_ONLY)
+
+The reviewed six-camera Texturing checkpoint now retains every source
+attention face from paged Rust `model_texture_coverage`, verifies each
+reported face count and cursor, and requires exact reviewer-selected Cube
+face and texture identity for every attention candidate. Fully transparent
+faces need an independently observed INTENTIONAL_TRANSPARENT decision.
+Unknown or unreviewed source face conditions block readiness instead of
+being summarized away by six general camera labels. The 256-Cube bound
+remains a deliberate UNVERIFIED ceiling. Source-only Node regression
+AUTHORED_NOT_RUN; no real camera/Blockbench/artistic validation.
+
 ## 2026-11-17 — Rust professional Texturing face-local candidates and review checkpoint (SOURCE_ONLY)
 
 At pinned Rust source, the canonical native PNG inspector now offers

@@ -44,6 +44,18 @@ Selected reviewed faces are not proof every occluded face was seen.
 No external image-capable reviewer, native renderer or PC-local validation
 is connected by the default CLI; it returns BLOCKED in that mode.
 
+The readiness scan also reconciles every saved-face source *attention*
+candidate. A face with transparent/partial-alpha/unknown source evidence
+cannot disappear from the final verdict simply because all six camera
+labels were accepted. Each such face must match a reviewer-selected
+`cubeUuid + face + textureUuid`; a fully transparent face specifically
+requires an observed `INTENTIONAL_TRANSPARENT` declaration. An
+unsupported/missing link or an unreviewed face remains BLOCKED. This
+source inventory is distinct from image visibility: hidden surfaces
+still need an actually observed close-up before artistic acceptance.
+The scan is deliberately bounded; oversized models remain incomplete
+rather than incorrectly PASS.
+
 To approach professional pixel-art quality, the actual reviewer must
 observe and communicate material-specific form shading, deliberate
 connected shade clusters, meaningful hue shifts, protected identity,

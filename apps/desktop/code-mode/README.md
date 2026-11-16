@@ -1,5 +1,15 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Attention-face closure (2026-11-17; SOURCE_ONLY):**
+A six-view material review now also reconciles all paged saved-face
+`review_candidates`, including partial/translucent/transparent
+source faces. Every attention entry requires an exact independently
+reviewed `cubeUuid + face + textureUuid`; a fully transparent face
+must be explicitly accepted as `INTENTIONAL_TRANSPARENT`.
+Unknown/missing links or any unreviewed candidate keep the terminal
+readiness BLOCKED. This remains *source* coverage, not native
+proof of occluded face visibility or artistic quality.
+
 **Professional pixel-art Texturing source workflow (2026-11-17; NOT_EXECUTED):**
 Code Mode now exposes a bounded `inspectBatch({kind:'texture_styling_face',
 texture_uuid,cube_uuid,face})` read. It decodes the real saved atlas

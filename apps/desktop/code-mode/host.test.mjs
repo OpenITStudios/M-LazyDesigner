@@ -2067,6 +2067,7 @@ test('Texturing readiness reads all saved Cube coverage only after independently
       chosen.push({viewId,referencePngPath,capturePngPath});
     }
     let step=0, inspectedPages=0, reviewerCalls=0, forceFlatWarning=false;
+    let extraAttention=false;
     const host=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
       preselectedVisualPair:{
@@ -2118,8 +2119,12 @@ test('Texturing readiness reads all saved Cube coverage only after independently
         return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
           kind:'model_texture_coverage',coverage:{
             scope:'saved_face_texture_coverage_page',offset:0,total_cubes:1,
-            reviewed_cubes:1,review_candidates:0,
+            reviewed_cubes:1,review_candidates:extraAttention?1:0,
             unresolved_reference_or_mapping_faces:0,next_offset:null,
+            cubes:extraAttention?[{cube_uuid:'unreviewed-cube',faces:[{
+              side:'down',texture_uuid:'tier2-atlas',
+              status:'fully_transparent_pixels',
+            }]}]:[],
           },
         }]};
       },
@@ -2133,8 +2138,13 @@ test('Texturing readiness reads all saved Cube coverage only after independently
           return {reviewed:true};
         }
         if (response.result.status==='BLOCKED'){
-          assert.ok(response.result.blockers.includes('UNIFORM_FACE_CANNOT_CLAIM_STYLED'));
-          return {sourceOnlyReady:false,flatRejected:true};
+          const blocked=response.result.blockers;
+          if(blocked.includes('UNIFORM_FACE_CANNOT_CLAIM_STYLED')){
+            return {sourceOnlyReady:false,flatRejected:true};
+          }
+          assert.ok(blocked.includes('SOURCE_ATTENTION_FACES_UNREVIEWED'));
+          assert.equal(response.result.face_scan.source_attention_faces_unreviewed,1);
+          return {sourceOnlyReady:false,reason:'SOURCE_ATTENTION_FACES_UNREVIEWED'};
         }
         assert.equal(response.result.status,'REVIEWER_DECLARED_READY_FOR_USER_DECISION');
         assert.equal(response.result.texture_completion_attested,false);
@@ -2152,6 +2162,12 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     forceFlatWarning=true;
     const flat=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
     assert.equal(flat.value.flatRejected,true);
+    forceFlatWarning=false;
+    extraAttention=true;
+    const missing=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
+    assert.equal(missing.value.sourceOnlyReady,false);
+    assert.ok(missing.value.flatRejected===undefined);
+    assert.equal(missing.value.reason,'SOURCE_ATTENTION_FACES_UNREVIEWED');
     assert.equal(reviewerCalls,1);
-    assert.equal(inspectedPages,2);
+    assert.equal(inspectedPages,3);
   }));

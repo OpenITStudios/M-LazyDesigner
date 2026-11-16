@@ -1,5 +1,14 @@
 # LazyDesigner Next Action
 
+**Rust Texturing blindspot source reconciliation (2026-11-17; SOURCE_ONLY):**
+The terminal reviewer checkpoint now reconciles every native source
+attention face against an exact reviewer-declared Cube+face+texture,
+including required intentional-transparent decisions. Missing/partial
+evidence blocks readiness; no new paint engine, native visual PASS,
+second state store or localtest has been introduced. This closes the
+source-count loophole where a six-camera review could silently ignore
+alpha/UV-attention faces. Tests remain AUTHORED_NOT_RUN.
+
 **Rust professional Texturing source closure (2026-11-17; SOURCE_ONLY):**
 Existing guarded face-local Cube painting is now paired with a read-only
 actual local-orientation saved-face styling inspector, all-region
