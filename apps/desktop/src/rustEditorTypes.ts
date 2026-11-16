@@ -75,6 +75,12 @@ export type TransformKeyframeView = {
   bezier?: BezierKeyframeHandles;
 };
 
+/** Blockbench-saved TimelineMarker.getUndoCopy(), no persistent marker UUID. */
+export type SavedTimelineMarker = {
+  name: string;
+  time: number;
+  color: number;
+};
 export type AnimationView = {
   uuid: string;
   name: string;
@@ -83,6 +89,8 @@ export type AnimationView = {
   loopMode: 'once' | 'loop' | 'hold' | 'unsupported';
   rotationKeyframes: RotationKeyframeView[];
   transformKeyframes: TransformKeyframeView[];
+  /** Tauri projects source-backed markers; older test fixtures may omit them. */
+  markers?: SavedTimelineMarker[];
   // True only when Tauri recognizes every animation/track field for static pose.
   previewSupported: boolean;
 };
@@ -136,6 +144,9 @@ export type EditOperation =
   | { op: 'set_cube_stretch'; uuid: string; stretch: Vec3 }
   | { op: 'set_cube_mirror_uv'; uuid: string; mirrored: boolean }
   | { op: 'duplicate_animation_clip'; source_uuid: string; new_uuid: string; new_name: string }
+  | { op: 'add_animation_timeline_marker'; animation_uuid: string; time: number; name: string; color: number }
+  | { op: 'update_animation_timeline_marker'; animation_uuid: string; target_time: number; time: number; name: string; color: number }
+  | { op: 'remove_animation_timeline_marker'; animation_uuid: string; time: number }
   | { op: 'add_animation_effect_event'; animation_uuid: string; keyframe_uuid: string; channel: 'sound' | 'particle'; time: number; points: AnimationEffectPoint[] }
   | { op: 'update_animation_effect_event'; animation_uuid: string; keyframe_uuid: string; channel: 'sound' | 'particle'; time: number; points: AnimationEffectPoint[] }
   | { op: 'remove_animation_effect_event'; animation_uuid: string; keyframe_uuid: string; channel: 'sound' | 'particle' }

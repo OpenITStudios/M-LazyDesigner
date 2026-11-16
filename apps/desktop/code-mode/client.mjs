@@ -123,6 +123,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   animation_track: ['animation_uuid', 'bone_uuid', 'offset', 'limit'],
   animation_transform_track: ['animation_uuid', 'bone_uuid', 'channel', 'offset', 'limit'],
   animation_effect_events: ['animation_uuid', 'offset', 'limit'],
+  animation_timeline_markers: ['animation_uuid', 'offset', 'limit'],
   audit: [],
 });
 
@@ -149,7 +150,8 @@ function serializeInspectionQueries(requests) {
         output[field] = Number(wholeNumber(
           value, field, field === 'limit' ? 1 : 0,
           field === 'limit' ? (kind === 'model_texture_coverage' ? 8 :
-            kind === 'animation_effect_events' ? 16 : 64) : 65536,
+            kind === 'animation_effect_events' ? 16 :
+            kind === 'animation_timeline_markers' ? 32 : 64) : 65536,
         ));
       } else if (field === 'channel') {
         if (!['rotation', 'position', 'scale'].includes(value)) {

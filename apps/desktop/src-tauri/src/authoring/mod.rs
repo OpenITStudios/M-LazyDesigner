@@ -16,6 +16,8 @@ mod bezier;
 mod animation_clip;
 mod effects;
 pub use effects::{inspect_animation_effect_events, AnimationEffectPoint};
+mod timeline_markers;
+pub use timeline_markers::{inspect_animation_timeline_markers, saved_timeline_markers, valid_saved_markers, SavedTimelineMarker};
 mod face_regions;
 pub use bezier::{parse_saved_bezier_handles, valid_track_segments, BezierKeyframeHandles};
 mod palette;
@@ -190,6 +192,9 @@ pub enum EditOperation {
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
     DuplicateAnimationClip { source_uuid: String, new_uuid: String, new_name: String },
+    AddAnimationTimelineMarker { animation_uuid: String, time: f64, name: String, color: u8 },
+    UpdateAnimationTimelineMarker { animation_uuid: String, target_time: f64, time: f64, name: String, color: u8 },
+    RemoveAnimationTimelineMarker { animation_uuid: String, time: f64 },
     AddAnimationEffectEvent { animation_uuid: String, keyframe_uuid: String, channel: String, time: f64, points: Vec<AnimationEffectPoint> },
     UpdateAnimationEffectEvent { animation_uuid: String, keyframe_uuid: String, channel: String, time: f64, points: Vec<AnimationEffectPoint> },
     RemoveAnimationEffectEvent { animation_uuid: String, keyframe_uuid: String, channel: String },
@@ -1012,7 +1017,7 @@ fn saved_animation_loop(animation: &Value) -> Option<&str> {
 fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
     if !animation.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
        !animation.as_object().is_some_and(|obj| obj.keys().all(|key|
-        matches!(key.as_str(), "uuid" | "name" | "loop" | "length" | "animators"))) {
+        matches!(key.as_str(), "uuid" | "name" | "loop" | "length" | "animators" | "markers"))) {
         return false;
     }
     let Some(loop_mode) = saved_animation_loop(animation) else {
@@ -1022,6 +1027,7 @@ fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
         .filter(|v| v.is_finite() && (0.0..=3600.0).contains(v)) else {
         return false;
     };
+    if !timeline_markers::valid_saved_markers(animation,length) { return false; }
     // A looping or held clip with zero duration has no stable time mapping.
     if length == 0.0 && loop_mode != "once" {
         return false;
@@ -2143,6 +2149,16 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             animation_clip::duplicate_animation_clip(doc, source_uuid, new_uuid, new_name)?;
             Ok(new_uuid.clone())
         }
+        EditOperation::AddAnimationTimelineMarker { animation_uuid, time, name, color } => {
+            timeline_markers::add_marker(doc,animation_uuid,*time,name,*color)
+        }
+        EditOperation::UpdateAnimationTimelineMarker {
+            animation_uuid, target_time, time, name, color,
+        } => timeline_markers::update_marker(
+            doc,animation_uuid,*target_time,*time,name,*color),
+        EditOperation::RemoveAnimationTimelineMarker { animation_uuid, time } => {
+            timeline_markers::remove_marker(doc,animation_uuid,*time)
+        }
         EditOperation::AddAnimationEffectEvent {
             animation_uuid, keyframe_uuid, channel, time, points,
         } => effects::add_event(doc,animation_uuid,keyframe_uuid,channel,*time,points),
@@ -2234,6 +2250,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                     return Err(fail("ANIMATION_LENGTH_BEFORE_KEYFRAME"));
                 }
             }
+            if !timeline_markers::valid_saved_markers(animation,*length) {
+                return Err(fail("ANIMATION_LENGTH_BEFORE_MARKER"));
+            }
             doc.animation_assets[index]["length"] = json!(length);
             Ok(animation_uuid.clone())
         }
@@ -2283,6 +2302,8 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                     frame["time"] = json!(scaled);
                 }
             }
+            timeline_markers::scale_markers(
+                &mut doc.animation_assets[index],*factor,new_length)?;
             doc.animation_assets[index]["length"] = json!(new_length);
             if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
                 // E.g. scale would collapse distinct same-channel keyframe

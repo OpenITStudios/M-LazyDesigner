@@ -1,5 +1,8 @@
 # LazyDesigner Desktop
 
+**Rust Animation Timeline Markers (2026-11-16; SOURCE_ONLY):** The shared Rust `add/update/remove_animation_timeline_marker` operations now author non-executing saved marker `name/time/color` for contact/phase timing, without inventing a marker UUID. Retiming, clip variants, Undo and `.bbmodel` saved data are owned by the existing Rust engine. Code Mode `inspectBatch` pages these markers, and Tauri projects their saved values without UI redesign. The previous Sound/Particle event read-batch selector is also now connected in the Rust CLI. Bedrock Animation Controller export is a separate format; controller behavior and native marker playback are NOT_IMPLEMENTED/NOT_EXECUTED. No Cargo/Node/local/native Blockbench tests or speed claims under current hold.
+
+
 **Rust Animation Sound/Particle source markers (2026-11-16; SOURCE_ONLY):** The shared Rust/Code Mode authoring operations now add, update and remove bounded Sound/Particle keyframe metadata saved in `.bbmodel` animations, with strict opaque-input refusal and one Undo state. A read-only Code Mode `animation_effect_events` inspection pages exact saved events. This does *not* load any audio files, produce particle resources, simulate timeline scripts or provide native effects playback. Tauri deliberately marks such clips unsupported for full preview instead of claiming sound/particle execution; UI design remains deferred. Tests AUTHORED_NOT_RUN and native Blockbench compatibility/relative performance UNVERIFIED.
 
 

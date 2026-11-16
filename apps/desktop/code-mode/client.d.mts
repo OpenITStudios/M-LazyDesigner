@@ -55,6 +55,9 @@ export type EditOperation =
   | { op: "remove_empty_bone"; uuid: string }
   | { op: "create_animation"; uuid: string; name: string; length: number }
   | { op: "duplicate_animation_clip"; source_uuid: string; new_uuid: string; new_name: string }
+  | { op: "add_animation_timeline_marker"; animation_uuid: string; time: number; name: string; color: number }
+  | { op: "update_animation_timeline_marker"; animation_uuid: string; target_time: number; time: number; name: string; color: number }
+  | { op: "remove_animation_timeline_marker"; animation_uuid: string; time: number }
   | { op: "add_animation_effect_event"; animation_uuid: string; keyframe_uuid: string; channel: "sound" | "particle"; time: number; points: AnimationEffectPoint[] }
   | { op: "update_animation_effect_event"; animation_uuid: string; keyframe_uuid: string; channel: "sound" | "particle"; time: number; points: AnimationEffectPoint[] }
   | { op: "remove_animation_effect_event"; animation_uuid: string; keyframe_uuid: string; channel: "sound" | "particle" }
@@ -385,6 +388,7 @@ export type InspectBatchQuery =
   | { kind: "animation_track"; animation_uuid: string; bone_uuid: string; offset?: number; limit?: number }
   | { kind: "animation_transform_track"; animation_uuid: string; bone_uuid: string; channel: TransformTrackInspection["channel"]; offset?: number; limit?: number }
   | { kind: "animation_effect_events"; animation_uuid: string; offset?: number; limit?: number }
+  | { kind: "animation_timeline_markers"; animation_uuid: string; offset?: number; limit?: number }
   | { kind: "audit" };
 export interface AnimationEffectInspection {
   scope: "saved_sound_particle_markers" | "unsupported_animation_effects";
@@ -404,6 +408,19 @@ export interface AnimationEffectInspection {
   }>;
   reason?: string;
 }
+export interface TimelineMarkerInspection {
+  scope: "saved_timeline_markers" | "unsupported_timeline_markers";
+  recognized: boolean;
+  visual_verdict: "UNVERIFIED";
+  playback_verdict: "NOT_EXECUTED";
+  animation_uuid: string;
+  clip_length?: number;
+  total_markers: number | null;
+  offset?: number;
+  next_offset: number | null;
+  markers: Array<{name: string; time: number; color: number}>;
+  reason?: string;
+}
 export type InspectBatchResult =
   | { kind: "cube"; element: FocusedElement }
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
@@ -417,6 +434,7 @@ export type InspectBatchResult =
   | { kind: "animation_track"; track: RotationTrackInspection }
   | { kind: "animation_transform_track"; track: TransformTrackInspection }
   | { kind: "animation_effect_events"; effects: AnimationEffectInspection }
+  | { kind: "animation_timeline_markers"; markers: TimelineMarkerInspection }
   | { kind: "audit"; audit: StaticModelAudit };
 export interface InspectBatchReceipt {
   status: "OK";

@@ -2,7 +2,8 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, inspect_animation_effect_events,
+    inspect_animation_timeline_markers, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -287,6 +288,12 @@ enum InspectBatchQuery {
         animation_uuid: String, bone_uuid: String, channel: String,
         offset: Option<usize>, limit: Option<usize>,
     },
+    AnimationEffectEvents {
+        animation_uuid: String, offset: Option<usize>, limit: Option<usize>,
+    },
+    AnimationTimelineMarkers {
+        animation_uuid: String, offset: Option<usize>, limit: Option<usize>,
+    },
     Audit,
 }
 
@@ -376,6 +383,20 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 let track = inspect_transform_track(doc, batch_id(&animation_uuid)?,
                     batch_id(&bone_uuid)?, &channel, offset, limit)?;
                 json!({"kind":"animation_transform_track","track":track})
+            },
+            InspectBatchQuery::AnimationEffectEvents {
+                animation_uuid, offset, limit,
+            } => {
+                let effects=inspect_animation_effect_events(
+                    doc,batch_id(&animation_uuid)?,offset.unwrap_or(0),limit.unwrap_or(16))?;
+                json!({"kind":"animation_effect_events","effects":effects})
+            },
+            InspectBatchQuery::AnimationTimelineMarkers {
+                animation_uuid, offset, limit,
+            } => {
+                let markers=inspect_animation_timeline_markers(
+                    doc,batch_id(&animation_uuid)?,offset.unwrap_or(0),limit.unwrap_or(32))?;
+                json!({"kind":"animation_timeline_markers","markers":markers})
             },
             InspectBatchQuery::Audit => {
                 json!({"kind":"audit","audit":inspect_model_audit(doc)})
@@ -634,6 +655,61 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE_AUTHORED_NOT_RUN: repair earlier Sound/Particle inspection's
+    // missing CLI enum/dispatch and add saved Timeline Marker read selector.
+    #[test]
+    fn code_mode_inspect_batch_reads_effects_and_timeline_markers_together() {
+        let mut session=EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let anim="00000000-0000-4000-8000-000000007631";
+        let sound="00000000-0000-4000-8000-000000007632";
+        session.apply(0,&[
+            EditOperation::CreateAnimation {
+                uuid:anim.into(),name:"contact".into(),length:2.0,
+            },
+            EditOperation::AddAnimationTimelineMarker {
+                animation_uuid:anim.into(),time:0.5,
+                name:"left_foot_contact".into(),color:6,
+            },
+            EditOperation::AddAnimationEffectEvent {
+                animation_uuid:anim.into(),keyframe_uuid:sound.into(),
+                channel:"sound".into(),time:0.5,
+                points:vec![lazydesigner::authoring::AnimationEffectPoint {
+                    effect:"robot.step".into(),locator:None,bind_to_actor:None,
+                }],
+            },
+        ]).unwrap();
+        let doc=session.document().clone();
+        let previous=doc.clone();
+        let req: InspectBatchInput=serde_json::from_str(&format!(
+            r#"{{"requests":[
+                {{"kind":"animation_effect_events","animation_uuid":"{anim}","limit":16}},
+                {{"kind":"animation_timeline_markers","animation_uuid":"{anim}","limit":1}}
+            ]}}"#
+        )).unwrap();
+        let selected=inspect_batch(&doc,req.requests).unwrap();
+        assert_eq!(selected.len(),2);
+        assert_eq!(selected[0]["kind"],json!("animation_effect_events"));
+        assert_eq!(selected[0]["effects"]["recognized"],json!(true));
+        assert_eq!(selected[0]["effects"]["events"][0]["uuid"],json!(sound));
+        assert_eq!(selected[1]["kind"],json!("animation_timeline_markers"));
+        assert_eq!(selected[1]["markers"]["recognized"],json!(true));
+        assert_eq!(selected[1]["markers"]["total_markers"],json!(1));
+        assert_eq!(selected[1]["markers"]["markers"][0]["name"],
+            json!("left_foot_contact"));
+        assert_eq!(selected[1]["markers"]["playback_verdict"],json!("NOT_EXECUTED"));
+        assert_eq!(doc,previous);
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"animation_timeline_markers","animation_uuid":"x","shell":"bad"}]}"#
+        ).is_err());
+        assert_eq!(inspect_batch(&doc,vec![
+            InspectBatchQuery::AnimationTimelineMarkers {
+                animation_uuid:anim.into(),offset:Some(0),limit:Some(33),
+            }
+        ]).unwrap_err(),"ANIMATION_MARKER_INSPECT_PAGE_INVALID");
+        assert_eq!(doc,previous);
+    }
 
     // SOURCE_AUTHORED_NOT_RUN: Code Mode inspects saved Sound/Particle
     // events as metadata only, with no native event playback claim.

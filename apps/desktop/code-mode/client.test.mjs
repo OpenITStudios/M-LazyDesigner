@@ -320,6 +320,98 @@ test('Code Mode submits Catmull-Rom Bone interpolation as one Rust edit', async 
 // through one host-approved Rust plan and never evaluated in the JS guest.
 
 
+
+// SOURCE_AUTHORED_NOT_RUN: no persistent marker UUID exists in Blockbench's
+// .bbmodel timeline marker copy; the editing selector is saved time.
+test('Code Mode submits Timeline Marker phases through one approved Rust plan', async () => {
+  const operations=[
+    {op:'add_animation_timeline_marker',animation_uuid:'clip-1',
+      time:0.25,name:'anticipation',color:4},
+    {op:'add_animation_timeline_marker',animation_uuid:'clip-1',
+      time:0.5,name:'weapon_contact',color:3},
+  ];
+  const approvals=[];
+  let plan;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:request=>{
+      approvals.push(request);
+      return request.operation==='apply' && request.expectedSha256===SHA;
+    },
+    runner:async argv=>{
+      plan=JSON.parse(await readFile(argv[argv.indexOf('--plan')+1],'utf8'));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:2,changed_uuids:['clip-1'],
+      }};
+    },
+  });
+  const receipt=await client.apply({
+    input:'/abs/robot.bbmodel',output:'/abs/robot-marked.bbmodel',
+    expectedSha256:SHA,operations,
+  });
+  assert.equal(approvals.length,1);
+  assert.deepEqual(approvals[0].operationKinds,
+    ['add_animation_timeline_marker','add_animation_timeline_marker']);
+  assert.equal(approvals[0].operationCount,2);
+  assert.deepEqual(plan,{expected_revision:0,operations});
+  assert.deepEqual(receipt.mutation.changed_uuids,['clip-1']);
+});
+
+test('Code Mode batch reads Timeline Markers and Sound Events without execution', async () => {
+  const calls=[];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    runner:async argv=>{
+      calls.push(argv);
+      if(argv[0]==='inspect'){
+        return {status:'OK',sha256:SHA,summary:{revision:0}};
+      }
+      const batch=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+      assert.deepEqual(batch,{requests:[
+        {kind:'animation_timeline_markers',animation_uuid:'clip-1',offset:0,limit:2},
+        {kind:'animation_effect_events',animation_uuid:'clip-1',offset:0,limit:1},
+      ]});
+      return {status:'OK',sha256:SHA,summary:{revision:0},results:[
+        {kind:'animation_timeline_markers',markers:{
+          scope:'saved_timeline_markers',recognized:true,
+          visual_verdict:'UNVERIFIED',playback_verdict:'NOT_EXECUTED',
+          animation_uuid:'clip-1',clip_length:2,total_markers:2,
+          offset:0,next_offset:null,markers:[
+            {name:'anticipation',time:0.25,color:4},
+            {name:'contact',time:0.5,color:3},
+          ],
+        }},
+        {kind:'animation_effect_events',effects:{
+          scope:'saved_sound_particle_markers',recognized:true,
+          visual_verdict:'UNVERIFIED',playback_verdict:'NOT_EXECUTED',
+          animation_uuid:'clip-1',clip_length:2,total_events:1,
+          offset:0,next_offset:null,events:[{
+            uuid:'sound-k',channel:'sound',time:0.5,
+            data_points:[{effect:'robot.hit'}],
+          }],
+        }},
+      ]};
+    },
+  });
+  const project=await openRustCodeModeProject(client,'/abs/robot.bbmodel');
+  const result=await project.inspectBatch([
+    {kind:'animation_timeline_markers',animation_uuid:'clip-1',offset:0,limit:2},
+    {kind:'animation_effect_events',animation_uuid:'clip-1',offset:0,limit:1},
+  ]);
+  assert.equal(calls.length,2);
+  assert.equal(result.results[0].markers.playback_verdict,'NOT_EXECUTED');
+  assert.equal(result.results[0].markers.markers[1].name,'contact');
+  assert.equal(result.results[1].effects.playback_verdict,'NOT_EXECUTED');
+  for(const request of [
+    {kind:'animation_timeline_markers',animation_uuid:'clip-1',limit:33},
+    {kind:'animation_timeline_markers',animation_uuid:'clip-1',script:'unsafe'},
+    {kind:'animation_timeline_markers',animation_uuid:''},
+  ]) {
+    await assert.rejects(project.inspectBatch([request]));
+  }
+  assert.equal(calls.length,2);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: Sound/Particle marker edits remain inside the
 // trusted host's one Rust transaction; no audio or emitter is executed.
 test('Code Mode writes bounded Sound and Particle markers with one approval', async () => {

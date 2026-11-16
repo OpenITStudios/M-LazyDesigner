@@ -486,6 +486,221 @@ fn numeric_catmullrom_refuses_unknown_handles_and_ambiguous_imports() {
 
 
 
+
+// SOURCE_AUTHORED_NOT_RUN: official Blockbench TimelineMarker.getUndoCopy()
+// stores only {name,time,color}, with no persistent marker UUID.
+#[test]
+fn animation_timeline_markers_author_and_retime_with_owned_clip_without_overwriting_rig() {
+    const CLIP:&str="00000000-0000-4000-8000-000000007601";
+    const CLONE:&str="00000000-0000-4000-8000-000000007602";
+    const KEY:&str="00000000-0000-4000-8000-000000007603";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let empty=session.document().clone();
+    let receipt=session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:CLIP.into(),name:"walk".into(),length:2.0,
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:CLIP.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:KEY.into(),channel:"rotation".into(),
+            time:0.25,value:[0.0,15.0,0.0],
+        },
+        EditOperation::AddAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),time:0.1,
+            name:"anticipation".into(),color:0,
+        },
+        EditOperation::AddAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),time:0.25,
+            name:"foot_contact".into(),color:3,
+        },
+        EditOperation::AddAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),time:1.5,
+            name:"recovery".into(),color:9,
+        },
+    ]).unwrap();
+    assert_eq!(receipt.revision,1);
+    assert_eq!(receipt.operation_count,5);
+    let saved=session.document().clone();
+    assert_eq!(saved.bones,empty.bones);
+    assert_eq!(saved.cubes,empty.cubes);
+    assert_eq!(saved.hierarchy,empty.hierarchy);
+    assert_eq!(saved.texture_assets,empty.texture_assets);
+    let markers=saved_timeline_markers(&saved.animation_assets[0]).unwrap();
+    assert_eq!(markers.len(),3);
+    assert_eq!(markers[0].name,"anticipation");
+    assert_eq!(markers[0].time,0.1);
+    assert_eq!(markers[1].name,"foot_contact");
+    assert_eq!(markers[1].color,3);
+    assert_eq!(markers[2].color,9);
+    let json=&saved.animation_assets[0]["markers"];
+    for item in json.as_array().unwrap() {
+        assert_eq!(item.as_object().unwrap().len(),3);
+        assert!(item.get("uuid").is_none());
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    let first=inspect_animation_timeline_markers(&saved,CLIP,0,2).unwrap();
+    assert_eq!(first["recognized"],json!(true));
+    assert_eq!(first["playback_verdict"],json!("NOT_EXECUTED"));
+    assert_eq!(first["total_markers"],json!(3));
+    assert_eq!(first["next_offset"],json!(2));
+    assert_eq!(first["markers"][1]["name"],json!("foot_contact"));
+    let second=inspect_animation_timeline_markers(&saved,CLIP,2,2).unwrap();
+    assert_eq!(second["markers"][0]["color"],json!(9));
+    assert_eq!(second["next_offset"],Value::Null);
+
+    session.apply(1,&[EditOperation::UpdateAnimationTimelineMarker {
+        animation_uuid:CLIP.into(),target_time:0.25,time:0.5,
+        name:"planted_foot".into(),color:6,
+    }]).unwrap();
+    let updated=session.document().clone();
+    assert_eq!(updated.animation_assets[0]["markers"][1]["time"],json!(0.5));
+    assert_eq!(updated.animation_assets[0]["markers"][1]["color"],json!(6));
+    assert_eq!(updated.animation_assets[0]["animators"][BONE]["keyframes"][0]["time"],
+        json!(0.25));
+    assert_eq!(session.apply(2,&[EditOperation::UpdateAnimationTimelineMarker {
+        animation_uuid:CLIP.into(),target_time:0.5,time:0.5,
+        name:"planted_foot".into(),color:6,
+    }]).unwrap_err(),"EDIT_NO_OP");
+    session.apply(2,&[
+        EditOperation::ScaleAnimationTimeline {
+            animation_uuid:CLIP.into(),factor:2.0,
+        },
+        EditOperation::SetAnimationLoopMode {
+            animation_uuid:CLIP.into(),mode:"loop".into(),
+        },
+    ]).unwrap();
+    let retimed=session.document().clone();
+    assert_eq!(retimed.animation_assets[0]["length"],json!(4.0));
+    assert_eq!(retimed.animation_assets[0]["loop"],json!("loop"));
+    assert_eq!(retimed.animation_assets[0]["markers"][0]["time"],json!(0.2));
+    assert_eq!(retimed.animation_assets[0]["markers"][1]["time"],json!(1.0));
+    assert_eq!(retimed.animation_assets[0]["markers"][2]["time"],json!(3.0));
+    assert_eq!(retimed.animation_assets[0]["animators"][BONE]["keyframes"][0]["time"],
+        json!(0.5));
+    assert_eq!(session.apply(3,&[EditOperation::SetAnimationLength {
+        animation_uuid:CLIP.into(),length:2.0,
+    }]).unwrap_err(),"ANIMATION_LENGTH_BEFORE_MARKER");
+    assert_eq!(session.document(),&retimed);
+
+    session.apply(3,&[EditOperation::DuplicateAnimationClip {
+        source_uuid:CLIP.into(),new_uuid:CLONE.into(),
+        new_name:"walk_variant".into(),
+    }]).unwrap();
+    let cloned=session.document().clone();
+    assert_eq!(cloned.animation_assets[0],retimed.animation_assets[0]);
+    assert_eq!(cloned.animation_assets[1]["markers"],
+        retimed.animation_assets[0]["markers"]);
+    assert_eq!(cloned.animation_assets[1]["loop"],json!("loop"));
+    assert_ne!(cloned.animation_assets[1]["animators"][BONE]["keyframes"][0]["uuid"],
+        cloned.animation_assets[0]["animators"][BONE]["keyframes"][0]["uuid"]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        cloned);
+
+    session.apply(4,&[EditOperation::RemoveAnimationTimelineMarker {
+        animation_uuid:CLONE.into(),time:3.0,
+    }]).unwrap();
+    let isolated=session.document().clone();
+    assert_eq!(isolated.animation_assets[0],retimed.animation_assets[0]);
+    assert_eq!(isolated.animation_assets[1]["markers"].as_array().unwrap().len(),2);
+    session.undo(5).unwrap();
+    assert_eq!(session.document(),&cloned);
+    session.undo(6).unwrap();
+    assert_eq!(session.document(),&retimed);
+    session.undo(7).unwrap();
+    assert_eq!(session.document(),&updated);
+    session.undo(8).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.undo(9).unwrap();
+    assert_eq!(session.document(),&empty);
+    session.redo(10).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.redo(11).unwrap();
+    assert_eq!(session.document(),&updated);
+    session.redo(12).unwrap();
+    assert_eq!(session.document(),&retimed);
+    session.redo(13).unwrap();
+    assert_eq!(session.document(),&cloned);
+    session.redo(14).unwrap();
+    assert_eq!(session.document(),&isolated);
+}
+
+#[test]
+fn animation_timeline_markers_refuse_unknown_sources_and_collisions_atomically() {
+    const CLIP:&str="00000000-0000-4000-8000-000000007611";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:CLIP.into(),name:"idle".into(),length:2.0,
+        },
+        EditOperation::AddAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),time:0.75,
+            name:"contact".into(),color:4,
+        },
+    ]).unwrap();
+    let saved=session.document().clone();
+    let add=|time:f64,name:&str,color:u8|
+        EditOperation::AddAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),time,name:name.into(),color,
+        };
+    for (time,name,color,error) in [
+        (0.75,"duplicate",1,"ANIMATION_MARKER_TIME_CONFLICT"),
+        (0.7505,"too_close",1,"ANIMATION_MARKER_TIME_CONFLICT"),
+        (1.0,"",1,"ANIMATION_MARKER_INVALID"),
+        (1.0,"bad\nname",1,"ANIMATION_MARKER_INVALID"),
+        (1.0,"bad_color",10,"ANIMATION_MARKER_INVALID"),
+        (2.5,"too_late",1,"ANIMATION_MARKER_INVALID"),
+        (f64::NAN,"not_finite",1,"ANIMATION_MARKER_INVALID"),
+    ] {
+        assert_eq!(session.apply(1,&[
+            EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+            add(time,name,color),
+        ]).unwrap_err(),error);
+        assert_eq!(session.document(),&saved);
+        assert_eq!(session.summary().revision,1);
+    }
+    assert_eq!(session.apply(1,&[
+        EditOperation::UpdateAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),target_time:0.75,
+            time:1.5,name:"updated".into(),color:10,
+        },
+    ]).unwrap_err(),"ANIMATION_MARKER_INVALID");
+    assert_eq!(session.apply(1,&[
+        EditOperation::UpdateAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),target_time:0.7,
+            time:1.5,name:"updated".into(),color:1,
+        },
+    ]).unwrap_err(),"ANIMATION_MARKER_NOT_FOUND");
+    assert_eq!(session.apply(1,&[
+        EditOperation::RemoveAnimationTimelineMarker {
+            animation_uuid:CLIP.into(),time:0.7,
+        },
+    ]).unwrap_err(),"ANIMATION_MARKER_NOT_FOUND");
+    assert_eq!(session.document(),&saved);
+    assert_eq!(inspect_animation_timeline_markers(&saved,CLIP,0,33).unwrap_err(),
+        "ANIMATION_MARKER_INSPECT_PAGE_INVALID");
+
+    let mut unknown=saved.clone();
+    unknown.animation_assets[0]["markers"][0]["uuid"]=json!("unknown_marker");
+    let mut imported=EditorSession::from_document(unknown.clone()).unwrap();
+    assert_eq!(imported.apply(0,&[add(1.5,"new",2)]).unwrap_err(),
+        "ANIMATION_MARKER_CLIP_UNSUPPORTED");
+    assert_eq!(imported.document(),&unknown);
+    assert_eq!(inspect_animation_timeline_markers(&unknown,CLIP,0,10).unwrap()
+        ["recognized"],json!(false));
+
+    let mut overlapping=saved.clone();
+    overlapping.animation_assets[0]["markers"].as_array_mut().unwrap().push(
+        json!({"name":"unknown","time":0.7503,"color":3})
+    );
+    let mut ambiguous=EditorSession::from_document(overlapping.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0,&[EditOperation::RemoveAnimationTimelineMarker {
+        animation_uuid:CLIP.into(),time:0.75,
+    }]).unwrap_err(),"ANIMATION_MARKER_CLIP_UNSUPPORTED");
+    assert_eq!(ambiguous.document(),&overlapping);
+    assert!(!ambiguous.can_undo());
+}
+
 // SOURCE_AUTHORED_NOT_RUN: Blockbench 5.2.1 EffectAnimator persists Sound
 // and Particle under animators.effects. No audio/particle file is loaded.
 #[test]

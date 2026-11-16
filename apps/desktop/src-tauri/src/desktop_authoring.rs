@@ -6,6 +6,7 @@ use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
     export_paint_png, export_bedrock_geometry, has_per_texture_uv_rules, can_set_empty_atlas_resolution,
     can_add_paint_texture, parse_saved_bezier_handles, valid_track_segments,
+    saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
     BezierKeyframeHandles,
     AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
@@ -106,6 +107,7 @@ pub struct AnimationView {
     loop_mode: String,
     rotation_keyframes: Vec<RotationKeyframeView>,
     transform_keyframes: Vec<TransformKeyframeView>,
+    markers: Vec<SavedTimelineMarker>,
     preview_supported: bool,
 }
 
@@ -402,7 +404,9 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                     Some(mode.as_str()),
             _ => None,
         };
+        let saved_markers = saved_timeline_markers(animation);
         let mut preview_supported = counts.get(uuid.as_str()) == Some(&1) &&
+            saved_markers.is_some() && valid_saved_markers(animation,length) &&
             !uuid.is_empty() && uuid.len() <= 128 &&
             !uuid.chars().any(|ch| ch.is_control() || ch.is_whitespace()) &&
             animation.as_object().is_some_and(|map|
@@ -525,7 +529,10 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
         Some(AnimationView {
             uuid, name, length,
             loop_mode:loop_mode.unwrap_or("unsupported").to_owned(),
-            rotation_keyframes, transform_keyframes, preview_supported,
+            rotation_keyframes, transform_keyframes,
+            markers:if preview_supported {saved_markers.unwrap_or_default()}
+                else {Vec::new()},
+            preview_supported,
         })
     }).collect()
 }
@@ -1591,6 +1598,61 @@ mod tests {
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
     }
 
+
+    // SOURCE_AUTHORED_NOT_RUN: timeline markers are positional annotations,
+    // not audio/particle execution or generated persistent marker UUIDs.
+    #[test]
+    fn animation_timeline_markers_project_from_rust_without_fake_playback() {
+        let mut session=EditorSession::open(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let anim="00000000-0000-4000-8000-000000007621";
+        let key="00000000-0000-4000-8000-000000007622";
+        let bone="00000000-0000-4000-8000-000000000001";
+        session.apply(0,&[
+            EditOperation::CreateAnimation {
+                uuid:anim.into(),name:"walk".into(),length:2.0,
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:anim.into(),bone_uuid:bone.into(),
+                keyframe_uuid:key.into(),channel:"rotation".into(),
+                time:0.5,value:[0.0,30.0,0.0],
+            },
+            EditOperation::AddAnimationTimelineMarker {
+                animation_uuid:anim.into(),time:0.5,
+                name:"left_foot_contact".into(),color:6,
+            },
+            EditOperation::AddAnimationTimelineMarker {
+                animation_uuid:anim.into(),time:1.5,
+                name:"right_foot_contact".into(),color:3,
+            },
+        ]).unwrap();
+        let source=session.document().clone();
+        let views=animation_views(&source);
+        assert_eq!(views.len(),1);
+        assert!(views[0].preview_supported);
+        assert_eq!(views[0].transform_keyframes.len(),1);
+        assert_eq!(views[0].markers.len(),2);
+        assert_eq!(views[0].markers[0].name,"left_foot_contact");
+        assert_eq!(views[0].markers[0].time,0.5);
+        assert_eq!(views[0].markers[1].color,3);
+        let store=EditorStore {
+            epoch:2,active:Some(ActiveModel {
+                session,source_path:None,source_sha:None,
+                saved_canonical_sha:None,dirty:true,
+            }),
+        };
+        let snapshot=project(&store).unwrap();
+        assert_eq!(snapshot.animations[0].markers.len(),2);
+        assert_eq!(snapshot.animations[0].rotation_keyframes.len(),1);
+        assert_eq!(store.active.as_ref().unwrap().session.document(),&source);
+        let mut imported=source.clone();
+        imported.animation_assets[0]["markers"][0]["color"]=json!(10);
+        let unsupported=animation_views(&imported);
+        assert!(!unsupported[0].preview_supported);
+        assert!(unsupported[0].markers.is_empty());
+        assert!(unsupported[0].transform_keyframes.is_empty());
+        assert_eq!(source.animation_assets[0]["markers"][0]["color"],json!(6));
+    }
 
     // SOURCE_AUTHORED_NOT_RUN: an admitted sound/particle event is saved
     // metadata, not a playable sound or a particle rendered by the preview.
