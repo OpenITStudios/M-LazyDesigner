@@ -331,9 +331,11 @@ pub(super) fn reflect_bone_subtree(
 
     // Existing opaque or editable keyframes must not play back on newly
     // reflected bind poses without explicit animation correction.
+    // Scan each animation tree once with a membership set, instead of once
+    // per Bone/Cube in a large rig.
+    let cohort: HashSet<String> = bone_ids.union(&cube_ids).cloned().collect();
     if doc.animation_assets.iter().any(|asset|
-        bone_ids.iter().chain(cube_ids.iter())
-            .any(|id| super::value_references_uuid(asset, id))) {
+        contains_cohort_uuid(asset, &cohort)) {
         return Err(fail("BONE_REFLECT_ANIMATION_BOUND"));
     }
     let box_default = doc.meta.box_uv.unwrap_or(false);
