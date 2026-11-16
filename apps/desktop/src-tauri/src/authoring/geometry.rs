@@ -200,6 +200,139 @@ fn compile_bone(
     Ok(())
 }
 
+// Bedrock Entity geometry visibility is described in blocks while Cube and
+// Bone coordinates are saved in model pixels (16 per block). The upstream
+// viewport-based calculateVisibleBox is unavailable in a headless Rust
+// exporter; infer a *conservative static* envelope from the exact compiled
+// Bone/Cube resource instead of silently omitting all visible_bounds fields.
+// This must not be claimed as animation-pose or native viewport QA evidence.
+const VISIBLE_PAD_PIXELS: f64 = 8.0;
+const PIXELS_PER_BLOCK: f64 = 16.0;
+
+fn vec3_resource(value: &Value) -> Result<[f64; 3]> {
+    let vector: [f64; 3] = serde_json::from_value(value.clone())
+        .map_err(|_| fail("GEOMETRY_EXPORT_BOUNDS_INVALID"))?;
+    if !vector.iter().all(|v| v.is_finite()) {
+        return Err(fail("GEOMETRY_EXPORT_BOUNDS_INVALID"));
+    }
+    Ok(vector)
+}
+
+fn length3(vector: [f64; 3]) -> f64 {
+    vector.iter().map(|value| value * value).sum::<f64>().sqrt()
+}
+
+fn distance3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    length3(std::array::from_fn(|i| a[i] - b[i]))
+}
+
+/// Use the same generated Cube origin/size/inflate and Bone pivots that
+/// actually appear in *.geo.json. An unrotated rig uses a padded static AABB.
+/// For any rotated pivot chain, fall back to a conservative radial enclosure:
+/// radius <= |outer pivot| + sum(adjacent pivot distance)
+///                    + max(|corner - innermost pivot|).
+/// This covers arbitrary Euler rotation magnitudes at each saved pivot,
+/// including nested Bone rotations, without duplicating native mesh math.
+/// It can be larger than Blockbench's exact world-space mesh box.
+fn compiled_visible_bounds(bones: &[Value]) -> Result<Value> {
+    let mut rotation_chain_by_bone: HashMap<&str, Vec<[f64; 3]>> = HashMap::new();
+    let mut minimum = [f64::INFINITY; 3];
+    let mut maximum = [f64::NEG_INFINITY; 3];
+    let mut maximum_radius: f64 = 0.0;
+    let mut any_rotation = false;
+    let mut has_cube = false;
+    for bone in bones {
+        let name = bone["name"].as_str()
+            .ok_or_else(|| fail("GEOMETRY_EXPORT_BOUNDS_INVALID"))?;
+        let mut chain = match bone.get("parent").and_then(Value::as_str) {
+            Some(parent) => rotation_chain_by_bone.get(parent)
+                .ok_or_else(|| fail("GEOMETRY_EXPORT_BOUNDS_INVALID"))?.clone(),
+            None => Vec::new(),
+        };
+        if bone.get("rotation").is_some() {
+            chain.push(vec3_resource(&bone["pivot"])?);
+        }
+        for cube in bone.get("cubes").and_then(Value::as_array)
+            .into_iter().flatten() {
+            has_cube = true;
+            let origin = vec3_resource(&cube["origin"])?;
+            let size = vec3_resource(&cube["size"])?;
+            let inflate = cube.get("inflate").and_then(Value::as_f64)
+                .unwrap_or(0.0).abs();
+            let mut cube_chain = chain.clone();
+            if cube.get("rotation").is_some() {
+                cube_chain.push(vec3_resource(&cube["pivot"])?);
+            }
+            if !cube_chain.is_empty() { any_rotation = true; }
+            let mut prefix_distance = 0.0;
+            if let Some(outer) = cube_chain.first() {
+                prefix_distance = length3(*outer);
+                for pivots in cube_chain.windows(2) {
+                    prefix_distance += distance3(pivots[0], pivots[1]);
+                }
+            }
+            let mut corner_radius: f64 = 0.0;
+            for mask in 0_u8..8 {
+                let point: [f64; 3] = std::array::from_fn(|axis| {
+                    origin[axis] + if (mask & (1_u8 << axis)) == 0 {
+                        -inflate
+                    } else {
+                        size[axis] + inflate
+                    }
+                });
+                for axis in 0..3 {
+                    minimum[axis] = minimum[axis].min(point[axis]);
+                    maximum[axis] = maximum[axis].max(point[axis]);
+                }
+                let radial = length3(point);
+                maximum_radius = maximum_radius.max(radial);
+                if let Some(inner) = cube_chain.last() {
+                    corner_radius = corner_radius.max(distance3(*inner, point));
+                }
+            }
+            if !cube_chain.is_empty() {
+                maximum_radius = maximum_radius.max(prefix_distance + corner_radius);
+            }
+        }
+        rotation_chain_by_bone.insert(name, chain);
+    }
+    if !has_cube {
+        // An empty Bone rig is a valid resource in this authored subset.
+        return Ok(json!({
+            "visible_bounds_width":2.0,
+            "visible_bounds_height":2.0,
+            "visible_bounds_offset":[0.0,0.0,0.0]
+        }));
+    }
+    let (width, height, offset_y) = if any_rotation {
+        // A radial bound is conservative for rotations about arbitrary saved
+        // pivots. It intentionally does not promise animation-pose coverage.
+        let diameter = ((maximum_radius + VISIBLE_PAD_PIXELS) * 2.0
+            / PIXELS_PER_BLOCK).ceil().max(2.0);
+        (diameter, diameter, 0.0)
+    } else {
+        let horizontal_radius = [minimum[0].abs(), maximum[0].abs(),
+            minimum[2].abs(), maximum[2].abs()]
+            .into_iter().fold(0.0_f64, f64::max);
+        let width = ((horizontal_radius + VISIBLE_PAD_PIXELS) * 2.0
+            / PIXELS_PER_BLOCK).ceil().max(2.0);
+        let low = ((minimum[1] - VISIBLE_PAD_PIXELS)
+            / PIXELS_PER_BLOCK).floor();
+        let high = ((maximum[1] + VISIBLE_PAD_PIXELS)
+            / PIXELS_PER_BLOCK).ceil();
+        let height = (high - low).max(2.0);
+        (width, height, (high + low) * 0.5)
+    };
+    if !width.is_finite() || !height.is_finite() || !offset_y.is_finite() {
+        return Err(fail("GEOMETRY_EXPORT_BOUNDS_INVALID"));
+    }
+    Ok(json!({
+        "visible_bounds_width":width,
+        "visible_bounds_height":height,
+        "visible_bounds_offset":[0.0,offset_y,0.0]
+    }))
+}
+
 /// Export a separate Bedrock geometry file without touching the editable
 /// .bbmodel document, texture assets, animation tracks, revision or Undo stack.
 pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
@@ -233,13 +366,17 @@ pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     if bones.is_empty() { return Err(fail("GEOMETRY_EXPORT_EMPTY")); }
     let version = if any_rotation { "1.21.0" }
         else if any_binding { "1.16.0" } else { "1.12.0" };
+    let bounds = compiled_visible_bounds(&bones)?;
     let json = json!({
         "format_version": version,
         "minecraft:geometry": [{
             "description": {
                 "identifier": format!("geometry.{identifier}"),
                 "texture_width": doc.resolution.width,
-                "texture_height": doc.resolution.height
+                "texture_height": doc.resolution.height,
+                "visible_bounds_width": bounds["visible_bounds_width"],
+                "visible_bounds_height": bounds["visible_bounds_height"],
+                "visible_bounds_offset": bounds["visible_bounds_offset"]
             },
             "bones": bones
         }]
@@ -435,6 +572,96 @@ mod tests {
         assert_eq!(export_bedrock_geometry(&duplicate_name).unwrap_err(),
             "GEOMETRY_EXPORT_BONE_NAME_UNSUPPORTED");
         assert_eq!(doc, unchanged);
+    }
+
+    // SOURCE_AUTHORED_NOT_RUN. The visibility volume is headless and
+    // conservative; these checks do not claim live Three.js mesh parity.
+    #[test]
+    fn static_visible_bounds_are_exported_in_model_blocks_without_source_edits() {
+        let mut doc = AuthoringDocument::import_bbmodel(BASIC).unwrap();
+        let original = doc.clone();
+        let output: Value = serde_json::from_slice(&export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let description = &output["minecraft:geometry"][0]["description"];
+        assert_eq!(description["visible_bounds_width"], json!(2.0));
+        assert_eq!(description["visible_bounds_height"], json!(2.0));
+        assert_eq!(description["visible_bounds_offset"], json!([0.0,0.0,0.0]));
+        assert_eq!(doc, original);
+        doc.cubes[0].from = [16.0,32.0,0.0];
+        doc.cubes[0].to = [20.0,36.0,4.0];
+        let moved = doc.clone();
+        let derived: Value = serde_json::from_slice(&export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let bounds = &derived["minecraft:geometry"][0]["description"];
+        assert_eq!(bounds["visible_bounds_width"], json!(4.0));
+        assert_eq!(bounds["visible_bounds_height"], json!(2.0));
+        assert_eq!(bounds["visible_bounds_offset"], json!([0.0,2.0,0.0]));
+        assert_eq!(doc, moved);
+        assert_eq!(AuthoringDocument::import_bbmodel(&doc.export_bbmodel().unwrap()).unwrap(),doc);
+    }
+
+    #[test]
+    fn rotated_cube_and_parent_bone_use_conservative_pivot_enclosure() {
+        let mut doc = AuthoringDocument::import_bbmodel(BASIC).unwrap();
+        doc.bones[0].origin = Some([32.0,0.0,0.0]);
+        doc.bones[0].extra.insert("rotation".into(),json!([0.0,90.0,0.0]));
+        doc.cubes[0].origin = Some([64.0,0.0,0.0]);
+        doc.cubes[0].extra.insert("rotation".into(),json!([0.0,90.0,0.0]));
+        let original = doc.clone();
+        let output: Value = serde_json::from_slice(&export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let info = &output["minecraft:geometry"][0]["description"];
+        let width = info["visible_bounds_width"].as_f64().unwrap();
+        let height = info["visible_bounds_height"].as_f64().unwrap();
+        // A nested pivot chain may swing geometry far from its unrotated
+        // Cube AABB; the derived bounds must not shrink to that AABB.
+        assert!(width >= 16.0);
+        assert_eq!(height,width);
+        assert_eq!(info["visible_bounds_offset"],json!([0.0,0.0,0.0]));
+        assert_eq!(doc,original);
+    }
+
+    #[test]
+    fn empty_bone_rig_still_emits_finite_visibility_description() {
+        let mut doc = AuthoringDocument::import_bbmodel(BASIC).unwrap();
+        doc.cubes.clear();
+        match &mut doc.hierarchy[0] {
+            OutlinerNode::Bone(root) => root.children.clear(),
+            _ => panic!("synthetic fixture root must be a Bone"),
+        };
+        let source = doc.clone();
+        let output: Value = serde_json::from_slice(&export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let description = &output["minecraft:geometry"][0]["description"];
+        assert_eq!(description["visible_bounds_width"],json!(2.0));
+        assert_eq!(description["visible_bounds_height"],json!(2.0));
+        assert_eq!(description["visible_bounds_offset"],json!([0.0,0.0,0.0]));
+        assert_eq!(doc,source);
+    }
+
+    #[test]
+    fn paired_geometry_and_animation_keep_exact_rig_bone_name_and_axes() {
+        const CLIP: &str = "00000000-0000-4000-8000-000000009351";
+        const FRAME: &str = "00000000-0000-4000-8000-000000009352";
+        let mut session = super::super::EditorSession::open(BASIC).unwrap();
+        let bone_uuid=session.document().bones[0].uuid.clone();
+        session.apply(0,&[
+            super::super::EditOperation::CreateAnimation {
+                uuid:CLIP.into(),name:"animation.visibility".into(),length:1.0,
+            },
+            super::super::EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:CLIP.into(),
+                bone_uuid,
+                keyframe_uuid:FRAME.into(),
+                channel:"position".into(),time:0.5,value:[2.0,1.0,0.0],
+            },
+        ]).unwrap();
+        let saved=session.export().unwrap();
+        let geometry:Value=serde_json::from_slice(
+            &export_bedrock_geometry(session.document()).unwrap()).unwrap();
+        let animation:Value=serde_json::from_slice(
+            &super::super::export_bedrock_animations(session.document()).unwrap()).unwrap();
+        let bone=geometry["minecraft:geometry"][0]["bones"][0]["name"].as_str().unwrap();
+        assert_eq!(animation["animations"]["animation.visibility"]["bones"][bone]["position"]["0.5"],
+            json!([-2.0,1.0,0.0]));
+        assert_eq!(session.export().unwrap(),saved);
+        assert_eq!(super::super::EditorSession::open(&saved).unwrap().document(),session.document());
     }
 
     #[test]
