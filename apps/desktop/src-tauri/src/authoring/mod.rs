@@ -13,6 +13,7 @@ mod uv_sharing;
 mod texture_coverage;
 mod subtree;
 mod face_regions;
+mod palette;
 pub use uv_sharing::inspect_cube_uv_sharing;
 pub use texture_coverage::inspect_model_texture_coverage;
 pub mod storage;
@@ -154,6 +155,23 @@ pub struct CubeFaceRegionPaintPatch {
     pub erase: bool,
 }
 
+/// Exact authored RGB replacement. Alpha is deliberately not a parameter.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaletteRgbSwap {
+    pub from: [u8; 3],
+    pub to: [u8; 3],
+}
+
+/// Selected faces on one Cube. Cross-Cube atlas aliases must be resolved or
+/// isolated explicitly before recoloring either counterpart.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CubePaletteTarget {
+    pub cube_uuid: String,
+    pub faces: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditOperation {
@@ -227,6 +245,9 @@ pub enum EditOperation {
     },
     PaintCubeFaceRegionsGuarded {
         cube_uuid: String, texture_uuid: String, regions: Vec<CubeFaceRegionPaintPatch>,
+    },
+    RecolorCubeFacesPaletteGuarded {
+        texture_uuid: String, targets: Vec<CubePaletteTarget>, palette: Vec<PaletteRgbSwap>,
     },
     IsolateCubeBoxUv { cube_uuid: String, texture_uuid: String },
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
@@ -2576,6 +2597,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             cube.uv_offset = Some(plan.next_offset);
             refresh_box_uv(cube)?;
             Ok(cube_uuid.clone())
+        }
+        EditOperation::RecolorCubeFacesPaletteGuarded { texture_uuid, targets, palette } => {
+            palette::recolor_cube_faces_palette_guarded(doc, texture_uuid, targets, palette)
         }
         EditOperation::PaintCubeFaceRegionsGuarded { cube_uuid, texture_uuid, regions } => {
             face_regions::paint_cube_face_regions_guarded(doc, cube_uuid, texture_uuid, regions)

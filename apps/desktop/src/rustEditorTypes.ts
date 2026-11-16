@@ -148,5 +148,6 @@ export type EditOperation =
   | { op: 'paint_cube_uv_faces'; cube_uuid: string; texture_uuid: string; faces: Array<{ face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; rgba: [number, number, number, number]; erase: boolean }> }
   | { op: 'paint_cube_uv_faces_guarded'; cube_uuid: string; texture_uuid: string; faces: Array<{ face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; rgba: [number, number, number, number]; erase: boolean }> }
   | { op: 'paint_cube_face_regions_guarded'; cube_uuid: string; texture_uuid: string; regions: Array<{ face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; from: [number, number]; to: [number, number]; rgba: [number, number, number, number]; erase: boolean }> }
+  | { op: 'recolor_cube_faces_palette_guarded'; texture_uuid: string; targets: Array<{ cube_uuid: string; faces: Array<'north' | 'east' | 'south' | 'west' | 'up' | 'down'> }>; palette: Array<{ from: [number, number, number]; to: [number, number, number] }> }
   | { op: 'isolate_cube_box_uv'; cube_uuid: string; texture_uuid: string }
   | { op: 'paint_texture_fill'; texture_index: number; at: [number, number]; rgba: [number, number, number, number]; erase: boolean };

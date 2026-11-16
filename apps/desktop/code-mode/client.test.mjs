@@ -344,6 +344,49 @@ test('Code Mode submits ordered Cube face-local shading as one approved Rust edi
   assert.deepEqual(result.mutation.changed_uuids,['atlas-1']);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: one SHA-pinned, explicitly approved palette
+// cohort transaction replaces repeated read/paint loops. The swatches
+// are literal source evidence, not generated from material labels.
+test('Code Mode forwards selected multi-Cube palette remapping as one approved Rust edit', async () => {
+  const operation = {
+    op: 'recolor_cube_faces_palette_guarded',
+    texture_uuid: 'atlas-1',
+    targets: [
+      { cube_uuid: 'body-1', faces: ['north', 'east'] },
+      { cube_uuid: 'body-2', faces: ['north'] },
+    ],
+    palette: [
+      { from: [80, 60, 40], to: [25, 95, 175] },
+      { from: [130, 100, 70], to: [50, 165, 220] },
+    ],
+  };
+  let plan;
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: request => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async argv => {
+      plan = JSON.parse(await readFile(argv[argv.indexOf('--plan') + 1], 'utf8'));
+      return { status: 'OK', mutation: {
+        revision: 1, operation_count: 1, changed_uuids: ['atlas-1'],
+      } };
+    },
+  });
+  const result = await client.apply({
+    input: '/abs/source.bbmodel', output: '/abs/variant.bbmodel',
+    expectedSha256: SHA, operations: [operation],
+  });
+  assert.deepEqual(plan, { expected_revision: 0, operations: [operation] });
+  assert.equal(approvals.length, 1);
+  assert.deepEqual(approvals[0].operationKinds, ['recolor_cube_faces_palette_guarded']);
+  assert.equal(approvals[0].operationCount, 1);
+  assert.deepEqual(result.mutation.changed_uuids, ['atlas-1']);
+});
+
 test('Code Mode forwards a semantic Cube-face paint batch as one approved Rust operation', async () => {
   let plan;
   const patches = [

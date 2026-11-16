@@ -177,7 +177,7 @@ fn linked_to(face: &Value, texture_uuid: &str, texture_index: usize) -> bool {
     }
 }
 
-fn project_supported_uv(doc: &AuthoringDocument, cube: &Cube) -> Result<Cube> {
+pub(super) fn project_supported_uv(doc: &AuthoringDocument, cube: &Cube) -> Result<Cube> {
     let mut projected = cube.clone();
     if cube_box_uv(cube, doc.meta.box_uv.unwrap_or(false)) {
         check_box_uv_repack_rules(doc, cube)?;
@@ -189,7 +189,7 @@ fn project_supported_uv(doc: &AuthoringDocument, cube: &Cube) -> Result<Cube> {
     Ok(projected)
 }
 
-fn rectangle(
+pub(super) fn rectangle(
     doc: &AuthoringDocument, cube: &Cube, face: &str,
 ) -> Result<([u32; 2], [u32; 2])> {
     let uv = face_uv(cube, face)?;

@@ -1577,6 +1577,249 @@ fn reflect_bone_subtree_refuses_unsafe_modes_ancestors_and_bound_animation() {
 }
 
 
+
+// SOURCE_AUTHORED_NOT_RUN: exact RGB swatches preserve painted material
+// structure and per-pixel alpha. No flat face overwrite or inferred color.
+#[test]
+fn recolor_cube_palette_preserves_shading_alpha_unselected_faces_and_undo() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009951";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Armor Palette", "armor_palette").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width:32, height:32 },
+        EditOperation::AddBone { bone:serde_json::from_value(json!({
+            "uuid":BONE, "name":"armor", "origin":[0,0,0]
+        })).unwrap(), parent_uuid:None },
+        EditOperation::AddCube { cube:sample_cube(CUBE), bone_uuid:BONE.into() },
+        EditOperation::CreatePaintTexture { uuid:TEX.into(), name:"armor.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(), texture_uuid:TEX.into() },
+    ]).unwrap();
+    session.apply(1, &[EditOperation::PaintCubeUvFaces {
+        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
+        faces:["north","east","south"].iter().map(|face| CubeFacePaintPatch {
+            face:(*face).into(), rgba:[80,60,40,255], erase:false,
+        }).collect(),
+    }]).unwrap();
+    session.apply(2, &[EditOperation::PaintCubeFaceRegionsGuarded {
+        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
+        regions:vec![CubeFaceRegionPaintPatch {
+            face:"north".into(), from:[0,0],to:[4,1],
+            rgba:[130,100,70,255],erase:false,
+        }],
+    }]).unwrap();
+    session.apply(3, &[
+        // Semi-transparent painted base; new palette must retain alpha 120.
+        EditOperation::PaintTexturePixel {
+            texture_index:0,x:5,y:5,rgba:[80,60,40,120],
+        },
+        // Hidden RGB on a blank atlas pixel is deliberately preserved.
+        EditOperation::PaintTexturePixel {
+            texture_index:0,x:0,y:0,rgba:[80,60,40,0],
+        },
+    ]).unwrap();
+    let original = session.document().clone();
+    let operation = EditOperation::RecolorCubeFacesPaletteGuarded {
+        texture_uuid:TEX.into(),
+        targets:vec![CubePaletteTarget {
+            cube_uuid:CUBE.into(),faces:vec!["north".into(),"east".into()],
+        }],
+        palette:vec![
+            PaletteRgbSwap { from:[80,60,40], to:[25,95,175] },
+            PaletteRgbSwap { from:[130,100,70], to:[50,165,220] },
+        ],
+    };
+    let receipt = session.apply(4, &[operation.clone()]).unwrap();
+    assert_eq!(receipt.revision, 5);
+    assert_eq!(receipt.operation_count, 1);
+    assert_eq!(receipt.changed_uuids, vec![TEX.to_owned()]);
+    let saved = session.document().clone();
+    let pixels = paint::decode_for_uv_inspection(&saved.texture_assets[0],32,32).unwrap();
+    let color = |x:usize,y:usize| -> &[u8] {
+        let i=(y*32+x)*4; &pixels[i..i+4]
+    };
+    // Box UV north begins [4,4], east [0,4], south [12,4].
+    assert_eq!(color(5,4), &[50,165,220,255]); // highlight retained
+    assert_eq!(color(5,5), &[25,95,175,120]);  // alpha retained
+    assert_eq!(color(5,6), &[25,95,175,255]);  // authored base retained
+    assert_eq!(color(1,5), &[25,95,175,255]);  // second selected face
+    assert_eq!(color(13,5), &[80,60,40,255]);  // unselected face
+    assert_eq!(color(0,0), &[80,60,40,0]);     // hidden RGB
+    assert_eq!(color(22,22), &[0,0,0,0]);      // unrelated atlas pixel
+    assert_eq!(saved.cubes, original.cubes);
+    assert_eq!(saved.bones, original.bones);
+    assert_eq!(saved.hierarchy, original.hierarchy);
+    assert_eq!(saved.animation_assets, original.animation_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    session.undo(5).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(6).unwrap();
+    assert_eq!(session.document(), &saved);
+    assert_eq!(session.apply(7, &[operation]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &saved);
+}
+
+#[test]
+fn recolor_cube_palette_is_simultaneous_not_chained_and_can_span_cubes() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009961";
+    const SECOND: &str = "00000000-0000-4000-8000-000000009962";
+    let mut cube = sample_cube(SECOND);
+    cube.uv_offset = Some([20.0,0.0]);
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Cohort","cohort").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution {width:64,height:32},
+        EditOperation::AddBone {bone:serde_json::from_value(json!({
+            "uuid":BONE,"name":"root","origin":[0,0,0]
+        })).unwrap(),parent_uuid:None},
+        EditOperation::AddCube {cube:sample_cube(CUBE),bone_uuid:BONE.into()},
+        EditOperation::AddCube {cube,bone_uuid:BONE.into()},
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"cohort.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+        EditOperation::AssignCubeTexture {cube_uuid:SECOND.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    session.apply(1, &[
+        EditOperation::PaintCubeUvFaces {
+            cube_uuid:CUBE.into(),texture_uuid:TEX.into(),
+            faces:vec![
+                CubeFacePaintPatch {face:"north".into(),rgba:[160,30,30,255],erase:false},
+                CubeFacePaintPatch {face:"east".into(),rgba:[35,80,170,255],erase:false},
+            ],
+        },
+        EditOperation::PaintCubeUvFaces {
+            cube_uuid:SECOND.into(),texture_uuid:TEX.into(),
+            faces:vec![CubeFacePaintPatch {
+                face:"north".into(),rgba:[160,30,30,255],erase:false,
+            }],
+        },
+    ]).unwrap();
+    let old=session.document().clone();
+    session.apply(2, &[EditOperation::RecolorCubeFacesPaletteGuarded {
+        texture_uuid:TEX.into(),
+        targets:vec![
+            CubePaletteTarget {
+                cube_uuid:CUBE.into(),faces:vec!["north".into(),"east".into()],
+            },
+            CubePaletteTarget {
+                cube_uuid:SECOND.into(),faces:vec!["north".into()],
+            },
+        ],
+        palette:vec![
+            PaletteRgbSwap {from:[160,30,30],to:[35,80,170]},
+            PaletteRgbSwap {from:[35,80,170],to:[40,180,75]},
+        ],
+    }]).unwrap();
+    let saved=session.document().clone();
+    let rgba=paint::decode_for_uv_inspection(&saved.texture_assets[0],64,32).unwrap();
+    let at=|x:usize,y:usize| -> &[u8] {
+        let i=(y*64+x)*4; &rgba[i..i+4]
+    };
+    assert_eq!(at(5,5), &[35,80,170,255]);  // A->B, not A->B->C
+    assert_eq!(at(1,5), &[40,180,75,255]);  // B->C
+    assert_eq!(at(25,5), &[35,80,170,255]); // second Cube, one PNG
+    assert_eq!(at(10,5), &[0,0,0,0]);      // unselected west
+    assert_eq!(saved.cubes,old.cubes);
+    assert_eq!(saved.animation_assets,old.animation_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(),&old);
+    session.redo(4).unwrap();
+    assert_eq!(session.document(),&saved);
+}
+
+#[test]
+fn recolor_cube_palette_refuses_unsafe_targets_opaque_sources_and_aliases() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009971";
+    const SECOND: &str = "00000000-0000-4000-8000-000000009972";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Palette Safety","palette_safety").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution {width:32,height:32},
+        EditOperation::AddBone {bone:serde_json::from_value(json!({
+            "uuid":BONE,"name":"root","origin":[0,0,0]
+        })).unwrap(),parent_uuid:None},
+        EditOperation::AddCube {cube:sample_cube(CUBE),bone_uuid:BONE.into()},
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"atlas.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    let original=session.document().clone();
+    let target=CubePaletteTarget {
+        cube_uuid:CUBE.into(),faces:vec!["north".into()],
+    };
+    let swatch=PaletteRgbSwap {from:[80,60,40],to:[25,95,175]};
+    let op=|targets:Vec<CubePaletteTarget>,palette:Vec<PaletteRgbSwap>| {
+        EditOperation::RecolorCubeFacesPaletteGuarded {
+            texture_uuid:TEX.into(),targets,palette,
+        }
+    };
+    for (targets,palette,code) in [
+        (vec![],vec![swatch.clone()],"PALETTE_TARGETS_SIZE_INVALID"),
+        (vec![target.clone();17],vec![swatch.clone()],"PALETTE_TARGETS_SIZE_INVALID"),
+        (vec![target.clone()],vec![],"PALETTE_SWAPS_SIZE_INVALID"),
+        (vec![target.clone()],vec![swatch.clone();33],"PALETTE_SWAPS_SIZE_INVALID"),
+        (vec![target.clone(),target.clone()],vec![swatch.clone()],
+            "PALETTE_TARGET_CUBE_DUPLICATE"),
+        (vec![CubePaletteTarget {cube_uuid:CUBE.into(),faces:vec![]}],
+            vec![swatch.clone()],"PALETTE_TARGET_FACES_SIZE_INVALID"),
+        (vec![CubePaletteTarget {cube_uuid:CUBE.into(),
+            faces:vec!["north".into(),"north".into()]}],
+            vec![swatch.clone()],"PALETTE_TARGET_FACE_UNKNOWN_OR_DUPLICATE"),
+        (vec![CubePaletteTarget {cube_uuid:CUBE.into(),faces:vec!["diagonal".into()]}],
+            vec![swatch.clone()],"PALETTE_TARGET_FACE_UNKNOWN_OR_DUPLICATE"),
+        (vec![target.clone()],vec![swatch.clone(),swatch.clone()],
+            "PALETTE_SWAPS_DUPLICATE_SOURCE"),
+    ] {
+        assert_eq!(session.apply(1,&[op(targets,palette)]).unwrap_err(), code);
+        assert_eq!(session.document(),&original);
+    }
+    // An absent palette source changes nothing and must not re-encode PNG.
+    assert_eq!(session.apply(1,&[op(vec![target.clone()],vec![swatch.clone()])])
+        .unwrap_err(),"EDIT_NO_OP");
+    assert_eq!(session.document(),&original);
+
+    session.apply(1,&[EditOperation::DuplicateCube {
+        source_uuid:CUBE.into(),new_uuid:SECOND.into(),
+    }]).unwrap();
+    let alias=session.document().clone();
+    assert_eq!(session.apply(2,&[
+        EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+        op(vec![target.clone()],vec![swatch.clone()]),
+    ]).unwrap_err(),"PALETTE_UV_GUARD_SHARED");
+    assert_eq!(session.document(),&alias);
+    assert_eq!(session.summary().revision,2);
+
+    let mut implicit=original.clone();
+    implicit.cubes[0].faces["east"].as_object_mut().unwrap().remove("texture");
+    let mut ambiguous=EditorSession::from_document(implicit.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0,&[op(vec![target.clone()],vec![swatch.clone()])])
+        .unwrap_err(),"PALETTE_UV_GUARD_UNRESOLVED");
+    assert_eq!(ambiguous.document(),&implicit);
+
+    let mut imported=original.clone();
+    imported.texture_assets[0]["paint_owner"]=json!("foreign");
+    let mut foreign=EditorSession::from_document(imported.clone()).unwrap();
+    assert_eq!(foreign.apply(0,&[op(vec![target.clone()],vec![swatch.clone()])])
+        .unwrap_err(),"PAINT_TEXTURE_NOT_OWNED");
+    assert_eq!(foreign.document(),&imported);
+
+    let mut invalid=original.clone();
+    invalid.texture_assets[0]["source"]=json!("data:image/png;base64,AAAA");
+    let mut invalid_image=EditorSession::from_document(invalid.clone()).unwrap();
+    assert!(invalid_image.apply(0,&[op(vec![target.clone()],vec![swatch.clone()])]).is_err());
+    assert_eq!(invalid_image.document(),&invalid);
+
+    let mut rules=original.clone();
+    rules.meta.extra.insert("per_texture_uv_size".into(),json!(true));
+    let mut multi=EditorSession::from_document(rules.clone()).unwrap();
+    assert_eq!(multi.apply(0,&[op(vec![target.clone()],vec![swatch.clone()])])
+        .unwrap_err(),"UV_SHARING_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(multi.document(),&rules);
+}
+
 // SOURCE-AUTHORED_NOT_RUN: local face pixel axes follow Blockbench's saved
 // UV direction and quarter-turn permutation, not the atlas corner minimum.
 #[test]

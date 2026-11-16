@@ -428,6 +428,67 @@ pub(super) fn copy_uv_regions(
     Ok(())
 }
 
+/// Recolor explicitly owned half-open UV rectangles by exact source RGB.
+/// One PNG decode/encode, no sampling from material names and no generated
+/// noise. Alpha and pixels outside the selected faces stay byte-equivalent
+/// in decoded RGBA. Swaps are *simultaneous*: A->B and B->C do not cascade.
+pub(super) fn recolor_regions(
+    texture: &mut Value, width: u32, height: u32,
+    regions: &[([u32; 2], [u32; 2])],
+    swaps: &[super::PaletteRgbSwap],
+) -> Result<()> {
+    use std::collections::HashMap;
+    if regions.is_empty() || regions.len() > 16 * 6 {
+        return Err("PALETTE_REGIONS_SIZE_INVALID".into());
+    }
+    if swaps.is_empty() || swaps.len() > 32 {
+        return Err("PALETTE_SWAPS_SIZE_INVALID".into());
+    }
+    let mut colors = HashMap::with_capacity(swaps.len());
+    for swap in swaps {
+        if colors.insert(swap.from, swap.to).is_some() {
+            return Err("PALETTE_SWAPS_DUPLICATE_SOURCE".into());
+        }
+    }
+    for &(from, to) in regions {
+        if from[0] >= to[0] || from[1] >= to[1] ||
+           to[0] > width || to[1] > height {
+            return Err("PALETTE_REGION_BOUNDS_INVALID".into());
+        }
+    }
+    let mut pixels = decode(texture, width, height)?;
+    let mut covered = vec![false; (width as usize) * (height as usize)];
+    let mut changed = false;
+    for &(from, to) in regions {
+        for y in from[1]..to[1] {
+            for x in from[0]..to[0] {
+                let index = (y as usize) * width as usize + x as usize;
+                if covered[index] {
+                    return Err("PALETTE_REGIONS_OVERLAP".into());
+                }
+                covered[index] = true;
+                let p = index * 4;
+                // Invisible RGB is part of the authored source image. Do not
+                // repaint it merely because it matches a visible swatch.
+                if pixels[p + 3] == 0 { continue; }
+                let source = [pixels[p], pixels[p + 1], pixels[p + 2]];
+                if let Some(&target) = colors.get(&source) {
+                    if source != target {
+                        pixels[p..p + 3].copy_from_slice(&target);
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    if changed {
+        let source = encode(width, height, &pixels)?;
+        texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
+            .insert("source".into(), Value::String(source));
+    }
+    Ok(())
+}
+
 /// One or many ordered, filled, inclusive atlas rectangles. The caller can
 /// paint a coherent palette/face-zone cohort as one PNG decode and encode,
 /// rather than decomposing it into repeated per-rectangle PNG mutations.

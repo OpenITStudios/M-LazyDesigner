@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Explicit material-palette variants (Rust source only):** `recolor_cube_faces_palette_guarded` accepts one `texture_uuid`, 1–16 `targets: [{cube_uuid,faces:[...]}]` and 1–32 exact `palette: [{from:[r,g,b],to:[r,g,b]}]` RGB pairs. The source RGB must be grounded in approved/current PNG pixels; a material name is *not* an input from which Rust invents a swatch. Rust reuses its guarded saved face-to-atlas mapping and one PNG pass to preserve all original material clusters and per-pixel alpha, and refuses face/atlas aliases or unsupported source formats. When creating an appearance variant, write to an authorized new output file, not over the source. The Code Mode host still requires independent write approval; tests NOT_EXECUTED, artistic/native acceptance UNVERIFIED.
+
+
 **Face-local Texture zones (Rust source only):** The typed `paint_cube_face_regions_guarded` EditOperation accepts explicit `cube_uuid`, `texture_uuid` and up to 64 ordered `regions: [{face, from:[u,v], to:[u,v], rgba:[r,g,b,a], erase}]`. Face-local `from` is inclusive and `to` exclusive, relative to the face's saved displayed UV orientation, **not atlas-pixel coordinates**. Rust handles signed UV/quarter-turn mapping, strict source-level shared-atlas refusal and one owned PNG/Undo transaction. This does not infer materials or certify six-face visual coverage; code execution and native Blockbench verification remain NOT_EXECUTED.
 
 

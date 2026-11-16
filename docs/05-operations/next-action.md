@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Texture palette-variant source continuation (2026-11-16):** `recolor_cube_faces_palette_guarded` now performs explicit approved RGB swatch replacement on up to 16 selected Cube face cohorts in one shared-atlas Rust edit, preserving hand-painted pattern detail, original alpha, hidden RGB and unrelated faces. Source color mapping is simultaneous and guards against implicit/overlapping/unsupported UV. No material recognition or procedural aesthetic judgment has been invented; exact user/reference swatches remain the source. CLI/Tauri/typed Code Mode contracts and regressions authored NOT_EXECUTED. Continue materially missing Texture UV ownership/variant fidelity, advanced Animation and native .bbmodel acceptance; comparative performance UNVERIFIED and UI/UX deferred.
+
+
 **Texturing face-local detail authoring (2026-11-16):** `paint_cube_face_regions_guarded` now lets an AI paint ordered base/shadow/highlight/accent regions on 1–6 Cube faces with up to 64 face-local half-open rectangles in one Rust bitmap transaction, rather than calculating atlas pixels. It projects strict 0/90/180/270 UV turns and signed manual/Box nets and refuses unsafe alias, unresolved links or imported unsupported rules. Same Rust CLI/Tauri and typed Code Mode authority; source regressions AUTHORED_NOT_RUN, native texture fidelity and empirical tool-call savings UNVERIFIED. Next materially missing capabilities remain reference-driven material decisions, richer UV island allocation, advanced Animation data and actual editable Blockbench acceptance. UI/UX remains deferred.
 
 
