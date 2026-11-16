@@ -451,12 +451,15 @@ export async function createCodeModeHost({
           evidence.comparison?.capture_png_sha256 !== visualPair.capture.sha256) {
         throw new Error('CODE_MODE_VISUAL_PAIR_RESULT_INVALID');
       }
-      let feedback = Object.freeze({
+      // Freeze the first reviewer decision for one source SHA/view. The
+      // guest must not downgrade ACCEPTED with a repeated review request.
+      const prior = visualPreflights.get(model.expectedSha256);
+      let feedback = prior ?? Object.freeze({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
-      if (typeof reviewVisualPair === 'function') {
+      if (typeof reviewVisualPair === 'function' && prior === undefined) {
         const execution = activeExecution;
         if (!execution || execution.closed) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
@@ -491,7 +494,7 @@ export async function createCodeModeHost({
         }
         feedback = normalizedVisualReview(returned);
       }
-      visualPreflights.set(model.expectedSha256,feedback);
+      if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
       return {
         ...evidence,
         review_feedback:feedback,
@@ -566,6 +569,14 @@ export async function createCodeModeHost({
             !correctionFitsReview(requested,feedback.correctionScope)) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
         }
+      }
+      if (visualPair !== null && pixelEdit) {
+        // An image may change after preflight. Verify BOTH original PNGs
+        // immediately before output/approval/native mutation.
+        await Promise.all([
+          pinnedReviewBytes(visualPair.reference),
+          pinnedReviewBytes(visualPair.capture),
+        ]);
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,

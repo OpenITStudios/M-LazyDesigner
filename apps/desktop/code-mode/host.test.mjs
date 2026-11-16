@@ -784,6 +784,141 @@ test('invalid or stale reviewer evidence fails before it can permit Paint', () =
     assert.equal(callbackInvoked,0);
   }));
 
+// Synthetic header-only PNG fixtures test host authority, NOT artistic image quality.
+test('repeat visual review cannot downgrade accepted Pillager snapshot', () =>
+  fixture(async input=>{
+    const folder=dirname(input), ref=join(folder,'accepted-front.png');
+    const cap=join(folder,'candidate-front.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);await writeFile(cap,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    let reviewerCalls=0, phase=0, approvals=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:ref,capturePngPath:cap,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:async()=>{
+        reviewerCalls++;
+        if(reviewerCalls===1)return {decision:'ACCEPTED',issues:[]};
+        return {
+          decision:'REJECTED',
+          issues:[{id:'fake-rejection',kind:'FLAT_SHADING',
+            observation:'Second review not authorized.'}],
+          correctionScope:{textureUuid:'tier2',
+            allowedRegions:[{from:[1,1],to:[3,3]}],preserveAlpha:true},
+        };
+      },
+      authorizeMutation:()=>{approvals++;throw Error('write never approved');},
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'inspect-visual-pair');
+        return {status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'}};
+      },
+      spawnImpl:()=>{
+        phase++;
+        if(phase<=2)return fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },result=>{
+          assert.equal(result.ok,true);
+          assert.equal(result.result.review_feedback.decision,'ACCEPTED');
+          return {decision:result.result.review_feedback.decision};
+        });
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:'should-not-exist.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,x:1,y:1,
+            rgba:[80,90,100,255]}],
+          correctionScope:{textureUuid:'tier2',
+            allowedRegions:[{from:[1,1],to:[3,3]}],preserveAlpha:true},
+        }},result=>{
+          assert.equal(result.ok,false);
+          assert.equal(result.code,'CODE_MODE_VISUAL_REVIEW_ACCEPTED_PROTECTED');
+          return {blocked:true};
+        });
+      },
+    });
+    for(let i=0;i<2;i++){
+      const result=await host.execute({code:'return await codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(result.value.decision,'ACCEPTED');
+    }
+    const edit=await host.execute({code:'return await codemode.apply({project:"p0"});'});
+    assert.equal(edit.value.blocked,true);
+    assert.equal(reviewerCalls,1);
+    assert.equal(approvals,0);
+  }));
+
+test('changed reference OR capture PNG after rejected review refuses Paint', () =>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    const digest=createHash('sha256').update(png).digest('hex');
+    for(const target of ['reference','capture']){
+      const ref=join(folder,target+'-reference.png');
+      const cap=join(folder,target+'-capture.png');
+      await writeFile(ref,png);await writeFile(cap,png);
+      let phase=0, approvals=0, nativeWrites=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:ref,capturePngPath:cap,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        reviewVisualPair:()=>({
+          decision:'REJECTED',
+          issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+            observation:'Helmet paint remains flat.'}],
+          correctionScope:{textureUuid:'tier2',
+            allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+        }),
+        authorizeMutation:()=>{approvals++;throw Error('should not approve');},
+        runner:async argv=>{
+          if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+          if(argv[0]==='inspect-visual-pair')return {
+            status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'},
+          };
+          nativeWrites++;
+          throw Error('should not launch Rust apply');
+        },
+        spawnImpl:()=>{
+          phase++;
+          if(phase===1)return fakeGuest({
+            method:'inspectSelectedVisualPair',args:{project:'p0'},
+          },result=>{
+            assert.equal(result.ok,true);
+            return {reviewed:true};
+          });
+          return fakeGuest({method:'apply',args:{
+            project:'p0',output:target+'-altered.bbmodel',
+            operations:[{op:'paint_texture_pixel',texture_index:0,
+              x:2,y:2,rgba:[40,70,100,255]}],
+            correctionScope:{textureUuid:'tier2',
+              allowedRegions:[{from:[2,2],to:[4,4]}],preserveAlpha:true},
+          }},result=>{
+            assert.equal(result.ok,false);
+            assert.equal(result.code,'CODE_MODE_VISUAL_REVIEW_INPUT_STALE');
+            return {refused:true};
+          });
+        },
+      });
+      const before=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(before.value.reviewed,true);
+      await writeFile(target==='reference'?ref:cap,Buffer.concat([png,Buffer.from([1])]));
+      const attempted=await host.execute({code:'return codemode.apply({project:"p0"});'});
+      assert.equal(attempted.value.refused,true);
+      assert.equal(approvals,0);
+      assert.equal(nativeWrites,0);
+    }
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {
