@@ -294,7 +294,7 @@ pub fn bedrock_animation_curve_fidelity(doc: &AuthoringDocument) -> &'static str
 }
 
 /// Read-only source evidence for the restart boundary of saved numeric looping clips.
-/// An exact endpoint comparison is neither velocity/tangent continuity nor a
+/// An exact saved-axis comparison is neither Euler orientation equivalence, velocity/tangent continuity nor a
 /// rendered/native playback verdict. No authored clip or resource is changed.
 /// Called only after the canonical document's whole-model validation.
 pub(super) fn inspect_animation_loop_seams_validated(doc: &AuthoringDocument) -> Result<Value> {
@@ -358,7 +358,7 @@ pub(super) fn inspect_animation_loop_seams_validated(doc: &AuthoringDocument) ->
                     });
                     if delta.iter().all(|value| *value <= ENDPOINT_EPS) { continue; }
                     axis_delta = Some(delta);
-                    "endpoint_pose_difference"
+                    "endpoint_axis_difference"
                 };
                 review_candidates += 1;
                 if issues.len() < MAX_REPORTED_ISSUES {

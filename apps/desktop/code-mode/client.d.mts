@@ -415,7 +415,7 @@ export interface AssetHandoffInspection {
     status: "source_exportable" | "blocked" | "not_required";
     sha256: string | null; bytes: number | null; reason?: string;
     curve_fidelity?: "native" | "adaptive_bezier_approximation";
-    /** Advisory saved keyframe endpoints only; never visual continuity PASS. */
+    /** Advisory saved keyframe axis endpoints only; never orientation or visual continuity PASS. */
     loop_seams?: {
       scope: "authored_numeric_loop_endpoint_review";
       status: "needs_review" | "unsupported" | "no_endpoint_candidates";
@@ -432,9 +432,9 @@ export interface AssetHandoffInspection {
         animation_uuid: string;
         bone_uuid: string;
         channel: "rotation" | "position" | "scale";
-        problem: "boundary_not_explicit" | "endpoint_pose_difference";
+        problem: "boundary_not_explicit" | "endpoint_axis_difference";
         missing_boundaries?: Array<"start" | "end">;
-        /** Absolute endpoint delta; rotation compared modulo 360 degrees. */
+        /** Absolute saved-axis delta; Euler pose equivalence beyond 360 wrapping not established. */
         axis_delta?: [number, number, number];
       }>;
     };

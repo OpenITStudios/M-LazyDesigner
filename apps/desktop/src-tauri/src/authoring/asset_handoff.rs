@@ -586,7 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn looping_numeric_handoff_locates_endpoint_pose_discontinuity_without_rewriting_assets() {
+    fn looping_numeric_handoff_locates_endpoint_axis_review_candidate_without_rewriting_assets() {
         const BONE: &str = "00000000-0000-4000-8000-000000000001";
         const START: &str = "00000000-0000-4000-8000-000000007101";
         const END: &str = "00000000-0000-4000-8000-000000007102";
@@ -625,9 +625,9 @@ mod tests {
         assert_eq!(found["animation"]["loop_seams"]["status"], "needs_review");
         assert_eq!(found["animation"]["loop_seams"]["review_candidates"], 1);
         assert_eq!(found["animation"]["loop_seams"]["issues"][0]["problem"],
-            "endpoint_pose_difference");
+            "endpoint_axis_difference");
         assert_eq!(found["animation"]["loop_seams"]["issues"][0]["bone_uuid"], BONE);
-        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["axis_delta"],
+        // Numerical Euler-axis differences are review candidates, not proof\n        // of a different 3D orientation or rendered loop artifact.\n        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["axis_delta"],
             json!([3.0, 0.0, 0.0]));
         assert_eq!(found["geometry"]["sha256"], clear["geometry"]["sha256"]);
         assert_eq!(found["texture"]["sha256"], clear["texture"]["sha256"]);
