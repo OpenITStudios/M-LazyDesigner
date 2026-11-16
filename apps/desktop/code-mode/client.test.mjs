@@ -1066,3 +1066,35 @@ test('path/SHA bound project reuses its identity without automatic mutation', as
   assert.equal(readCalls[2][readCalls[2].indexOf('--expected-sha256') + 1], SHA);
   assert.equal(readCalls[2][readCalls[2].indexOf('--frame-limit') + 1], '4');
 });
+
+
+test('Bedrock animation export uses exact SHA, trusted approval and one CLI write', async () => {
+  const calls = [];
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: async (request) => { approvals.push(request); return true; },
+    runner: async (args) => {
+      calls.push(args);
+      return { status: 'OK', source_sha256: SHA, output_sha256: SHA,
+        bytes: 128, format: 'minecraft:animation' };
+    },
+  });
+  const receipt = await client.exportAnimations({
+    input: '/abs/model.bbmodel', output: '/abs/model.animation.json', expectedSha256: SHA,
+  });
+  assert.equal(receipt.format, 'minecraft:animation');
+  assert.equal(approvals.length, 1);
+  assert.equal(approvals[0].operation, 'exportAnimations');
+  assert.equal(approvals[0].expectedSha256, SHA);
+  assert.equal(approvals[0].output, '/abs/model.animation.json');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], 'export-animation');
+  assert.ok(calls[0].includes('--expected-sha256'));
+  const denied = createRustCodeModeClient({
+    binary: BIN, runner: async () => { throw new Error('must not run'); },
+  });
+  await assert.rejects(denied.exportAnimations({
+    input: '/abs/model.bbmodel', output: '/abs/model.animation.json', expectedSha256: SHA,
+  }), /CODE_MODE_MUTATION_AUTHORITY_REQUIRED/);
+});

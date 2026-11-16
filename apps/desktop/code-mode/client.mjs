@@ -16,7 +16,7 @@ const PLAN_LIMIT = 64 * 1024;
 const OUTPUT_LIMIT = 128 * 1024;
 const SHA256 = /^[a-f0-9]{64}$/i;
 const WRITE_COMMANDS = new Set([
-  'new', 'apply', 'import-png', 'export-png', 'export-geometry',
+  'new', 'apply', 'import-png', 'export-png', 'export-geometry', 'export-animation',
 ]);
 
 function nonempty(value, name) {
@@ -413,6 +413,17 @@ export function createRustCodeModeClient({
       });
       return call('export-geometry', options, approval);
     },
+    async exportAnimations({ input, output, expectedSha256 }) {
+      const options = {
+        input: absolute(input, 'input'), output: absolute(output, 'output'),
+        'expected-sha256': hash(expectedSha256),
+      };
+      const approval = await requestWrite('exportAnimations', {
+        input: options.input, output: options.output,
+        expectedSha256: options['expected-sha256'],
+      });
+      return call('export-animation', options, approval);
+    },
   });
 }
 
@@ -461,5 +472,7 @@ export async function openRustCodeModeProject(client, input) {
       client.exportPng({ input: path, output, textureUuid, expectedSha256 }),
     exportGeometry: ({ output }) =>
       client.exportGeometry({ input: path, output, expectedSha256 }),
+    exportAnimations: ({ output }) =>
+      client.exportAnimations({ input: path, output, expectedSha256 }),
   });
 }

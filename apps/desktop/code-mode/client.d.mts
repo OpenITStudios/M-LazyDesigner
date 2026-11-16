@@ -493,10 +493,11 @@ export interface RustCodeModeClient {
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
   exportPng(input: { input: string; output: string; textureUuid: string; expectedSha256: string }): Promise<OutputReceipt>;
   exportGeometry(input: { input: string; output: string; expectedSha256: string }): Promise<OutputReceipt>;
+  exportAnimations(input: { input: string; output: string; expectedSha256: string }): Promise<OutputReceipt>;
 }
 /** Exact requested write. The digest binds approval to the serialized Rust plan. */
 export interface MutationRequest {
-  operation: "newModel" | "apply" | "importPng" | "exportPng" | "exportGeometry";
+  operation: "newModel" | "apply" | "importPng" | "exportPng" | "exportGeometry" | "exportAnimations";
   input?: string;
   output: string;
   name?: string;
@@ -549,6 +550,7 @@ export interface RustCodeModeProject {
   apply(input: { output: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
   exportPng(input: { output: string; textureUuid: string }): Promise<OutputReceipt>;
   exportGeometry(input: { output: string }): Promise<OutputReceipt>;
+  exportAnimations(input: { output: string }): Promise<OutputReceipt>;
 }
 export declare function openRustCodeModeProject(
   client: RustCodeModeClient, input: string

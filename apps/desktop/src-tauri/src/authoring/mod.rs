@@ -14,6 +14,8 @@ mod texture_coverage;
 mod subtree;
 mod bezier;
 mod animation_clip;
+mod animation_export;
+pub use animation_export::export_bedrock_animations;
 mod effects;
 pub use effects::{inspect_animation_effect_events, AnimationEffectPoint};
 mod timeline_markers;

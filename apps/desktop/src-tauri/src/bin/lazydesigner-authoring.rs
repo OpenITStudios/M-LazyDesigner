@@ -3,11 +3,11 @@
 
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, inspect_animation_effect_events,
-    inspect_animation_timeline_markers, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_animation_timeline_markers, export_bedrock_animations, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use lazydesigner::authoring::storage::{bbmodel, png, geometry_json, publish_new, publish_new_png, publish_new_geometry, read_bounded, same_directory};
+use lazydesigner::authoring::storage::{bbmodel, png, geometry_json, animation_json, publish_new, publish_new_png, publish_new_geometry, publish_new_animation, read_bounded, same_directory};
 use rand::RngCore;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashSet};
@@ -638,7 +638,28 @@ fn execute() -> Result<Value> {
                 "format":"minecraft:geometry", "summary":session.summary()
             }))
         }
-        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG_EXPORT_PNG_EXPORT_GEOMETRY")),
+        "export-animation" => {
+            option_set(&options, &["--input", "--output", "--expected-sha256"])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let output = PathBuf::from(option(&options, "--output")?);
+            animation_json(&output)?;
+            same_directory(&input, &output)?;
+            let (original, source_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let session = EditorSession::open(&original)?;
+            let bytes = export_bedrock_animations(session.document())?;
+            if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != source_sha {
+                return Err(fail("SOURCE_CHANGED_DURING_EXPORT"));
+            }
+            publish_new_animation(&output, &bytes, MAX_MODEL_BYTES)?;
+            Ok(json!({
+                "status":"OK", "source_sha256":source_sha,
+                "output_sha256":sha256(&bytes), "bytes":bytes.len(),
+                "format":"minecraft:animation", "summary":session.summary()
+            }))
+        }
+        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG_EXPORT_PNG_EXPORT_GEOMETRY_EXPORT_ANIMATION")),
     }
 }
 

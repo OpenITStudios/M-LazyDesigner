@@ -11,7 +11,7 @@ const METHODS = Object.freeze([
   "projectInfo", "inspect", "catalog", "inspectBatch", "inspectCubeSurfaces",
   "inspectCubeFaceAlpha", "inspectTexture", "inspectTextureAlpha",
   "inspectAnimation", "inspectAnimationTrack", "inspectAnimationTransformTrack", "audit",
-  "newModel", "apply", "importPng", "exportPng", "exportGeometry",
+  "newModel", "apply", "importPng", "exportPng", "exportGeometry", "exportAnimations",
 ]);
 const MAX_LINE = 128 * 1024;
 const MAX_RETURN = 32 * 1024;

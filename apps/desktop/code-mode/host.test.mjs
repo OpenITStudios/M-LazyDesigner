@@ -366,3 +366,35 @@ test('Code Mode rejects oversize or empty script before sandbox spawn', () =>
       /CODE_MODE_SCRIPT_INVALID_OR_OVERSIZE/);
     assert.equal(spawns, 0);
   }));
+
+
+test('Bedrock animation export guest routes to approved exact sibling without model write', () =>
+  fixture(async (input) => {
+    const calls = [];
+    const approvals = [];
+    const host = await createCodeModeHost({
+      rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+      authorizeMutation: async (request) => { approvals.push(request); return true; },
+      runner: async (args) => {
+        calls.push(args);
+        if (args[0] === 'export-animation') {
+          return { status: 'OK', source_sha256: HASH, output_sha256: HASH, bytes: 100 };
+        }
+        return { status: 'OK', sha256: HASH, summary: SUMMARY };
+      },
+      spawnImpl: () => fakeGuest({
+        method: 'exportAnimations', args: { project: 'p0', output: 'walk.animation.json' },
+      }, (response) => {
+        assert.equal(response.ok, true);
+        assert.equal(response.result.bytes, 100);
+        return { emitted: true };
+      }),
+    });
+    const result = await host.execute({ code: 'return await codemode.exportAnimations({ project: codemode.initial.project, output: "walk.animation.json" });' });
+    assert.equal(result.status, 'OK');
+    assert.equal(result.value.emitted, true);
+    assert.equal(approvals.length, 1);
+    assert.equal(approvals[0].operation, 'exportAnimations');
+    assert.equal(calls.filter((args) => args[0] === 'export-animation').length, 1);
+    assert.ok(calls.find((args) => args[0] === 'export-animation').includes('--expected-sha256'));
+  }));

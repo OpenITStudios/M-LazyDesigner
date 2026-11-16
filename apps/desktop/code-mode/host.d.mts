@@ -52,6 +52,7 @@ export interface CodeModeGuestAPI {
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt }>;
   exportPng(args: { project: string; output: string; textureUuid: string }): Promise<OutputReceipt>;
   exportGeometry(args: { project: string; output: string }): Promise<OutputReceipt>;
+  exportAnimations(args: { project: string; output: string }): Promise<OutputReceipt>;
 }
 export interface CodeModeHost {
   initial: CodeModeInitialReference;

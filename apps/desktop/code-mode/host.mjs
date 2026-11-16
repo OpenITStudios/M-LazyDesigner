@@ -261,6 +261,11 @@ export async function createCodeModeHost({
       const output = await outputPath(args.output, '.geo.json');
       return p.exportGeometry({ output });
     },
+    exportAnimations: async (args) => {
+      const p = selected(args);
+      const output = await outputPath(args.output, '.animation.json');
+      return p.exportAnimations({ output });
+    },
   });
   async function execute({ code } = {}) {
     if (typeof code !== 'string' || !code.trim() ||

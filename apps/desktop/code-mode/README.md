@@ -1,5 +1,7 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Rust Animation JSON export (2026-11-16; SOURCE_ONLY):** `codemode.exportAnimations({project,output:"walk.animation.json"})` uses the same SHA-bound Rust document/CLI and exact per-write trusted host approval as model, PNG and Geometry outputs. The new `export-animation` CLI publishes a separate Bedrock `format_version: 1.8.0` `animations` resource; supported numeric linear/step Bone tracks, loop/hold and authored sound/particle event metadata are converted without rewriting the editable `.bbmodel`. Bezier/Catmull-Rom require separate, verified curve baking and are explicitly rejected for this runtime export; editor Timeline Markers stay in `.bbmodel`. Animation Controllers remain a separate unsupported resource. Source tests authored NOT_EXECUTED; native file adoption and actual playback unverified.
+
 **Status:** Rust-branch source integration; local JS host, Rust executable, and native editor **NOT_EXECUTED**. This is a Code Mode *client-side programmatic API*, not an installed server-side Cloudflare Worker sandbox and not a claim of accepted end-to-end asset production.
 
 ## End-to-end Code Mode host source — 2026-11-15

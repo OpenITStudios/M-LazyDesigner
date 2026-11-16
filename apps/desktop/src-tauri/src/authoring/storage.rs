@@ -58,6 +58,16 @@ pub fn geometry_json(path: &Path) -> Result<()> {
     }
 }
 
+/// Bedrock Entity animations are exported separately from animation controllers.
+pub fn animation_json(path: &Path) -> Result<()> {
+    if path.file_name().and_then(|name| name.to_str())
+        .is_some_and(|name| name.to_ascii_lowercase().ends_with(".animation.json")) {
+        Ok(())
+    } else {
+        Err(fail("ANIMATION_OUTPUT_EXTENSION_REQUIRED"))
+    }
+}
+
 /// Output must be a new sibling of the input. This protects references that
 /// Blockbench wrote relative to the original project directory.
 pub fn same_directory(input: &Path, output: &Path) -> Result<()> {
@@ -83,6 +93,12 @@ pub fn publish_new_png(path: &Path, data: &[u8], limit: usize) -> Result<()> {
 /// Geometry export uses the same exclusive no-overwrite publisher as .bbmodel.
 pub fn publish_new_geometry(path: &Path, data: &[u8], limit: usize) -> Result<()> {
     geometry_json(path)?;
+    publish_new_bytes(path, data, limit)
+}
+
+/// Animation JSON uses the same bounded exclusive no-overwrite publisher.
+pub fn publish_new_animation(path: &Path, data: &[u8], limit: usize) -> Result<()> {
+    animation_json(path)?;
     publish_new_bytes(path, data, limit)
 }
 
@@ -170,6 +186,26 @@ mod tests {
         assert_eq!(fs::read(&output).unwrap(), b"{\"geometry\":true}");
         fs::remove_file(output).unwrap();
         fs::remove_file(existing).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn animation_export_requires_animation_json_and_never_overwrites() {
+        let dir = std::env::temp_dir()
+            .join(format!("lazydesigner-animation-export-{:016x}", rand::rng().next_u64()));
+        fs::create_dir(&dir).unwrap();
+        let existing = dir.join("existing.animation.json");
+        fs::write(&existing, b"original").unwrap();
+        assert_eq!(publish_new_animation(&existing, b"replacement", 4096).unwrap_err(),
+            "OUTPUT_ALREADY_EXISTS");
+        assert_eq!(fs::read(&existing).unwrap(), b"original");
+        assert_eq!(publish_new_animation(&dir.join("wrong.geo.json"), b"x", 4096).unwrap_err(),
+            "ANIMATION_OUTPUT_EXTENSION_REQUIRED");
+        assert_eq!(animation_json(Path::new("walk.ANIMATION.JSON")), Ok(()));
+        let output = dir.join("walk.animation.json");
+        publish_new_animation(&output, b"{\"animations\":{}}", 4096).unwrap();
+        fs::remove_file(existing).unwrap();
+        fs::remove_file(output).unwrap();
         fs::remove_dir(dir).unwrap();
     }
 
