@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Animation Sound/Particle marker continuation (2026-11-16):** Rust/Code Mode now author saved `animators.effects` Sound/Particle metadata through strict add/update/remove operations, with paginated read-only `animation_effect_events` inspection. The existing numeric Bone/Bezier clips, clip variants, retiming, .bbmodel pass-through and Undo remain one Rust authority. No external file loads, audio/particle execution, timeline scripting or controller effects are claimed. Tauri intentionally refuses unsupported full event playback. Rust/CLI/Tauri/Node source regressions AUTHORED_NOT_RUN; native effect fidelity and measured operation cost UNVERIFIED. Next meaningful source gap: bounded, reference-backed Animation Controller and effects timeline semantics only if their file/preview boundaries can be represented without inventing gameplay or script execution; continue overall Geometry/Texture/Animation export ownership checks before PC-local acceptance. UI/UX deferred.
+
+
 **Animation Clip variants via single Rust edit (2026-11-16):** `duplicate_animation_clip` makes a distinct editable numeric Bone clip in one transaction with deterministic new keyframe UUIDs. It preserves original supported Rotation/Position/Scale, looping, Step/Catmull-Rom/Bezier data and Bone targets while refusing name/ID conflicts, incomplete/opaque metadata or export overflow. Typed Code Mode and generic Tauri share the Rust authority and host permission model. Source regressions AUTHORED_NOT_RUN; actual Blockbench playback, varied-motion quality and measured AI-operation savings UNVERIFIED. Next in-scope Animation gaps: safe effects/marker semantics and controller boundaries, followed by end-to-end editable .bbmodel handoff once PC-local acceptance is authorized. Geometry and Texturing preservation remain required; UI/UX last.
 
 

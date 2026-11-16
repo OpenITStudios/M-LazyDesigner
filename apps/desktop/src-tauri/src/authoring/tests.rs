@@ -485,6 +485,286 @@ fn numeric_catmullrom_refuses_unknown_handles_and_ambiguous_imports() {
 }
 
 
+
+// SOURCE_AUTHORED_NOT_RUN: Blockbench 5.2.1 EffectAnimator persists Sound
+// and Particle under animators.effects. No audio/particle file is loaded.
+#[test]
+fn sound_particle_effect_events_roundtrip_and_copy_with_bone_animation() {
+    const ANIM:&str="00000000-0000-4000-8000-000000007511";
+    const COPY:&str="00000000-0000-4000-8000-000000007512";
+    const SOUND:&str="00000000-0000-4000-8000-000000007513";
+    const PARTICLE:&str="00000000-0000-4000-8000-000000007514";
+    const ROTATION:&str="00000000-0000-4000-8000-000000007515";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let initial=session.document().clone();
+    let sound=AnimationEffectPoint {
+        effect:"robot.attack".into(),
+        locator:Some("weapon_tip".into()),bind_to_actor:None,
+    };
+    let particle=AnimationEffectPoint {
+        effect:"studio:robot_sparks".into(),
+        locator:Some("weapon_tip".into()),bind_to_actor:Some(false),
+    };
+    let receipt=session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:ANIM.into(),name:"attack".into(),length:2.0,
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:ROTATION.into(),channel:"rotation".into(),
+            time:0.5,value:[0.0,45.0,0.0],
+        },
+        EditOperation::AddAnimationEffectEvent {
+            animation_uuid:ANIM.into(),keyframe_uuid:SOUND.into(),
+            channel:"sound".into(),time:0.5,points:vec![sound.clone()],
+        },
+        EditOperation::AddAnimationEffectEvent {
+            animation_uuid:ANIM.into(),keyframe_uuid:PARTICLE.into(),
+            channel:"particle".into(),time:0.5,points:vec![particle.clone()],
+        },
+    ]).unwrap();
+    assert_eq!(receipt.revision,1);
+    assert_eq!(receipt.operation_count,4);
+    let saved=session.document().clone();
+    let track=&saved.animation_assets[0]["animators"]["effects"];
+    assert_eq!(track["type"],json!("effect"));
+    assert_eq!(track["name"],json!("Effects"));
+    assert_eq!(track["keyframes"].as_array().unwrap().len(),2);
+    assert_eq!(track["keyframes"][0]["channel"],json!("sound"));
+    assert_eq!(track["keyframes"][0]["data_points"][0]["effect"],
+        json!("robot.attack"));
+    assert!(track["keyframes"][0]["data_points"][0]
+        .get("bind_to_actor").is_none());
+    assert_eq!(track["keyframes"][1]["channel"],json!("particle"));
+    assert_eq!(track["keyframes"][1]["data_points"][0]["bind_to_actor"],
+        json!(false));
+    assert!(track["keyframes"][1]["data_points"][0].get("file").is_none());
+    assert!(track["keyframes"][1]["data_points"][0].get("script").is_none());
+    assert_eq!(saved.cubes,initial.cubes);
+    assert_eq!(saved.bones,initial.bones);
+    assert_eq!(saved.hierarchy,initial.hierarchy);
+    assert_eq!(saved.texture_assets,initial.texture_assets);
+    assert_eq!(saved.extensions,initial.extensions);
+    let evidence=inspect_animation_effect_events(&saved,ANIM,0,16).unwrap();
+    assert_eq!(evidence["recognized"],json!(true));
+    assert_eq!(evidence["scope"],json!("saved_sound_particle_markers"));
+    assert_eq!(evidence["playback_verdict"],json!("NOT_EXECUTED"));
+    assert_eq!(evidence["total_events"],json!(2));
+    assert_eq!(evidence["events"][0]["uuid"],json!(SOUND));
+    assert_eq!(evidence["events"][1]["data_points"][0]["locator"],
+        json!("weapon_tip"));
+    let second=inspect_animation_effect_events(&saved,ANIM,1,1).unwrap();
+    assert_eq!(second["events"][0]["uuid"],json!(PARTICLE));
+    assert_eq!(second["next_offset"],Value::Null);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+
+    session.apply(1,&[EditOperation::DuplicateAnimationClip {
+        source_uuid:ANIM.into(),new_uuid:COPY.into(),new_name:"attack_fast".into(),
+    }]).unwrap();
+    let copied=session.document().clone();
+    assert_eq!(copied.animation_assets.len(),2);
+    assert_eq!(copied.animation_assets[0],saved.animation_assets[0]);
+    assert_eq!(copied.animation_assets[1]["uuid"],json!(COPY));
+    let new_sound=copied.animation_assets[1]["animators"]["effects"]["keyframes"][0]
+        ["uuid"].as_str().unwrap().to_owned();
+    let new_particle=copied.animation_assets[1]["animators"]["effects"]["keyframes"][1]
+        ["uuid"].as_str().unwrap().to_owned();
+    assert_ne!(new_sound,SOUND);
+    assert_ne!(new_particle,PARTICLE);
+    assert_ne!(new_sound,new_particle);
+    assert_eq!(copied.animation_assets[1]["animators"]["effects"]["keyframes"][0]
+        ["data_points"][0]["effect"],json!("robot.attack"));
+
+    session.apply(2,&[EditOperation::UpdateAnimationEffectEvent {
+        animation_uuid:COPY.into(),keyframe_uuid:new_sound.clone(),
+        channel:"sound".into(),time:1.0,points:vec![AnimationEffectPoint {
+            effect:"robot.heavy_attack".into(),locator:None,bind_to_actor:None,
+        }],
+    }]).unwrap();
+    let changed=session.document().clone();
+    assert_eq!(changed.animation_assets[0],saved.animation_assets[0]);
+    assert_eq!(changed.animation_assets[1]["animators"]["effects"]["keyframes"][0]
+        ["time"],json!(1.0));
+    assert_eq!(changed.animation_assets[1]["animators"]["effects"]["keyframes"][0]
+        ["data_points"][0]["effect"],json!("robot.heavy_attack"));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        changed);
+
+    session.undo(3).unwrap();
+    assert_eq!(session.document(),&copied);
+    session.undo(4).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.undo(5).unwrap();
+    assert_eq!(session.document(),&initial);
+    session.redo(6).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.redo(7).unwrap();
+    assert_eq!(session.document(),&copied);
+    session.redo(8).unwrap();
+    assert_eq!(session.document(),&changed);
+
+    let receipt=session.apply(9,&[
+        EditOperation::RemoveAnimationEffectEvent {
+            animation_uuid:COPY.into(),keyframe_uuid:new_particle,
+            channel:"particle".into(),
+        },
+    ]).unwrap();
+    assert_eq!(receipt.changed_uuids.len(),1);
+    assert_eq!(session.document().animation_assets[1]["animators"]["effects"]
+        ["keyframes"].as_array().unwrap().len(),1);
+    assert_eq!(session.document().animation_assets[0],saved.animation_assets[0]);
+    session.undo(10).unwrap();
+    assert_eq!(session.document(),&changed);
+}
+
+#[test]
+fn effect_events_refuse_opaque_script_files_duplicates_and_invalid_metadata_atomically() {
+    const ANIM:&str="00000000-0000-4000-8000-000000007521";
+    const KEY:&str="00000000-0000-4000-8000-000000007522";
+    const OTHER:&str="00000000-0000-4000-8000-000000007523";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[EditOperation::CreateAnimation {
+        uuid:ANIM.into(),name:"idle".into(),length:2.0,
+    }]).unwrap();
+    let original=session.document().clone();
+    let point=AnimationEffectPoint {
+        effect:"robot.idle".into(),locator:Some("head".into()),
+        bind_to_actor:None,
+    };
+    let add=|id:&str,channel:&str,time:f64,points:Vec<AnimationEffectPoint>|
+        EditOperation::AddAnimationEffectEvent {
+            animation_uuid:ANIM.into(),keyframe_uuid:id.into(),
+            channel:channel.into(),time,points,
+        };
+    for (id,channel,time,points,error) in [
+        (KEY,"timeline",0.5,vec![point.clone()],
+            "ANIMATION_EFFECT_CHANNEL_UNSUPPORTED"),
+        (KEY,"sound",0.5,vec![],"ANIMATION_EFFECT_POINTS_INVALID"),
+        (KEY,"sound",0.5,vec![point.clone();9],
+            "ANIMATION_EFFECT_POINTS_INVALID"),
+        (KEY,"sound",0.5,vec![AnimationEffectPoint {
+            effect:"".into(),..point.clone()}],
+            "ANIMATION_EFFECT_POINTS_INVALID"),
+        (KEY,"sound",0.5,vec![AnimationEffectPoint {
+            effect:"../../file".into(),..point.clone()}],
+            "ANIMATION_EFFECT_POINTS_INVALID"),
+        (KEY,"sound",0.5,vec![AnimationEffectPoint {
+            bind_to_actor:Some(false),..point.clone()}],
+            "ANIMATION_EFFECT_POINTS_INVALID"),
+        ("bad uuid","sound",0.5,vec![point.clone()],
+            "ANIMATION_EFFECT_ID_INVALID"),
+        (KEY,"sound",3.0,vec![point.clone()],
+            "ANIMATION_EFFECT_TIME_INVALID"),
+        (KEY,"sound",f64::NAN,vec![point.clone()],
+            "ANIMATION_EFFECT_TIME_INVALID"),
+        (BONE,"sound",0.5,vec![point.clone()],
+            "ANIMATION_EFFECT_ID_CONFLICT"),
+    ] {
+        assert_eq!(session.apply(1,&[
+            EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+            add(id,channel,time,points),
+        ]).unwrap_err(),error);
+        assert_eq!(session.document(),&original);
+        assert_eq!(session.summary().revision,1);
+    }
+    // Existing references from opaque resolution metadata are also
+    // reserved; generated event IDs cannot silently adopt them.
+    let mut referenced=original.clone();
+    referenced.resolution.extra.insert("external_effect_key".into(),json!(OTHER));
+    let mut reserved=EditorSession::from_document(referenced.clone()).unwrap();
+    assert_eq!(reserved.apply(0,&[
+        add(OTHER,"sound",1.0,vec![point.clone()]),
+    ]).unwrap_err(),"ANIMATION_EFFECT_ID_CONFLICT");
+    assert_eq!(reserved.document(),&referenced);
+
+    session.apply(1,&[add(KEY,"sound",0.5,vec![point.clone()])]).unwrap();
+    let known=session.document().clone();
+    assert_eq!(session.apply(2,&[
+        add(OTHER,"sound",0.5,vec![point.clone()]),
+    ]).unwrap_err(),"ANIMATION_EFFECT_AFTER_EDIT_UNSUPPORTED");
+    assert_eq!(session.document(),&known);
+    assert_eq!(session.apply(2,&[add(KEY,"particle",0.9,vec![point.clone()])])
+        .unwrap_err(),"ANIMATION_EFFECT_ID_CONFLICT");
+    assert_eq!(session.document(),&known);
+    assert_eq!(session.apply(2,&[EditOperation::RemoveAnimationEffectEvent {
+        animation_uuid:ANIM.into(),keyframe_uuid:KEY.into(),
+        channel:"particle".into(),
+    }]).unwrap_err(),"ANIMATION_EFFECT_CHANNEL_MISMATCH");
+    assert_eq!(session.document(),&known);
+
+    let mut imported=known.clone();
+    imported.animation_assets[0]["animators"]["effects"]["keyframes"][0]
+        ["data_points"][0]["file"]=json!("/mnt/private.wav");
+    let mut foreign=EditorSession::from_document(imported.clone()).unwrap();
+    assert_eq!(foreign.apply(0,&[add(OTHER,"sound",1.0,vec![point.clone()])])
+        .unwrap_err(),"ANIMATION_EFFECT_CLIP_UNSUPPORTED");
+    assert_eq!(foreign.document(),&imported);
+    assert_eq!(inspect_animation_effect_events(&imported,ANIM,0,16).unwrap()
+        ["recognized"],json!(false));
+
+    let mut scripted=known.clone();
+    scripted.animation_assets[0]["animators"]["effects"]["keyframes"][0]
+        ["data_points"][0]["script"]=json!("variable.exploit=1");
+    let mut unsafe_clip=EditorSession::from_document(scripted.clone()).unwrap();
+    assert_eq!(unsafe_clip.apply(0,&[add(OTHER,"sound",1.0,vec![point])])
+        .unwrap_err(),"ANIMATION_EFFECT_CLIP_UNSUPPORTED");
+    assert_eq!(unsafe_clip.document(),&scripted);
+    assert!(!unsafe_clip.can_undo());
+}
+
+// SOURCE_AUTHORED_NOT_RUN: clip timing mutations move Sound/Particle
+// metadata keyframes together with Bone tracks, never resample/execute them.
+#[test]
+fn sound_particle_events_follow_clip_retime_and_refuse_truncation() {
+    const ANIM:&str="00000000-0000-4000-8000-000000007531";
+    const KEY:&str="00000000-0000-4000-8000-000000007532";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:ANIM.into(),name:"retime_sound".into(),length:2.0,
+        },
+        EditOperation::AddAnimationEffectEvent {
+            animation_uuid:ANIM.into(),keyframe_uuid:KEY.into(),
+            channel:"sound".into(),time:1.25,
+            points:vec![AnimationEffectPoint {
+                effect:"robot.step".into(),locator:None,bind_to_actor:None,
+            }],
+        },
+    ]).unwrap();
+    let original=session.document().clone();
+    session.apply(1,&[
+        EditOperation::SetAnimationLoopMode {
+            animation_uuid:ANIM.into(),mode:"loop".into(),
+        },
+        EditOperation::ScaleAnimationTimeline {
+            animation_uuid:ANIM.into(),factor:2.0,
+        },
+    ]).unwrap();
+    let retimed=session.document().clone();
+    assert_eq!(retimed.animation_assets[0]["loop"],json!("loop"));
+    assert_eq!(retimed.animation_assets[0]["length"],json!(4.0));
+    assert_eq!(retimed.animation_assets[0]["animators"]["effects"]
+        ["keyframes"][0]["time"],json!(2.5));
+    assert_eq!(retimed.animation_assets[0]["animators"]["effects"]
+        ["keyframes"][0]["data_points"][0]["effect"],json!("robot.step"));
+    assert_eq!(inspect_animation_effect_events(&retimed,ANIM,0,1).unwrap()
+        ["events"][0]["time"],json!(2.5));
+    assert_eq!(session.apply(2,&[
+        EditOperation::SetAnimationLength {
+            animation_uuid:ANIM.into(),length:2.0,
+        },
+    ]).unwrap_err(),"ANIMATION_LENGTH_BEFORE_KEYFRAME");
+    assert_eq!(session.document(),&retimed);
+    assert_eq!(session.summary().revision,2);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        retimed);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(),&original);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(),&retimed);
+}
+
 // SOURCE_AUTHORED_NOT_RUN: one editable Clip copy replaces per-keyframe
 // AI round-trips and preserves the original numeric Animation.
 #[test]

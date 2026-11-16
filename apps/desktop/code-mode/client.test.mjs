@@ -319,6 +319,86 @@ test('Code Mode submits Catmull-Rom Bone interpolation as one Rust edit', async 
 // SOURCE_AUTHORED_NOT_RUN: exact Blockbench Bezier handle arrays are authored
 // through one host-approved Rust plan and never evaluated in the JS guest.
 
+
+// SOURCE_AUTHORED_NOT_RUN: Sound/Particle marker edits remain inside the
+// trusted host's one Rust transaction; no audio or emitter is executed.
+test('Code Mode writes bounded Sound and Particle markers with one approval', async () => {
+  const operations=[
+    {op:'add_animation_effect_event',animation_uuid:'clip-1',
+      keyframe_uuid:'key-sound',channel:'sound',time:0.5,
+      points:[{effect:'robot.attack'}]},
+    {op:'add_animation_effect_event',animation_uuid:'clip-1',
+      keyframe_uuid:'key-particle',channel:'particle',time:0.5,
+      points:[{effect:'studio:robot_sparks',locator:'weapon_tip',
+        bind_to_actor:false}]},
+  ];
+  const approvals=[];
+  let plan;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:request=>{
+      approvals.push(request);
+      return request.operation==='apply' && request.expectedSha256===SHA;
+    },
+    runner:async argv=>{
+      plan=JSON.parse(await readFile(argv[argv.indexOf('--plan')+1],'utf8'));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:2,changed_uuids:['key-sound','key-particle'],
+      }};
+    },
+  });
+  const receipt=await client.apply({
+    input:'/abs/robot.bbmodel',output:'/abs/robot-effects.bbmodel',
+    expectedSha256:SHA,operations,
+  });
+  assert.equal(approvals.length,1);
+  assert.deepEqual(approvals[0].operationKinds,
+    ['add_animation_effect_event','add_animation_effect_event']);
+  assert.equal(approvals[0].operationCount,2);
+  assert.deepEqual(plan,{expected_revision:0,operations});
+  assert.deepEqual(receipt.mutation.changed_uuids,
+    ['key-sound','key-particle']);
+});
+
+test('Code Mode reads paged Sound/Particle source markers without guest playback', async () => {
+  const calls=[];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    runner:async argv=>{
+      calls.push(argv);
+      if(argv[0]==='inspect'){
+        return {status:'OK',sha256:SHA,summary:{revision:0}};
+      }
+      const query=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+      assert.deepEqual(query,{requests:[{
+        kind:'animation_effect_events',animation_uuid:'clip-1',offset:0,limit:1,
+      }]});
+      return {status:'OK',sha256:SHA,summary:{revision:0},
+        results:[{kind:'animation_effect_events',effects:{
+          scope:'saved_sound_particle_markers',recognized:true,
+          visual_verdict:'UNVERIFIED',playback_verdict:'NOT_EXECUTED',
+          animation_uuid:'clip-1',clip_length:2,total_events:1,
+          offset:0,next_offset:null,events:[{uuid:'k',channel:'sound',
+            time:1,data_points:[{effect:'robot.attack'}]}],
+        }}]};
+    },
+  });
+  const project=await openRustCodeModeProject(client,'/abs/robot.bbmodel');
+  const response=await project.inspectBatch([{
+    kind:'animation_effect_events',animation_uuid:'clip-1',offset:0,limit:1,
+  }]);
+  assert.equal(response.results[0].effects.playback_verdict,'NOT_EXECUTED');
+  assert.equal(calls.length,2);
+  for(const request of [
+    {kind:'animation_effect_events',animation_uuid:'clip-1',limit:17},
+    {kind:'animation_effect_events',animation_uuid:'clip-1',execute:true},
+    {kind:'animation_effect_events',animation_uuid:''},
+  ]) {
+    await assert.rejects(project.inspectBatch([request]));
+  }
+  assert.equal(calls.length,2);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: a whole Animation Clip variant is an approved
 // semantic Rust edit, not a guest script that copies keyframes individually.
 test('Code Mode duplicates a complete Bone Animation Clip in one approved plan', async () => {

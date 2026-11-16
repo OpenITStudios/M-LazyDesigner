@@ -635,6 +635,50 @@ fn main() {
 mod tests {
     use super::*;
 
+    // SOURCE_AUTHORED_NOT_RUN: Code Mode inspects saved Sound/Particle
+    // events as metadata only, with no native event playback claim.
+    #[test]
+    fn code_mode_batch_inspects_guarded_animation_effect_events_without_mutation() {
+        let mut session=EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let animation="00000000-0000-4000-8000-000000007541";
+        let sound="00000000-0000-4000-8000-000000007542";
+        session.apply(0,&[
+            EditOperation::CreateAnimation {
+                uuid:animation.into(),name:"step_sound".into(),length:2.0,
+            },
+            EditOperation::AddAnimationEffectEvent {
+                animation_uuid:animation.into(),keyframe_uuid:sound.into(),
+                channel:"sound".into(),time:1.0,
+                points:vec![lazydesigner::authoring::AnimationEffectPoint {
+                    effect:"robot.step".into(),locator:None,bind_to_actor:None,
+                }],
+            },
+        ]).unwrap();
+        let doc=session.document().clone();
+        let source=doc.clone();
+        let requests: InspectBatchInput=serde_json::from_str(&format!(
+            r#"{{"requests":[{{"kind":"animation_effect_events","animation_uuid":"{animation}","offset":0,"limit":1}}]}}"#
+        )).unwrap();
+        let entries=inspect_batch(&doc,requests.requests).unwrap();
+        assert_eq!(entries.len(),1);
+        assert_eq!(entries[0]["kind"],json!("animation_effect_events"));
+        assert_eq!(entries[0]["effects"]["recognized"],json!(true));
+        assert_eq!(entries[0]["effects"]["playback_verdict"],json!("NOT_EXECUTED"));
+        assert_eq!(entries[0]["effects"]["events"][0]["uuid"],json!(sound));
+        assert_eq!(entries[0]["effects"]["events"][0]["data_points"][0]["effect"],
+            json!("robot.step"));
+        assert_eq!(doc,source);
+        assert!(!serde_json::to_string(&entries).unwrap().contains("data:image/png"));
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"animation_effect_events","animation_uuid":"clip","shell":"unsafe"}]}"#
+        ).is_err());
+        assert_eq!(inspect_batch(&doc,vec![InspectBatchQuery::AnimationEffectEvents {
+            animation_uuid:animation.into(),offset:Some(0),limit:Some(17),
+        }]).unwrap_err(),"ANIMATION_EFFECT_INSPECT_PAGE_INVALID");
+        assert_eq!(doc,source);
+    }
+
     // Source-authored CLI/Rust proof only; Cargo/native execution is held.
     #[test]
     fn code_mode_inspect_batch_projects_multiple_reads_from_one_immutable_document() {

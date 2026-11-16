@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Sound/Particle event metadata (2026-11-16; SOURCE_ONLY):** Rust `add_animation_effect_event`, `update_animation_effect_event`, and `remove_animation_effect_event` edit saved Blockbench `animators.effects` keyframes within the same SHA/revision-guarded `apply` plan as Bone animation. Supported channels are `sound` and `particle`, with explicit `points` arrays (1–8), each point containing an effect ID and optionally a locator; particle may specify `bind_to_actor`. Audio files, scripts, executable expressions and arbitrary particle resources are **not** loaded or created. Read the saved markers using `inspectBatch([{kind:'animation_effect_events',animation_uuid,offset:0,limit:16}])` (one document load, 1–16 events per page). Response declares `playback_verdict:'NOT_EXECUTED'`; no sound/particle preview is implied. Invalid selectors, unsafe import metadata or duplicate channel/time/UUIDs refuse before Rust commit. Source tests AUTHORED_NOT_RUN; native event playback/effect-asset availability and speed remain UNVERIFIED.
+
+
 **Animation Clip variants (Rust source only):** To create `attack` from `walk`, submit one `duplicate_animation_clip` EditOperation with `{source_uuid,new_uuid,new_name}` inside the existing SHA/revision-guarded, trusted-host-approved `apply` plan. Rust clones the admitted numeric Bone clip, all keyframes and interpolation/Bezier data, assigning stable new keyframe UUIDs. The original remains unchanged and both clips are separately editable. The operation refuses duplicate names/IDs, malformed/opaque source tracks, external identity conflicts and oversized .bbmodel results; it does **not** clone or re-author imported effects/controllers of unknown shape. Existing Code Mode sandbox/host gating remains unchanged. Source regressions AUTHORED_NOT_RUN, native playback and measured tool savings UNVERIFIED.
 
 

@@ -14,6 +14,8 @@ mod texture_coverage;
 mod subtree;
 mod bezier;
 mod animation_clip;
+mod effects;
+pub use effects::{inspect_animation_effect_events, AnimationEffectPoint};
 mod face_regions;
 pub use bezier::{parse_saved_bezier_handles, valid_track_segments, BezierKeyframeHandles};
 mod palette;
@@ -188,6 +190,9 @@ pub enum EditOperation {
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
     DuplicateAnimationClip { source_uuid: String, new_uuid: String, new_name: String },
+    AddAnimationEffectEvent { animation_uuid: String, keyframe_uuid: String, channel: String, time: f64, points: Vec<AnimationEffectPoint> },
+    UpdateAnimationEffectEvent { animation_uuid: String, keyframe_uuid: String, channel: String, time: f64, points: Vec<AnimationEffectPoint> },
+    RemoveAnimationEffectEvent { animation_uuid: String, keyframe_uuid: String, channel: String },
     SetAnimationLength { animation_uuid: String, length: f64 },
     SetAnimationLoopMode { animation_uuid: String, mode: String },
     ScaleAnimationTimeline { animation_uuid: String, factor: f64 },
@@ -1027,6 +1032,25 @@ fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
     let mut all_ids = HashSet::new();
     let mut total = 0usize;
     for (bone_uuid, track) in tracks {
+        // Blockbench effect animator is saved under the fixed "effects"
+        // track key, not a Bone UUID. Admit only Sound/Particle markers.
+        // No scripts, local files, raw controller payloads or playback.
+        if bone_uuid == "effects" {
+            let Some(frames) = track.get("keyframes").and_then(Value::as_array) else {
+                return false;
+            };
+            total = total.saturating_add(frames.len());
+            if total > 2048 || !effects::valid_effect_track(track,length) {
+                return false;
+            }
+            for frame in frames {
+                let Some(id) = frame.get("uuid").and_then(Value::as_str) else {
+                    return false;
+                };
+                if !all_ids.insert(id) { return false; }
+            }
+            continue;
+        }
         let Some(bone) = bones.iter().find(|bone| bone.uuid == *bone_uuid) else {
             return false;
         };
@@ -2119,6 +2143,15 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             animation_clip::duplicate_animation_clip(doc, source_uuid, new_uuid, new_name)?;
             Ok(new_uuid.clone())
         }
+        EditOperation::AddAnimationEffectEvent {
+            animation_uuid, keyframe_uuid, channel, time, points,
+        } => effects::add_event(doc,animation_uuid,keyframe_uuid,channel,*time,points),
+        EditOperation::UpdateAnimationEffectEvent {
+            animation_uuid, keyframe_uuid, channel, time, points,
+        } => effects::update_event(doc,animation_uuid,keyframe_uuid,channel,*time,points),
+        EditOperation::RemoveAnimationEffectEvent {
+            animation_uuid, keyframe_uuid, channel,
+        } => effects::remove_event(doc,animation_uuid,keyframe_uuid,channel),
         EditOperation::CreateAnimation { uuid, name, length } => {
             if !valid_uuid(uuid) || name.trim().is_empty() || name.chars().count() > 128 ||
                name.chars().any(char::is_control) ||

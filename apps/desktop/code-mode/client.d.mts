@@ -38,6 +38,12 @@ export interface Bone {
   origin?: Vec3;
   [key: string]: unknown;
 }
+/** Native .bbmodel sound/particle keyframe metadata. No local file, script or playback. */
+export interface AnimationEffectPoint {
+  effect: string;
+  locator?: string;
+  bind_to_actor?: boolean;
+}
 export type EditOperation =
   | { op: "add_bone"; bone: Bone; parent_uuid: string | null }
   | { op: "add_cube"; cube: Cube; bone_uuid: string }
@@ -49,6 +55,9 @@ export type EditOperation =
   | { op: "remove_empty_bone"; uuid: string }
   | { op: "create_animation"; uuid: string; name: string; length: number }
   | { op: "duplicate_animation_clip"; source_uuid: string; new_uuid: string; new_name: string }
+  | { op: "add_animation_effect_event"; animation_uuid: string; keyframe_uuid: string; channel: "sound" | "particle"; time: number; points: AnimationEffectPoint[] }
+  | { op: "update_animation_effect_event"; animation_uuid: string; keyframe_uuid: string; channel: "sound" | "particle"; time: number; points: AnimationEffectPoint[] }
+  | { op: "remove_animation_effect_event"; animation_uuid: string; keyframe_uuid: string; channel: "sound" | "particle" }
   | { op: "set_animation_length"; animation_uuid: string; length: number }
   | { op: "set_animation_loop_mode"; animation_uuid: string; mode: "once" | "loop" | "hold" }
   | { op: "scale_animation_timeline"; animation_uuid: string; factor: number }
@@ -375,7 +384,26 @@ export type InspectBatchQuery =
   | { kind: "animation"; uuid: string }
   | { kind: "animation_track"; animation_uuid: string; bone_uuid: string; offset?: number; limit?: number }
   | { kind: "animation_transform_track"; animation_uuid: string; bone_uuid: string; channel: TransformTrackInspection["channel"]; offset?: number; limit?: number }
+  | { kind: "animation_effect_events"; animation_uuid: string; offset?: number; limit?: number }
   | { kind: "audit" };
+export interface AnimationEffectInspection {
+  scope: "saved_sound_particle_markers" | "unsupported_animation_effects";
+  recognized: boolean;
+  visual_verdict: "UNVERIFIED";
+  playback_verdict: "NOT_EXECUTED";
+  animation_uuid: string;
+  clip_length?: number;
+  total_events?: number;
+  offset?: number;
+  next_offset: number | null;
+  events: Array<{
+    uuid: string;
+    channel: "sound" | "particle";
+    time: number;
+    data_points: AnimationEffectPoint[];
+  }>;
+  reason?: string;
+}
 export type InspectBatchResult =
   | { kind: "cube"; element: FocusedElement }
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
@@ -388,6 +416,7 @@ export type InspectBatchResult =
   | { kind: "animation"; asset: InspectAsset }
   | { kind: "animation_track"; track: RotationTrackInspection }
   | { kind: "animation_transform_track"; track: TransformTrackInspection }
+  | { kind: "animation_effect_events"; effects: AnimationEffectInspection }
   | { kind: "audit"; audit: StaticModelAudit };
 export interface InspectBatchReceipt {
   status: "OK";

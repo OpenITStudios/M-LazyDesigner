@@ -1592,6 +1592,55 @@ mod tests {
     }
 
 
+    // SOURCE_AUTHORED_NOT_RUN: an admitted sound/particle event is saved
+    // metadata, not a playable sound or a particle rendered by the preview.
+    // Tauri must refuse partial visual-only "supported" playback.
+    #[test]
+    fn animation_effect_markers_do_not_fake_supported_tauri_playback() {
+        let mut session=EditorSession::open(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let anim="00000000-0000-4000-8000-000000007551";
+        let rot="00000000-0000-4000-8000-000000007552";
+        let sound="00000000-0000-4000-8000-000000007553";
+        let bone="00000000-0000-4000-8000-000000000001";
+        session.apply(0,&[
+            EditOperation::CreateAnimation {
+                uuid:anim.into(),name:"attack".into(),length:2.0,
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:anim.into(),bone_uuid:bone.into(),
+                keyframe_uuid:rot.into(),channel:"rotation".into(),
+                time:0.5,value:[0.0,45.0,0.0],
+            },
+        ]).unwrap();
+        assert!(animation_views(session.document())[0].preview_supported);
+        session.apply(1,&[EditOperation::AddAnimationEffectEvent {
+            animation_uuid:anim.into(),keyframe_uuid:sound.into(),
+            channel:"sound".into(),time:0.5,
+            points:vec![lazydesigner::authoring::AnimationEffectPoint {
+                effect:"robot.attack".into(),locator:None,bind_to_actor:None,
+            }],
+        }]).unwrap();
+        let saved=session.document().clone();
+        let views=animation_views(&saved);
+        assert_eq!(views.len(),1);
+        assert!(!views[0].preview_supported);
+        assert!(views[0].rotation_keyframes.is_empty());
+        assert!(views[0].transform_keyframes.is_empty());
+        assert_eq!(saved.animation_assets[0]["animators"]["effects"]["keyframes"][0]
+            ["data_points"][0]["effect"],json!("robot.attack"));
+        let store=EditorStore {
+            epoch:1,active:Some(ActiveModel {
+                session,source_path:None,source_sha:None,
+                saved_canonical_sha:None,dirty:true,
+            }),
+        };
+        let snapshot=project(&store).unwrap();
+        assert_eq!(snapshot.animations.len(),1);
+        assert!(!snapshot.animations[0].preview_supported);
+        assert_eq!(store.active.as_ref().unwrap().session.document(),&saved);
+    }
+
     // SOURCE_AUTHORED_NOT_RUN: a single Rust Clone Clip operation is
     // discoverable by the existing Tauri Animation snapshot without
     // rebuilding per-Bone keyframe controls or altering the preview owner.

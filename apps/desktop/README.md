@@ -1,5 +1,8 @@
 # LazyDesigner Desktop
 
+**Rust Animation Sound/Particle source markers (2026-11-16; SOURCE_ONLY):** The shared Rust/Code Mode authoring operations now add, update and remove bounded Sound/Particle keyframe metadata saved in `.bbmodel` animations, with strict opaque-input refusal and one Undo state. A read-only Code Mode `animation_effect_events` inspection pages exact saved events. This does *not* load any audio files, produce particle resources, simulate timeline scripts or provide native effects playback. Tauri deliberately marks such clips unsupported for full preview instead of claiming sound/particle execution; UI design remains deferred. Tests AUTHORED_NOT_RUN and native Blockbench compatibility/relative performance UNVERIFIED.
+
+
 **Rust Animation Clip variants (2026-11-16; SOURCE_ONLY):** The shared Rust EditOperation `duplicate_animation_clip` copies a recognized Bone Animation clip and all numeric transforms into a separately named, independently keyed clip in one authoring transaction. It keeps original Geometry/UV/Texture and Animation source untouched, preserves supported interpolation including Bezier handles, and refuses unknown imported clips rather than guessing. Typed Code Mode and generic Tauri are the consumers; this is not a new UI workflow or native proof. Rust/Tauri/Node source regressions AUTHORED_NOT_RUN; actual Blockbench clip play/edit compatibility and latency UNVERIFIED.
 
 

@@ -115,6 +115,12 @@ export type EditorSnapshot = {
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';
 };
 
+/** Saved event metadata only, never evidence of sound/particle playback. */
+export type AnimationEffectPoint = {
+  effect: string;
+  locator?: string;
+  bind_to_actor?: boolean;
+};
 export type EditOperation =
   | { op: 'translate_cube'; uuid: string; delta: Vec3 }
   | { op: 'translate_bone_subtree'; uuid: string; delta: Vec3 }
@@ -130,6 +136,9 @@ export type EditOperation =
   | { op: 'set_cube_stretch'; uuid: string; stretch: Vec3 }
   | { op: 'set_cube_mirror_uv'; uuid: string; mirrored: boolean }
   | { op: 'duplicate_animation_clip'; source_uuid: string; new_uuid: string; new_name: string }
+  | { op: 'add_animation_effect_event'; animation_uuid: string; keyframe_uuid: string; channel: 'sound' | 'particle'; time: number; points: AnimationEffectPoint[] }
+  | { op: 'update_animation_effect_event'; animation_uuid: string; keyframe_uuid: string; channel: 'sound' | 'particle'; time: number; points: AnimationEffectPoint[] }
+  | { op: 'remove_animation_effect_event'; animation_uuid: string; keyframe_uuid: string; channel: 'sound' | 'particle' }
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
   | { op: 'set_animation_loop_mode'; animation_uuid: string; mode: 'once' | 'loop' | 'hold' }
   | { op: 'scale_animation_timeline'; animation_uuid: string; factor: number }
