@@ -44,7 +44,9 @@ async function mockedNativeFaceBinding(argv, sha) {
         face_count:6,faces:ALL_FACE_SIDES.map(side=>({
           side,saved_reference_kind:side==='south'?'null':'index',
           texture_uuid:side==='south'?null:'tier2-atlas',
-          alpha:{status:'unsupported',reason:'UNVERIFIED'},
+          alpha:side===q.face?
+            {status:'measured',region:{transparent_pixels:0}}:
+            {status:'unsupported',reason:'UNVERIFIED'},
         })),
       }},
     ],
@@ -1391,7 +1393,7 @@ test('spoofed face ownership or incomplete six-face source read cannot authorize
     const png=Buffer.from('89504e470d0a1a0a00000000','hex');
     await writeFile(ref,png);await writeFile(cap,png);
     const sha=createHash('sha256').update(png).digest('hex');
-    for(const tamper of ['wrong_face','partial_faces']){
+    for(const tamper of ['wrong_face','partial_faces','unknown_alpha']){
       let nativeWrites=0;
       const host=await createCodeModeHost({
         rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
@@ -1422,7 +1424,8 @@ test('spoofed face ownership or incomplete six-face source read cannot authorize
           if(argv[0]==='inspect-batch'){
             const report=await mockedNativeFaceBinding(argv,HASH);
             if(tamper==='wrong_face')report.results[0].binding.face='south';
-            else report.results[1].face_alpha.faces.pop();
+            else if(tamper==='partial_faces')report.results[1].face_alpha.faces.pop();
+            else report.results[1].face_alpha.faces[0].alpha={status:'unsupported',reason:'not_decodable'};
             return report;
           }
           nativeWrites++;
@@ -1432,7 +1435,9 @@ test('spoofed face ownership or incomplete six-face source read cannot authorize
           project:'p0',
         }},response=>{
           assert.equal(response.ok,false);
-          assert.equal(response.code,'CODE_MODE_MATERIAL_FACE_BINDING_UNVERIFIED');
+          assert.equal(response.code,tamper==='unknown_alpha'?
+            'CODE_MODE_MATERIAL_FACE_ALPHA_UNVERIFIED':
+            'CODE_MODE_MATERIAL_FACE_BINDING_UNVERIFIED');
           return {blocked:true};
         }),
       });

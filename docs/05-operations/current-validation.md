@@ -7,7 +7,10 @@ projector-backed query that requires an explicitly linked texture,
 contains the patch inside the selected face, and rejects unresolved
 or overlapping atlas consumers. The same trusted host review source
 also retrieves six saved face-alpha records for the selected Cube.
-The face metadata is source evidence only: view correspondence,
+Host admission additionally requires that the selected face has a
+measured source PNG alpha region; missing or unsupported target-face alpha
+stops before Paint. This remains a bitmap/source precondition, not an
+image-quality approval. The face metadata is source evidence only: view correspondence,
 effective material and face coverage remain UNVERIFIED. The guest
 receives no raw PNG or secretly selected external file path.
 Rust/Node positive and negative regression cases AUTHORED_NOT_RUN.

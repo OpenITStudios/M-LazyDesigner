@@ -635,6 +635,14 @@ export async function createCodeModeHost({
               ].includes(item.alpha?.status))) {
             throw new Error('CODE_MODE_MATERIAL_FACE_BINDING_UNVERIFIED');
           }
+          // The exact target face must be backed by a readable source
+          // bitmap region, rather than a missing/implicit/unsupported
+          // texture link. This does not judge its artistic quality.
+          const selectedFace=six.faces.find(face=>face.side===cohort.face);
+          if (selectedFace?.texture_uuid!==feedback.correctionScope.textureUuid ||
+              selectedFace?.alpha?.status!=='measured') {
+            throw new Error('CODE_MODE_MATERIAL_FACE_ALPHA_UNVERIFIED');
+          }
           feedback=Object.freeze({
             ...feedback,
             materialCohort:Object.freeze({

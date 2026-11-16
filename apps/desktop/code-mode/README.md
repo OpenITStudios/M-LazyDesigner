@@ -7,7 +7,10 @@ accepting its sample or propagation review, the trusted host queries
 one pinned Rust `material_face_patch` source inspector. Rust resolves
 the actual supported Box/manual UV projection, checks the atlas texture
 link and requires the selected patch to remain inside that face,
-without unresolved or overlapping atlas consumers. Unsupported alias
+without unresolved or overlapping atlas consumers. The selected face must
+also have measurable saved PNG alpha; unsupported/missing face alpha
+refuses before Paint. This is not proof its shading is professional.
+Unsupported alias
 or implicit texture ownership refuses instead of assuming a safe target.
 
 The same read obtains the selected Cube's six saved face-alpha statuses
