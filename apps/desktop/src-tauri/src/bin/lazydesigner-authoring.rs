@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, inspect_material_pair, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -278,6 +278,8 @@ enum InspectBatchQuery {
     CubeUvSharing { uuid: String, texture_uuid: String },
     AssetHandoff { texture_uuid: String, offset: Option<usize>, limit: Option<usize> },
     ModelTextureCoverage { offset: Option<usize>, limit: Option<usize>, attention_only: Option<bool> },
+    MaterialPair { reference_uuid: String, candidate_uuid: String,
+        reference_region: MaterialPatchRegion, candidate_region: MaterialPatchRegion },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
     TextureAlpha { uuid: String },
@@ -345,6 +347,13 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                     offset.unwrap_or(0), limit.unwrap_or(4),
                     attention_only.unwrap_or(false))?;
                 json!({"kind":"model_texture_coverage","coverage":coverage})
+            },
+            InspectBatchQuery::MaterialPair {reference_uuid,candidate_uuid,
+                reference_region,candidate_region} => {
+                let comparison=inspect_material_pair(doc,
+                    batch_id(&reference_uuid)?,batch_id(&candidate_uuid)?,
+                    &reference_region,&candidate_region)?;
+                json!({"kind":"material_pair","comparison":comparison})
             },
             InspectBatchQuery::Catalog { category, offset, limit } => {
                 let offset = offset.unwrap_or(0);

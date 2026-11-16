@@ -11,6 +11,8 @@ mod geometry;
 mod paint;
 mod correction_scope;
 pub use correction_scope::TextureCorrectionScope;
+mod material_pair;
+pub use material_pair::{inspect_material_pair, MaterialPatchRegion};
 mod uv_sharing;
 mod texture_coverage;
 mod subtree;
