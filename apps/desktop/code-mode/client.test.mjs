@@ -307,6 +307,43 @@ test('Code Mode groups nested rig duplication and symmetry in one approved plan'
   assert.deepEqual(result.mutation.changed_uuids,['right-arm']);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: the AI specifies face-local shading zones without
+// translating them into atlas UV pixels or requesting one PNG write per zone.
+test('Code Mode submits ordered Cube face-local shading as one approved Rust edit', async () => {
+  const regions = [
+    { face: 'north', from: [0,0], to: [4,4], rgba: [100,70,50,255], erase: false },
+    { face: 'north', from: [0,0], to: [4,1], rgba: [175,130,95,255], erase: false },
+    { face: 'north', from: [0,3], to: [4,4], rgba: [45,30,20,255], erase: false },
+  ];
+  const operation = {
+    op: 'paint_cube_face_regions_guarded', cube_uuid: 'cube-1',
+    texture_uuid: 'atlas-1', regions,
+  };
+  let plan;
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: request => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async argv => {
+      plan = JSON.parse(await readFile(argv[argv.indexOf('--plan') + 1], 'utf8'));
+      return {status:'OK',mutation:{revision:1,operation_count:1,
+        changed_uuids:['atlas-1']}};
+    },
+  });
+  const result = await client.apply({
+    input:'/abs/model.bbmodel', output:'/abs/model-shaded.bbmodel',
+    expectedSha256:SHA, operations:[operation],
+  });
+  assert.deepEqual(plan, {expected_revision:0,operations:[operation]});
+  assert.deepEqual(approvals[0].operationKinds,['paint_cube_face_regions_guarded']);
+  assert.equal(approvals[0].operationCount,1);
+  assert.deepEqual(result.mutation.changed_uuids,['atlas-1']);
+});
+
 test('Code Mode forwards a semantic Cube-face paint batch as one approved Rust operation', async () => {
   let plan;
   const patches = [

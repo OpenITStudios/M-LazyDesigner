@@ -1576,6 +1576,224 @@ fn reflect_bone_subtree_refuses_unsafe_modes_ancestors_and_bound_animation() {
     assert!(!cull_session.can_undo());
 }
 
+
+// SOURCE-AUTHORED_NOT_RUN: local face pixel axes follow Blockbench's saved
+// UV direction and quarter-turn permutation, not the atlas corner minimum.
+#[test]
+fn face_local_region_maps_rotated_and_reversed_uv_pixel_rectangles() {
+    let uv = [1.0, 2.0, 5.0, 6.0];
+    for (rotation, from, to) in [
+        (0, [1, 2], [2, 4]),
+        (90, [1, 5], [3, 6]),
+        (180, [4, 4], [5, 6]),
+        (270, [3, 2], [5, 3]),
+    ] {
+        assert_eq!(
+            face_regions::face_local_pixel_rectangle(16, 16, uv, rotation,
+                [0, 0], [1, 2]).unwrap(),
+            (from, to)
+        );
+    }
+    assert_eq!(
+        face_regions::face_local_pixel_rectangle(
+            16, 16, [8.0, 8.0, 4.0, 4.0], 0, [0, 0], [1, 1]).unwrap(),
+        ([7, 7], [8, 8])
+    );
+    for (from, to) in [
+        ([0, 0], [0, 1]),
+        ([2, 2], [1, 3]),
+        ([4, 0], [5, 1]),
+        ([0, 0], [5, 1]),
+    ] {
+        assert_eq!(
+            face_regions::face_local_pixel_rectangle(16,16,uv,0,from,to)
+                .unwrap_err(),
+            "PAINT_FACE_REGION_BOUNDS_INVALID",
+        );
+    }
+    assert_eq!(face_regions::face_local_pixel_rectangle(
+        16, 16, uv, 45, [0,0], [1,1]).unwrap_err(),
+        "PAINT_FACE_REGION_ROTATION_UNSUPPORTED");
+    assert_eq!(face_regions::face_local_pixel_rectangle(
+        16, 16, [0.5,2.0,5.0,6.0], 0, [0,0], [1,1]).unwrap_err(),
+        "PAINT_UV_RECT_NON_INTEGRAL");
+}
+
+#[test]
+fn face_local_region_paints_ordered_shading_zones_across_box_uv_faces_in_one_undo() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009941";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Region Paint", "region_paint").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution {width:32,height:32},
+        EditOperation::AddBone {
+            bone:serde_json::from_value(json!({
+                "uuid":BONE, "name":"body", "origin":[0,0,0]
+            })).unwrap(), parent_uuid:None,
+        },
+        EditOperation::AddCube {cube:sample_cube(CUBE), bone_uuid:BONE.into()},
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"atlas.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    let initial = session.document().clone();
+    let patch = |face:&str, from:[u32;2], to:[u32;2], rgba:[u8;4]| {
+        CubeFaceRegionPaintPatch {
+            face:face.into(),from,to,rgba,erase:false,
+        }
+    };
+    let regions = vec![
+        patch("north",[0,0],[4,4],[100,70,50,255]),
+        patch("north",[0,0],[4,1],[175,130,95,255]),
+        patch("north",[0,3],[4,4],[45,30,20,255]),
+        patch("east",[1,1],[3,3],[20,145,210,255]),
+    ];
+    let op = EditOperation::PaintCubeFaceRegionsGuarded {
+        cube_uuid:CUBE.into(),texture_uuid:TEX.into(),regions:regions.clone(),
+    };
+    let receipt = session.apply(1, &[op.clone()]).unwrap();
+    assert_eq!(receipt.revision,2);
+    assert_eq!(receipt.operation_count,1);
+    assert_eq!(receipt.changed_uuids,vec![TEX.to_owned()]);
+    let saved = session.document().clone();
+    let rgba = paint::decode_for_uv_inspection(&saved.texture_assets[0],32,32).unwrap();
+    let pixel = |x:usize,y:usize| -> &[u8] {
+        let index=(y*32+x)*4;
+        &rgba[index..index+4]
+    };
+    // New 4x4 Box UV north: [4,4,8,8]; east: [0,4,4,8].
+    assert_eq!(pixel(5,4), &[175,130,95,255]);
+    assert_eq!(pixel(5,5), &[100,70,50,255]);
+    assert_eq!(pixel(5,7), &[45,30,20,255]);
+    assert_eq!(pixel(2,5), &[20,145,210,255]);
+    assert_eq!(pixel(0,4), &[0,0,0,0]);
+    assert_eq!(pixel(5,1), &[0,0,0,0]);
+    assert_eq!(saved.cubes,initial.cubes);
+    assert_eq!(saved.bones,initial.bones);
+    assert_eq!(saved.animation_assets,initial.animation_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(),&initial);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(),&saved);
+    assert_eq!(session.apply(4,&[op]).unwrap_err(),"EDIT_NO_OP");
+    assert_eq!(session.document(),&saved);
+}
+
+#[test]
+fn face_local_region_respects_manual_quarter_turn_in_actual_bitmap() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009942";
+    let mut doc = AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap();
+    for side in FACE_NAMES {
+        if side != "north" { doc.cubes[0].faces.get_mut(side).unwrap()
+            ["texture"] = Value::Null; }
+    }
+    doc.cubes[0].faces["north"]["uv"] = json!([1,2,5,6]);
+    doc.cubes[0].faces["north"]["rotation"] = json!(90);
+    let mut session = EditorSession::from_document(doc).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"manual.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    let initial = session.document().clone();
+    session.apply(1, &[EditOperation::PaintCubeFaceRegionsGuarded {
+        cube_uuid:CUBE.into(),texture_uuid:TEX.into(),
+        regions:vec![CubeFaceRegionPaintPatch {
+            face:"north".into(),from:[0,0],to:[1,2],
+            rgba:[220,15,25,255],erase:false,
+        }],
+    }]).unwrap();
+    let saved = session.document().clone();
+    let pixels=paint::decode_for_uv_inspection(&saved.texture_assets[0],128,128).unwrap();
+    let pixel = |x:usize,y:usize| -> &[u8] {
+        let i=(y*128+x)*4; &pixels[i..i+4]
+    };
+    assert_eq!(pixel(1,5), &[220,15,25,255]);
+    assert_eq!(pixel(2,5), &[220,15,25,255]);
+    assert_eq!(pixel(1,4), &[0,0,0,0]);
+    assert_eq!(saved.cubes,initial.cubes);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(),&initial);
+}
+
+#[test]
+fn face_local_region_refuses_aliases_invalid_regions_and_opaque_rules_atomically() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009943";
+    const DUP: &str = "00000000-0000-4000-8000-000000009944";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Guarded Regions","guarded_regions").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution {width:32,height:32},
+        EditOperation::AddBone {
+            bone:serde_json::from_value(json!({
+                "uuid":BONE,"name":"root","origin":[0,0,0]
+            })).unwrap(),parent_uuid:None,
+        },
+        EditOperation::AddCube {cube:sample_cube(CUBE),bone_uuid:BONE.into()},
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"atlas.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    let initial = session.document().clone();
+    let valid = CubeFaceRegionPaintPatch {
+        face:"north".into(),from:[0,0],to:[1,1],
+        rgba:[90,50,30,255],erase:false,
+    };
+    let op = |regions:Vec<CubeFaceRegionPaintPatch>| {
+        EditOperation::PaintCubeFaceRegionsGuarded {
+            cube_uuid:CUBE.into(),texture_uuid:TEX.into(),regions,
+        }
+    };
+    for (regions, code) in [
+        (vec![], "PAINT_FACE_REGIONS_SIZE_INVALID"),
+        (vec![valid.clone();65], "PAINT_FACE_REGIONS_SIZE_INVALID"),
+        (vec![CubeFaceRegionPaintPatch {face:"invalid".into(),..valid.clone()}],
+            "PAINT_FACE_REGION_UNKNOWN_FACE"),
+        (vec![CubeFaceRegionPaintPatch {to:[0,1],..valid.clone()}],
+            "PAINT_FACE_REGION_BOUNDS_INVALID"),
+        (vec![CubeFaceRegionPaintPatch {to:[5,1],..valid.clone()}],
+            "PAINT_FACE_REGION_BOUNDS_INVALID"),
+    ] {
+        assert_eq!(session.apply(1,&[op(regions)]).unwrap_err(),code);
+        assert_eq!(session.document(),&initial);
+    }
+    session.apply(1, &[EditOperation::DuplicateCube {
+        source_uuid:CUBE.into(),new_uuid:DUP.into(),
+    }]).unwrap();
+    let shared=session.document().clone();
+    assert_eq!(session.apply(2,&[
+        EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+        op(vec![valid.clone()]),
+    ]).unwrap_err(),"PAINT_CUBE_UV_GUARD_SHARED");
+    assert_eq!(session.document(),&shared);
+    assert_eq!(session.summary().revision,2);
+
+    let mut unknown = initial.clone();
+    unknown.cubes[0].faces.get_mut("east").unwrap()
+        .as_object_mut().unwrap().remove("texture");
+    let mut ambiguous=EditorSession::from_document(unknown.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0,&[op(vec![valid.clone()])]).unwrap_err(),
+        "PAINT_CUBE_UV_GUARD_UNRESOLVED");
+    assert_eq!(ambiguous.document(),&unknown);
+
+    let mut rules = initial.clone();
+    rules.extensions.insert("per_texture_uv_size".into(),json!(true));
+    let mut unsafe_rules=EditorSession::from_document(rules.clone()).unwrap();
+    assert_eq!(unsafe_rules.apply(0,&[op(vec![valid.clone()])]).unwrap_err(),
+        "UV_SHARING_TEXTURE_RULESET_UNSUPPORTED");
+    assert_eq!(unsafe_rules.document(),&rules);
+
+    let mut corrupted = initial.clone();
+    corrupted.texture_assets[0]["source"]=json!("data:image/png;base64,AAAA");
+    let mut corrupt=EditorSession::from_document(corrupted.clone()).unwrap();
+    assert!(corrupt.apply(0,&[op(vec![valid])]).is_err());
+    assert_eq!(corrupt.document(),&corrupted);
+    assert!(!corrupt.can_undo());
+}
+
 // SOURCE-AUTHORED: one Cube's painted Box UV can be relocated without
 // erasing the shared source, then painted independently from its duplicate.
 #[test]

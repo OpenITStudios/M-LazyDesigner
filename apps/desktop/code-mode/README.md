@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Face-local Texture zones (Rust source only):** The typed `paint_cube_face_regions_guarded` EditOperation accepts explicit `cube_uuid`, `texture_uuid` and up to 64 ordered `regions: [{face, from:[u,v], to:[u,v], rgba:[r,g,b,a], erase}]`. Face-local `from` is inclusive and `to` exclusive, relative to the face's saved displayed UV orientation, **not atlas-pixel coordinates**. Rust handles signed UV/quarter-turn mapping, strict source-level shared-atlas refusal and one owned PNG/Undo transaction. This does not infer materials or certify six-face visual coverage; code execution and native Blockbench verification remain NOT_EXECUTED.
+
+
 The SDK is ready for a **host-provided** Code Mode program. `openRustCodeModeProject` binds a path and observed file SHA-256 so subsequent reads and writes fail closed if the source changes. Normal inspection is read-only:
 
 ```js

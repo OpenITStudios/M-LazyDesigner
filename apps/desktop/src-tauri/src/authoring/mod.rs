@@ -12,6 +12,7 @@ mod paint;
 mod uv_sharing;
 mod texture_coverage;
 mod subtree;
+mod face_regions;
 pub use uv_sharing::inspect_cube_uv_sharing;
 pub use texture_coverage::inspect_model_texture_coverage;
 pub mod storage;
@@ -141,6 +142,18 @@ pub struct CubeFacePaintPatch {
     pub erase: bool,
 }
 
+/// Half-open local face pixel region (not absolute atlas coordinates).
+/// Multiple regions may target the same face and apply in caller order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CubeFaceRegionPaintPatch {
+    pub face: String,
+    pub from: [u32; 2],
+    pub to: [u32; 2],
+    pub rgba: [u8; 4],
+    pub erase: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditOperation {
@@ -211,6 +224,9 @@ pub enum EditOperation {
     },
     PaintCubeUvFacesGuarded {
         cube_uuid: String, texture_uuid: String, faces: Vec<CubeFacePaintPatch>,
+    },
+    PaintCubeFaceRegionsGuarded {
+        cube_uuid: String, texture_uuid: String, regions: Vec<CubeFaceRegionPaintPatch>,
     },
     IsolateCubeBoxUv { cube_uuid: String, texture_uuid: String },
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
@@ -2560,6 +2576,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             cube.uv_offset = Some(plan.next_offset);
             refresh_box_uv(cube)?;
             Ok(cube_uuid.clone())
+        }
+        EditOperation::PaintCubeFaceRegionsGuarded { cube_uuid, texture_uuid, regions } => {
+            face_regions::paint_cube_face_regions_guarded(doc, cube_uuid, texture_uuid, regions)
         }
         EditOperation::PaintCubeUvFacesGuarded { cube_uuid, texture_uuid, faces } => {
             // Opt-in shared-atlas protection: only requested faces are paint
