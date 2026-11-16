@@ -129,6 +129,7 @@ export type EditOperation =
   | { op: 'set_cube_inflate'; uuid: string; inflate: number }
   | { op: 'set_cube_stretch'; uuid: string; stretch: Vec3 }
   | { op: 'set_cube_mirror_uv'; uuid: string; mirrored: boolean }
+  | { op: 'duplicate_animation_clip'; source_uuid: string; new_uuid: string; new_name: string }
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
   | { op: 'set_animation_loop_mode'; animation_uuid: string; mode: 'once' | 'loop' | 'hold' }
   | { op: 'scale_animation_timeline'; animation_uuid: string; factor: number }

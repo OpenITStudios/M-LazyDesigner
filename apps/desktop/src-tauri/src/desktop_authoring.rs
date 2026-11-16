@@ -1592,6 +1592,62 @@ mod tests {
     }
 
 
+    // SOURCE_AUTHORED_NOT_RUN: a single Rust Clone Clip operation is
+    // discoverable by the existing Tauri Animation snapshot without
+    // rebuilding per-Bone keyframe controls or altering the preview owner.
+    #[test]
+    fn duplicated_animation_clip_projects_as_distinct_tauri_animation() {
+        let mut session=EditorSession::open(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let anim="00000000-0000-4000-8000-000000007401";
+        let copy="00000000-0000-4000-8000-000000007402";
+        let bone="00000000-0000-4000-8000-000000000001";
+        let key="00000000-0000-4000-8000-000000007403";
+        session.apply(0,&[
+            EditOperation::CreateAnimation {
+                uuid:anim.into(),name:"idle".into(),length:2.0,
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:anim.into(),bone_uuid:bone.into(),
+                keyframe_uuid:key.into(),channel:"rotation".into(),
+                time:1.0,value:[0.0,90.0,0.0],
+            },
+        ]).unwrap();
+        let previous=session.document().clone();
+        session.apply(1,&[EditOperation::DuplicateAnimationClip {
+            source_uuid:anim.into(),new_uuid:copy.into(),new_name:"attack".into(),
+        }]).unwrap();
+        let saved=session.document().clone();
+        let views=animation_views(&saved);
+        assert_eq!(views.len(),2);
+        assert!(views.iter().all(|view|view.preview_supported));
+        assert_eq!(views[0].name,"idle");
+        assert_eq!(views[1].name,"attack");
+        assert_eq!(views[0].uuid,anim);
+        assert_eq!(views[1].uuid,copy);
+        assert_eq!(views[0].transform_keyframes.len(),1);
+        assert_eq!(views[1].transform_keyframes.len(),1);
+        assert_eq!(views[0].transform_keyframes[0].uuid,key);
+        assert_ne!(views[1].transform_keyframes[0].uuid,key);
+        assert_eq!(views[0].transform_keyframes[0].value,
+            views[1].transform_keyframes[0].value);
+        assert_eq!(views[0].transform_keyframes[0].interpolation,
+            views[1].transform_keyframes[0].interpolation);
+        let store=EditorStore {
+            epoch:1,active:Some(ActiveModel {
+                session,source_path:None,source_sha:None,
+                saved_canonical_sha:None,dirty:true,
+            }),
+        };
+        let snapshot=project(&store).unwrap();
+        assert_eq!(snapshot.animation_count,2);
+        assert_eq!(snapshot.animations.len(),2);
+        assert_eq!(snapshot.animations[1].name,"attack");
+        assert_eq!(snapshot.animations[1].length,2.0);
+        assert_eq!(store.active.as_ref().unwrap().session.document(),&saved);
+        assert_eq!(saved.animation_assets[0],previous.animation_assets[0]);
+    }
+
     // SOURCE_AUTHORED_NOT_RUN: Tauri projects only validated numeric Bezier
     // handles from the one Rust document, never sampled or inferred curves.
     #[test]

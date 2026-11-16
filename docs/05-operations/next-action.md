@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Animation Clip variants via single Rust edit (2026-11-16):** `duplicate_animation_clip` makes a distinct editable numeric Bone clip in one transaction with deterministic new keyframe UUIDs. It preserves original supported Rotation/Position/Scale, looping, Step/Catmull-Rom/Bezier data and Bone targets while refusing name/ID conflicts, incomplete/opaque metadata or export overflow. Typed Code Mode and generic Tauri share the Rust authority and host permission model. Source regressions AUTHORED_NOT_RUN; actual Blockbench playback, varied-motion quality and measured AI-operation savings UNVERIFIED. Next in-scope Animation gaps: safe effects/marker semantics and controller boundaries, followed by end-to-end editable .bbmodel handoff once PC-local acceptance is authorized. Geometry and Texturing preservation remain required; UI/UX last.
+
+
 **Bezier Animation authoring continuation (2026-11-16):** `set_bone_transform_keyframe_bezier` now stores explicit Blockbench-compatible per-axis left/right time/value handles and linked state in the canonical Rust numeric Bone edit path. Tauri projects the admitted handles and read-only prepared TS preview evaluates monotone cubic Bezier with bounded per-axis time inversion. The existing `linear/step/catmullrom` modes, geometry/texture assets, Undo and Code Mode host authorization are preserved; retiming scales time handles and unknown/unsafe curves fail closed. Rust/Tauri/Node/Code Mode regressions AUTHORED_NOT_RUN, native Blockbench visual quality and performance UNVERIFIED. Continue in-scope Animation controller/effects and model/export reliability only where source acceptance requires it; UI/UX last, local validation remains held.
 
 

@@ -484,6 +484,205 @@ fn numeric_catmullrom_refuses_unknown_handles_and_ambiguous_imports() {
     assert_eq!(session.document(),&original);
 }
 
+
+// SOURCE_AUTHORED_NOT_RUN: one editable Clip copy replaces per-keyframe
+// AI round-trips and preserves the original numeric Animation.
+#[test]
+fn duplicate_animation_clip_preserves_curves_and_enables_independent_variant_editing() {
+    const ANIM:&str="00000000-0000-4000-8000-000000007301";
+    const CLONE:&str="00000000-0000-4000-8000-000000007302";
+    const P0:&str="00000000-0000-4000-8000-000000007303";
+    const P2:&str="00000000-0000-4000-8000-000000007304";
+    const R0:&str="00000000-0000-4000-8000-000000007305";
+    const S0:&str="00000000-0000-4000-8000-000000007306";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:ANIM.into(),name:"walk".into(),length:2.0,
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:P0.into(),channel:"position".into(),
+            time:0.0,value:[0.0;3],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:P2.into(),channel:"position".into(),
+            time:2.0,value:[8.0,0.0,0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:R0.into(),channel:"rotation".into(),
+            time:0.0,value:[0.0,45.0,0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:S0.into(),channel:"scale".into(),
+            time:0.0,value:[1.0;3],
+        },
+    ]).unwrap();
+    let bezier=BezierKeyframeHandles {
+        linked:false,
+        left_time:[-0.2;3],left_value:[0.0;3],
+        right_time:[0.25;3],right_value:[1.0,0.0,0.0],
+    };
+    session.apply(1,&[
+        EditOperation::SetBoneTransformKeyframeBezier {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:P0.into(),channel:"position".into(),
+            handles:bezier,
+        },
+        EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:R0.into(),channel:"rotation".into(),
+            interpolation:"step".into(),
+        },
+        EditOperation::SetAnimationLoopMode {
+            animation_uuid:ANIM.into(),mode:"loop".into(),
+        },
+    ]).unwrap();
+    let original=session.document().clone();
+    let duplicate=EditOperation::DuplicateAnimationClip {
+        source_uuid:ANIM.into(),new_uuid:CLONE.into(),new_name:"attack".into(),
+    };
+    let receipt=session.apply(2,&[duplicate.clone()]).unwrap();
+    assert_eq!(receipt.revision,3);
+    assert_eq!(receipt.operation_count,1);
+    assert_eq!(receipt.changed_uuids,vec![CLONE.to_owned()]);
+    let saved=session.document().clone();
+    assert_eq!(saved.animation_assets.len(),2);
+    assert_eq!(saved.animation_assets[0],original.animation_assets[0]);
+    assert_eq!(saved.animation_assets[1]["uuid"],json!(CLONE));
+    assert_eq!(saved.animation_assets[1]["name"],json!("attack"));
+    assert_eq!(saved.animation_assets[1]["loop"],json!("loop"));
+    assert_eq!(saved.animation_assets[1]["length"],json!(2.0));
+    assert_eq!(saved.cubes,original.cubes);
+    assert_eq!(saved.bones,original.bones);
+    assert_eq!(saved.hierarchy,original.hierarchy);
+    assert_eq!(saved.texture_assets,original.texture_assets);
+    assert_eq!(saved.extensions,original.extensions);
+    let source=&saved.animation_assets[0]["animators"][BONE]["keyframes"];
+    let copied=&saved.animation_assets[1]["animators"][BONE]["keyframes"];
+    let original_keys=source.as_array().unwrap();
+    let clone_keys=copied.as_array().unwrap();
+    assert_eq!(clone_keys.len(),4);
+    let mut all=std::collections::HashSet::new();
+    for (old,new) in original_keys.iter().zip(clone_keys) {
+        let old_id=old["uuid"].as_str().unwrap();
+        let new_id=new["uuid"].as_str().unwrap();
+        assert_ne!(new_id,old_id);
+        assert!(all.insert(new_id.to_owned()));
+        let mut expected=old.clone();
+        expected["uuid"]=json!(new_id);
+        assert_eq!(new,&expected);
+    }
+    assert_eq!(copied[0]["interpolation"],json!("bezier"));
+    assert_eq!(copied[0]["bezier_right_time"],json!([0.25,0.25,0.25]));
+    assert_eq!(copied[2]["interpolation"],json!("step"));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+
+    let mut repeated=EditorSession::from_document(original.clone()).unwrap();
+    repeated.apply(0,&[duplicate.clone()]).unwrap();
+    assert_eq!(repeated.export().unwrap(),session.export().unwrap());
+
+    session.undo(3).unwrap();
+    assert_eq!(session.document(),&original);
+    session.redo(4).unwrap();
+    assert_eq!(session.document(),&saved);
+    let copied_position=clone_keys[0]["uuid"].as_str().unwrap();
+    session.apply(5,&[EditOperation::UpdateBoneTransformKeyframe {
+        animation_uuid:CLONE.into(),bone_uuid:BONE.into(),
+        keyframe_uuid:copied_position.into(),channel:"position".into(),
+        time:0.5,value:[2.0,0.0,0.0],
+    }]).unwrap();
+    assert_eq!(session.document().animation_assets[0],
+        original.animation_assets[0]);
+    assert_eq!(session.document().animation_assets[1]["animators"][BONE]
+        ["keyframes"][0]["time"],json!(0.5));
+    assert_eq!(session.document().animation_assets[1]["animators"][BONE]
+        ["keyframes"][0]["interpolation"],json!("bezier"));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+}
+
+#[test]
+fn duplicate_animation_clip_refuses_unsafe_names_ids_and_opaque_input_atomically() {
+    const ANIM:&str="00000000-0000-4000-8000-000000007321";
+    const CLONE:&str="00000000-0000-4000-8000-000000007322";
+    const P0:&str="00000000-0000-4000-8000-000000007323";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {uuid:ANIM.into(),name:"walk".into(),length:2.0},
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:P0.into(),channel:"position".into(),
+            time:0.0,value:[0.0;3],
+        },
+    ]).unwrap();
+    let original=session.document().clone();
+    let make=|source:&str,id:&str,name:&str| EditOperation::DuplicateAnimationClip {
+        source_uuid:source.into(),new_uuid:id.into(),new_name:name.into(),
+    };
+    for (source,id,name,error) in [
+        (ANIM,CLONE,"", "ANIMATION_DUPLICATE_ID_OR_NAME_INVALID"),
+        (ANIM,CLONE,"  ","ANIMATION_DUPLICATE_ID_OR_NAME_INVALID"),
+        (ANIM,"invalid uuid","attack","ANIMATION_DUPLICATE_ID_OR_NAME_INVALID"),
+        (ANIM,CLONE,"bad\nname","ANIMATION_DUPLICATE_ID_OR_NAME_INVALID"),
+        ("unknown",CLONE,"attack","ANIMATION_NOT_FOUND"),
+        (ANIM,ANIM,"attack","ANIMATION_DUPLICATE_ID_CONFLICT"),
+        (ANIM,CUBE,"attack","ANIMATION_DUPLICATE_ID_CONFLICT"),
+        (ANIM,P0,"attack","ANIMATION_DUPLICATE_ID_CONFLICT"),
+        (ANIM,CLONE,"walk","ANIMATION_DUPLICATE_NAME_CONFLICT"),
+    ] {
+        assert_eq!(session.apply(1,&[
+            EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+            make(source,id,name),
+        ]).unwrap_err(),error);
+        assert_eq!(session.document(),&original);
+        assert_eq!(session.summary().revision,1);
+    }
+    let mut opaque=original.clone();
+    opaque.animation_assets[0]["animators"][BONE]["keyframes"][0]
+        ["data_points"][0]["x"]=json!("query.opaque");
+    let mut refused=EditorSession::from_document(opaque.clone()).unwrap();
+    assert_eq!(refused.apply(0,&[make(ANIM,CLONE,"attack")]).unwrap_err(),
+        "ANIMATION_DUPLICATE_SOURCE_UNSUPPORTED");
+    assert_eq!(refused.document(),&opaque);
+    assert!(!refused.can_undo());
+
+    // Pre-existing saved identity equal to a derived child UUID must stop
+    // the copy before the Rust draft can replace the original document.
+    let digest=sha256(format!(
+        "lazydesigner:animation-clip-copy\0{CLONE}\0{P0}"
+    ).as_bytes());
+    let reserved=format!("{}-{}-4{}-8{}-{}",
+        &digest[..8],&digest[8..12],&digest[13..16],
+        &digest[17..20],&digest[20..32]);
+    let mut occupied=original.clone();
+    occupied.animation_assets.push(json!({
+        "uuid":reserved,"name":"reserved","loop":"once",
+        "length":0.0,"animators":{}
+    }));
+    let mut key_collision=EditorSession::from_document(occupied.clone()).unwrap();
+    assert_eq!(key_collision.apply(0,&[make(ANIM,CLONE,"attack")]).unwrap_err(),
+        "ANIMATION_DUPLICATE_KEY_ID_CONFLICT");
+    assert_eq!(key_collision.document(),&occupied);
+
+    let mut duplicated=original.clone();
+    duplicated.animation_assets.push(original.animation_assets[0].clone());
+    let mut ambiguous=EditorSession::from_document(duplicated.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0,&[make(ANIM,CLONE,"attack")]).unwrap_err(),
+        "ANIMATION_ID_AMBIGUOUS");
+    assert_eq!(ambiguous.document(),&duplicated);
+
+    session.apply(1,&[make(ANIM,CLONE,"attack")]).unwrap();
+    let once=session.document().clone();
+    assert_eq!(session.apply(2,&[make(ANIM,CLONE,"attack")]).unwrap_err(),
+        "ANIMATION_DUPLICATE_NAME_CONFLICT");
+    assert_eq!(session.document(),&once);
+}
+
 // SOURCE_AUTHORED_NOT_RUN: pinned Blockbench 5.2.1 Step holds the prior
 // numeric Bone value until the next frame. The Rust codec owns saved modes,
 // while the Tauri renderer alone derives display poses.

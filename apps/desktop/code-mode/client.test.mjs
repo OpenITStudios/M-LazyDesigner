@@ -318,6 +318,42 @@ test('Code Mode submits Catmull-Rom Bone interpolation as one Rust edit', async 
 
 // SOURCE_AUTHORED_NOT_RUN: exact Blockbench Bezier handle arrays are authored
 // through one host-approved Rust plan and never evaluated in the JS guest.
+
+// SOURCE_AUTHORED_NOT_RUN: a whole Animation Clip variant is an approved
+// semantic Rust edit, not a guest script that copies keyframes individually.
+test('Code Mode duplicates a complete Bone Animation Clip in one approved plan', async () => {
+  const operation = {
+    op: 'duplicate_animation_clip',
+    source_uuid: 'clip-walk',
+    new_uuid: 'clip-attack',
+    new_name: 'attack',
+  };
+  const approvals = [];
+  let plan;
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: request => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async argv => {
+      plan = JSON.parse(await readFile(argv[argv.indexOf('--plan') + 1], 'utf8'));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:1,changed_uuids:['clip-attack'],
+      }};
+    },
+  });
+  const result = await client.apply({
+    input:'/abs/walk.bbmodel',output:'/abs/walk-attack.bbmodel',
+    expectedSha256:SHA,operations:[operation],
+  });
+  assert.deepEqual(plan,{expected_revision:0,operations:[operation]});
+  assert.equal(approvals.length,1);
+  assert.deepEqual(approvals[0].operationKinds,['duplicate_animation_clip']);
+  assert.equal(approvals[0].operationCount,1);
+  assert.deepEqual(result.mutation.changed_uuids,['clip-attack']);
+});
+
 test('Code Mode sends complete Bezier Bone handles in one approved Rust edit', async () => {
   const handles={
     linked:false,

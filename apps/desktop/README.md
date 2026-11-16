@@ -1,12 +1,17 @@
 # LazyDesigner Desktop
 
+**Rust Animation Clip variants (2026-11-16; SOURCE_ONLY):** The shared Rust EditOperation `duplicate_animation_clip` copies a recognized Bone Animation clip and all numeric transforms into a separately named, independently keyed clip in one authoring transaction. It keeps original Geometry/UV/Texture and Animation source untouched, preserves supported interpolation including Bezier handles, and refuses unknown imported clips rather than guessing. Typed Code Mode and generic Tauri are the consumers; this is not a new UI workflow or native proof. Rust/Tauri/Node source regressions AUTHORED_NOT_RUN; actual Blockbench clip play/edit compatibility and latency UNVERIFIED.
+
+
 **Rust Animate Bone Position/Scale (2026-11-15; SOURCE_ONLY):**
-Atomic Rust transform keyframe edits now cover numeric linear Rotation,
-Position and nonnegative Scale, with existing rotation APIs retained.
+Atomic Rust transform keyframe edits cover numeric Rotation,
+Position and nonnegative Scale with the supported linear/step/Catmull-Rom
+and explicitly validated Bezier subset; existing rotation APIs remain.
 The Animate UI has channel selection and per-channel Bone timeline markers.
 Tauri projects only recognized clips; Three.js previews read-only
 position/rotation/scale transforms without rewriting saved source.
-Imported Molang, Bezier/effects and negative scale are not approximated.
+Imported Molang, opaque or incomplete Bezier/effects and negative
+scale are not approximated; complete admitted Bezier is handled separately.
 All regression source AUTHORED_NOT_RUN; Windows/Blockbench/native proof
 UNVERIFIED.
 **Rust Animate duration and Bone timeline (2026-11-15; SOURCE_ONLY):**

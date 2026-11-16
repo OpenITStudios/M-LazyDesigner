@@ -13,6 +13,7 @@ mod uv_sharing;
 mod texture_coverage;
 mod subtree;
 mod bezier;
+mod animation_clip;
 mod face_regions;
 pub use bezier::{parse_saved_bezier_handles, valid_track_segments, BezierKeyframeHandles};
 mod palette;
@@ -186,6 +187,7 @@ pub enum EditOperation {
     RemoveCube { uuid: String },
     RemoveEmptyBone { uuid: String },
     CreateAnimation { uuid: String, name: String, length: f64 },
+    DuplicateAnimationClip { source_uuid: String, new_uuid: String, new_name: String },
     SetAnimationLength { animation_uuid: String, length: f64 },
     SetAnimationLoopMode { animation_uuid: String, mode: String },
     ScaleAnimationTimeline { animation_uuid: String, factor: f64 },
@@ -2112,6 +2114,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 cube.extra.insert("rotation".into(), json!(rotation));
             }
             Ok(uuid.clone())
+        }
+        EditOperation::DuplicateAnimationClip { source_uuid, new_uuid, new_name } => {
+            animation_clip::duplicate_animation_clip(doc, source_uuid, new_uuid, new_name)?;
+            Ok(new_uuid.clone())
         }
         EditOperation::CreateAnimation { uuid, name, length } => {
             if !valid_uuid(uuid) || name.trim().is_empty() || name.chars().count() > 128 ||

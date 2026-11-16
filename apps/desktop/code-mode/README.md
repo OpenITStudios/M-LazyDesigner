@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Animation Clip variants (Rust source only):** To create `attack` from `walk`, submit one `duplicate_animation_clip` EditOperation with `{source_uuid,new_uuid,new_name}` inside the existing SHA/revision-guarded, trusted-host-approved `apply` plan. Rust clones the admitted numeric Bone clip, all keyframes and interpolation/Bezier data, assigning stable new keyframe UUIDs. The original remains unchanged and both clips are separately editable. The operation refuses duplicate names/IDs, malformed/opaque source tracks, external identity conflicts and oversized .bbmodel results; it does **not** clone or re-author imported effects/controllers of unknown shape. Existing Code Mode sandbox/host gating remains unchanged. Source regressions AUTHORED_NOT_RUN, native playback and measured tool savings UNVERIFIED.
+
+
 **Saved Bezier handle control (Rust source, 2026-11-16):** `set_bone_transform_keyframe_bezier` accepts one exact `{animation_uuid,bone_uuid,keyframe_uuid,channel,handles}` operation. `handles` has `linked:boolean`, and `leftTime/leftValue/rightTime/rightValue` as three-component numeric arrays. Rust validates each handle, the referenced channel/keyframe, the whole numeric clip and unambiguous time control segments, then saves Blockbench's native `bezier_* ` fields without sampling or rewriting pixels. Link mode requires opposing time/value handles. The same plan can add a key and set its Bezier controls in one host-approved mutation. The bounded transform/rotation reads return the source `bezier` payload only for recognized curves; existing `scope` labels remain stable. Imported Molang/opaque/incomplete Bezier is not guessed. Local/Blockbench runtime and performance **NOT_EXECUTED/UNVERIFIED**.
 
 
