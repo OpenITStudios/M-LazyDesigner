@@ -598,6 +598,18 @@ fn apply_box_resize_offset(cube: &mut Cube, axis: usize, direction: i8, old_size
 }
 
 fn validate_cube(cube: &Cube, textures: &[Value]) -> Result<()> {
+    // Focused Add/Duplicate operations still validate one Cube independently.
+    let texture_uuids: HashSet<&str> = textures.iter()
+        .filter_map(|texture| texture.get("uuid").and_then(Value::as_str)).collect();
+    validate_cube_with_texture_refs(cube, textures.len(), &texture_uuids)
+}
+
+/// One shared membership index for the model-wide validation hot path.
+/// Texture-shape, UUID-shape and duplicate-ID refusals remain in the
+/// unchanged late validation gate so error precedence does not change.
+fn validate_cube_with_texture_refs(
+    cube: &Cube, texture_count: usize, texture_uuids: &HashSet<&str>,
+) -> Result<()> {
     if cube.kind != "cube" { return Err(fail("ELEMENT_TYPE_UNSUPPORTED")); }
     optional_rotation(&cube.extra)?;
     // These saved geometry fields alter the 3D surface and must not be
@@ -649,9 +661,8 @@ fn validate_cube(cube: &Cube, textures: &[Value]) -> Result<()> {
         if let Some(reference) = face.get("texture") {
             match reference {
                 Value::Null | Value::Bool(false) => {},
-                Value::Number(index) if index.as_u64().is_some_and(|v| v < textures.len() as u64) => {},
-                Value::String(uuid) if textures.iter().any(|texture|
-                    texture.get("uuid").and_then(Value::as_str) == Some(uuid.as_str())) => {},
+                Value::Number(index) if index.as_u64().is_some_and(|v| v < texture_count as u64) => {},
+                Value::String(uuid) if texture_uuids.contains(uuid.as_str()) => {},
                 _ => return Err(fail("CUBE_FACE_TEXTURE_UNSUPPORTED")),
             }
         }
@@ -725,11 +736,13 @@ impl AuthoringDocument {
            self.texture_assets.len() > MAX_ELEMENTS || self.animation_assets.len() > MAX_ELEMENTS {
             return Err(fail("BBMODEL_SIZE_LIMIT"));
         }
+        let texture_refs: HashSet<&str> = self.texture_assets.iter()
+            .filter_map(|texture| texture.get("uuid").and_then(Value::as_str)).collect();
         let mut all_ids = HashSet::new();
         let mut cube_ids = HashSet::new();
         let mut bone_ids = HashSet::new();
         for cube in &self.cubes {
-            validate_cube(cube, &self.texture_assets)?;
+            validate_cube_with_texture_refs(cube, self.texture_assets.len(), &texture_refs)?;
             if !all_ids.insert(cube.uuid.clone()) { return Err(fail("DUPLICATE_UUID")); }
             cube_ids.insert(cube.uuid.clone());
         }
@@ -1040,6 +1053,10 @@ fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
     let Some(tracks) = animation.get("animators").and_then(Value::as_object) else {
         return false;
     };
+    // Check each declared animator Bone through one clip-local lookup instead
+    // of rescanning the whole rig for every saved track.
+    let bone_by_uuid: HashMap<&str, &Bone> = bones.iter()
+        .map(|bone| (bone.uuid.as_str(), bone)).collect();
     let mut all_ids = HashSet::new();
     let mut total = 0usize;
     for (bone_uuid, track) in tracks {
@@ -1062,7 +1079,7 @@ fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
             }
             continue;
         }
-        let Some(bone) = bones.iter().find(|bone| bone.uuid == *bone_uuid) else {
+        let Some(bone) = bone_by_uuid.get(bone_uuid.as_str()).copied() else {
             return false;
         };
         if !editable_rotation_track(track) || track.get("name")

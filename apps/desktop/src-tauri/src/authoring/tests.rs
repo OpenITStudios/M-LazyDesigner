@@ -14,6 +14,58 @@ fn sample_cube(uuid: &str) -> Cube {
     serde_json::from_value(value["elements"][0].clone()).unwrap()
 }
 
+// SOURCE-AUTHORED_NOT_RUN: document-wide texture membership has one index,
+// while malformed/duplicate texture metadata keeps its original refusal gate.
+#[test]
+fn indexed_model_validation_preserves_numeric_uuid_and_opaque_asset_error_contracts() {
+    let mut doc = AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap();
+    for index in 0..96 {
+        doc.texture_assets.push(json!({
+            "uuid":format!("00000000-0000-4000-8000-{:012}", 10000 + index),
+            "name":format!("texture_{index}.png"),
+        }));
+    }
+    let original_cube = doc.cubes[0].clone();
+    let mut child_ids = Vec::new();
+    for index in 0..64 {
+        let mut cube = original_cube.clone();
+        cube.uuid = format!("00000000-0000-4000-8000-{:012}", 11000 + index);
+        cube.name = Some(format!("cube_{index}"));
+        cube.faces.get_mut("north").unwrap()["texture"] = json!(
+            format!("00000000-0000-4000-8000-{:012}", 10000 + index % 32)
+        );
+        cube.faces.get_mut("east").unwrap()["texture"] = json!(index % 32);
+        cube.faces.get_mut("south").unwrap()["texture"] = Value::Null;
+        cube.faces.get_mut("west").unwrap()["texture"] = Value::Bool(false);
+        cube.faces.get_mut("up").unwrap().as_object_mut().unwrap().remove("texture");
+        child_ids.push(OutlinerNode::Cube(cube.uuid.clone()));
+        doc.cubes.push(cube);
+    }
+    match &mut doc.hierarchy[0] {
+        OutlinerNode::Bone(root) => root.children.extend(child_ids),
+        OutlinerNode::Cube(_) => panic!("synthetic fixture root must be a Bone"),
+    }
+    doc.validate().unwrap();
+    let source = doc.clone();
+    assert_eq!(AuthoringDocument::import_bbmodel(&doc.export_bbmodel().unwrap()).unwrap(), doc);
+
+    let mut missing = doc.clone();
+    missing.cubes[1].faces.get_mut("north").unwrap()["texture"] =
+        json!("00000000-0000-4000-8000-000000099999");
+    assert_eq!(missing.validate().unwrap_err(), "CUBE_FACE_TEXTURE_UNSUPPORTED");
+    let mut invalid_index = doc.clone();
+    invalid_index.cubes[1].faces.get_mut("east").unwrap()["texture"] = json!(96);
+    assert_eq!(invalid_index.validate().unwrap_err(), "CUBE_FACE_TEXTURE_UNSUPPORTED");
+    let mut duplicated = doc.clone();
+    let duplicate_texture_uuid = duplicated.texture_assets[94]["uuid"].clone();
+    duplicated.texture_assets[95]["uuid"] = duplicate_texture_uuid;
+    assert_eq!(duplicated.validate().unwrap_err(), "TEXTURE_UUID_DUPLICATE");
+    let mut malformed = doc.clone();
+    malformed.texture_assets[95] = Value::Null;
+    assert_eq!(malformed.validate().unwrap_err(), "BBMODEL_ASSET_ENTRY_INVALID");
+    assert_eq!(doc, source);
+}
+
 // SOURCE-AUTHORED only: Cargo and Blockbench tests remain on hold.
 #[test]
 fn numeric_linear_bone_position_scale_and_rotation_share_one_undoable_transaction() {

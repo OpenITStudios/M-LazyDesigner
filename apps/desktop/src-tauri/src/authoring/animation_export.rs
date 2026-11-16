@@ -6,7 +6,7 @@
 use super::{bezier, editable_transform_clip, saved_animation_loop, transform_axis,
     valid_animation_transform_value, AuthoringDocument, MAX_MODEL_BYTES};
 use serde_json::{json, Map, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 type Result<T> = std::result::Result<T, String>;
 fn fail(code: &str) -> String { code.to_owned() }
@@ -299,6 +299,10 @@ pub fn bedrock_animation_curve_fidelity(doc: &AuthoringDocument) -> &'static str
 /// resource. Animation controllers belong to a DIFFERENT resource/codec.
 pub fn export_bedrock_animations(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     doc.validate()?;
+    // Reuse one read-only index across every animation clip. Output remains
+    // ordered by the saved clip/track maps, never by HashMap iteration order.
+    let bone_by_uuid: HashMap<&str, &super::Bone> = doc.bones.iter()
+        .map(|bone| (bone.uuid.as_str(), bone)).collect();
     let mut animations = Map::new();
     let mut names = HashSet::new();
     for clip in &doc.animation_assets {
@@ -332,7 +336,7 @@ pub fn export_bedrock_animations(doc: &AuthoringDocument) -> Result<Vec<u8>> {
                 compile_effects(track, &mut output)?;
                 continue;
             }
-            let bone = doc.bones.iter().find(|bone| bone.uuid == *id)
+            let bone = bone_by_uuid.get(id.as_str()).copied()
                 .ok_or_else(|| fail("ANIMATION_EXPORT_BONE_NOT_FOUND"))?;
             if !super::geometry::valid_bone_name(&bone.name) ||
                 !used_bones.insert(bone.name.to_ascii_lowercase()) {
@@ -554,6 +558,48 @@ mod tests {
             value.as_array().is_some()));
         assert_eq!(s.export().unwrap(), saved);
         assert_eq!(EditorSession::open(&saved).unwrap().document(), s.document());
+    }
+
+    // Source-authored only: this fixture covers many Bone tracks without
+    // changing the document or depending on hash iteration order.
+    #[test]
+    fn indexed_many_bone_tracks_export_exact_channels_deterministically() {
+        let mut s = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+        let mut operations = vec![EditOperation::CreateAnimation {
+            uuid: CLIP.into(), name: "animation.many".into(), length: 2.0,
+        }];
+        for index in 0..16 {
+            let bone_uuid = format!("00000000-0000-4000-8000-{:012}", 4000 + index);
+            let frame_uuid = format!("00000000-0000-4000-8000-{:012}", 6000 + index);
+            operations.push(EditOperation::AddBone {
+                bone: super::super::Bone {
+                    uuid: bone_uuid.clone(), name: format!("limb_{index}"),
+                    origin: Some([0.0, 0.0, 0.0]), extra: Map::new(),
+                },
+                parent_uuid: Some(BONE.into()),
+            });
+            operations.push(EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid, keyframe_uuid: frame_uuid,
+                channel: "position".into(), time: 1.0,
+                value: [index as f64, index as f64 * 0.5, 2.0],
+            });
+        }
+        s.apply(0, &operations).unwrap();
+        let source = s.document().clone();
+        let saved = s.export().unwrap();
+        let first = export_bedrock_animations(s.document()).unwrap();
+        assert_eq!(first, export_bedrock_animations(s.document()).unwrap());
+        let json: Value = serde_json::from_slice(&first).unwrap();
+        let bones = json["animations"]["animation.many"]["bones"].as_object().unwrap();
+        assert_eq!(bones.len(), 16);
+        for index in 0..16 {
+            let key = format!("limb_{index}");
+            let position = &bones[&key]["position"]["1.0"];
+            assert_eq!(position, &json!([- (index as f64), index as f64 * 0.5, 2.0]));
+        }
+        assert_eq!(s.document(), &source);
+        assert_eq!(s.export().unwrap(), saved);
+        assert_eq!(EditorSession::open(&saved).unwrap().document(), &source);
     }
 
     #[test]

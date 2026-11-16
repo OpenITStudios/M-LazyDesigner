@@ -4,7 +4,7 @@
 
 use super::{has_per_texture_uv_rules, AuthoringDocument, Bone, Cube, OutlinerNode, MAX_MODEL_BYTES};
 use serde_json::{json, Map, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 type Result<T> = std::result::Result<T, String>;
 fn fail(code: &str) -> String { code.to_owned() }
@@ -131,13 +131,14 @@ fn compile_cube(cube: &Cube, project_box_uv: bool, bone_mirror: bool) -> Result<
 
 fn compile_bone(
     node: &super::OutlinerBone, parent: Option<&str>, doc: &AuthoringDocument,
+    bone_by_uuid: &HashMap<&str, &Bone>, cube_by_uuid: &HashMap<&str, &Cube>,
     out: &mut Vec<Value>, any_rotation: &mut bool, any_binding: &mut bool,
     bone_names: &mut HashSet<String>,
 ) -> Result<()> {
     if !node.extra.is_empty() {
         return Err(fail("GEOMETRY_EXPORT_OUTLINER_UNSUPPORTED"));
     }
-    let bone = doc.bones.iter().find(|bone| bone.uuid == node.uuid)
+    let bone = bone_by_uuid.get(node.uuid.as_str()).copied()
         .ok_or_else(|| fail("GEOMETRY_EXPORT_BONE_NOT_FOUND"))?;
     supported_keys(&bone.extra, &[
         "rotation", "mirror_uv", "bedrock_binding", "reset", "material",
@@ -181,7 +182,7 @@ fn compile_bone(
     let mut cubes = Vec::new();
     for child in &node.children {
         if let OutlinerNode::Cube(id) = child {
-            let cube = doc.cubes.iter().find(|cube| cube.uuid == *id)
+            let cube = cube_by_uuid.get(id.as_str()).copied()
                 .ok_or_else(|| fail("GEOMETRY_EXPORT_CUBE_NOT_FOUND"))?;
             let (compiled, has_rotation) = compile_cube(cube, doc.meta.box_uv.unwrap_or(false), mirror)?;
             cubes.push(compiled);
@@ -192,7 +193,8 @@ fn compile_bone(
     out.push(Value::Object(item));
     for child in &node.children {
         if let OutlinerNode::Bone(nested) = child {
-            compile_bone(nested, Some(&bone.name), doc, out, any_rotation, any_binding, bone_names)?;
+            compile_bone(nested, Some(&bone.name), doc, bone_by_uuid, cube_by_uuid,
+                out, any_rotation, any_binding, bone_names)?;
         }
     }
     Ok(())
@@ -208,6 +210,13 @@ pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     let identifier = doc.extensions.get("model_identifier").and_then(Value::as_str)
         .filter(|id| valid_bone_name(id))
         .ok_or_else(|| fail("GEOMETRY_EXPORT_IDENTIFIER_INVALID"))?;
+    // The validated Outliner already identifies each Bone/Cube uniquely.
+    // Index only for this export; iterating Outliner children still defines the
+    // exact previous output order, never HashMap iteration order.
+    let bone_by_uuid: HashMap<&str, &Bone> = doc.bones.iter()
+        .map(|bone| (bone.uuid.as_str(), bone)).collect();
+    let cube_by_uuid: HashMap<&str, &Cube> = doc.cubes.iter()
+        .map(|cube| (cube.uuid.as_str(), cube)).collect();
     let mut bones = Vec::new();
     let mut any_rotation = false;
     let mut any_binding = false;
@@ -215,7 +224,8 @@ pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     for node in &doc.hierarchy {
         match node {
             OutlinerNode::Bone(group) => {
-                compile_bone(group, None, doc, &mut bones, &mut any_rotation, &mut any_binding, &mut names)?;
+                compile_bone(group, None, doc, &bone_by_uuid, &cube_by_uuid,
+                    &mut bones, &mut any_rotation, &mut any_binding, &mut names)?;
             },
             OutlinerNode::Cube(_) => return Err(fail("GEOMETRY_EXPORT_CUBE_REQUIRES_BONE")),
         }
@@ -366,6 +376,65 @@ mod tests {
         assert_eq!(export_bedrock_geometry(&unsupported).unwrap_err(),
             "GEOMETRY_EXPORT_CUBE_REQUIRES_BONE");
         assert_eq!(source, AuthoringDocument::import_bbmodel(BASIC).unwrap());
+    }
+
+    // Authored source regression only: scale the hierarchy without relying
+    // on HashMap iteration order for parent/cube output order.
+    #[test]
+    fn indexed_many_cube_bone_export_keeps_hierarchy_order_and_serialized_bytes() {
+        let mut doc = AuthoringDocument::import_bbmodel(BASIC).unwrap();
+        let original_cube = doc.cubes[0].clone();
+        let root_uuid = doc.bones[0].uuid.clone();
+        let mut children = vec![OutlinerNode::Cube(original_cube.uuid.clone())];
+        for group_index in 0..8 {
+            let bone_uuid = format!("00000000-0000-4000-8000-{:012}", 1000 + group_index);
+            let mut direct_cubes = Vec::new();
+            for cube_index in 0..16 {
+                let id = format!("00000000-0000-4000-8000-{:012}",
+                    2000 + group_index * 16 + cube_index);
+                let mut cube = original_cube.clone();
+                cube.uuid = id.clone();
+                let from = [group_index as f64 * 5.0, 0.0, cube_index as f64 * 4.0];
+                cube.from = from;
+                cube.to = [from[0] + 4.0, 4.0, from[2] + 4.0];
+                doc.cubes.push(cube);
+                direct_cubes.push(OutlinerNode::Cube(id));
+            }
+            doc.bones.push(Bone {
+                uuid: bone_uuid.clone(), name: format!("limb_{group_index}"),
+                origin: Some([0.0, group_index as f64, 0.0]), extra: Map::new(),
+            });
+            children.push(OutlinerNode::Bone(super::super::OutlinerBone {
+                uuid: bone_uuid, is_open: Some(true), extra: Map::new(),
+                children: direct_cubes,
+            }));
+        }
+        doc.hierarchy = vec![OutlinerNode::Bone(super::super::OutlinerBone {
+            uuid: root_uuid, is_open: Some(true), extra: Map::new(), children,
+        })];
+        let unchanged = doc.clone();
+        let bytes = export_bedrock_geometry(&doc).unwrap();
+        assert_eq!(bytes, export_bedrock_geometry(&doc).unwrap());
+        let resource: Value = serde_json::from_slice(&bytes).unwrap();
+        let bones = resource["minecraft:geometry"][0]["bones"].as_array().unwrap();
+        assert_eq!(bones.len(), 9);
+        assert_eq!(bones[0]["name"], "root_bone");
+        assert_eq!(bones[0]["cubes"].as_array().unwrap().len(), 1);
+        for group_index in 0..8 {
+            let bone = &bones[group_index + 1];
+            assert_eq!(bone["name"], json!(format!("limb_{group_index}")));
+            assert_eq!(bone["parent"], "root_bone");
+            assert_eq!(bone["cubes"].as_array().unwrap().len(), 16);
+        }
+        assert_eq!(bones[8]["cubes"][15]["origin"], json!([-39.0, 0.0, 60.0]));
+        assert_eq!(doc, unchanged);
+        assert_eq!(AuthoringDocument::import_bbmodel(
+            &doc.export_bbmodel().unwrap()).unwrap(), doc);
+        let mut duplicate_name = doc.clone();
+        duplicate_name.bones[8].name = "ROOT_BONE".into();
+        assert_eq!(export_bedrock_geometry(&duplicate_name).unwrap_err(),
+            "GEOMETRY_EXPORT_BONE_NAME_UNSUPPORTED");
+        assert_eq!(doc, unchanged);
     }
 
     #[test]
