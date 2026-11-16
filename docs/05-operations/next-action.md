@@ -1,5 +1,9 @@
 # LazyDesigner Next Action
 
+
+**Rust authored Scale reach (2026-11-16; SOURCE_ONLY):** The canonical Geometry → Texture → Animation asset handoff now derives a bounded numeric linear/step Scale upper budget per Bone hierarchy: max(1, axis Scale) products along ancestral paths, combined conservatively with the existing pivot Rotation sphere and Position chain reach. Retained read-only `translation_clearance` scope reports `scaled_pivot_envelope` with typed Code Mode fields, without altering source or exported assets, changing permissions, creating a new runtime or requiring localtest. Source-authored positive/negative regressions are NOT_EXECUTED. Unsupported nonlinear curves, Molang, simultaneous controller blends, native culling, visual texture fidelity and measured comparison with Blockbench remain UNVERIFIED. Next in-scope work should follow *newly established* source incompatibilities in Geometry/Texture/Animation rather than duplicate broad benchmarking or UI feature lists.
+
+
 **Rotation-aware Rust asset handoff (2026-11-16; SOURCE_ONLY):** The canonical headless Geometry compiler is now reused to produce a conservative padded rotation envelope from emitted Bone/Cube pivot chains, combined with the existing per-clip linear/step Position reach. The SHA-bound `asset_handoff.geometry.translation_clearance` reports `coverage_mode` and bounded radius without changing `.bbmodel`, exported Geometry/PNG/Animation, Code Mode permissions or no-overwrite behavior. Numeric Scale changes, nonlinear motion and controller blends are still intentionally unassessed; a covered *source budget* does not prove native culling or quality. Rust/SDK/regression source AUTHORED_NOT_RUN, native build/localtest DEFERRED under hold. Further work only where an actual Geometry/Texture/Animation export or accepted-quality gap is source-established; UI last.
 
 

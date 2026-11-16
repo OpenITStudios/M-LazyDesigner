@@ -33,10 +33,14 @@ fn export_evidence(
 /// Conservative source-only upper budget for ONE authored numeric clip.
 /// Linear/step Bone Position uses the maximum nested sum of vector lengths;
 /// Bone Rotation (any numeric angle) uses the canonical compiled Geometry's
-/// pivot-chain radius. This does NOT measure visual poses, native culling,
-/// controller blends, Scale, Molang or non-linear interpolation. The existing
-/// scope string is retained for typed Code Mode compatibility; coverage_mode
-/// distinguishes the two proven source subsets.
+/// pivot-chain radius. Linear/step Scale is bounded by multiplying the largest
+/// per-Bone axis magnitude (minimum factor 1) along each authored hierarchy
+/// path. Each clip is considered separately and the maximum reach and growth
+/// are conservatively combined across clips. This can substantially overstate
+/// actual clearance, never understate it under this numeric single-clip subset.
+/// This does NOT measure visual poses, native culling, simultaneous controller
+/// blends, Molang or nonlinear interpolation. Preserve the existing scope and
+/// status fields for typed Code Mode compatibility.
 fn translation_clearance(
     doc: &AuthoringDocument, static_bounds: &Value, saved_bounds: &Value,
     compiled_bones: &[Value],
@@ -51,15 +55,26 @@ fn translation_clearance(
         })
     }
     fn maximum_chain(
-        nodes: &[OutlinerNode], local: &HashMap<&str, f64>,
-        inherited: f64, maximum: &mut f64,
+        nodes: &[OutlinerNode],
+        local_position: &HashMap<&str, f64>,
+        local_scale: &HashMap<&str, f64>,
+        inherited_reach: f64, inherited_growth: f64,
+        maximum_reach: &mut f64, maximum_growth: &mut f64,
     ) -> bool {
         for node in nodes {
             if let OutlinerNode::Bone(bone) = node {
-                let reach = inherited + local.get(bone.uuid.as_str()).copied().unwrap_or(0.0);
-                if !reach.is_finite() { return false; }
-                *maximum = (*maximum).max(reach);
-                if !maximum_chain(&bone.children, local, reach, maximum) { return false; }
+                let id = bone.uuid.as_str();
+                let reach = inherited_reach +
+                    local_position.get(id).copied().unwrap_or(0.0);
+                let growth = inherited_growth *
+                    local_scale.get(id).copied().unwrap_or(1.0);
+                if !reach.is_finite() || !growth.is_finite() { return false; }
+                *maximum_reach = (*maximum_reach).max(reach);
+                *maximum_growth = (*maximum_growth).max(growth);
+                if !maximum_chain(&bone.children, local_position, local_scale,
+                    reach, growth, maximum_reach, maximum_growth) {
+                    return false;
+                }
             }
         }
         true
@@ -67,7 +82,10 @@ fn translation_clearance(
     let mut maximum_reach: f64 = 0.0;
     let mut position_tracks = 0usize;
     let mut rotation_tracks = 0usize;
+    let mut scale_tracks = 0usize;
     let mut has_animated_rotation = false;
+    let mut has_animated_scale = false;
+    let mut maximum_scale_growth = 1.0_f64;
     let mut numeric_clips = 0usize;
     for clip in &doc.animation_assets {
         if !super::editable_transform_clip(clip, &doc.bones) {
@@ -78,6 +96,7 @@ fn translation_clearance(
             return unassessed("OPAQUE_OR_UNSUPPORTED_CLIP");
         };
         let mut local: HashMap<&str, f64> = HashMap::new();
+        let mut local_scale: HashMap<&str, f64> = HashMap::new();
         for (bone_uuid, track) in tracks {
             if bone_uuid == "effects" { continue; }
             let Some(frames) = track.get("keyframes").and_then(Value::as_array) else {
@@ -85,6 +104,7 @@ fn translation_clearance(
             };
             let mut has_position = false;
             let mut has_rotation = false;
+            let mut has_scale = false;
             for frame in frames {
                 let Some(mode) = frame.get("interpolation").and_then(Value::as_str) else {
                     return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
@@ -126,25 +146,43 @@ fn translation_clearance(
                             rotation_tracks += 1;
                         }
                     },
-                    "scale" if axes.iter().any(|axis| *axis != 1.0) =>
-                        return unassessed("ANIMATED_SCALE_UNASSESSED"),
-                    "rotation" | "scale" => {},
+                    "scale" => {
+                        // The admitted numeric Scale is nonnegative. Between
+                        // linear endpoints, every axis stays in their convex
+                        // range; Step holds a saved axis exactly. Use >=1
+                        // to upper-bound shrink-only and absent channels.
+                        let growth = axes.into_iter().fold(1.0_f64, f64::max);
+                        if !growth.is_finite() {
+                            return unassessed("SCALE_MAGNITUDE_OVERFLOW");
+                        }
+                        let entry = local_scale.entry(bone_uuid.as_str()).or_insert(1.0);
+                        *entry = (*entry).max(growth);
+                        if axes.iter().any(|axis| *axis != 1.0) {
+                            has_animated_scale = true;
+                            if !has_scale { has_scale = true; scale_tracks += 1; }
+                        }
+                    },
+                    "rotation" => {},
                     _ => return unassessed("UNSUPPORTED_CHANNEL"),
                 }
             }
             if has_position { position_tracks += 1; }
         }
         let mut clip_reach = 0.0_f64;
-        if !maximum_chain(&doc.hierarchy, &local, 0.0, &mut clip_reach) {
-            return unassessed("TRANSLATION_CHAIN_OVERFLOW");
+        let mut clip_growth = 1.0_f64;
+        if !maximum_chain(&doc.hierarchy, &local, &local_scale,
+            0.0, 1.0, &mut clip_reach, &mut clip_growth) {
+            return unassessed("TRANSFORM_CHAIN_OVERFLOW");
         }
         maximum_reach = maximum_reach.max(clip_reach);
+        maximum_scale_growth = maximum_scale_growth.max(clip_growth);
     }
-    if maximum_reach == 0.0 && !has_animated_rotation {
+    if maximum_reach == 0.0 && !has_animated_rotation && !has_animated_scale {
         return json!({
             "scope":"single_clip_numeric_translation_clearance",
             "status":"no_numeric_translation", "numeric_clips":numeric_clips,
             "coverage_mode":"translation_only", "rotation_tracks":0,
+            "scale_tracks":0, "max_scale_chain_amplification":1.0,
             "position_tracks":position_tracks, "max_reach_model_units":0.0,
             "native_verdict":"NOT_EXECUTED", "visual_verdict":"UNVERIFIED",
             "controller_blends":"NOT_ASSESSED",
@@ -161,17 +199,23 @@ fn translation_clearance(
     ) else { return unassessed("GEOMETRY_BOUNDS_UNAVAILABLE"); };
     let shift = maximum_reach / PIXELS_PER_BLOCK;
     let (required_width, required_height, required_low, required_high,
-         required_center_y, coverage_mode, rotation_radius) = if has_animated_rotation {
-        // Work exclusively from the SAME canonical compiled Geometry bones
-        // already emitted for this handoff. A global conservative sphere
-        // covers arbitrary Bone angles and fixed Cube rotations; no sampling.
+         required_center_y, coverage_mode, rotation_radius) =
+        if has_animated_rotation || has_animated_scale {
+        // The SAME compiled Geometry's pivot sphere bounds arbitrary rigid
+        // rotations. Every scale along an ancestor chain is bounded by
+        // its max admitted axis (>=1); multiplying the global pivot/position
+        // budget by the largest complete chain growth is deliberately loose,
+        // but also conservatively covers scaling of each ancestor translation.
+        // Never infer native culling or active-controller combinations.
         let radius = match super::geometry::compiled_rotation_envelope_radius(compiled_bones) {
             Ok(value) => value,
             Err(_) => return unassessed("GEOMETRY_ROTATION_ENVELOPE_UNAVAILABLE"),
         };
-        let total = (radius + maximum_reach) / PIXELS_PER_BLOCK;
-        (total * 2.0, total * 2.0, -total, total,
-         0.0, "pivot_rotation_envelope", Some(radius))
+        let model_reach = (radius + maximum_reach) * maximum_scale_growth;
+        let total = model_reach / PIXELS_PER_BLOCK;
+        (total * 2.0, total * 2.0, -total, total, 0.0,
+         if has_animated_scale { "scaled_pivot_envelope" }
+         else { "pivot_rotation_envelope" }, Some(radius))
     } else {
         (width + shift * 2.0, height + shift * 2.0,
          center_y - height / 2.0 - shift, center_y + height / 2.0 + shift,
@@ -196,6 +240,8 @@ fn translation_clearance(
         "numeric_clips":numeric_clips,
         "position_tracks":position_tracks,
         "rotation_tracks":rotation_tracks,
+        "scale_tracks":scale_tracks,
+        "max_scale_chain_amplification":maximum_scale_growth,
         "coverage_mode":coverage_mode,
         "rotation_radius_model_units":rotation_radius,
         "max_reach_model_units":maximum_reach,
@@ -935,6 +981,106 @@ mod tests {
         assert_ne!(original, authored);
     }
 
+
+
+    #[test]
+    fn linear_scale_only_reach_preserves_native_export_hashes_and_source() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        let baseline = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        session.apply(1, &[EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:"00000000-0000-4000-8000-000000008401".into(),
+            channel:"scale".into(), time:0.0, value:[2.0,1.0,1.0],
+        }]).unwrap();
+        let saved = session.export().unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(report["status"],"source_consistent");
+        assert_eq!(report["geometry"]["translation_clearance"]["status"],
+            "conservative_margin_shortfall");
+        assert_eq!(report["geometry"]["translation_clearance"]["coverage_mode"],
+            "scaled_pivot_envelope");
+        assert_eq!(report["geometry"]["translation_clearance"]["scale_tracks"],1);
+        assert_eq!(report["geometry"]["translation_clearance"]["max_scale_chain_amplification"],2.0);
+        assert_eq!(report["geometry"]["translation_clearance"]["max_reach_model_units"],0.0);
+        assert_eq!(report["geometry"]["translation_clearance"]["controller_blends"],"NOT_ASSESSED");
+        assert_eq!(report["geometry"]["sha256"],baseline["geometry"]["sha256"]);
+        assert_eq!(report["texture"]["sha256"],baseline["texture"]["sha256"]);
+        assert_ne!(report["animation"]["sha256"],baseline["animation"]["sha256"]);
+        assert_eq!(session.export().unwrap(),saved);
+
+        session.apply(2, &[EditOperation::SetVisibleBox {
+            bounds:[16.0,16.0,0.0],
+        }]).unwrap();
+        let accepted = session.export().unwrap();
+        let adjusted = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(adjusted["geometry"]["translation_clearance"]["status"],
+            "source_budget_covered");
+        assert_eq!(adjusted["texture"]["sha256"],report["texture"]["sha256"]);
+        assert_eq!(adjusted["animation"]["sha256"],report["animation"]["sha256"]);
+        assert_ne!(adjusted["geometry"]["sha256"],report["geometry"]["sha256"]);
+        assert_eq!(session.export().unwrap(),accepted);
+        assert_eq!(EditorSession::open(&accepted).unwrap().document(),session.document());
+    }
+
+    #[test]
+    fn nested_linear_scale_uses_ancestor_product_instead_of_max_individual_key() {
+        const ROOT: &str = "00000000-0000-4000-8000-000000000001";
+        const CUBE: &str = "00000000-0000-4000-8000-000000000002";
+        const CHILD: &str = "00000000-0000-4000-8000-000000008499";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::AddBone {
+                bone:super::super::Bone {
+                    uuid:CHILD.into(), name:"nested_scale".into(),
+                    origin:Some([0.0,0.0,0.0]), extra:serde_json::Map::new(),
+                },
+                parent_uuid:Some(ROOT.into()),
+            },
+            EditOperation::ReparentNode {
+                uuid:CUBE.into(),parent_uuid:Some(CHILD.into()),
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:ROOT.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008402".into(),
+                channel:"scale".into(),time:0.0,value:[2.0,2.0,2.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:CHILD.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008403".into(),
+                channel:"scale".into(),time:0.0,value:[3.0,1.0,1.0],
+            },
+        ]).unwrap();
+        let bytes = session.export().unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(report["status"],"source_consistent");
+        assert_eq!(report["geometry"]["translation_clearance"]["coverage_mode"],
+            "scaled_pivot_envelope");
+        assert_eq!(report["geometry"]["translation_clearance"]["scale_tracks"],2);
+        assert_eq!(report["geometry"]["translation_clearance"]["max_scale_chain_amplification"],6.0);
+        assert_eq!(report["geometry"]["translation_clearance"]["position_tracks"],0);
+        assert_eq!(session.export().unwrap(),bytes);
+        assert_eq!(EditorSession::open(&bytes).unwrap().document(),session.document());
+    }
+
+    #[test]
+    fn shrink_only_scale_still_uses_safe_unity_growth_and_never_claims_native_pass() {
+        const ROOT: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        session.apply(1, &[EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIMATION.into(),bone_uuid:ROOT.into(),
+            keyframe_uuid:"00000000-0000-4000-8000-000000008404".into(),
+            channel:"scale".into(),time:0.0,value:[0.25,0.5,0.75],
+        }]).unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(report["geometry"]["translation_clearance"]["coverage_mode"],
+            "scaled_pivot_envelope");
+        assert_eq!(report["geometry"]["translation_clearance"]["max_scale_chain_amplification"],1.0);
+        assert_eq!(report["geometry"]["translation_clearance"]["status"],
+            "source_budget_covered");
+        assert_eq!(report["geometry"]["translation_clearance"]["native_verdict"],"NOT_EXECUTED");
+        assert_eq!(report["visual_verdict"],"UNVERIFIED");
+    }
 
     #[test]
     fn rotation_only_pivot_reach_reviews_visible_box_and_preserves_other_assets() {
