@@ -1,5 +1,10 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Rust rig symmetry via one semantic Bone subtree operation (SOURCE_ONLY)
+
+Added `reflect_bone_subtree` for bounded X/Y/Z plane mirroring of nested Cube/Bone Geometry with matching off-axis saved Euler rotation signs, using the existing Rust EditOperation/Undo and without changing IDs or source assets. Separate UV intent: `preserve` leaves all saved face mapping unchanged; `mirror` updates supported manual UV face-pairs/rotated rectangles or the Box UV X mirror flag/net. Source-derived from pinned official Blockbench 5.2.1 Cube.flip and MirrorModeling, independently implemented. Fail-closed: unsupported Auto UV/per-texture UV, Box UV mirror on Y/Z, non-neutral ancestor transforms, bound Animation references, unsupported side culling, bad axes/planes, out-of-range coordinates. One approved Code Mode plan can duplicate a Bone rig then reflect the copy, with no new runtime or GUI. Authored Rust source regressions for nested original preservation and converted geometry/UV, reversible Box UV, .bbmodel/Undo, corrupt/refused cases and atomic rollback; JS plan/approval regression authored. Tests NOT_EXECUTED; native Blockbench editability and measured efficiency remain UNVERIFIED.
+
+
 ## 2026-11-16 — Recursive Bone hierarchy duplication (SOURCE_ONLY)
 
 Compared official Blockbench 5.2.1 Group.duplicate against the Rust Cube-only duplicate. Added one `duplicate_bone_subtree` authoring operation that preserves nested Bone/Cube Outliner order, pivots, UV and Texture assets while generating new UUIDs and export-safe names; original Animation tracks are not silently copied. Refuses ID/name conflicts and opaque metadata links into the copied source, without auto-remapping unknown fields. Shared Rust CLI/Tauri EditOperation and Code Mode type; no new engine or GUI. Rust source regressions cover nested painted/animated fixture, deterministic output, a single Undo for duplicate+move, geometry/.bbmodel export and invalid/atomic refusal; JS Code Mode plan/approval regression also authored. NOT_EXECUTED under active hold, native Blockbench quality and efficiency UNVERIFIED.

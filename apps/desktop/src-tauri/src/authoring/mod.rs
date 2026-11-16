@@ -181,6 +181,7 @@ pub enum EditOperation {
     },
     TranslateCube { uuid: String, delta: [f64; 3] },
     TranslateBoneSubtree { uuid: String, delta: [f64; 3] },
+    ReflectBoneSubtree { uuid: String, axis: String, center: f64, uv_policy: String },
     SetCubeBounds { uuid: String, from: [f64; 3], to: [f64; 3] },
     ReframeCube { uuid: String, from: [f64; 3], to: [f64; 3], uv_policy: String },
     SetCubeRotation { uuid: String, rotation: [f64; 3] },
@@ -1754,6 +1755,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
             translate_cube_in_place(cube, *delta, per_texture,
                 resolution, textures, project_box_uv)?;
+            Ok(uuid.clone())
+        }
+        EditOperation::ReflectBoneSubtree { uuid, axis, center, uv_policy } => {
+            subtree::reflect_bone_subtree(doc, uuid, axis, *center, uv_policy)?;
             Ok(uuid.clone())
         }
         EditOperation::TranslateBoneSubtree { uuid, delta } => {

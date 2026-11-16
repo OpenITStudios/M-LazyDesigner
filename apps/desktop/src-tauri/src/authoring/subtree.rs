@@ -205,3 +205,192 @@ pub(super) fn duplicate_bone_subtree(
     let _ = doc.export_bbmodel()?;
     Ok(())
 }
+
+
+/// Reflect one scalar about an explicit plane, refusing unrepresentable
+/// persisted coordinates rather than relying on JSON floating point coercion.
+fn reflected(value: f64, center: f64) -> Result<f64> {
+    let next = 2.0 * center - value;
+    if !next.is_finite() || next.abs() > super::LIMIT {
+        return Err(fail("BONE_REFLECT_COORDINATE_INVALID"));
+    }
+    Ok(if next == 0.0 { 0.0 } else { next })
+}
+
+/// A plane reflection conjugates a ZYX Euler rotation: its own-axis angle
+/// stays unchanged; angles around the other two axes reverse sign.
+fn reflect_saved_rotation(extra: &mut Map<String, Value>, axis: usize) -> Result<()> {
+    let Some(saved) = extra.get("rotation") else { return Ok(()); };
+    let mut values: [f64; 3] = serde_json::from_value(saved.clone())
+        .map_err(|_| fail("BONE_REFLECT_ROTATION_UNSUPPORTED"))?;
+    if !super::valid_vec3(values) {
+        return Err(fail("BONE_REFLECT_ROTATION_UNSUPPORTED"));
+    }
+    for (i, angle) in values.iter_mut().enumerate() {
+        if i != axis { *angle = -*angle; }
+    }
+    extra.insert("rotation".into(), serde_json::json!(values));
+    Ok(())
+}
+
+/// Pinned Blockbench 5.2.1 Cube.flip face-pair and rotated-UV semantics.
+/// Change only saved face coordinates and side ownership, not atlas PNGs.
+fn reflect_manual_uv(cube: &mut Cube, axis: usize) -> Result<()> {
+    let (a, b) = match axis {
+        0 => ("west", "east"),
+        1 => ("up", "down"),
+        2 => ("south", "north"),
+        _ => return Err(fail("BONE_REFLECT_AXIS_INVALID")),
+    };
+    let first = cube.faces.get(a).cloned()
+        .ok_or_else(|| fail("BONE_REFLECT_FACE_INVALID"))?;
+    let second = cube.faces.get(b).cloned()
+        .ok_or_else(|| fail("BONE_REFLECT_FACE_INVALID"))?;
+    cube.faces.insert(a.to_owned(), second);
+    cube.faces.insert(b.to_owned(), first);
+    for side in super::FACE_NAMES {
+        let face = cube.faces.get_mut(side).and_then(Value::as_object_mut)
+            .ok_or_else(|| fail("BONE_REFLECT_FACE_INVALID"))?;
+        // Imported side-relative cull rules cannot be safely reused after
+        // swapping face ownership; no silent carryover to the opposite side.
+        if face.get("cullface").is_some_and(|value|
+            value.as_str().is_none_or(|name| !name.is_empty())) {
+            return Err(fail("BONE_REFLECT_FACE_RULE_UNSUPPORTED"));
+        }
+        let mut uv: [f64; 4] = serde_json::from_value(
+            face.get("uv").cloned()
+                .ok_or_else(|| fail("BONE_REFLECT_FACE_INVALID"))?
+        ).map_err(|_| fail("BONE_REFLECT_FACE_INVALID"))?;
+        let rotation = match face.get("rotation") {
+            None => 0.0,
+            Some(value) => value.as_f64()
+                .ok_or_else(|| fail("BONE_REFLECT_FACE_ROTATION_UNSUPPORTED"))?,
+        };
+        if ![0.0, 90.0, 180.0, 270.0].contains(&rotation) {
+            return Err(fail("BONE_REFLECT_FACE_ROTATION_UNSUPPORTED"));
+        }
+        // Vertical sides flip V on Y and U on X/Z; the up/down faces flip U
+        // on X and V on Y/Z. Quarter turns exchange the active UV axis.
+        let mut flip_u = if matches!(side, "up" | "down") {
+            axis == 0
+        } else {
+            axis != 1
+        };
+        if rotation == 90.0 || rotation == 270.0 { flip_u = !flip_u; }
+        if flip_u { uv.swap(0, 2); } else { uv.swap(1, 3); }
+        face.insert("uv".into(), serde_json::json!(uv));
+    }
+    Ok(())
+}
+
+/// Author X/Y/Z geometry symmetry in one Rust EditOperation, optionally
+/// mirroring admitted UV faces. This is not an animation-keyframe mirror.
+/// Use DuplicateBoneSubtree followed by this operation in one EditPlan to
+/// create a mirrored counterpart without touching the source rig.
+pub(super) fn reflect_bone_subtree(
+    doc: &mut AuthoringDocument, uuid: &str, axis: &str,
+    center: f64, uv_policy: &str,
+) -> Result<()> {
+    let axis = match axis {
+        "x" => 0,
+        "y" => 1,
+        "z" => 2,
+        _ => return Err(fail("BONE_REFLECT_AXIS_INVALID")),
+    };
+    if !center.is_finite() || center.abs() > super::LIMIT {
+        return Err(fail("BONE_REFLECT_CENTER_INVALID"));
+    }
+    if !matches!(uv_policy, "preserve" | "mirror") {
+        return Err(fail("BONE_REFLECT_UV_POLICY_INVALID"));
+    }
+    let group = super::find_visibility_group(&doc.hierarchy, uuid)
+        .ok_or_else(|| fail("BONE_REFLECT_NOT_FOUND"))?;
+    let mut cube_ids = HashSet::new();
+    let mut bone_ids = HashSet::new();
+    collect_visibility_targets(group, &mut cube_ids, &mut bone_ids);
+
+    // Reflection in saved model coordinates is exact only when unmirrored
+    // ancestors do not impose their own rotations (the root has none).
+    let mut parent = super::outliner_parent_uuid(&doc.hierarchy, uuid, None)
+        .ok_or_else(|| fail("BONE_REFLECT_NOT_FOUND"))?;
+    while let Some(parent_id) = parent {
+        let bone = doc.bones.iter().find(|bone| bone.uuid == parent_id)
+            .ok_or_else(|| fail("BONE_REFLECT_PARENT_INVALID"))?;
+        let rotation: [f64; 3] = match bone.extra.get("rotation") {
+            Some(value) => serde_json::from_value(value.clone())
+                .map_err(|_| fail("BONE_REFLECT_PARENT_UNSUPPORTED"))?,
+            None => [0.0; 3],
+        };
+        if rotation.iter().any(|angle| *angle != 0.0) ||
+           bone.extra.contains_key("scale") {
+            return Err(fail("BONE_REFLECT_PARENT_UNSUPPORTED"));
+        }
+        parent = super::outliner_parent_uuid(&doc.hierarchy, &parent_id, None)
+            .ok_or_else(|| fail("BONE_REFLECT_PARENT_INVALID"))?;
+    }
+
+    // Existing opaque or editable keyframes must not play back on newly
+    // reflected bind poses without explicit animation correction.
+    if doc.animation_assets.iter().any(|asset|
+        bone_ids.iter().chain(cube_ids.iter())
+            .any(|id| super::value_references_uuid(asset, id))) {
+        return Err(fail("BONE_REFLECT_ANIMATION_BOUND"));
+    }
+    let box_default = doc.meta.box_uv.unwrap_or(false);
+    // Validate every Cube before changing any, so the Rust draft remains
+    // one coherent geometry+UV transformation or a precise refusal.
+    for cube in doc.cubes.iter().filter(|cube| cube_ids.contains(&cube.uuid)) {
+        if super::cube_auto_uv(cube)? != 0 {
+            return Err(fail("BONE_REFLECT_AUTO_UV_UNSUPPORTED"));
+        }
+        if uv_policy == "mirror" {
+            if super::has_per_texture_uv_rules(doc) {
+                return Err(fail("BONE_REFLECT_UV_RULESET_UNSUPPORTED"));
+            }
+            if super::cube_box_uv(cube, box_default) {
+                // The pinned Box UV flag mirrors X only; Y/Z cannot be
+                // expressed as a lossless single Box-net mirror flag.
+                if axis != 0 {
+                    return Err(fail("BONE_REFLECT_BOX_UV_AXIS_UNSUPPORTED"));
+                }
+                super::check_box_uv_repack_rules(doc, cube)
+                    .map_err(|_| fail("BONE_REFLECT_BOX_UV_UNSUPPORTED"))?;
+            }
+        }
+    }
+
+    for cube in &mut doc.cubes {
+        if !cube_ids.contains(&cube.uuid) { continue; }
+        let old_from = cube.from[axis];
+        let old_to = cube.to[axis];
+        cube.from[axis] = reflected(old_to, center)?;
+        cube.to[axis] = reflected(old_from, center)?;
+        if cube.origin.is_some() || center != 0.0 {
+            let mut origin = cube.origin.unwrap_or([0.0; 3]);
+            origin[axis] = reflected(origin[axis], center)?;
+            cube.origin = Some(origin);
+        }
+        reflect_saved_rotation(&mut cube.extra, axis)?;
+        if uv_policy == "mirror" {
+            if super::cube_box_uv(cube, box_default) {
+                let mirrored = cube.extra.get("mirror_uv")
+                    .and_then(Value::as_bool).unwrap_or(false);
+                if mirrored { cube.extra.remove("mirror_uv"); }
+                else { cube.extra.insert("mirror_uv".into(), Value::Bool(true)); }
+                super::refresh_box_uv(cube)?;
+            } else {
+                reflect_manual_uv(cube, axis)?;
+            }
+        }
+    }
+    for bone in &mut doc.bones {
+        if !bone_ids.contains(&bone.uuid) { continue; }
+        if bone.origin.is_some() || center != 0.0 {
+            let mut origin = bone.origin.unwrap_or([0.0; 3]);
+            origin[axis] = reflected(origin[axis], center)?;
+            bone.origin = Some(origin);
+        }
+        reflect_saved_rotation(&mut bone.extra, axis)?;
+    }
+    Ok(())
+}

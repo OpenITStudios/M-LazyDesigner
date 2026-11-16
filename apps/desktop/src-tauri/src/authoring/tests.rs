@@ -1396,6 +1396,186 @@ fn duplicate_bone_subtree_remains_editable_in_bedrock_geometry_export() {
         *session.document());
 }
 
+
+// SOURCE_AUTHORED_NOT_RUN: one approved Rust batch authors a mirrored rig
+// from a nested, textured and already animated original without changing it.
+#[test]
+fn reflect_bone_subtree_preserves_original_rig_and_opaque_animation() {
+    const CLONE: &str = "00000000-0000-4000-8000-000000008931";
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[
+        EditOperation::DuplicateBoneSubtree {
+            source_uuid:BONE.into(), new_uuid:CLONE.into(), name_suffix:"_right".into(),
+        },
+        EditOperation::ReflectBoneSubtree {
+            uuid:CLONE.into(), axis:"x".into(), center:8.0, uv_policy:"preserve".into(),
+        },
+    ]).unwrap();
+    assert_eq!(receipt.operation_count, 2);
+    assert_eq!(receipt.changed_uuids, vec![CLONE.to_owned()]);
+    let saved = session.document().clone();
+    assert_eq!(saved.hierarchy.len(), 2);
+    assert_eq!(saved.hierarchy[0], original.hierarchy[0]);
+    assert_eq!(saved.cubes[0], original.cubes[0]);
+    assert_eq!(&saved.bones[..2], original.bones.as_slice());
+    assert_eq!(saved.texture_assets, original.texture_assets);
+    assert_eq!(saved.animation_assets, original.animation_assets);
+    assert_eq!(saved.extensions, original.extensions);
+
+    let OutlinerNode::Bone(root) = &saved.hierarchy[1] else { panic!("missing cloned root") };
+    assert_eq!(root.uuid, CLONE);
+    let OutlinerNode::Bone(child) = &root.children[0] else { panic!("missing child") };
+    let OutlinerNode::Cube(cube_id) = &child.children[0] else { panic!("missing Cube") };
+    let clone_cube = saved.cubes.iter().find(|cube| &cube.uuid == cube_id).unwrap();
+    assert_eq!(clone_cube.from, [12.0, 0.0, 0.0]);
+    assert_eq!(clone_cube.to, [16.0, 4.0, 4.0]);
+    assert_eq!(clone_cube.origin, Some([16.0, 0.0, 0.0]));
+    assert_eq!(clone_cube.faces, original.cubes[0].faces);
+    assert_eq!(clone_cube.extra, original.cubes[0].extra);
+    let root_bone = saved.bones.iter().find(|bone| bone.uuid == root.uuid).unwrap();
+    let child_bone = saved.bones.iter().find(|bone| bone.uuid == child.uuid).unwrap();
+    assert_eq!(root_bone.origin, Some([16.0, 0.0, 0.0]));
+    assert_eq!(child_bone.origin, Some([16.0, 2.0, 0.0]));
+    assert_eq!(child_bone.extra["rotation"], json!([0.0, -15.0, 0.0]));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &saved);
+}
+
+#[test]
+fn reflect_bone_subtree_mirrors_manual_rotated_face_uv_without_touching_png() {
+    const CLONE: &str = "00000000-0000-4000-8000-000000008932";
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let before = session.document().clone();
+    session.apply(0, &[
+        EditOperation::DuplicateBoneSubtree {
+            source_uuid:BONE.into(), new_uuid:CLONE.into(), name_suffix:"_uvmirror".into(),
+        },
+        EditOperation::ReflectBoneSubtree {
+            uuid:CLONE.into(), axis:"x".into(), center:8.0, uv_policy:"mirror".into(),
+        },
+    ]).unwrap();
+    let cloned = session.document().cubes.last().unwrap();
+    // The original north face is quarter-turned: mirroring X flips V.
+    assert_eq!(cloned.faces["north"]["uv"], json!([1.0, 6.0, 5.0, 2.0]));
+    assert_eq!(cloned.faces["north"]["custom"], before.cubes[0].faces["north"]["custom"]);
+    // East/west face ownership swaps, then U coordinates reverse.
+    assert_eq!(cloned.faces["east"]["uv"], json!([13.0, 2.0, 9.0, 6.0]));
+    assert_eq!(cloned.faces["west"]["uv"], json!([9.0, 2.0, 5.0, 6.0]));
+    assert_eq!(session.document().texture_assets, before.texture_assets);
+    assert_eq!(session.document().cubes[0], before.cubes[0]);
+    assert_eq!(session.document().animation_assets, before.animation_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+}
+
+#[test]
+fn reflect_bone_subtree_box_uv_x_switches_mirror_flag_and_preserves_export() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Box Mirror", "box_mirror").unwrap()
+    ).unwrap();
+    session.apply(0, &[
+        EditOperation::AddBone {
+            bone: serde_json::from_value(json!({
+                "uuid":BONE, "name":"body", "origin":[0,0,0]
+            })).unwrap(), parent_uuid:None,
+        },
+        EditOperation::AddCube { cube:sample_cube(CUBE), bone_uuid:BONE.into() },
+    ]).unwrap();
+    let before = session.document().clone();
+    session.apply(1, &[EditOperation::ReflectBoneSubtree {
+        uuid:BONE.into(), axis:"x".into(), center:8.0, uv_policy:"mirror".into(),
+    }]).unwrap();
+    let reflected = session.document().clone();
+    assert_eq!(reflected.cubes[0].from, [12.0, 0.0, 0.0]);
+    assert_eq!(reflected.cubes[0].to, [16.0, 4.0, 4.0]);
+    assert_eq!(reflected.cubes[0].extra["mirror_uv"], json!(true));
+    assert_eq!(reflected.texture_assets, before.texture_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        reflected);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), &reflected);
+    // Reversing the same supported mirror restores the original shape/UV.
+    session.apply(4, &[EditOperation::ReflectBoneSubtree {
+        uuid:BONE.into(), axis:"x".into(), center:8.0, uv_policy:"mirror".into(),
+    }]).unwrap();
+    assert_eq!(session.document(), &before);
+}
+
+#[test]
+fn reflect_bone_subtree_refuses_unsafe_modes_ancestors_and_bound_animation() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let op = |uuid:&str, axis:&str, center:f64, uv:&str| EditOperation::ReflectBoneSubtree {
+        uuid:uuid.into(), axis:axis.into(), center, uv_policy:uv.into(),
+    };
+    for (uuid, axis, center, uv, code) in [
+        (BONE, "unknown", 0.0, "preserve", "BONE_REFLECT_AXIS_INVALID"),
+        (BONE, "x", f64::NAN, "preserve", "BONE_REFLECT_CENTER_INVALID"),
+        (BONE, "x", 0.0, "rotate", "BONE_REFLECT_UV_POLICY_INVALID"),
+        ("missing", "x", 0.0, "preserve", "BONE_REFLECT_NOT_FOUND"),
+        (BONE, "x", 100_000.0, "preserve", "BONE_REFLECT_COORDINATE_INVALID"),
+    ] {
+        assert_eq!(session.apply(0, &[op(uuid,axis,center,uv)]).unwrap_err(), code);
+        assert_eq!(session.document(), &original);
+    }
+    // Source-owned Box UV cannot express vertical mirror with one saved flag.
+    let mut boxed = AuthoringDocument::new_bedrock("Restricted", "restricted").unwrap();
+    let bone: Bone = serde_json::from_value(json!({
+        "uuid":BONE, "name":"root", "origin":[0,0,0]
+    })).unwrap();
+    let mut b = EditorSession::from_document(boxed.clone()).unwrap();
+    b.apply(0, &[
+        EditOperation::AddBone {bone, parent_uuid:None},
+        EditOperation::AddCube {cube:sample_cube(CUBE), bone_uuid:BONE.into()},
+    ]).unwrap();
+    boxed = b.document().clone();
+    assert_eq!(b.apply(1, &[
+        EditOperation::SetCubeInflate {uuid:CUBE.into(), inflate:0.25},
+        op(BONE, "y", 1.0, "mirror"),
+    ]).unwrap_err(), "BONE_REFLECT_BOX_UV_AXIS_UNSUPPORTED");
+    assert_eq!(b.document(), &boxed);
+    assert_eq!(b.summary().revision, 1);
+
+    let mut animated = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let imported = animated.document().clone();
+    assert_eq!(animated.apply(0, &[op(BONE,"x",8.0,"preserve")]).unwrap_err(),
+        "BONE_REFLECT_ANIMATION_BOUND");
+    assert_eq!(animated.document(), &imported);
+
+    let mut auto = original.clone();
+    auto.cubes[0].extra.insert("autouv".into(), json!(2));
+    let mut auto_session = EditorSession::from_document(auto.clone()).unwrap();
+    assert_eq!(auto_session.apply(0, &[op(BONE,"x",8.0,"preserve")]).unwrap_err(),
+        "BONE_REFLECT_AUTO_UV_UNSUPPORTED");
+    assert_eq!(auto_session.document(), &auto);
+
+    let mut parent = imported.clone();
+    parent.animation_assets.clear();
+    parent.bones[0].extra.insert("rotation".into(), json!([0,30,0]));
+    let mut parent_session = EditorSession::from_document(parent.clone()).unwrap();
+    assert_eq!(parent_session.apply(0, &[op(
+        "00000000-0000-4000-8000-000000000003", "x", 8.0, "preserve"
+    )]).unwrap_err(), "BONE_REFLECT_PARENT_UNSUPPORTED");
+    assert_eq!(parent_session.document(), &parent);
+
+    let mut cull = original.clone();
+    cull.cubes[0].faces["north"]["cullface"] = json!("north");
+    let mut cull_session = EditorSession::from_document(cull.clone()).unwrap();
+    assert_eq!(cull_session.apply(0, &[
+        EditOperation::SetCubeInflate {uuid:CUBE.into(), inflate:0.25},
+        op(BONE,"x",8.0,"mirror"),
+    ]).unwrap_err(), "BONE_REFLECT_FACE_RULE_UNSUPPORTED");
+    assert_eq!(cull_session.document(), &cull);
+    assert_eq!(cull_session.summary().revision, 0);
+    assert!(!cull_session.can_undo());
+}
+
 // SOURCE-AUTHORED: one Cube's painted Box UV can be relocated without
 // erasing the shared source, then painted independently from its duplicate.
 #[test]

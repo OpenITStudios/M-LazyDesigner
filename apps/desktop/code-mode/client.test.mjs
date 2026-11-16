@@ -274,6 +274,39 @@ test('Code Mode forwards one approved Bone subtree copy without per-child operat
   assert.deepEqual(result.mutation.changed_uuids, ['root-2']);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: the trusted host approves a single plan whose
+// Rust operations clone and reflect the whole hierarchy, not one child call.
+test('Code Mode groups nested rig duplication and symmetry in one approved plan', async () => {
+  const operations = [
+    {op:'duplicate_bone_subtree',source_uuid:'left-arm',
+      new_uuid:'right-arm',name_suffix:'_right'},
+    {op:'reflect_bone_subtree',uuid:'right-arm',
+      axis:'x',center:8,uv_policy:'mirror'},
+  ];
+  let recorded;
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation: (request) => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async (argv) => {
+      recorded = JSON.parse(await readFile(argv[argv.indexOf('--plan')+1], 'utf8'));
+      return {status:'OK',mutation:{revision:1,operation_count:2,
+        changed_uuids:['right-arm']}};
+    },
+  });
+  const result=await client.apply({input:'/abs/robot.bbmodel',
+    output:'/abs/robot-symmetric.bbmodel',expectedSha256:SHA,operations});
+  assert.deepEqual(recorded,{expected_revision:0,operations});
+  assert.deepEqual(approvals[0].operationKinds,
+    ['duplicate_bone_subtree','reflect_bone_subtree']);
+  assert.equal(approvals[0].operationCount,2);
+  assert.deepEqual(result.mutation.changed_uuids,['right-arm']);
+});
+
 test('Code Mode forwards a semantic Cube-face paint batch as one approved Rust operation', async () => {
   let plan;
   const patches = [

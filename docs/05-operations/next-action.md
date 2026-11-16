@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Geometry symmetry continuation (2026-11-16):** New `reflect_bone_subtree` mirrors one Bone/Cube hierarchy on a caller-selected plane in a single Rust edit, with explicit unchanged UV or strict supported UV-mirror policy. Compound `duplicate_bone_subtree` + `reflect_bone_subtree` in one Code Mode-approved plan creates a counterpart while preserving original rig, Paint bytes and Animation clips. Strict guardrails refuse Auto UV, unsupported Box Y/Z mirror and live bound Animation tracks rather than fabricating full Blockbench parity. Rust/JS regressions AUTHORED_NOT_RUN. Next material authoring gaps include richer UV layout/paint material decisions, advanced Animation formats, and empirical real Blockbench .bbmodel interoperability; UI/UX deferred.
+
+
 **Nested rig duplication (2026-11-16):** `duplicate_bone_subtree` now clones one Bone/Cube hierarchy as a single Rust operation, assigns deterministic descendant IDs and unique suffixed Bone names, and preserves existing Texture/UV and original Animation assets. Explicit subsequent translation or UV isolation is required for spatially/texturally independent copies. Generic Tauri/CLI and typed Code Mode share the source; regression source AUTHORED_NOT_RUN, Blockbench native export and comparative throughput UNVERIFIED. Continue Geometry/Texturing/Animation feature depth, source quality and editable .bbmodel acceptance; UI remains deferred.
 
 

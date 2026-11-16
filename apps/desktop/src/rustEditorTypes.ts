@@ -106,6 +106,7 @@ export type EditorSnapshot = {
 export type EditOperation =
   | { op: 'translate_cube'; uuid: string; delta: Vec3 }
   | { op: 'translate_bone_subtree'; uuid: string; delta: Vec3 }
+  | { op: 'reflect_bone_subtree'; uuid: string; axis: 'x' | 'y' | 'z'; center: number; uv_policy: 'preserve' | 'mirror' }
   | { op: 'set_cube_bounds'; uuid: string; from: Vec3; to: Vec3 }
   | { op: 'reframe_cube'; uuid: string; from: Vec3; to: Vec3; uv_policy: 'box_repack' | 'manual_preserve' }
   | { op: 'set_cube_rotation'; uuid: string; rotation: Vec3 }
