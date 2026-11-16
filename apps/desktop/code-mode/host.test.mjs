@@ -12,6 +12,44 @@ import { createCodeModeHost, createCodeModeTool } from './host.mjs';
 const HASH = 'a'.repeat(64);
 const SUMMARY = { revision: 0, cubes: 1, bones: 1, textures: 0, animations: 0 };
 
+const REVIEW_CUBE='00000000-0000-4000-8000-000000000002';
+const ALL_FACE_SIDES=Object.freeze(['north','east','south','west','up','down']);
+async function mockedNativeFaceBinding(argv, sha) {
+  assert.equal(argv[0],'inspect-batch');
+  const plan=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+  assert.deepEqual(plan.requests.map(x=>x.kind),[
+    'material_face_patch','cube_face_alpha',
+  ]);
+  const q=plan.requests[0];
+  assert.equal(q.cube_uuid,REVIEW_CUBE);
+  assert.equal(q.face,'north');
+  assert.equal(q.texture_uuid,'tier2-atlas');
+  assert.equal(plan.requests[1].uuid,REVIEW_CUBE);
+  return {
+    status:'OK',sha256:sha,summary:SUMMARY,
+    results:[
+      {kind:'material_face_patch',binding:{
+        scope:'source_explicit_cube_face_patch',status:'bound_source_only',
+        texture_uuid:q.texture_uuid,cube_uuid:q.cube_uuid,face:q.face,
+        sample_region:q.region,
+        visual_verdict:'UNVERIFIED',
+        face_coverage_verdict:'UNVERIFIED',
+        view_correspondence:'NOT_VERIFIED',
+      }},
+      {kind:'cube_face_alpha',face_alpha:{
+        scope:'saved_manual_face_uv_alpha',cube_uuid:REVIEW_CUBE,
+        visual_verdict:'UNVERIFIED',face_coverage_verdict:'UNVERIFIED',
+        face_count:6,faces:ALL_FACE_SIDES.map(side=>({
+          side,saved_reference_kind:side==='south'?'null':'index',
+          texture_uuid:side==='south'?null:'tier2-atlas',
+          alpha:{status:'unsupported',reason:'UNVERIFIED'},
+        })),
+      }},
+    ],
+  };
+}
+
+
 function fakeGuest(request, whenResponse, initialHandle = 'p0') {
   const child = new EventEmitter();
   child.stdout = new PassThrough();
@@ -563,6 +601,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             preserveAlpha:true,
           },
           materialCohort:{phase:'sample',issueId:'helmet-flat',
+            cubeUuid:REVIEW_CUBE,face:'north',
             partId:'tier2-helmet',approachId:'helmet-value-masses',
             sampleRegion:{from:[1,1],to:[5,5]}},
         };
@@ -589,6 +628,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             },
           };
         }
+        if(args[0]==='inspect-batch')return mockedNativeFaceBinding(args,HASH);
         if(args[0]==='apply'){
           return {status:'OK',source_sha256:HASH,
             output_sha256:'b'.repeat(64),summary:{...SUMMARY,revision:1},
@@ -607,6 +647,9 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
           assert.equal(response.result.review_feedback.visual_verdict,'UNVERIFIED');
           assert.equal(response.result.review_feedback.materialCohort.phase,'sample');
           assert.equal(response.result.review_feedback.materialCohort.source_model_sha256,HASH);
+          assert.equal(response.result.review_feedback.materialCohort.faceBinding.face,'north');
+          assert.equal(response.result.review_feedback.face_source_evidence.face_count,6);
+          assert.equal(response.result.review_feedback.face_source_evidence.visual_verdict,'UNVERIFIED');
           assert.equal(response.result.evidence_binding.image_ingestion,'NOT_VERIFIED');
           assert.equal(JSON.stringify(response.result).includes('pngBytes'),false);
           return {reviewed:true};
@@ -657,7 +700,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(approvals[0].materialCorrectionIntent.issueId,'helmet-flat');
     assert.equal(approvals[0].materialCorrectionIntent.approachId,'helmet-value-masses');
     assert.match(approvals[0].materialIntentSha256,/^[a-f0-9]{64}$/);
-    assert.deepEqual(calls,['inspect','inspect-visual-pair','apply','inspect']);
+    assert.deepEqual(calls,['inspect','inspect-visual-pair','inspect-batch','apply','inspect']);
   }));
 
 test('accepted or unverified visual feedback cannot authorize another pixel correction', () =>
@@ -1060,6 +1103,7 @@ test('representative material is constrained; propagation requires fresh accepte
         correctionScope:{textureUuid:'tier2-atlas',
           allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
         materialCohort:{phase:'sample',issueId:'helmet-flat',
+            cubeUuid:REVIEW_CUBE,face:'north',
           partId:'tier2-helmet',approachId:'form-following-metal',
           sampleRegion:{from:[1,1],to:[5,5]}},
       }),
@@ -1077,6 +1121,7 @@ test('representative material is constrained; propagation requires fresh accepte
             reference_png_sha256:digest,capture_png_sha256:digest,
             visual_verdict:'UNVERIFIED'},
         };
+        if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,HASH);
         assert.equal(argv[0],'apply');
         await writeFile(argv[argv.indexOf('--output')+1],'{}');
         return {status:'OK',source_sha256:HASH,output_sha256:modifiedSha,
@@ -1135,6 +1180,7 @@ test('representative material is constrained; propagation requires fresh accepte
         correctionScope:{textureUuid:'tier2-atlas',
           allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
         materialCohort:{phase:'propagation',
+          cubeUuid:REVIEW_CUBE,face:'north',
           issueId:'helmet-flat',partId:'tier2-helmet',
           approachId:'form-following-metal',
           sampleRegion:{from:[1,1],to:[5,5]},
@@ -1154,6 +1200,7 @@ test('representative material is constrained; propagation requires fresh accepte
             reference_png_sha256:digest,capture_png_sha256:sampleDigest,
             visual_verdict:'UNVERIFIED'},
         };
+        if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,modifiedSha);
         assert.equal(argv[0],'apply');
         await writeFile(argv[argv.indexOf('--output')+1],'{}');
         return {status:'OK',source_sha256:modifiedSha,output_sha256:widenedSha,
@@ -1208,13 +1255,17 @@ test('invalid source-only sample review declarations fail before Paint', () =>
     const sha=createHash('sha256').update(png).digest('hex');
     const invalid=[
       {phase:'propagation',issueId:'helmet-flat',partId:'tier2-helmet',
-        approachId:'form-following-metal',sampleRegion:{from:[1,1],to:[5,5]}},
+        approachId:'form-following-metal',cubeUuid:REVIEW_CUBE,
+        face:'north',sampleRegion:{from:[1,1],to:[5,5]}},
       {phase:'sample',issueId:'helmet-flat',partId:'tier2-helmet',
-        approachId:'form-following-metal',sampleRegion:{from:[0,0],to:[40,40]}},
+        approachId:'form-following-metal',cubeUuid:REVIEW_CUBE,
+        face:'north',sampleRegion:{from:[0,0],to:[40,40]}},
       {phase:'sample',issueId:'other-issue',partId:'tier2-helmet',
-        approachId:'form-following-metal',sampleRegion:{from:[1,1],to:[5,5]}},
+        approachId:'form-following-metal',cubeUuid:REVIEW_CUBE,
+        face:'north',sampleRegion:{from:[1,1],to:[5,5]}},
       {phase:'sample',issueId:'helmet-flat',partId:'tier2-helmet',
-        approachId:'form-following-metal',sampleRegion:{from:[1,1],to:[5,5]},
+        approachId:'form-following-metal',cubeUuid:REVIEW_CUBE,
+        face:'north',sampleRegion:{from:[1,1],to:[5,5]},
         sampleVerdict:'ACCEPTED'},
     ];
     for(const materialCohort of invalid){
@@ -1280,6 +1331,7 @@ test('reviewed texture host rejects non-paint apply and imported PNG bypasses', 
         correctionScope:{textureUuid:'tier2-atlas',
           allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
         materialCohort:{phase:'sample',issueId:'helmet-flat',
+            cubeUuid:REVIEW_CUBE,face:'north',
           partId:'tier2-helmet',approachId:'form-following-metal',
           sampleRegion:{from:[1,1],to:[5,5]}},
       }),
@@ -1293,6 +1345,7 @@ test('reviewed texture host rejects non-paint apply and imported PNG bypasses', 
             reference_png_sha256:digest,capture_png_sha256:digest,
             visual_verdict:'UNVERIFIED'},
         };
+        if(args[0]==='inspect-batch')return mockedNativeFaceBinding(args,HASH);
         writes++;
         throw Error('unreviewed texture or structure mutation attempted');
       },
@@ -1327,6 +1380,64 @@ test('reviewed texture host rejects non-paint apply and imported PNG bypasses', 
     assert.equal((await host.execute({code:'return codemode.importPng({project:"p0"});'})).value.denied,true);
     assert.equal(writes,0);
     assert.equal(approvals,0);
+  }));
+
+test('spoofed face ownership or incomplete six-face source read cannot authorize sample', () =>
+  fixture(async input=>{
+    const folder=dirname(input), ref=join(folder,'reference.png');
+    const cap=join(folder,'capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);await writeFile(cap,png);
+    const sha=createHash('sha256').update(png).digest('hex');
+    for(const tamper of ['wrong_face','partial_faces']){
+      let nativeWrites=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:ref,capturePngPath:cap,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        reviewVisualPair:()=>({
+          decision:'REJECTED',
+          issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+            partId:'tier2-helmet',observation:'Helmet shading is still flat.'}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+          materialCohort:{phase:'sample',issueId:'helmet-flat',
+            cubeUuid:REVIEW_CUBE,face:'north',
+            partId:'tier2-helmet',approachId:'form-following-metal',
+            sampleRegion:{from:[1,1],to:[4,4]}},
+        }),
+        runner:async argv=>{
+          if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+          if(argv[0]==='inspect-visual-pair')return {
+            status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:sha,capture_png_sha256:sha,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:sha,capture_png_sha256:sha,
+              visual_verdict:'UNVERIFIED'},
+          };
+          if(argv[0]==='inspect-batch'){
+            const report=await mockedNativeFaceBinding(argv,HASH);
+            if(tamper==='wrong_face')report.results[0].binding.face='south';
+            else report.results[1].face_alpha.faces.pop();
+            return report;
+          }
+          nativeWrites++;
+          throw Error('unverified native model mutation');
+        },
+        spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p0',
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_MATERIAL_FACE_BINDING_UNVERIFIED');
+          return {blocked:true};
+        }),
+      });
+      const observed=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(observed.value.blocked,true);
+      assert.equal(nativeWrites,0);
+    }
   }));
 
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
