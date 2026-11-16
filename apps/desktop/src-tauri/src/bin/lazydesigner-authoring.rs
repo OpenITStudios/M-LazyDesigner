@@ -3,7 +3,8 @@
 
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, inspect_animation_effect_events,
-    inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
+    inspect_bedrock_asset_handoff, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -275,6 +276,7 @@ enum InspectBatchQuery {
     CubeSurfaces { uuid: String },
     CubeFaceAlpha { uuid: String },
     CubeUvSharing { uuid: String, texture_uuid: String },
+    AssetHandoff { texture_uuid: String },
     ModelTextureCoverage { offset: Option<usize>, limit: Option<usize> },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
@@ -331,6 +333,11 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 let uv_sharing = inspect_cube_uv_sharing(
                     doc, batch_id(&uuid)?, batch_id(&texture_uuid)?)?;
                 json!({"kind":"cube_uv_sharing","uv_sharing":uv_sharing})
+            },
+            InspectBatchQuery::AssetHandoff { texture_uuid } => {
+                let handoff = inspect_bedrock_asset_handoff(
+                    doc, batch_id(&texture_uuid)?)?;
+                json!({"kind":"asset_handoff","handoff":handoff})
             },
             InspectBatchQuery::ModelTextureCoverage { offset, limit } => {
                 let coverage = inspect_model_texture_coverage(doc,
@@ -776,6 +783,45 @@ mod tests {
             animation_uuid:animation.into(),offset:Some(0),limit:Some(17),
         }]).unwrap_err(),"ANIMATION_EFFECT_INSPECT_PAGE_INVALID");
         assert_eq!(doc,source);
+    }
+
+    // Regression source only; there is no filesystem publication or runtime PASS.
+    #[test]
+    fn code_mode_asset_handoff_reuses_three_exporters_without_raw_png_echo() {
+        const TEX: &str = "00000000-0000-4000-8000-000000006801";
+        let mut session = EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let cube = session.document().cubes[0].uuid.clone();
+        session.apply(0,&[
+            EditOperation::CreatePaintTexture {
+                uuid:TEX.into(),name:"atlas.png".into(),
+            },
+            EditOperation::AssignCubeTexture {
+                cube_uuid:cube,texture_uuid:TEX.into(),
+            },
+        ]).unwrap();
+        let doc = session.document().clone();
+        let bytes = serde_json::to_vec(&json!({"requests":[
+            {"kind":"asset_handoff","texture_uuid":TEX},
+            {"kind":"audit"}
+        ]})).unwrap();
+        let plan: InspectBatchInput = serde_json::from_slice(&bytes).unwrap();
+        let results = inspect_batch(&doc,plan.requests).unwrap();
+        assert_eq!(results.len(),2);
+        assert_eq!(results[0]["kind"],"asset_handoff");
+        assert_eq!(results[0]["handoff"]["status"],"source_consistent");
+        assert_eq!(results[0]["handoff"]["faces"]["selected_texture"],6);
+        assert_eq!(results[0]["handoff"]["animation"]["status"],"not_required");
+        assert_eq!(results[0]["handoff"]["visual_verdict"],"UNVERIFIED");
+        assert_eq!(results[1]["kind"],"audit");
+        assert!(!serde_json::to_string(&results).unwrap().contains("data:image/png"));
+        assert_eq!(session.document(),&doc);
+        assert!(serde_json::from_value::<InspectBatchInput>(json!({"requests":[
+            {"kind":"asset_handoff","texture_uuid":TEX,"path":"/not/allowed"}
+        ]})).is_err());
+        assert!(serde_json::from_value::<InspectBatchInput>(json!({"requests":[
+            {"kind":"asset_handoff"}
+        ]})).is_err());
     }
 
     // Source-authored CLI/Rust proof only; Cargo/native execution is held.

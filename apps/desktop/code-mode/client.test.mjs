@@ -1099,3 +1099,46 @@ test('Bedrock animation export uses exact SHA, trusted approval and one CLI writ
     input: '/abs/model.bbmodel', output: '/abs/model.animation.json', expectedSha256: SHA,
   }), /CODE_MODE_MUTATION_AUTHORITY_REQUIRED/);
 });
+
+
+test('asset handoff is a single SHA-bound read without PNG data or write authority', async () => {
+  const calls = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      calls.push(argv);
+      assert.equal(argv[0], 'inspect-batch');
+      assert.ok(argv.includes('--expected-sha256'));
+      const queryPath = argv[argv.indexOf('--queries') + 1];
+      const queries = JSON.parse(await readFile(queryPath, 'utf8'));
+      assert.deepEqual(queries, {requests: [
+        {kind:'asset_handoff',texture_uuid:'texture-1'},
+      ]});
+      return {status:'OK',sha256:SHA,summary:{revision:0},
+        results:[{kind:'asset_handoff',handoff:{
+          scope:'bedrock_single_atlas_export_handoff',status:'blocked',
+          visual_verdict:'UNVERIFIED',native_verdict:'NOT_EXECUTED',
+          selected_texture_uuid:'texture-1',blockers:['SELECTED_TEXTURE_NOT_BOUND'],
+          geometry:{status:'source_exportable',sha256:'a'.repeat(64),bytes:100},
+          texture:{status:'blocked',reason:'PAINT_EXPORT_TEXTURE_UNSUPPORTED'},
+          animation:{status:'not_required'},
+          faces:{total:6,selected_texture:0,other_texture:0,unresolved:0,
+            unset:0,false_reference:6,explicitly_absent:0},
+        }}]};
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const result = await project.inspectBatch([
+    {kind:'asset_handoff',texture_uuid:'texture-1'},
+  ]);
+  assert.equal(result.results[0].kind,'asset_handoff');
+  assert.equal(result.results[0].handoff.native_verdict,'NOT_EXECUTED');
+  assert.equal(calls.length,1);
+  await assert.rejects(project.inspectBatch([
+    {kind:'asset_handoff',texture_uuid:'texture-1',file_path:'/secrets'},
+  ]),/Unknown inspection selector or field/);
+  await assert.rejects(project.inspectBatch([
+    {kind:'asset_handoff'},
+  ]),/Missing required inspection selector field/);
+  assert.equal(calls.length,1);
+});

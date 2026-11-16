@@ -359,6 +359,30 @@ export interface StaticModelAudit {
   rig: { cubes: number; bones: number; root_bones: number };
   animation: { clips: number; declared_animator_tracks: number };
 }
+/** Cross-domain output assessment from canonical in-memory exporters.
+ * source_consistent is NOT native/visual success. The inspect-batch receipt
+ * pins the exact input SHA; no PNG bytes or untrusted paths are returned.
+ */
+export interface AssetHandoffInspection {
+  scope: "bedrock_single_atlas_export_handoff";
+  status: "source_consistent" | "blocked";
+  visual_verdict: "UNVERIFIED";
+  native_verdict: "NOT_EXECUTED";
+  selected_texture_uuid: string;
+  faces: {
+    total: number; selected_texture: number; other_texture: number;
+    unresolved: number; unset: number; false_reference: number;
+    explicitly_absent: number;
+  };
+  geometry: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };
+  texture: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };
+  animation: {
+    status: "source_exportable" | "blocked" | "not_required";
+    sha256: string | null; bytes: number | null; reason?: string;
+    curve_fidelity?: "native" | "adaptive_bezier_approximation";
+  };
+  blockers: string[];
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
@@ -380,6 +404,7 @@ export type InspectBatchQuery =
   | { kind: "cube_surfaces"; uuid: string }
   | { kind: "cube_face_alpha"; uuid: string }
   | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
+  | { kind: "asset_handoff"; texture_uuid: string }
   | { kind: "model_texture_coverage"; offset?: number; limit?: number }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
@@ -426,6 +451,7 @@ export type InspectBatchResult =
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
   | { kind: "cube_face_alpha"; face_alpha: CubeFaceAlphaInspection }
   | { kind: "cube_uv_sharing"; uv_sharing: CubeUvSharingInspection }
+  | { kind: "asset_handoff"; handoff: AssetHandoffInspection }
   | { kind: "model_texture_coverage"; coverage: ModelTextureCoveragePage }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }

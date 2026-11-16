@@ -16,6 +16,8 @@ mod bezier;
 mod animation_clip;
 mod animation_export;
 pub use animation_export::{export_bedrock_animations, bedrock_animation_curve_fidelity};
+mod asset_handoff;
+pub use asset_handoff::inspect_bedrock_asset_handoff;
 mod effects;
 pub use effects::{inspect_animation_effect_events, AnimationEffectPoint};
 mod timeline_markers;
