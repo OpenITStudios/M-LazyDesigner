@@ -573,6 +573,16 @@ export interface MaterialFacePatchBinding {
   face_coverage_verdict:"UNVERIFIED";
   view_correspondence:"NOT_VERIFIED";
 }
+/** Native saved atlas statistics only. Never model appearance PASS. */
+export interface TextureStylingEvidence {
+  scope:"selected_saved_rgba8_atlas_region"|"first_allowed_region_only";
+  status:"BASE_ONLY_CANDIDATE"|"REVIEW_REQUIRED"|"NOT_EVALUATED";
+  visual_verdict:"UNVERIFIED";texture_completion_attested:false;
+  texture_uuid?:string;region?:MaterialPatchRegion;
+  region_pixels?:number;visible_pixels?:number;
+  unique_visible_rgb?:number;approx_luma_span?:number|null;
+  review_hints?:string[];reason?:string;note?:string;
+}
 export type InspectBatchQuery =
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
@@ -582,6 +592,7 @@ export type InspectBatchQuery =
   | { kind: "model_texture_coverage"; offset?: number; limit?: number; attention_only?: boolean }
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
   | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion }
+  | { kind: "texture_styling"; texture_uuid: string; region: MaterialPatchRegion }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
@@ -631,6 +642,7 @@ export type InspectBatchResult =
   | { kind: "model_texture_coverage"; coverage: ModelTextureCoveragePage }
   | { kind: "material_pair"; comparison: MaterialPairComparison }
   | { kind: "material_face_patch"; binding: MaterialFacePatchBinding }
+  | { kind: "texture_styling"; styling: TextureStylingEvidence }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }
@@ -658,6 +670,8 @@ export interface ApplyReceipt {
   output_sha256: string;
   summary: DocumentSummary;
   mutation: MutationReceipt;
+  /** Optional diagnostic of the first reviewed correction rectangle. */
+  texture_styling_evidence?:TextureStylingEvidence|null;
   /** Returned by Rust only when a declared pixel scope was enforced. */
   correction_scope?: {
     status: "enforced";

@@ -1,5 +1,19 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Native Rust Texturing candidate evidence (2026-11-17; SOURCE_ONLY):**
+The Rust-native editor now uses its own canonical PNG decoder to
+provide a SHA-bound `texture_styling` Code Mode read over one
+operator-selected physical atlas rectangle (up to 4,096 pixels).
+Exact one-color fills return `BASE_ONLY_CANDIDATE`; low form
+contrast, uniform horizontal bands and high-transition noise
+produce `REVIEW_REQUIRED` candidate warnings. A reviewed Rust
+`apply` receipt also includes a first-region source diagnostic
+when correctionScope is present, with safe `NOT_EVALUATED` fallback.
+ALL reported evidence retains `texture_completion_attested:false`
+and `visual_verdict:'UNVERIFIED'`. This is not an artistic style
+validator and does not automatically block intentional flat work.
+Native and SDK regressions authored but NOT_EXECUTED.
+
 **Six rendered directions required for broad material propagation (2026-11-16; SOURCE_ONLY):**
 The operator-selected six-camera view option is now mandatory for
 `materialCohort.phase:'propagation'`, not for the initial small sample.

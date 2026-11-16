@@ -1,5 +1,18 @@
 # LazyDesigner Current Validation
 
+## 2026-11-17 — Rust native Texturing candidate evaluation (SOURCE_ONLY)
+
+Ported legacy MCP Texturing improvements now also have a native
+Rust source-level inspector (`material_styling.rs`) using the existing
+PNG decoder. Code Mode exposes a bounded `texture_styling` batch query,
+and the native CLI returns one advisory texture_styling_evidence
+report for the first explicit correction scope after a saved candidate
+has been assembled. Uniform RGB, high-transition/checker noise,
+weak value contrast and horizontal bands can raise warnings.
+Read results never certify visual or user-accepted material shading;
+full model and hidden faces require actual mapped-view review.
+Rust/SDK source regressions AUTHORED_NOT_RUN; CI/PC/localtest held.
+
 ## 2026-11-17 — Restore mistakenly Local-authored Texturing safeguards to Rust source
 
 **Target and write authority:** Rust only. The four Local source commits

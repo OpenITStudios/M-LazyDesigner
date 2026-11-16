@@ -194,6 +194,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   model_texture_coverage: ['offset', 'limit', 'attention_only'],
   material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
   material_face_patch: ['texture_uuid','cube_uuid','face','region'],
+  texture_styling: ['texture_uuid','region'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
   texture_alpha: ['uuid'],
