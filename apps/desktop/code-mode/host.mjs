@@ -612,6 +612,10 @@ export async function createCodeModeHost({
               binding?.scope!=='source_explicit_cube_face_patch' ||
               binding?.status!=='bound_source_only' ||
               binding?.visual_verdict!=='UNVERIFIED' ||
+              binding?.face_coverage_verdict!=='UNVERIFIED' ||
+              binding?.view_correspondence!=='NOT_VERIFIED' ||
+              binding?.texture_reference!=='explicit_saved_link' ||
+              binding?.pixel_alias!=='no_detected_overlap_for_sample' ||
               binding?.texture_uuid!==feedback.correctionScope.textureUuid ||
               binding?.cube_uuid!==cohort.cubeUuid ||
               binding?.face!==cohort.face ||

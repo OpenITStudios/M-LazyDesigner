@@ -1,5 +1,18 @@
 # LazyDesigner Next Action
 
+**Rust native Cube/UV-bound sample, six-face source status (2026-11-16; SOURCE_ONLY):**
+Representative material review now requires an actual Cube UUID and local
+face direction. The trusted Code Mode host confirms them through one
+SHA-bound Rust read using supported Box/manual UV projection, explicit
+atlas texture owner and sample alias checks. It also reads all six saved
+Cube face-alpha records and returns a bounded source review ledger.
+Neither face-alpha statistics nor source UV mapping are a material quality
+PASS or six camera views. The independent real reviewer must still inspect
+rendered front/back/side/underside views for relevant parts, and the Rust
+source read refuses ambiguous UV ownership rather than painting blindly.
+Source-only positive/negative tests AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.
+No new renderer, state engine, branch, or CI workflow.
+
 **Rust Texturing representative patch admission (2026-11-16; SOURCE_ONLY):**
 The trusted Code Mode host now requires a reviewer-selected small
 atlas sample before broad reviewed Texturing. Sample scope is bounded

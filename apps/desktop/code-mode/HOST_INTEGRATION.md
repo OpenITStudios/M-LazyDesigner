@@ -100,6 +100,7 @@ const host = await createCodeModeHost({
       },
       materialCohort:{phase:'sample',issueId:'helmet-flat',
         partId:'tier3-helmet',approachId:'form-following-metal',
+        cubeUuid:'EXACT_REVIEWED_CUBE_UUID',face:'north',
         sampleRegion:{from:[8,8],to:[12,16]}},
     };
   },
@@ -144,6 +145,7 @@ return {
     allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
   materialCohort:{phase:'sample',issueId:'helmet-flat',
     partId:'tier2-helmet',approachId:'form-following-metal',
+    cubeUuid:'EXACT_REVIEWED_CUBE_UUID',face:'north',
     sampleRegion:{from:[1,1],to:[5,5]}},
 };
 ~~~
@@ -162,6 +164,7 @@ regions REJECTED:
 ~~~js
 materialCohort:{phase:'propagation',issueId:'helmet-flat',
   partId:'tier2-helmet',approachId:'form-following-metal',
+  cubeUuid:'EXACT_REVIEWED_CUBE_UUID',face:'north',
   sampleRegion:{from:[1,1],to:[5,5]},sampleVerdict:'ACCEPTED'}
 ~~~
 
@@ -176,6 +179,28 @@ existing Code Mode tool, Rust model owner and independent write approval.
 
 Source proof: regression tests written but NOT_EXECUTED under the local
 validation hold. Reviewer callback declarations are not visual PASS.
+#### Actual Rust Cube/UV binding and six saved face statuses
+
+The reviewer must replace `EXACT_REVIEWED_CUBE_UUID` with the Cube's
+actual saved UUID and choose a **Cube-local face**, not a camera view.
+Code Mode now sends one SHA-pinned `inspectBatch` with
+`material_face_patch` (texture UUID, Cube UUID, face, atlas rectangle)
+and `cube_face_alpha` (all six saved faces of the selected Cube).
+The Rust face binder reconstructs Box UV when applicable and refuses
+unknown/implicit texture links, unsupported projections, out-of-face
+patches and overlaps with another texture consumer. Failure stops
+the reviewer-backed sample before Paint. No raw atlas PNG is returned.
+
+The response carries `review_feedback.materialCohort.faceBinding` and
+`review_feedback.face_source_evidence` (six face names, saved link types,
+alpha status). Both explicitly retain `UNVERIFIED` for visual quality.
+Alpha counts and mapped UV only confirm a saved-source property;
+occluded or intentionally transparent faces need a real visual-review
+decision. Six saved Cube faces do not imply six camera captures,
+especially for rotated Cubes and inherited material settings.
+To declare full art coverage, the real reviewer must inspect the
+affected shaded front/back/side/underside views independently;
+this source reader alone never authorizes whole-model completion.
 ## Programmatic execution architecture
 
 ~~~text

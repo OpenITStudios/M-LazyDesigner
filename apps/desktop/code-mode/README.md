@@ -1,5 +1,26 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Cube face / UV ownership and six-direction source evidence (2026-11-16; SOURCE_ONLY):**
+The representative material patch must now identify the reviewer-selected
+`cubeUuid` and Cube-local `face` (north/east/south/west/up/down). Before
+accepting its sample or propagation review, the trusted host queries
+one pinned Rust `material_face_patch` source inspector. Rust resolves
+the actual supported Box/manual UV projection, checks the atlas texture
+link and requires the selected patch to remain inside that face,
+without unresolved or overlapping atlas consumers. Unsupported alias
+or implicit texture ownership refuses instead of assuming a safe target.
+
+The same read obtains the selected Cube's six saved face-alpha statuses
+through the existing native `cube_face_alpha` inspector. The guest
+receives only bounded `face_source_evidence`, never raw PNG pixels;
+`face_coverage_verdict` and `visual_verdict` remain `UNVERIFIED`.
+This is one Cube's **saved source** mapping, not six rendered camera
+views, shaded material PASS, or all-model coverage. Native face direction
+does not necessarily match an external camera angle for rotated Cubes.
+Actual front/back/side/top/bottom visual reviews are still required
+where appropriate before claiming professional texturing completeness.
+Tests AUTHORED_NOT_RUN and native execution deferred.
+
 **Reviewed Texturing mutation boundary (2026-11-16; SOURCE_ONLY):**
 An independently reviewed sample/cohort host now refuses non-Paint
 `apply` operations and PNG imports on that same reviewed source. This

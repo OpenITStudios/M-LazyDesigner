@@ -32,6 +32,8 @@ async function mockedNativeFaceBinding(argv, sha) {
         scope:'source_explicit_cube_face_patch',status:'bound_source_only',
         texture_uuid:q.texture_uuid,cube_uuid:q.cube_uuid,face:q.face,
         sample_region:q.region,
+        texture_reference:'explicit_saved_link',
+        pixel_alias:'no_detected_overlap_for_sample',
         visual_verdict:'UNVERIFIED',
         face_coverage_verdict:'UNVERIFIED',
         view_correspondence:'NOT_VERIFIED',

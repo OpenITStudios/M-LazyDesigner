@@ -1,5 +1,19 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Exact Cube-face atlas sample owner and six-face source evidence
+
+At pinned Rust source, `material_face_patch` is a read-only Cube/UV
+projector-backed query that requires an explicitly linked texture,
+contains the patch inside the selected face, and rejects unresolved
+or overlapping atlas consumers. The same trusted host review source
+also retrieves six saved face-alpha records for the selected Cube.
+The face metadata is source evidence only: view correspondence,
+effective material and face coverage remain UNVERIFIED. The guest
+receives no raw PNG or secretly selected external file path.
+Rust/Node positive and negative regression cases AUTHORED_NOT_RUN.
+Real mapped-view visual quality, multiple camera views and broad model
+texture completion still need independently observed native evidence.
+
 ## 2026-11-16 — Reviewed texture mutation admission boundary
 
 The same trusted Code Mode host refuses non-Paint `apply` operations and
