@@ -557,6 +557,22 @@ export interface MaterialPairComparison {
   different_alpha_pixels: number;
   attention_candidates: string[];
 }
+/** Source-only native Cube-face/UV binding; never rendered material PASS. */
+export interface MaterialFacePatchBinding {
+  scope:"source_explicit_cube_face_patch";
+  status:"bound_source_only";
+  texture_uuid:string;cube_uuid:string;
+  face:CubeFaceSurface["side"];
+  sample_region:MaterialPatchRegion;
+  face_uv_region:MaterialPatchRegion;
+  uv_projection:"native_supported_box_or_manual";
+  texture_reference:"explicit_saved_link";
+  pixel_alias:"no_detected_overlap_for_sample";
+  visual_verdict:"UNVERIFIED";
+  effective_material:"UNVERIFIED";
+  face_coverage_verdict:"UNVERIFIED";
+  view_correspondence:"NOT_VERIFIED";
+}
 export type InspectBatchQuery =
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
@@ -565,6 +581,7 @@ export type InspectBatchQuery =
   | { kind: "asset_handoff"; texture_uuid: string; offset?: number; limit?: number }
   | { kind: "model_texture_coverage"; offset?: number; limit?: number; attention_only?: boolean }
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
+  | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
@@ -613,6 +630,7 @@ export type InspectBatchResult =
   | { kind: "asset_handoff"; handoff: AssetHandoffInspection }
   | { kind: "model_texture_coverage"; coverage: ModelTextureCoveragePage }
   | { kind: "material_pair"; comparison: MaterialPairComparison }
+  | { kind: "material_face_patch"; binding: MaterialFacePatchBinding }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }

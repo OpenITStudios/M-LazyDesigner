@@ -193,6 +193,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   asset_handoff: ['texture_uuid', 'offset', 'limit'],
   model_texture_coverage: ['offset', 'limit', 'attention_only'],
   material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
+  material_face_patch: ['texture_uuid','cube_uuid','face','region'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
   texture_alpha: ['uuid'],
@@ -268,8 +269,14 @@ function serializeInspectionQueries(requests) {
           throw new TypeError('Unknown catalog category');
         }
         output.category = value;
-      } else if (field === 'reference_region' || field === 'candidate_region') {
+      } else if (field === 'reference_region' || field === 'candidate_region' ||
+                 field === 'region') {
         output[field] = materialPatchRegion(value);
+      } else if (field === 'face') {
+        if (!['north','east','south','west','up','down'].includes(value)) {
+          throw new TypeError('MATERIAL_FACE_SIDE_UNKNOWN');
+        }
+        output.face = value;
       } else {
         output[field] = nonempty(value, field);
         if (Buffer.byteLength(output[field], 'utf8') > 128) {

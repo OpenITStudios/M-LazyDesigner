@@ -13,6 +13,8 @@ mod correction_scope;
 pub use correction_scope::TextureCorrectionScope;
 mod material_pair;
 pub use material_pair::{inspect_material_pair, MaterialPatchRegion};
+mod material_face;
+pub use material_face::inspect_material_face_patch;
 mod visual_pair;
 pub use visual_pair::{inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES};
 mod uv_sharing;
