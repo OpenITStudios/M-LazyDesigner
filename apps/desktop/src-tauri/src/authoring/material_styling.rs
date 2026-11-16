@@ -243,8 +243,11 @@ pub fn inspect_texture_styling_face(
     ).map_err(|_|"TEXTURE_STYLING_UV_UNSUPPORTED".to_string())?;
     let rotation=match projected.faces.get(side).and_then(|v|v.get("rotation")) {
         None => 0u16,
-        Some(Value::Number(n)) => match n.as_u64() {
-            Some(v) if matches!(v,0|90|180|270) => v as u16,
+        Some(Value::Number(n)) => match n.as_f64() {
+            Some(v) if v==0.0 => 0,
+            Some(v) if v==90.0 => 90,
+            Some(v) if v==180.0 => 180,
+            Some(v) if v==270.0 => 270,
             _ => return Err("TEXTURE_STYLING_ROTATION_UNSUPPORTED".into())
         },
         _ => return Err("TEXTURE_STYLING_ROTATION_UNSUPPORTED".into()),
@@ -362,10 +365,14 @@ mod tests{
     }
     #[test]
     fn saved_cube_local_face_uses_real_uv_and_no_visual_pass(){
-        let d=AuthoringDocument::import_bbmodel(
+        let mut d=AuthoringDocument::import_bbmodel(
             include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")
         ).unwrap();
         let t="00000000-0000-4000-8000-000000000101";
+        // The interchange fixture deliberately has an invalid PNG source
+        // and opaque texture_set metadata. Replace only the in-test atlas
+        // with canonical Rust-owned RGBA8 pixels; never edit the fixture.
+        d.texture_assets[0]=paint::create(t,"atlas.png",64,32).unwrap();
         let cube="00000000-0000-4000-8000-000000000002";
         let original=d.clone();
         let report=inspect_texture_styling_face(&d,t,cube,"north").unwrap();
