@@ -12,7 +12,9 @@ mod paint;
 mod uv_sharing;
 mod texture_coverage;
 mod subtree;
+mod bezier;
 mod face_regions;
+pub use bezier::{parse_saved_bezier_handles, valid_track_segments, BezierKeyframeHandles};
 mod palette;
 pub use uv_sharing::inspect_cube_uv_sharing;
 pub use texture_coverage::inspect_model_texture_coverage;
@@ -209,6 +211,10 @@ pub enum EditOperation {
     SetBoneTransformKeyframeInterpolation {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
         channel: String, interpolation: String,
+    },
+    SetBoneTransformKeyframeBezier {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        channel: String, handles: BezierKeyframeHandles,
     },
     RemoveBoneTransformKeyframe {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
@@ -926,9 +932,9 @@ fn has_external_uuid_references(doc: &AuthoringDocument, uuid: &str) -> bool {
     outliner_extra_references_uuid(&doc.hierarchy, uuid)
 }
 
-// The editable subset intentionally excludes unsupported interpolation and
-// point extensions. Step holds the previous key until the next key time.
-/// Strict bounded numeric linear/step/Catmull-Rom subset from Blockbench v5.2.1
+// Admit bounded numeric single-point Bezier handles only when their
+// saved metadata is complete; imported unknown frames stay opaque.
+/// Strict bounded numeric linear/step/Catmull-Rom/Bezier Bone subset from Blockbench v5.2.1
 /// BoneAnimator: rotation offsets in degrees, position offsets in model
 /// units, and multiplicative scales (identity [1,1,1]). This slice
 /// deliberately refuses negative/excessive scales rather than pretending
@@ -954,9 +960,11 @@ fn transform_axis(value: Option<&Value>) -> Option<f64> {
 fn editable_transform_frame(frame: &Value) -> bool {
     let Some(fields) = frame.as_object() else { return false; };
     if !fields.keys().all(|key| matches!(key.as_str(),
-        "uuid" | "channel" | "time" | "interpolation" | "data_points")) ||
+        "uuid" | "channel" | "time" | "interpolation" | "data_points" |
+        "bezier_linked" | "bezier_left_time" | "bezier_left_value" |
+        "bezier_right_time" | "bezier_right_value")) ||
        !matches!(frame.get("interpolation").and_then(Value::as_str),
-           Some("linear" | "step" | "catmullrom")) ||
+           Some("linear" | "step" | "catmullrom" | "bezier")) ||
        !frame.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
        !frame.get("time").and_then(Value::as_f64)
            .is_some_and(|v| v.is_finite() && v >= 0.0) {
@@ -977,7 +985,12 @@ fn editable_transform_frame(frame: &Value) -> bool {
         transform_axis(values.get("x")), transform_axis(values.get("y")),
         transform_axis(values.get("z")),
     ] else { return false; };
-    valid_animation_transform_value(channel, [x, y, z])
+    if !valid_animation_transform_value(channel, [x, y, z]) { return false; }
+    if frame.get("interpolation").and_then(Value::as_str) == Some("bezier") {
+        bezier::parse_saved_bezier_handles(frame).is_some()
+    } else {
+        !bezier::has_metadata(frame)
+    }
 }
 /// The exact saved Blockbench v5.2.1 animation loop variants.
 fn saved_animation_loop(animation: &Value) -> Option<&str> {
@@ -1046,6 +1059,7 @@ fn editable_transform_clip(animation: &Value, bones: &[Bone]) -> bool {
                 return false;
             }
         }
+        if !bezier::valid_track_segments(frames) { return false; }
     }
     true
 }
@@ -1249,16 +1263,20 @@ pub fn inspect_rotation_track(
                 _ => Err(fail("ANIMATION_INSPECT_AXIS_INVALID")),
             }
         };
-        keyframes.push(json!({
+        let mut detail = json!({
             "uuid":frame["uuid"],
             "time":frame["time"], "interpolation":frame["interpolation"],
             "rotation":[axis("x")?, axis("y")?, axis("z")?]
-        }));
+        });
+        if let Some(handles) = bezier::parse_saved_bezier_handles(frame) {
+            detail["bezier"] = json!(handles);
+        }
+        keyframes.push(detail);
     }
     Ok(json!({
         // Keep the legacy scope label for existing read clients; this
         // explicit field declares the now-admitted outgoing segment modes.
-        "scope":"linear_bone_rotation", "interpolation_modes":["linear","step","catmullrom"],
+        "scope":"linear_bone_rotation", "interpolation_modes":["linear","step","catmullrom","bezier"],
         "recognized":true, "visual_verdict":"UNVERIFIED",
         "animation_uuid":animation_uuid, "bone_uuid":bone_uuid,
         "total_frames":total, "offset":offset,
@@ -1323,15 +1341,19 @@ pub fn inspect_transform_track(
             transform_axis(points.get("y")).ok_or_else(|| fail("ANIMATION_INSPECT_AXIS_INVALID"))?,
             transform_axis(points.get("z")).ok_or_else(|| fail("ANIMATION_INSPECT_AXIS_INVALID"))?,
         ];
-        selected.push(json!({
+        let mut detail = json!({
             "uuid":frame["uuid"], "time":frame["time"], "value":value,
             "interpolation":frame["interpolation"],
-        }));
+        });
+        if let Some(handles) = bezier::parse_saved_bezier_handles(frame) {
+            detail["bezier"] = json!(handles);
+        }
+        selected.push(detail);
     }
     Ok(json!({
         // The legacy scope identifier is stable across read consumers.
         "scope":"linear_bone_transform", "recognized":true,
-        "interpolation_modes":["linear","step","catmullrom"],
+        "interpolation_modes":["linear","step","catmullrom","bezier"],
         "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
         "bone_uuid":bone_uuid, "channel":channel,
         "loop_mode":saved_animation_loop(animation).unwrap_or("once"),
@@ -2177,7 +2199,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(animation_uuid.clone())
         }
         EditOperation::ScaleAnimationTimeline { animation_uuid, factor } => {
-            // Numeric linear/step/Catmull-Rom Animation tracks can be retimed in a
+            // Admitted numeric linear/step/Catmull-Rom/Bezier clips are retimed in a
             // single transaction. No keyframe payload, UUID, Bone identity,
             // channel or interpolation is rewritten or guessed.
             if !factor.is_finite() || !(0.1..=10.0).contains(factor) {
@@ -2214,6 +2236,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                     let scaled = time * factor;
                     if !scaled.is_finite() || scaled > new_length {
                         return Err(fail("ANIMATION_TIMELINE_LENGTH_UNSUPPORTED"));
+                    }
+                    if frame.get("interpolation").and_then(Value::as_str) == Some("bezier") &&
+                       !bezier::retime_handles(frame, *factor) {
+                        return Err(fail("ANIMATION_BEZIER_RETIME_UNSUPPORTED"));
                     }
                     frame["time"] = json!(scaled);
                 }
@@ -2395,6 +2421,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                     "z":value[2].to_string()
                 }]
             }));
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_TRANSFORM_AFTER_EDIT_UNSUPPORTED"));
+            }
             Ok(keyframe_uuid.clone())
         }
         EditOperation::UpdateBoneTransformKeyframe {
@@ -2443,13 +2472,16 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 "x":value[0].to_string(), "y":value[1].to_string(),
                 "z":value[2].to_string()
             });
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_TRANSFORM_AFTER_EDIT_UNSUPPORTED"));
+            }
             Ok(keyframe_uuid.clone())
         }
         EditOperation::SetBoneTransformKeyframeInterpolation {
             animation_uuid, bone_uuid, keyframe_uuid, channel, interpolation,
         } => {
-            // Blockbench 5.2.1 Keyframe.interpolation stores linear/step.
-            // The outgoing segment belongs to the earlier keyframe; a
+            // Blockbench 5.2.1 stores each key's outgoing interpolation.
+            // Bezier requires separate explicit handle authoring; a
             // change is therefore targeted at one exact key UUID/channel.
             if !supported_transform_channel(channel) ||
                !matches!(interpolation.as_str(), "linear" | "step" | "catmullrom") {
@@ -2491,6 +2523,57 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Ok(keyframe_uuid.clone());
             }
             frames[target]["interpolation"] = json!(interpolation);
+            // Blockbench's saved representation omits Bezier-specific
+            // fields when a key is switched to another interpolation.
+            bezier::clear_handles(&mut frames[target]);
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_INTERPOLATION_AFTER_EDIT_UNSUPPORTED"));
+            }
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::SetBoneTransformKeyframeBezier {
+            animation_uuid, bone_uuid, keyframe_uuid, channel, handles,
+        } => {
+            if !supported_transform_channel(channel) || !handles.valid() {
+                return Err(fail("ANIMATION_BEZIER_HANDLES_INVALID"));
+            }
+            let matches: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, item)| item.get("uuid").and_then(Value::as_str)
+                    == Some(animation_uuid.as_str()))
+                .map(|(index, _)| index).collect();
+            let index = match matches.as_slice() {
+                [] => return Err(fail("ANIMATION_NOT_FOUND")),
+                [index] => *index,
+                _ => return Err(fail("ANIMATION_ID_AMBIGUOUS")),
+            };
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_BEZIER_CLIP_UNSUPPORTED"));
+            }
+            let frames = doc.animation_assets[index]
+                .get_mut("animators").and_then(Value::as_object_mut)
+                .and_then(|tracks| tracks.get_mut(bone_uuid))
+                .and_then(|track| track.get_mut("keyframes"))
+                .and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+            let matching: Vec<_> = frames.iter().enumerate()
+                .filter(|(_, frame)| frame.get("uuid").and_then(Value::as_str)
+                    == Some(keyframe_uuid.as_str()))
+                .map(|(i, _)| i).collect();
+            let target = match matching.as_slice() {
+                [] => return Err(fail("ANIMATION_KEYFRAME_NOT_FOUND")),
+                [i] => *i,
+                _ => return Err(fail("ANIMATION_KEYFRAME_ID_AMBIGUOUS")),
+            };
+            if frames[target].get("channel").and_then(Value::as_str)
+                != Some(channel.as_str()) {
+                return Err(fail("ANIMATION_KEYFRAME_CHANNEL_MISMATCH"));
+            }
+            bezier::write_handles(&mut frames[target], handles);
+            // Existing EditorSession draft is never committed if any
+            // operation fails. Recheck recognized saved keys now.
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_BEZIER_AFTER_EDIT_UNSUPPORTED"));
+            }
             Ok(keyframe_uuid.clone())
         }
         EditOperation::RemoveBoneTransformKeyframe {
@@ -2525,6 +2608,11 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("ANIMATION_KEYFRAME_CHANNEL_MISMATCH"));
             }
             frames.remove(target);
+            // Joining two adjacent segments may alter their Bezier time
+            // handles. Fail atomically if the remaining track is ambiguous.
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_TRANSFORM_AFTER_EDIT_UNSUPPORTED"));
+            }
             if has_external_uuid_references(doc, keyframe_uuid) ||
                doc.cubes.iter().any(|cube| cube.uuid == *keyframe_uuid) ||
                doc.bones.iter().any(|bone| bone.uuid == *keyframe_uuid) {

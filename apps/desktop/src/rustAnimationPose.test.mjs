@@ -279,6 +279,125 @@ test('Catmull-Rom loop neighbours wrap at track edges without editing keyframes'
   assert.equal(samplePreparedBoneTransformPose(loop,2.5),null);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: Blockbench stores four per-axis Bezier handles.
+// Monotone time inversion is evaluated directly rather than approximated by
+// a precomputed fixed-200-point source-array sample.
+test('Bezier Pose uses per-axis time and value handles on three Bone channels', () => {
+  const handles = (leftValue, rightValue) => ({
+    linked:false,
+    leftTime:[-0.5,-0.5,-0.5],leftValue,
+    rightTime:[0.5,0.5,0.5],rightValue,
+  });
+  const clip = {
+    ...animation([]),
+    transformKeyframes: [
+      {uuid:'p0',boneUuid:'rig',channel:'position',time:0,
+        value:[0,0,0],interpolation:'bezier',
+        bezier:handles([0,0,0],[8,0,0])},
+      {uuid:'p2',boneUuid:'rig',channel:'position',time:2,
+        value:[10,0,0],interpolation:'bezier',
+        bezier:handles([-1,0,0],[0,0,0])},
+      {uuid:'r0',boneUuid:'rig',channel:'rotation',time:0,
+        value:[0,0,0],interpolation:'bezier',
+        bezier:handles([0,0,0],[0,15,0])},
+      {uuid:'r2',boneUuid:'rig',channel:'rotation',time:2,
+        value:[0,90,0],interpolation:'bezier',
+        bezier:handles([0,-15,0],[0,0,0])},
+      {uuid:'s0',boneUuid:'rig',channel:'scale',time:0,
+        value:[1,1,1],interpolation:'bezier',
+        bezier:handles([0,0,0],[0.2,0.2,0.2])},
+      {uuid:'s2',boneUuid:'rig',channel:'scale',time:2,
+        value:[2,2,2],interpolation:'bezier',
+        bezier:handles([-0.2,-0.2,-0.2],[0,0,0])},
+    ],
+  };
+  const source=JSON.stringify(clip);
+  const prepared=prepareBoneTransformPose(clip);
+  assert.ok(prepared);
+  const mid=samplePreparedBoneTransformPose(prepared,1);
+  assert.ok(Math.abs(mid.rig.position[0] - 7.625) < 1e-6);
+  assert.deepEqual(mid.rig.position.slice(1),[0,0]);
+  assert.ok(Math.abs(mid.rig.rotation[1] - 45) < 1e-6);
+  assert.ok(Math.abs(mid.rig.scale[0] - 1.5) < 1e-6);
+  assert.deepEqual(samplePreparedBoneTransformPose(prepared,0).rig.position,[0,0,0]);
+  assert.deepEqual(samplePreparedBoneTransformPose(prepared,2).rig.position,[10,0,0]);
+  assert.deepEqual(projectedBoneTransformPose(clip,1),mid);
+  const frame=projectedTransformTimelineRows(clip,[{uuid:'rig',name:'Rig'}])
+    .find(row=>row.channel==='position').frames[0];
+  assert.equal(frame.interpolation,'bezier');
+  assert.deepEqual(frame.bezier.rightValue,[8,0,0]);
+  assert.equal(Object.getPrototypeOf(mid),null);
+  assert.equal(JSON.stringify(clip),source);
+});
+
+test('Bezier time inversion handles different per-axis controls and mixed modes', () => {
+  const generic=(rightTime,leftTime) => ({
+    linked:false,
+    leftTime:[-0.1,-0.1,-0.1],leftValue:[0,0,0],
+    rightTime,rightValue:[0,0,0],
+  });
+  const afterHandle=(leftTime) => ({
+    linked:false,leftTime,leftValue:[0,0,0],
+    rightTime:[0.1,0.1,0.1],rightValue:[0,0,0],
+  });
+  const clip={
+    ...animation([]),
+    transformKeyframes:[
+      {uuid:'a',boneUuid:'rig',channel:'position',time:0,
+        value:[0,0,0],interpolation:'bezier',
+        bezier:generic([0.1,0.5,0.8])},
+      {uuid:'b',boneUuid:'rig',channel:'position',time:2,
+        value:[10,10,10],interpolation:'bezier',
+        bezier:afterHandle([-0.8,-0.5,-0.1])},
+      {uuid:'s0',boneUuid:'rig',channel:'scale',time:0,
+        value:[1,1,1],interpolation:'step'},
+      {uuid:'s2',boneUuid:'rig',channel:'scale',time:2,
+        value:[2,2,2],interpolation:'bezier',
+        bezier:afterHandle([-0.5,-0.5,-0.5])},
+    ],
+  };
+  const prepared=prepareBoneTransformPose(clip);
+  assert.ok(prepared);
+  const pose=samplePreparedBoneTransformPose(prepared,1);
+  assert.ok(pose.rig.position.every(Number.isFinite));
+  assert.notEqual(pose.rig.position[0],pose.rig.position[2]);
+  assert.deepEqual(pose.rig.scale,[1,1,1]); // Step stays authoritative
+  assert.deepEqual(samplePreparedBoneTransformPose(prepared,2).rig.scale,[2,2,2]);
+  assert.equal(samplePreparedBoneTransformPose(prepared,2.01),null);
+});
+
+test('unsafe Bezier preview metadata and crossed control times refuse atomically', () => {
+  const valid={
+    linked:false,
+    leftTime:[-0.1,-0.1,-0.1],leftValue:[0,0,0],
+    rightTime:[0.1,0.1,0.1],rightValue:[0,0,0],
+  };
+  const base={uuid:'a',boneUuid:'rig',channel:'position',time:0,
+    value:[0,0,0],interpolation:'bezier',bezier:valid};
+  const mk=keys=>({...animation([]),transformKeyframes:keys});
+  for(const bezier of [
+    undefined,
+    {...valid,linked:true,rightValue:[1,0,0]},
+    {...valid,leftTime:[0.1,-0.1,-0.1]},
+    {...valid,rightTime:[Number.POSITIVE_INFINITY,0.1,0.1]},
+    {...valid,rightValue:[100001,0,0]},
+    {...valid,rightValue:[1,0]},
+    {...valid,leftValue:null},
+  ]) {
+    assert.equal(prepareBoneTransformPose(mk([{...base,bezier}])),null);
+  }
+  const after={uuid:'b',boneUuid:'rig',channel:'position',
+    time:2,value:[10,0,0],interpolation:'bezier',
+    bezier:{...valid,leftTime:[-1.8,-1.8,-1.8]}};
+  const crossing={...base,bezier:{...valid,rightTime:[1.8,1.8,1.8]}};
+  assert.equal(prepareBoneTransformPose(mk([crossing,after])),null);
+  assert.equal(projectedBoneTransformPose(mk([crossing,after]),1),null);
+  assert.equal(prepareBoneTransformPose(mk([
+    {...base,interpolation:'linear',bezier:valid},
+  ])),null);
+});
+
 test('unknown or malformed interpolation cannot produce a false supported pose', () => {
   const base = {uuid:'k0',boneUuid:'bone',channel:'position',
     time:0,value:[0,0,0],interpolation:'step'};

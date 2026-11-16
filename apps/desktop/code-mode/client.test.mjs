@@ -315,6 +315,53 @@ test('Code Mode submits Catmull-Rom Bone interpolation as one Rust edit', async 
   assert.deepEqual(receipt.mutation.changed_uuids,['key-1']);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: exact Blockbench Bezier handle arrays are authored
+// through one host-approved Rust plan and never evaluated in the JS guest.
+test('Code Mode sends complete Bezier Bone handles in one approved Rust edit', async () => {
+  const handles={
+    linked:false,
+    leftTime:[-0.25,-0.3,-0.4],
+    leftValue:[-1,0,0],
+    rightTime:[0.5,0.4,0.3],
+    rightValue:[3,0,0],
+  };
+  const operations=[
+    {op:'add_bone_transform_keyframe',animation_uuid:'clip-1',
+      bone_uuid:'bone-1',keyframe_uuid:'key-1',
+      channel:'position',time:0,value:[0,0,0]},
+    {op:'set_bone_transform_keyframe_bezier',animation_uuid:'clip-1',
+      bone_uuid:'bone-1',keyframe_uuid:'key-1',
+      channel:'position',handles},
+  ];
+  let plan;
+  const approvals=[];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation: request=>{
+      approvals.push(request);
+      return request.operation==='apply' && request.expectedSha256===SHA;
+    },
+    runner:async argv=>{
+      plan=JSON.parse(await readFile(argv[argv.indexOf('--plan')+1],'utf8'));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:2,changed_uuids:['key-1'],
+      }};
+    },
+  });
+  const receipt=await client.apply({
+    input:'/abs/rig.bbmodel',output:'/abs/rig-curved.bbmodel',
+    expectedSha256:SHA,operations,
+  });
+  assert.deepEqual(plan,{expected_revision:0,operations});
+  assert.equal(approvals.length,1);
+  assert.deepEqual(approvals[0].operationKinds,[
+    'add_bone_transform_keyframe','set_bone_transform_keyframe_bezier',
+  ]);
+  assert.equal(approvals[0].operationCount,2);
+  assert.deepEqual(receipt.mutation.changed_uuids,['key-1']);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: one approved Rust subtree command replaces
 // per-Bone/per-Cube AI operations without bypassing host authorization.
 test('Code Mode forwards one approved Bone subtree copy without per-child operations', async () => {

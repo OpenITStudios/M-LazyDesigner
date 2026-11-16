@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Bezier Animation authoring continuation (2026-11-16):** `set_bone_transform_keyframe_bezier` now stores explicit Blockbench-compatible per-axis left/right time/value handles and linked state in the canonical Rust numeric Bone edit path. Tauri projects the admitted handles and read-only prepared TS preview evaluates monotone cubic Bezier with bounded per-axis time inversion. The existing `linear/step/catmullrom` modes, geometry/texture assets, Undo and Code Mode host authorization are preserved; retiming scales time handles and unknown/unsafe curves fail closed. Rust/Tauri/Node/Code Mode regressions AUTHORED_NOT_RUN, native Blockbench visual quality and performance UNVERIFIED. Continue in-scope Animation controller/effects and model/export reliability only where source acceptance requires it; UI/UX last, local validation remains held.
+
+
 **Animation Catmull-Rom continuation (2026-11-16):** Strict numeric Bone Position/Rotation/Scale tracks now admit saved `linear/step/catmullrom` through the canonical Rust EditOperation, including mode preservation on retime, clip loop and Undo. The read-only Tauri/TypeScript projection evaluates value-indexed Catmull-Rom with adjacent keys and loop-end neighbours on already prepared tracks; numeric Step still overrides its outgoing segment. Code Mode admits the mode and source inspection retains legacy scope names while exposing saved interpolation. Source regressions AUTHORED_NOT_RUN; real Blockbench playback, native loop seams and matched perf remain UNVERIFIED. Remaining material Animation work includes correct Bezier time/value handle authoring and evaluation, animation effects/controller semantics, then actual editable .bbmodel handoff; UI/UX deferred.
 
 

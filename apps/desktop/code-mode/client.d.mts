@@ -13,6 +13,14 @@ export interface CubeFacePaintPatch {
   rgba: [number, number, number, number];
   erase: boolean;
 }
+/** Explicit per-axis Blockbench 5.2.1 Bezier handles, not sampled poses. */
+export interface BezierKeyframeHandles {
+  linked: boolean;
+  leftTime: Vec3;
+  leftValue: Vec3;
+  rightTime: Vec3;
+  rightValue: Vec3;
+}
 export interface Cube {
   uuid: string;
   type: "cube";
@@ -44,6 +52,7 @@ export type EditOperation =
   | { op: "set_animation_loop_mode"; animation_uuid: string; mode: "once" | "loop" | "hold" }
   | { op: "scale_animation_timeline"; animation_uuid: string; factor: number }
   | { op: "set_bone_transform_keyframe_interpolation"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; interpolation: "linear" | "step" | "catmullrom" }
+  | { op: "set_bone_transform_keyframe_bezier"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; handles: BezierKeyframeHandles }
   | { op: "add_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
   | { op: "update_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
   | { op: "remove_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale" }

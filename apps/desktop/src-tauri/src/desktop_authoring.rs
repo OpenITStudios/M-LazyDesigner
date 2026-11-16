@@ -5,7 +5,9 @@ use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
     export_paint_png, export_bedrock_geometry, has_per_texture_uv_rules, can_set_empty_atlas_resolution,
-    can_add_paint_texture, AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    can_add_paint_texture, parse_saved_bezier_handles, valid_track_segments,
+    BezierKeyframeHandles,
+    AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -91,6 +93,8 @@ pub struct TransformKeyframeView {
     time: f64,
     value: [f64; 3],
     interpolation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bezier: Option<BezierKeyframeHandles>,
 }
 
 #[derive(Serialize)]
@@ -432,14 +436,30 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                     };
                     let Some(interpolation) = frame.get("interpolation")
                         .and_then(Value::as_str)
-                        .filter(|mode| matches!(*mode, "linear" | "step" | "catmullrom")) else {
+                        .filter(|mode| matches!(*mode, "linear" | "step" | "catmullrom" | "bezier")) else {
                         preview_supported = false; continue;
                     };
                     if !frame.as_object().is_some_and(|map| map.keys().all(|key|
                         matches!(key.as_str(),
-                            "uuid" | "channel" | "time" | "interpolation" | "data_points"))) {
+                            "uuid" | "channel" | "time" | "interpolation" | "data_points" |
+                            "bezier_linked" | "bezier_left_time" |
+                            "bezier_left_value" | "bezier_right_time" |
+                            "bezier_right_value"))) {
                         preview_supported = false; continue;
                     }
+                    let bezier = if interpolation == "bezier" {
+                        let Some(saved) = parse_saved_bezier_handles(frame) else {
+                            preview_supported = false; continue;
+                        };
+                        Some(saved)
+                    } else {
+                        if ["bezier_linked", "bezier_left_time", "bezier_left_value",
+                            "bezier_right_time", "bezier_right_value"]
+                            .iter().any(|key| frame.get(*key).is_some()) {
+                            preview_supported = false; continue;
+                        }
+                        None
+                    };
                     let Some(id) = frame.get("uuid").and_then(Value::as_str)
                         .filter(|value| !value.is_empty() && value.len() <= 128 &&
                             !value.chars().any(|character|
@@ -484,7 +504,7 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                     transform_keyframes.push(TransformKeyframeView {
                         uuid: id.to_owned(), bone_uuid: bone_uuid.clone(),
                         channel: channel.to_owned(), time, value,
-                        interpolation: interpolation.to_owned(),
+                        interpolation: interpolation.to_owned(), bezier,
                     });
                     if channel == "rotation" {
                         rotation_keyframes.push(RotationKeyframeView {
@@ -493,6 +513,7 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                         });
                     }
                 }
+                if !valid_track_segments(frames) { preview_supported = false; }
             }
         } else { preview_supported = false; }
         // An unsupported imported clip must not provide a *partial* set of
@@ -1571,6 +1592,97 @@ mod tests {
     }
 
 
+    // SOURCE_AUTHORED_NOT_RUN: Tauri projects only validated numeric Bezier
+    // handles from the one Rust document, never sampled or inferred curves.
+    #[test]
+    fn animation_projection_bezier_handles_and_unsafe_imports() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let bone="00000000-0000-4000-8000-000000000001";
+        let clip="00000000-0000-4000-8000-000000009921";
+        let key="00000000-0000-4000-8000-000000009922";
+        doc.animation_assets.push(json!({
+            "uuid":clip,"name":"bezier","loop":"once","length":2.0,
+            "animators":{}
+        }));
+        doc.animation_assets[0]["animators"][bone]=json!({
+            "name":"root_bone","type":"bone","keyframes":[
+                {
+                    "uuid":key,"channel":"position","time":0.0,
+                    "interpolation":"bezier",
+                    "data_points":[{"x":"0","y":"0","z":"0"}],
+                    "bezier_linked":false,
+                    "bezier_left_time":[-0.25,-0.25,-0.25],
+                    "bezier_left_value":[0,0,0],
+                    "bezier_right_time":[0.5,0.5,0.5],
+                    "bezier_right_value":[8,0,0]
+                },
+                {
+                    "uuid":"00000000-0000-4000-8000-000000009923",
+                    "channel":"position","time":2.0,
+                    "interpolation":"linear",
+                    "data_points":[{"x":"10","y":"0","z":"0"}]
+                }
+            ]
+        });
+        let before=doc.clone();
+        let views=animation_views(&doc);
+        assert!(views[0].preview_supported);
+        assert_eq!(views[0].transform_keyframes.len(),2);
+        assert_eq!(views[0].transform_keyframes[0].interpolation,"bezier");
+        let handle=views[0].transform_keyframes[0].bezier.as_ref().unwrap();
+        assert!(!handle.linked);
+        assert_eq!(handle.right_time,[0.5;3]);
+        assert_eq!(handle.right_value,[8.0,0.0,0.0]);
+        assert!(views[0].transform_keyframes[1].bezier.is_none());
+        let json=serde_json::to_value(&views[0].transform_keyframes[0]).unwrap();
+        assert_eq!(json["bezier"]["rightTime"],json!([0.5,0.5,0.5]));
+        let store=EditorStore {
+            epoch:1,active:Some(ActiveModel {
+                session:EditorSession::from_document(doc.clone()).unwrap(),
+                source_path:None,source_sha:None,saved_canonical_sha:None,dirty:true,
+            }),
+        };
+        let snapshot=project(&store).unwrap();
+        assert!(snapshot.animations[0].preview_supported);
+        assert!(snapshot.animations[0].transform_keyframes[0].bezier.is_some());
+        assert_eq!(store.active.as_ref().unwrap().session.document(),&before);
+
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["bezier_right_time"]=json!([-0.5,0.5,0.5]);
+        let refused=animation_views(&doc);
+        assert!(!refused[0].preview_supported);
+        assert!(refused[0].transform_keyframes.is_empty());
+
+        doc=before.clone();
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["bezier_right_value"]=Value::Null;
+        assert!(!animation_views(&doc)[0].preview_supported);
+
+        doc=before.clone();
+        doc.animation_assets[0]["animators"][bone]["keyframes"][1]
+            ["bezier_linked"]=json!(false);
+        assert!(!animation_views(&doc)[0].preview_supported);
+
+        doc=before.clone();
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["bezier_right_time"]=json!([1.9,1.9,1.9]);
+        doc.animation_assets[0]["animators"][bone]["keyframes"][1]
+            ["interpolation"]=json!("bezier");
+        for (field,value) in [
+            ("bezier_linked",json!(false)),
+            ("bezier_left_time",json!([-1.9,-1.9,-1.9])),
+            ("bezier_left_value",json!([0,0,0])),
+            ("bezier_right_time",json!([0.1,0.1,0.1])),
+            ("bezier_right_value",json!([0,0,0])),
+        ] {
+            doc.animation_assets[0]["animators"][bone]["keyframes"][1][field]=value;
+        }
+        assert!(!animation_views(&doc)[0].preview_supported);
+        assert_eq!(before.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["bezier_right_time"],json!([0.5,0.5,0.5]));
+    }
+
     // SOURCE_AUTHORED_NOT_RUN: step is carried as explicit saved metadata
     // from Rust to Tauri. No unverified keyframe is presented as a pose.
     #[test]
@@ -1617,7 +1729,7 @@ mod tests {
         let curved = animation_views(&doc);
         assert!(curved[0].preview_supported);
         assert_eq!(curved[0].transform_keyframes[0].interpolation,"catmullrom");
-        // Imported Bezier handles are still opaque and never previewed.
+        // Bezier without complete saved numeric handles remains opaque.
         doc.animation_assets[0]["animators"][bone]["keyframes"][0]
             ["interpolation"] = json!("bezier");
         let refused = animation_views(&doc);

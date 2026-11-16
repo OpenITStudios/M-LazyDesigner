@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Saved Bezier handle control (Rust source, 2026-11-16):** `set_bone_transform_keyframe_bezier` accepts one exact `{animation_uuid,bone_uuid,keyframe_uuid,channel,handles}` operation. `handles` has `linked:boolean`, and `leftTime/leftValue/rightTime/rightValue` as three-component numeric arrays. Rust validates each handle, the referenced channel/keyframe, the whole numeric clip and unambiguous time control segments, then saves Blockbench's native `bezier_* ` fields without sampling or rewriting pixels. Link mode requires opposing time/value handles. The same plan can add a key and set its Bezier controls in one host-approved mutation. The bounded transform/rotation reads return the source `bezier` payload only for recognized curves; existing `scope` labels remain stable. Imported Molang/opaque/incomplete Bezier is not guessed. Local/Blockbench runtime and performance **NOT_EXECUTED/UNVERIFIED**.
+
+
 **Numeric Catmull-Rom source (2026-11-16):** The existing `set_bone_transform_keyframe_interpolation` typed Rust operation now accepts `interpolation:'catmullrom'` in addition to `linear/step`, for strictly admitted single-numeric-point Bone Position, Rotation and Scale keys. The mode is saved in the Blockbench keyframe field and preserved through other supported edits and timeline retiming. For AI-authored curves, add the numeric keys and set their interpolation in one approved Rust plan; do not simulate spline sampling in the Code Mode guest. `inspectAnimationTransformTrack` keeps legacy scope identifiers but reports per-key `interpolation` and the full admitted mode set. Rust/Tauri own saved state and read-only viewer interpolation; Bezier handles, Molang, controllers and effects are still opaque. Source regressions AUTHORED_NOT_RUN; no native Blockbench playback or performance comparison.
 
 

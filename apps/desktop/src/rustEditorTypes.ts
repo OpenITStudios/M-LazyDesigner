@@ -55,7 +55,14 @@ export type RotationKeyframeView = {
 };
 /** Numeric Bone channels; only linear/step source interpolation is admitted. */
 export type TransformChannel = 'rotation' | 'position' | 'scale';
-export type TransformInterpolation = 'linear' | 'step' | 'catmullrom';
+export type TransformInterpolation = 'linear' | 'step' | 'catmullrom' | 'bezier';
+export type BezierKeyframeHandles = {
+  linked: boolean;
+  leftTime: Vec3;
+  leftValue: Vec3;
+  rightTime: Vec3;
+  rightValue: Vec3;
+};
 export type TransformKeyframeView = {
   uuid: string;
   boneUuid: string;
@@ -64,6 +71,8 @@ export type TransformKeyframeView = {
   value: Vec3;
   /** Tauri always supplies the source-backed value; older read fixtures may omit it. */
   interpolation?: TransformInterpolation;
+  /** Complete saved Blockbench handles, only on a validated Bezier key. */
+  bezier?: BezierKeyframeHandles;
 };
 
 export type AnimationView = {
@@ -123,7 +132,8 @@ export type EditOperation =
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
   | { op: 'set_animation_loop_mode'; animation_uuid: string; mode: 'once' | 'loop' | 'hold' }
   | { op: 'scale_animation_timeline'; animation_uuid: string; factor: number }
-  | { op: 'set_bone_transform_keyframe_interpolation'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; interpolation: TransformInterpolation }
+  | { op: 'set_bone_transform_keyframe_interpolation'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; interpolation: Exclude<TransformInterpolation, 'bezier'> }
+  | { op: 'set_bone_transform_keyframe_bezier'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; handles: BezierKeyframeHandles }
   | { op: 'add_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'update_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'remove_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel }

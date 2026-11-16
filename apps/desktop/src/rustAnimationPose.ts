@@ -1,11 +1,11 @@
-// Read-only numeric linear/step/Catmull-Rom Bone pose, not Molang/effects/
-// Bezier/controller evaluation. Blockbench's SplineCurve uses uniform
-// Catmull-Rom interpolation on the ordered numeric values.
+// Read-only numeric linear/step/Catmull-Rom/Bezier Bone pose.
+// Molang, effects and controllers are not evaluated. Bezier time handles
+// use monotone cubic inversion rather than Blockbench's 200-point sampling.
 // Position is an offset from the Bone bind origin; Scale multiplies bind pose.
 // Pinned Blockbench v5.2.1 BoneAnimator.displayPosition/displayScale.
 import type {
-  AnimationView, BoneView, RotationKeyframeView, TransformChannel,
-  TransformKeyframeView, Vec3,
+  AnimationView, BezierKeyframeHandles, BoneView, RotationKeyframeView,
+  TransformChannel, TransformKeyframeView, Vec3,
 } from './rustEditorTypes';
 
 export type BoneTransformPose = {
@@ -14,6 +14,61 @@ export type BoneTransformPose = {
   scale: Vec3;
 };
 const CHANNELS: readonly TransformChannel[] = ['rotation', 'position', 'scale'];
+const DEFAULT_RIGHT_TIME = 0.1;
+const DEFAULT_LEFT_TIME = -0.1;
+
+/** Accept only fully typed and bounded saved Bezier handles. */
+function validBezier(value: unknown): value is BezierKeyframeHandles {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const fields = value as Partial<BezierKeyframeHandles>;
+  if (typeof fields.linked !== 'boolean') return false;
+  const vec = (candidate: unknown, lo: number, hi: number) =>
+    Array.isArray(candidate) && candidate.length === 3 &&
+    candidate.every(axis => typeof axis === 'number' &&
+      Number.isFinite(axis) && axis >= lo && axis <= hi);
+  if (!vec(fields.leftTime,-3600,0) || !vec(fields.rightTime,0,3600) ||
+      !vec(fields.leftValue,-100000,100000) ||
+      !vec(fields.rightValue,-100000,100000)) return false;
+  if (!fields.linked) return true;
+  return [0,1,2].every(i =>
+    Math.abs(fields.leftTime![i] + fields.rightTime![i]) <= 1e-9 &&
+    Math.abs(fields.leftValue![i] + fields.rightValue![i]) <= 1e-9);
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.max(low, Math.min(value, high));
+}
+
+function cubic(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const u = 1 - t;
+  return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
+}
+
+/** Exact time-axis inversion for admitted monotone Bezier handles.
+ * Blockbench 5.2.1 samples 200 points for a rough inverse. We use a
+ * fixed 30-step bisection, bounded per axis, then evaluate the cubic y.
+ */
+function bezierValue(
+  before: TransformKeyframeView, after: TransformKeyframeView, time: number,
+): Vec3 {
+  const gap = after.time - before.time;
+  return before.value.map((value, axis) => {
+    const timeA = before.time + clamp(
+      before.bezier?.rightTime[axis] ?? DEFAULT_RIGHT_TIME, 0, gap);
+    const timeB = after.time + clamp(
+      after.bezier?.leftTime[axis] ?? DEFAULT_LEFT_TIME, -gap, 0);
+    const yA = value + (before.bezier?.rightValue[axis] ?? 0);
+    const yB = after.value[axis] + (after.bezier?.leftValue[axis] ?? 0);
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (cubic(before.time,timeA,timeB,after.time,mid) < time) lo = mid;
+      else hi = mid;
+    }
+    return cubic(value,yA,yB,after.value[axis],(lo + hi) / 2);
+  }) as Vec3;
+}
 
 /** Validated, sorted read-only projection of one Rust/Tauri animation snapshot. */
 export type PreparedBoneTransformPose = {
@@ -53,7 +108,10 @@ function grouped(
         frame.time > animation.length ||
         (frame.interpolation !== undefined &&
           frame.interpolation !== 'linear' && frame.interpolation !== 'step' &&
-          frame.interpolation !== 'catmullrom') ||
+          frame.interpolation !== 'catmullrom' &&
+          frame.interpolation !== 'bezier') ||
+        (frame.interpolation === 'bezier'
+          ? !validBezier(frame.bezier) : frame.bezier !== undefined) ||
         !Array.isArray(frame.value) || frame.value.length !== 3 ||
         !frame.value.every((axis) =>
           typeof axis === 'number' && Number.isFinite(axis) &&
@@ -72,6 +130,25 @@ function grouped(
       const ordered = [...frames].sort((a, b) => a.time - b.time);
       if (ordered.some((frame, i) => i > 0 &&
           frame.time - ordered[i - 1].time <= 1e-6)) return null;
+      // A cubic with crossing time handles cannot be inverted uniquely.
+      // Reject those saved curves instead of depicting a fabricated pose.
+      for (let i = 1; i < ordered.length; i++) {
+        const previous = ordered[i - 1];
+        const following = ordered[i];
+        if (previous.interpolation === 'step' ||
+            previous.interpolation === 'catmullrom' ||
+            following.interpolation === 'catmullrom' ||
+            (previous.interpolation !== 'bezier' &&
+             following.interpolation !== 'bezier')) continue;
+        const gap = following.time - previous.time;
+        for (let axis = 0; axis < 3; axis++) {
+          const right = clamp(previous.bezier?.rightTime[axis] ??
+            DEFAULT_RIGHT_TIME, 0, gap);
+          const left = clamp(following.bezier?.leftTime[axis] ??
+            DEFAULT_LEFT_TIME, -gap, 0);
+          if (right > gap + left + 1e-9) return null;
+        }
+      }
       channels.set(channel, ordered);
     }
   }
@@ -144,6 +221,10 @@ function interpolate(
         ? frames[1] : after);
     return catmullRom(prior.value, previous.value,
       after.value, following.value, alpha);
+  }
+  if (previous.interpolation === 'bezier' ||
+      after.interpolation === 'bezier') {
+    return bezierValue(previous, after, time);
   }
   // Legacy fixtures missing the field preserve their linear behavior.
   return previous.value.map((axis, index) =>

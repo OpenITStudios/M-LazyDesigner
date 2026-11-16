@@ -141,6 +141,204 @@ fn transform_keyframes_reject_unknown_molang_negative_scale_and_cross_channel_ed
 
 
 
+
+// SOURCE_AUTHORED_NOT_RUN: authored Blockbench 5.2.1 cubic Bezier handles
+// are saved as per-axis time and value offsets, not baked key samples.
+#[test]
+fn numeric_bezier_handles_roundtrip_retime_preserve_assets_and_undo() {
+    const A:&str="00000000-0000-4000-8000-000000009901";
+    const P0:&str="00000000-0000-4000-8000-000000009902";
+    const P2:&str="00000000-0000-4000-8000-000000009903";
+    const R0:&str="00000000-0000-4000-8000-000000009904";
+    const R2:&str="00000000-0000-4000-8000-000000009905";
+    const S0:&str="00000000-0000-4000-8000-000000009906";
+    const S2:&str="00000000-0000-4000-8000-000000009907";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original=session.document().clone();
+    let add=|id:&str,channel:&str,time:f64,value:[f64;3]|
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:A.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:id.into(),channel:channel.into(),time,value,
+        };
+    let set=|id:&str,channel:&str,handles:BezierKeyframeHandles|
+        EditOperation::SetBoneTransformKeyframeBezier {
+            animation_uuid:A.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:id.into(),channel:channel.into(),handles,
+        };
+    let linked=BezierKeyframeHandles {
+        linked:true,
+        left_time:[-0.25;3],left_value:[-2.0,0.0,0.0],
+        right_time:[0.25;3],right_value:[2.0,0.0,0.0],
+    };
+    let next=BezierKeyframeHandles {
+        linked:false,
+        left_time:[-0.5,-0.25,-0.2],left_value:[-1.0,0.0,0.0],
+        right_time:[0.2,0.25,0.3],right_value:[0.0;3],
+    };
+    let rotation=BezierKeyframeHandles {
+        linked:false,
+        left_time:[-0.2;3],left_value:[0.0;3],
+        right_time:[0.2;3],right_value:[0.0,15.0,0.0],
+    };
+    let scale=BezierKeyframeHandles {
+        linked:false,
+        left_time:[-0.3;3],left_value:[0.0;3],
+        right_time:[0.3;3],right_value:[0.15,0.0,0.0],
+    };
+    let receipt=session.apply(0,&[
+        EditOperation::CreateAnimation {uuid:A.into(),name:"bezier".into(),length:2.0},
+        add(P0,"position",0.0,[0.0,0.0,0.0]),
+        add(P2,"position",2.0,[10.0,0.0,0.0]),
+        add(R0,"rotation",0.0,[0.0,0.0,0.0]),
+        add(R2,"rotation",2.0,[0.0,90.0,0.0]),
+        add(S0,"scale",0.0,[1.0,1.0,1.0]),
+        add(S2,"scale",2.0,[2.0,2.0,2.0]),
+        set(P0,"position",linked.clone()),
+        set(P2,"position",next.clone()),
+        set(R0,"rotation",rotation.clone()),
+        set(S0,"scale",scale.clone()),
+    ]).unwrap();
+    assert_eq!(receipt.revision,1);
+    assert_eq!(receipt.operation_count,11);
+    let saved=session.document().clone();
+    let frames=&saved.animation_assets[0]["animators"][BONE]["keyframes"];
+    assert_eq!(frames[0]["interpolation"],json!("bezier"));
+    assert_eq!(frames[0]["bezier_linked"],json!(true));
+    assert_eq!(frames[0]["bezier_right_time"],json!([0.25,0.25,0.25]));
+    assert_eq!(frames[0]["bezier_right_value"],json!([2.0,0.0,0.0]));
+    assert_eq!(frames[1]["bezier_left_time"],json!([-0.5,-0.25,-0.2]));
+    assert_eq!(frames[2]["bezier_right_value"],json!([0.0,15.0,0.0]));
+    assert_eq!(frames[4]["bezier_right_value"],json!([0.15,0.0,0.0]));
+    let inspected=inspect_transform_track(&saved,A,BONE,"position",0,8).unwrap();
+    assert_eq!(inspected["recognized"],json!(true));
+    assert_eq!(inspected["interpolation_modes"],
+        json!(["linear","step","catmullrom","bezier"]));
+    assert_eq!(inspected["keyframes"][0]["bezier"]["linked"],json!(true));
+    assert_eq!(inspected["keyframes"][1]["bezier"]["leftTime"],
+        json!([-0.5,-0.25,-0.2]));
+    assert_eq!(saved.texture_assets,original.texture_assets);
+    assert_eq!(saved.cubes,original.cubes);
+    assert_eq!(saved.bones,original.bones);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+    assert_eq!(session.apply(1,&[set(P0,"position",linked.clone())]).unwrap_err(),
+        "EDIT_NO_OP");
+
+    session.apply(1,&[
+        EditOperation::SetAnimationLoopMode {
+            animation_uuid:A.into(),mode:"hold".into(),
+        },
+        EditOperation::ScaleAnimationTimeline {
+            animation_uuid:A.into(),factor:2.0,
+        },
+    ]).unwrap();
+    let scaled=session.document().clone();
+    let frames=&scaled.animation_assets[0]["animators"][BONE]["keyframes"];
+    assert_eq!(scaled.animation_assets[0]["loop"],json!("hold"));
+    assert_eq!(scaled.animation_assets[0]["length"],json!(4.0));
+    assert_eq!(frames[0]["bezier_right_time"],json!([0.5,0.5,0.5]));
+    assert_eq!(frames[0]["bezier_right_value"],json!([2.0,0.0,0.0]));
+    assert_eq!(frames[1]["bezier_left_time"],json!([-1.0,-0.5,-0.4]));
+    assert_eq!(frames[1]["time"],json!(4.0));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        scaled);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(),&original);
+    session.redo(4).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.redo(5).unwrap();
+    assert_eq!(session.document(),&scaled);
+
+    session.apply(6,&[EditOperation::SetBoneTransformKeyframeInterpolation {
+        animation_uuid:A.into(),bone_uuid:BONE.into(),
+        keyframe_uuid:P0.into(),channel:"position".into(),
+        interpolation:"linear".into(),
+    }]).unwrap();
+    let cleared=&session.document().animation_assets[0]["animators"][BONE]["keyframes"][0];
+    assert_eq!(cleared["interpolation"],json!("linear"));
+    for field in ["bezier_linked","bezier_left_time","bezier_left_value",
+                  "bezier_right_time","bezier_right_value"] {
+        assert!(cleared.get(field).is_none());
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+}
+
+#[test]
+fn numeric_bezier_rejects_invalid_linked_import_and_crossed_time_handles_atomically() {
+    const A:&str="00000000-0000-4000-8000-000000009911";
+    const P0:&str="00000000-0000-4000-8000-000000009912";
+    const P2:&str="00000000-0000-4000-8000-000000009913";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {uuid:A.into(),name:"curve".into(),length:2.0},
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:A.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:P0.into(),channel:"position".into(),
+            time:0.0,value:[0.0;3],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:A.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:P2.into(),channel:"position".into(),
+            time:2.0,value:[10.0,0.0,0.0],
+        },
+    ]).unwrap();
+    let original=session.document().clone();
+    let valid=BezierKeyframeHandles {
+        linked:false,
+        left_time:[-0.1;3],left_value:[0.0;3],
+        right_time:[0.1;3],right_value:[0.0;3],
+    };
+    let set=|bone:&str,key:&str,handles:BezierKeyframeHandles|
+        EditOperation::SetBoneTransformKeyframeBezier {
+            animation_uuid:A.into(),bone_uuid:bone.into(),keyframe_uuid:key.into(),
+            channel:"position".into(),handles,
+        };
+    let mut bad=valid.clone();
+    bad.right_time[0]=f64::INFINITY;
+    assert_eq!(session.apply(1,&[set(BONE,P0,bad)]).unwrap_err(),
+        "ANIMATION_BEZIER_HANDLES_INVALID");
+    let mut bad=valid.clone();
+    bad.left_time[0]=0.1;
+    assert_eq!(session.apply(1,&[set(BONE,P0,bad)]).unwrap_err(),
+        "ANIMATION_BEZIER_HANDLES_INVALID");
+    let mut bad=valid.clone();
+    bad.linked=true;
+    bad.left_value[0]=4.0;
+    assert_eq!(session.apply(1,&[set(BONE,P0,bad)]).unwrap_err(),
+        "ANIMATION_BEZIER_HANDLES_INVALID");
+    assert_eq!(session.apply(1,&[set("missing",P0,valid.clone())]).unwrap_err(),
+        "ANIMATION_TRACK_NOT_FOUND");
+    assert_eq!(session.apply(1,&[set(BONE,"missing",valid.clone())]).unwrap_err(),
+        "ANIMATION_KEYFRAME_NOT_FOUND");
+    assert_eq!(session.document(),&original);
+    let mut first=valid.clone();
+    first.right_time=[1.8;3];
+    session.apply(1,&[set(BONE,P0,first)]).unwrap();
+    let safe=session.document().clone();
+    let mut last=valid.clone();
+    last.left_time=[-1.8;3];
+    assert_eq!(session.apply(2,&[
+        EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+        set(BONE,P2,last),
+    ]).unwrap_err(),"ANIMATION_BEZIER_AFTER_EDIT_UNSUPPORTED");
+    assert_eq!(session.document(),&safe);
+    assert_eq!(session.summary().revision,2);
+
+    let mut imported=original.clone();
+    imported.animation_assets[0]["animators"][BONE]["keyframes"][0]
+        ["interpolation"]=json!("bezier");
+    // Incomplete handles must remain untouched, not get "repaired" through
+    // guesses about Blockbench's implicit keyframe defaults.
+    let mut opaque=EditorSession::from_document(imported.clone()).unwrap();
+    assert_eq!(opaque.apply(0,&[set(BONE,P0,valid)]).unwrap_err(),
+        "ANIMATION_BEZIER_CLIP_UNSUPPORTED");
+    assert_eq!(opaque.document(),&imported);
+    assert!(!opaque.can_undo());
+}
+
 // SOURCE_AUTHORED_NOT_RUN: pinned Blockbench Catmull-Rom uses the same
 // saved Keyframe.interpolation field for numeric Bone Position/Rotation/Scale.
 // No Bezier handle, Molang or opaque effects are rewritten.
