@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, inspect_material_pair, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -549,6 +549,46 @@ fn execute() -> Result<Value> {
             }
             Ok(response)
         }
+        "inspect-visual-pair" => {
+            option_set(&options, &[
+                "--input", "--expected-sha256",
+                "--reference", "--reference-sha256",
+                "--capture", "--capture-sha256",
+            ])?;
+            let source = PathBuf::from(option(&options, "--input")?);
+            let (_, model_sha) = read_verified_source(
+                &source, option(&options, "--expected-sha256")?)?;
+            let reference = PathBuf::from(option(&options, "--reference")?);
+            let capture = PathBuf::from(option(&options, "--capture")?);
+            png(&reference)?;
+            png(&capture)?;
+            let original = read_bounded(&reference, MAX_VISUAL_PNG_BYTES)?;
+            let observed = read_bounded(&capture, MAX_VISUAL_PNG_BYTES)?;
+            let reference_sha = sha256(&original);
+            let capture_sha = sha256(&observed);
+            let expected_reference = option(&options, "--reference-sha256")?;
+            let expected_capture = option(&options, "--capture-sha256")?;
+            if expected_reference.len() != 64 ||
+                !expected_reference.bytes().all(|b| b.is_ascii_hexdigit()) ||
+                !reference_sha.eq_ignore_ascii_case(expected_reference) {
+                return Err(fail("VISUAL_PAIR_REFERENCE_SHA_STALE"));
+            }
+            if expected_capture.len() != 64 ||
+                !expected_capture.bytes().all(|b| b.is_ascii_hexdigit()) ||
+                !capture_sha.eq_ignore_ascii_case(expected_capture) {
+                return Err(fail("VISUAL_PAIR_CAPTURE_SHA_STALE"));
+            }
+            let report = inspect_visual_png_pair(&original, &observed)?;
+            if sha256(&read_bounded(&source, MAX_MODEL_BYTES)?) != model_sha {
+                return Err(fail("SOURCE_CHANGED_DURING_VISUAL_INSPECTION"));
+            }
+            Ok(json!({
+                "status":"OK","source_model_sha256":model_sha,
+                "reference_png_sha256":reference_sha,
+                "capture_png_sha256":capture_sha,
+                "comparison":report
+            }))
+        }
         "apply" => {
             option_set(&options, &["--input", "--output", "--plan", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);
@@ -686,7 +726,7 @@ fn execute() -> Result<Value> {
                 "summary":session.summary()
             }))
         }
-        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_APPLY_IMPORT_PNG_EXPORT_PNG_EXPORT_GEOMETRY_EXPORT_ANIMATION")),
+        _ => Err(fail("UNKNOWN_COMMAND_USE_NEW_INSPECT_INSPECT_VISUAL_PAIR_APPLY_IMPORT_PNG_EXPORT_PNG_EXPORT_GEOMETRY_EXPORT_ANIMATION")),
     }
 }
 
