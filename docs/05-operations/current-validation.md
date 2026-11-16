@@ -1,5 +1,16 @@
 # LazyDesigner Current Validation
 
+## 2026-11-17 — Local face-local anti-band style evidence (SOURCE_ONLY)
+
+The reference-declared initial cluster composer now inspects its
+proposed post-paint RGBA in the actual Cube face-local pixel grid
+through the canonical signed/rotated UV map. A horizontal face-band
+cannot hide as a vertical atlas stripe. Uniform faces and flat color
+bands are refused before a native Paint transaction; focused corrections
+remain supported. This is a deterministic candidate filter only;
+it cannot prove a visually attractive material or installed executor.
+Regression source AUTHORED_NOT_RUN; PC/native tests remain on hold.
+
 ## 2026-11-17 — Local Texture value/form completion evidence (SOURCE_ONLY)
 
 The canonical Local `paint_texture_transaction` now computes bounded

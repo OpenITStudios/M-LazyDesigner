@@ -13,6 +13,7 @@ import {
   applyPaintTransactionRgba,
   type PaintTransactionOperation,
 } from "./paintTransaction";
+import { inspectPaintStylingEvidence } from "./stylingEvidence";
 import {
   computeTextureRevision,
   requireTextureRevisionMatch,
@@ -558,9 +559,30 @@ export async function compileReferencePixelClusterPaint(
       throw new Error("CLUSTER_VALUE_FORM_PALETTE_REQUIRED");
     }
     for (const face of input.faces) {
+      const key=faceId(face);
       const roles=new Set(face.clusters.map(cluster=>cluster.role));
       if (!roles.has("shadow") || !roles.has("highlight")) {
-        throw new Error("CLUSTER_VALUE_FORM_ROLES_REQUIRED: "+faceId(face));
+        throw new Error("CLUSTER_VALUE_FORM_ROLES_REQUIRED: "+key);
+      }
+      // Inspect proposed form treatment on the face-local pixel grid.
+      // Rotated/mirrored atlas UV can turn a flat horizontal face band
+      // into a vertical column, so atlas-row heuristics alone miss it.
+      const uv=mapping.get(key)!;
+      const binding=native.get(key)!;
+      const [fw,fh]=faceLocalPixelSize(uv,binding.rotation!,key);
+      const mapped=new Uint8ClampedArray(fw*fh*4);
+      for(let y=0;y<fh;y++)for(let x=0;x<fw;x++){
+        const pixel=mapFaceLocalPixelToAtlasPixel(
+          uv,binding.rotation!,x,y,key);
+        const start=(pixel.y*width+pixel.x)*4;
+        mapped.set(proposed.pixels.subarray(start,start+4),(y*fw+x)*4);
+      }
+      const style=inspectPaintStylingEvidence(mapped,fw,fh);
+      if(style.status==="BASE_ONLY_CANDIDATE"){
+        throw new Error("CLUSTER_VALUE_FORM_FLAT_PIXELS: "+key);
+      }
+      if(style.review_hints.includes("UNIFORM_HORIZONTAL_BANDS_REVIEW")){
+        throw new Error("CLUSTER_VALUE_FORM_BANDING_REVIEW: "+key);
       }
     }
   }

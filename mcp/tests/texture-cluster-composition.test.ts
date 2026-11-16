@@ -169,6 +169,21 @@ describe("reference-declared face-local pixel cluster composer", () => {
     // or identity region, without repainting the whole material.
   });
 
+  test("refuses a horizontal stripe masquerading as shading even with shadow and highlight labels", async()=>{
+    const original=facePlan();
+    const bands=[
+      {...original.clusters[0],shape:{
+        kind:"rect" as const,x:0,y:0,width:4,height:1}},
+      {...original.clusters[1],shape:{
+        kind:"rect" as const,x:0,y:3,width:4,height:1}},
+    ];
+    const input=await fixture({faces:[{
+      ...original,clusters:bands,quiet_zones:[],
+    }]});
+    await expect(compileReferencePixelClusterPaint(input))
+      .rejects.toThrow("CLUSTER_VALUE_FORM_BANDING_REVIEW");
+  });
+
   test("supports an explicitly authorized uniformly opaque template without touching other atlas regions", async () => {
     const bitmap = new Uint8ClampedArray(
       Array.from({ length: 64 }, () => [72,72,72,255]).flat());
