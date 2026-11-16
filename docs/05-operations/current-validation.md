@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Tauri Rust Editor animation JSON export integration (SOURCE_ONLY)
+
+The native File menu now offers a Bedrock animation output choice without a new UI mode. `rust_editor_export_bedrock_animations` checks session epoch/revision before and after the native Save dialog, checks original model SHA and same-directory when an existing model is open, uses the single Rust animation exporter, and publishes `*.animation.json` through the existing exclusive no-overwrite writer. The editable `.bbmodel`, source files, revision, timeline markers and Undo history are not mutated. All exported animation semantics have the same strict support/refusal boundary as the CLI/Code Mode. Source reviewed only; Tauri/WebView, file picker, native animation playback and latency NOT_EXECUTED.
+
 ## 2026-11-16 — Bedrock runtime Animation JSON output from canonical Rust model (SOURCE_ONLY)
 
 New `animation_export.rs` maps recognized numeric linear/step Bone keyframes, source-backed loops and Sound/Particle effects to independent Bedrock `format_version:1.8.0` `animations` JSON. Step uses next-frame pre/post; position/rotation axis signs follow pinned Blockbench 5.2.1 exporter. The new `export-animation` CLI validates SHA on source read and before no-overwrite publication of `*.animation.json`; typed Code Mode maps one guest RPC to the same trusted write approval and compiler. Opaque clip metadata, scripts, unsupported Bezier/Catmull-Rom interpolation, timestamp precision overflow and timecode collisions fail closed. Timeline Markers and all original edit data remain in `.bbmodel`, separate controller schema not inferred. Rust module/storage and Code Mode host/client regressions authored NOT_EXECUTED; no build, real Blockbench/Bedrock visual playback or performance evidence.

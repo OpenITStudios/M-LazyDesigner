@@ -4,7 +4,8 @@
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
-    export_paint_png, export_bedrock_geometry, has_per_texture_uv_rules, can_set_empty_atlas_resolution,
+    export_paint_png, export_bedrock_geometry, export_bedrock_animations,
+    has_per_texture_uv_rules, can_set_empty_atlas_resolution,
     can_add_paint_texture, parse_saved_bezier_handles, valid_track_segments,
     saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
     BezierKeyframeHandles,
@@ -152,6 +153,14 @@ pub struct PaintPngExportReceipt {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeometryExportReceipt {
+    sha256: String,
+    byte_count: usize,
+}
+
+/// Bedrock animation export has independent output identity, never a saved model.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimationExportReceipt {
     sha256: String,
     byte_count: usize,
 }
@@ -1050,6 +1059,69 @@ pub async fn rust_editor_export_bedrock_geometry(
     }))
 }
 
+/// Export a separate Bedrock animations resource through the same Rust
+/// document authority as the .bbmodel, CLI and trusted Code Mode.
+/// This never rewrites imported curves, source assets or Undo history.
+#[tauri::command]
+pub async fn rust_editor_export_bedrock_animations(
+    state: State<'_, EditorState>,
+    expected_epoch: u64,
+    expected_revision: u64,
+) -> Result<Option<AnimationExportReceipt>, DesktopError> {
+    let (source_path, filename) = {
+        let guard = lock(&state)?;
+        check_epoch(&guard, expected_epoch)?;
+        let active = guard.active.as_ref()
+            .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+        if active.session.summary().revision != expected_revision {
+            return Err(failure("RUST_EDITOR_REVISION_STALE", "Refresh the model before exporting animations."));
+        }
+        let raw_name = active.session.document().extensions.get("model_identifier")
+            .and_then(Value::as_str).unwrap_or("model");
+        let safe_name: String = raw_name.chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+            .take(64).collect();
+        let safe_name = safe_name.trim_matches('.');
+        let filename = format!("{}.animation.json", if safe_name.is_empty() { "model" } else { safe_name });
+        (active.source_path.clone(), filename)
+    };
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        let mut picker = FileDialog::new()
+            .add_filter("Minecraft Bedrock Animation JSON", &["json"])
+            .set_file_name(&filename);
+        if let Some(ref source) = source_path {
+            if let Some(folder) = source.parent() {
+                picker = picker.set_directory(folder);
+            }
+        }
+        picker.save_file()
+    }).await.map_err(|_| failure("RUST_EDITOR_PICKER_FAILED", "Animation export dialog did not complete."))?;
+    let Some(path) = chosen else { return Ok(None); };
+    storage::animation_json(&path).map_err(model_failure)?;
+
+    let guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_ref()
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE", "The model changed during animation export selection."));
+    }
+    if let Some(ref source) = active.source_path {
+        storage::same_directory(source, &path).map_err(model_failure)?;
+        let expected = active.source_sha.as_ref()
+            .ok_or_else(|| failure("RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
+        let source_bytes = storage::read_bounded(source, MAX_MODEL_BYTES).map_err(model_failure)?;
+        if sha256(&source_bytes) != *expected {
+            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", "The original model changed on disk; no animations were exported."));
+        }
+    }
+    let bytes = export_bedrock_animations(active.session.document()).map_err(model_failure)?;
+    storage::publish_new_animation(&path, &bytes, MAX_MODEL_BYTES).map_err(model_failure)?;
+    Ok(Some(AnimationExportReceipt {
+        sha256: sha256(&bytes), byte_count: bytes.len(),
+    }))
+}
+
 #[tauri::command]
 pub async fn rust_editor_save_copy(
     state: State<'_, EditorState>,
@@ -1113,6 +1185,27 @@ pub async fn rust_editor_save_copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE ONLY: Tauri app/file-dialog and localtest are held.
+    #[test]
+    fn animation_export_consumer_reuses_rust_document_without_modification() {
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Native", "native").unwrap()).unwrap();
+        const CLIP: &str = "00000000-0000-4000-8000-000000009999";
+        session.apply(0, &[EditOperation::CreateAnimation {
+            uuid: CLIP.into(), name: "animation.idle".into(), length: 1.0,
+        }]).unwrap();
+        let before = session.document().clone();
+        let bytes = export_bedrock_animations(session.document()).unwrap();
+        let output: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(output["format_version"], "1.8.0");
+        assert!(output["animations"].get("animation.idle").is_some());
+        assert_eq!(session.document(), &before);
+        let mut opaque = before;
+        opaque.animation_assets[0]["opaque"] = json!(true);
+        assert_eq!(export_bedrock_animations(&opaque).unwrap_err(),
+            "ANIMATION_EXPORT_CLIP_UNSUPPORTED");
+    }
 
     // SOURCE AUTHORED; NOT_EXECUTED under the Rust branch's localtest hold.
     #[test]

@@ -375,6 +375,23 @@
     } catch (cause) { showError(cause); }
     finally { busy = false; }
   }
+  async function exportAnimations() {
+    if (!snapshot || busy || loading || paintStroke) return;
+    const epoch = snapshot.epoch;
+    const revision = snapshot.revision;
+    busy = true; closeMenus(); error = '';
+    try {
+      const receipt = await invoke<GeometryExportReceipt | null>(
+        'rust_editor_export_bedrock_animations',
+        { expectedEpoch: epoch, expectedRevision: revision },
+      );
+      if (receipt) {
+        notice = 'Bedrock animations exported (' + receipt.byteCount +
+          ' bytes). The editable .bbmodel and history remain unchanged.';
+      }
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
   async function saveCopy() {
     if (!snapshot || busy) return;
     busy = true; closeMenus(); error = '';
@@ -2042,6 +2059,11 @@
                   disabled={!snapshot || busy || loading || !!paintStroke}
                   title="Export a separate Minecraft Bedrock geometry JSON. This does not replace your editable .bbmodel.">
                   Export Bedrock Geometry…
+                </button>
+                <button role="menuitem" onclick={() => void exportAnimations()}
+                  disabled={!snapshot || busy || loading || !!paintStroke}
+                  title="Export a separate Minecraft Bedrock animation JSON. Unsupported curves are refused without affecting the editable .bbmodel.">
+                  Export Bedrock Animations…
                 </button>
                 <div class="menu-rule"></div>
                 <button role="menuitem" onclick={openLegacyWorkspace}>Legacy Workspace</button>
