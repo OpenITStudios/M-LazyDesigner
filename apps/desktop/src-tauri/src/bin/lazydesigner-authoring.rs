@@ -836,6 +836,24 @@ mod tests {
         assert_eq!(first[0]["handoff"]["geometry"], second[0]["handoff"]["geometry"]);
         assert_eq!(first[0]["handoff"]["texture"], second[0]["handoff"]["texture"]);
         assert_eq!(damaged.cubes[0].faces["north"]["texture"], json!(false));
+        // A correct atlas UUID can still point outside the physical PNG.
+        // This is a saved UV issue, not a second output/publisher mutation.
+        let mut bad_uv = doc.clone();
+        bad_uv.cubes[0].faces.get_mut("north").unwrap()["uv"] =
+            json!([-1.0,0.0,4.0,4.0]);
+        let uv_report = inspect_batch(&bad_uv, vec![
+            InspectBatchQuery::AssetHandoff {
+                texture_uuid:TEX.into(), offset:Some(0), limit:Some(1),
+            }
+        ]).unwrap();
+        assert_eq!(uv_report[0]["handoff"]["status"], "blocked");
+        assert_eq!(uv_report[0]["handoff"]["faces"]["uv_out_of_bounds"], 1);
+        assert_eq!(uv_report[0]["handoff"]["issues"][0]["face"], "north");
+        assert_eq!(uv_report[0]["handoff"]["issues"][0]["problem"], "uv_out_of_bounds");
+        assert_eq!(uv_report[0]["handoff"]["issues"][0]["uv_source"], "saved_manual");
+        assert!(uv_report[0]["handoff"]["blockers"].as_array().unwrap().contains(
+            &json!("UV_OUT_OF_ATLAS")));
+        assert_eq!(doc.cubes[0].faces["north"]["uv"], json!([0,0,4,4]));
         for (offset, limit) in [(0, 0), (0, 33), (393_217, 1)] {
             assert_eq!(inspect_batch(&damaged, vec![InspectBatchQuery::AssetHandoff {
                 texture_uuid:TEX.into(), offset:Some(offset), limit:Some(limit),

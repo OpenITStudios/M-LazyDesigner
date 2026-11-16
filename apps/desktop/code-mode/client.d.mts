@@ -377,14 +377,21 @@ export interface AssetHandoffInspection {
   issues: Array<{
     cube_uuid: string;
     face: "north" | "east" | "south" | "west" | "up" | "down";
-    problem: "false_reference" | "unset_reference" | "other_texture" | "unresolved_reference";
+    problem:
+      | "false_reference" | "unset_reference" | "other_texture" | "unresolved_reference"
+      | "uv_out_of_bounds" | "uv_zero_area" | "uv_projection_unsupported";
     reference_kind: "false" | "unset" | "index" | "uuid" | "unsupported";
     referenced_texture_uuid: string | null;
+    /** Effective, potentially mirrored atlas UV; null for non-UV issues. */
+    uv_rect: [number, number, number, number] | null;
+    uv_source: "saved_manual" | "derived_box" | null;
   }>;
   faces: {
     total: number; selected_texture: number; other_texture: number;
     unresolved: number; unset: number; false_reference: number;
     explicitly_absent: number;
+    uv_out_of_bounds: number; uv_zero_area: number;
+    uv_projection_unsupported: number;
   };
   geometry: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };
   texture: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };

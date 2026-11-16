@@ -76,10 +76,20 @@ pub fn inspect_bedrock_asset_handoff_page(
     let mut implicit = 0usize;
     let mut explicit_absent = 0usize;
     let mut all_faces = 0usize;
+    let mut uv_out_of_bounds = 0usize;
+    let mut uv_zero_area = 0usize;
+    let mut uv_projection_unsupported = 0usize;
     let mut total_issues = 0usize;
     let mut issues = Vec::with_capacity(limit);
 
     for cube in &doc.cubes {
+        let box_uv = super::cube_box_uv(cube, doc.meta.box_uv.unwrap_or(false));
+        // Recompute the same Box UV net owned by Rust, once per Cube, only
+        // for read-only metadata inspection; no saved UVs or PNGs are edited.
+        let projected_box = if box_uv && super::check_box_uv_repack_rules(doc, cube).is_ok() {
+            let mut derived = cube.clone();
+            super::refresh_box_uv(&mut derived).ok().map(|()| derived)
+        } else { None };
         for name in FACE_NAMES {
             all_faces += 1;
             let face = cube.faces.get(name).and_then(Value::as_object)
@@ -103,12 +113,36 @@ pub fn inspect_bedrock_asset_handoff_page(
                 Some(Value::String(id)) => ("uuid", texture_indices.get(id.as_str()).copied()),
                 _ => ("unsupported", None),
             };
+            let mut uv_rect: Option<[f64; 4]> = None;
+            let mut uv_source: Option<&str> = None;
             let problem = match (reference_kind, referenced) {
                 ("false", _) => Some("false_reference"),
                 ("unset", _) => Some("unset_reference"),
                 (_, Some(index)) if Some(index) == selected_index => {
                     referenced_selected += 1;
-                    None
+                    // The Geometry resource stores one global atlas size.
+                    // A correct texture UUID is insufficient when the UV net
+                    // points outside it. Reversed UVs and fractional UVs are
+                    // valid; inspect min/max, not integer pixel rounding.
+                    let projected = if box_uv { projected_box.as_ref() } else { Some(cube) };
+                    if let Some(projected) = projected {
+                        let rect = super::face_uv(projected, name)?;
+                        uv_source = Some(if box_uv { "derived_box" } else { "saved_manual" });
+                        uv_rect = Some(rect);
+                        if rect[0].min(rect[2]) < 0.0 ||
+                           rect[1].min(rect[3]) < 0.0 ||
+                           rect[0].max(rect[2]) > f64::from(doc.resolution.width) ||
+                           rect[1].max(rect[3]) > f64::from(doc.resolution.height) {
+                            uv_out_of_bounds += 1;
+                            Some("uv_out_of_bounds")
+                        } else if rect[0] == rect[2] || rect[1] == rect[3] {
+                            uv_zero_area += 1;
+                            Some("uv_zero_area")
+                        } else { None }
+                    } else {
+                        uv_projection_unsupported += 1;
+                        Some("uv_projection_unsupported")
+                    }
                 },
                 (_, Some(_)) => {
                     referenced_other += 1;
@@ -125,14 +159,16 @@ pub fn inspect_bedrock_asset_handoff_page(
                         .and_then(|index| doc.texture_assets.get(index))
                         .and_then(|texture| texture.get("uuid"))
                         .and_then(Value::as_str);
-                    // A location and identity, not an automatic destructive
-                    // repair. The agent must inspect intent/UV before editing.
+                    // Location + specific UV evidence, never a destructive
+                    // repair recommendation or claimed visual coverage.
                     issues.push(json!({
                         "cube_uuid":cube.uuid,
                         "face":name,
                         "problem":problem,
                         "reference_kind":reference_kind,
                         "referenced_texture_uuid":referenced_texture_uuid,
+                        "uv_rect":uv_rect,
+                        "uv_source":uv_source,
                     }));
                 }
                 total_issues += 1;
@@ -165,6 +201,9 @@ pub fn inspect_bedrock_asset_handoff_page(
     if implicit != 0 || no_texture != 0 {
         blockers.push("IMPLICIT_OR_UNASSIGNED_FACE_TEXTURES");
     }
+    if uv_out_of_bounds != 0 { blockers.push("UV_OUT_OF_ATLAS"); }
+    if uv_zero_area != 0 { blockers.push("UV_ZERO_AREA"); }
+    if uv_projection_unsupported != 0 { blockers.push("UV_PROJECTION_UNSUPPORTED"); }
 
     let coherent = blockers.is_empty();
     Ok(json!({
@@ -180,7 +219,10 @@ pub fn inspect_bedrock_asset_handoff_page(
             "unresolved":unresolved,
             "unset":implicit,
             "false_reference":no_texture,
-            "explicitly_absent":explicit_absent
+            "explicitly_absent":explicit_absent,
+            "uv_out_of_bounds":uv_out_of_bounds,
+            "uv_zero_area":uv_zero_area,
+            "uv_projection_unsupported":uv_projection_unsupported
         },
         "total_issues":total_issues,
         "issue_offset":offset,
@@ -427,6 +469,68 @@ mod tests {
             "PAINT_TEXTURE_RULESET_UNSUPPORTED");
         assert_eq!(session.document(), &scoped);
         assert!(!session.can_undo());
+    }
+
+    #[test]
+    fn handoff_locates_out_of_atlas_and_zero_area_on_selected_cube_faces() {
+        let mut doc = prepared().document().clone();
+        let original = doc.clone();
+        doc.cubes[0].faces.get_mut("north").unwrap()["uv"] = json!([-1.0,0.0,4.0,4.0]);
+        doc.cubes[0].faces.get_mut("east").unwrap()["uv"] = json!([2.0,2.0,2.0,4.0]);
+        let altered = doc.clone();
+        let first = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 0, 1).unwrap();
+        let second = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 1, 1).unwrap();
+        assert_eq!(first["status"], "blocked");
+        assert_eq!(first["total_issues"], 2);
+        assert_eq!(first["faces"]["selected_texture"], 6);
+        assert_eq!(first["faces"]["uv_out_of_bounds"], 1);
+        assert_eq!(first["faces"]["uv_zero_area"], 1);
+        assert_eq!(first["issues"][0]["cube_uuid"], CUBE);
+        assert_eq!(first["issues"][0]["face"], "north");
+        assert_eq!(first["issues"][0]["problem"], "uv_out_of_bounds");
+        assert_eq!(first["issues"][0]["uv_source"], "saved_manual");
+        assert_eq!(first["issues"][0]["uv_rect"], json!([-1.0,0.0,4.0,4.0]));
+        assert_eq!(first["next_issue_offset"], 1);
+        assert_eq!(second["issues"][0]["face"], "east");
+        assert_eq!(second["issues"][0]["problem"], "uv_zero_area");
+        assert_eq!(second["next_issue_offset"], Value::Null);
+        assert!(first["blockers"].as_array().unwrap().contains(&json!("UV_OUT_OF_ATLAS")));
+        assert!(first["blockers"].as_array().unwrap().contains(&json!("UV_ZERO_AREA")));
+        assert_eq!(first["geometry"]["status"], "source_exportable");
+        assert_eq!(first["texture"]["status"], "source_exportable");
+        assert_eq!(first["geometry"], second["geometry"]);
+        assert_eq!(doc, altered);
+        assert_eq!(original.cubes[0].faces["north"]["uv"], json!([0,0,4,4]));
+    }
+
+    #[test]
+    fn reversed_and_fractional_manual_uv_are_not_false_atlas_failures() {
+        let mut doc = prepared().document().clone();
+        doc.cubes[0].faces.get_mut("north").unwrap()["uv"] = json!([4.5,4.0,0.5,0.0]);
+        let report = inspect_bedrock_asset_handoff(&doc, TEXTURE).unwrap();
+        assert_eq!(report["status"], "source_consistent");
+        assert_eq!(report["total_issues"], 0);
+        assert_eq!(report["faces"]["uv_out_of_bounds"], 0);
+        assert_eq!(report["faces"]["uv_zero_area"], 0);
+    }
+
+    #[test]
+    fn box_uv_uses_derived_net_bounds_without_rewriting_saved_face_uvs() {
+        let mut doc = prepared().document().clone();
+        doc.meta.box_uv = Some(true);
+        let original = doc.clone();
+        let valid = inspect_bedrock_asset_handoff(&doc, TEXTURE).unwrap();
+        assert_eq!(valid["status"], "source_consistent");
+        doc.cubes[0].uv_offset = Some([127.0,127.0]);
+        let altered = doc.clone();
+        let blocked = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 0, 16).unwrap();
+        assert_eq!(blocked["status"], "blocked");
+        assert!(blocked["faces"]["uv_out_of_bounds"].as_u64().unwrap() > 0);
+        assert_eq!(blocked["issues"][0]["uv_source"], "derived_box");
+        assert!(blocked["blockers"].as_array().unwrap().contains(&json!("UV_OUT_OF_ATLAS")));
+        assert_eq!(blocked["geometry"]["status"], "source_exportable");
+        assert_eq!(doc, altered);
+        assert_eq!(original.cubes[0].faces, altered.cubes[0].faces);
     }
 
     #[test]
