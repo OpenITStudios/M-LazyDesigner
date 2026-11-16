@@ -555,7 +555,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
         return {
           decision:'REJECTED',
           issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
-            observation:'Helmet needs reviewed material shading.'}],
+            observation:'Helmet needs reviewed material shading.',
+            partId:'tier2-helmet'}],
           correctionScope:{
             textureUuid:'tier2-atlas',
             allowedRegions:[{from:[1,1],to:[5,5]}],
@@ -921,6 +922,98 @@ test('changed reference OR capture PNG after rejected review refuses Paint', () 
       assert.equal(approvals,0);
       assert.equal(nativeWrites,0);
     }
+  }));
+
+// The host must refuse repeated causal approaches and ungrounded/other-part
+// corrections without asking for write permission or launching native Paint.
+test('reviewed material correction blocks missing, unrelated and previously rejected plans', () =>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'approved-helmet.png');
+    const cap=join(folder,'candidate-helmet.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);await writeFile(cap,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    let phase=0, approvals=0, nativeWrites=0;
+    const baseIntent={
+      issueId:'helmet-flat',approachId:'helmet-flat-stripe',
+      partId:'tier2-helmet',material:'metal',
+      cause:'The helmet currently renders as one flat horizontal stripe.',
+      treatment:'form_value_masses',
+      expectedChange:'Build form-following base, highlight and shadow masses on the helmet.',
+    };
+    const cases=[
+      {intent:undefined,expected:'CODE_MODE_MATERIAL_INTENT_REQUIRED'},
+      {intent:{...baseIntent,issueId:'unreviewed-shield'},
+        expected:'CODE_MODE_MATERIAL_ISSUE_NOT_REVIEWED'},
+      {intent:{...baseIntent,partId:'tier1-shield'},
+        expected:'CODE_MODE_MATERIAL_TARGET_MISMATCH'},
+      {intent:baseIntent,expected:'CODE_MODE_MATERIAL_APPROACH_PREVIOUSLY_REJECTED'},
+    ];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:ref,capturePngPath:cap,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:async()=>({
+        decision:'REJECTED',
+        issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+          observation:'The metal helmet remains visually flat.',
+          partId:'tier2-helmet'}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[1,1],to:[5,5]}],
+          preserveAlpha:true},
+        rejectedApproaches:[{issueId:'helmet-flat',
+          approachId:'helmet-flat-stripe'}],
+      }),
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async args=>{
+        if(args[0]==='inspect')
+          return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(args[0]==='inspect-visual-pair')
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'}};
+        nativeWrites++;
+        throw Error('unexpected Paint');
+      },
+      spawnImpl:()=>{
+        const current=phase++;
+        if(current===0)return fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p0',
+        }},response=>{
+          assert.equal(response.ok,true);
+          assert.deepEqual(response.result.review_feedback.rejectedApproaches,
+            [{issueId:'helmet-flat',approachId:'helmet-flat-stripe'}]);
+          return {reviewed:true};
+        });
+        const item=cases[current-1];
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:'negative-'+current+'.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:1,
+            x:2,y:2,rgba:[80,90,120,255]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[2,2],to:[4,4]}],
+            preserveAlpha:true},
+          ...(item.intent?{correctionIntent:item.intent}:{}),
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,item.expected);
+          return {refused:response.code};
+        });
+      },
+    });
+    const inspected=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(inspected.value.reviewed,true);
+    for(const item of cases){
+      const result=await host.execute({code:'return codemode.apply({project:"p0"});'});
+      assert.equal(result.value.refused,item.expected);
+    }
+    assert.equal(approvals,0);
+    assert.equal(nativeWrites,0);
   }));
 
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {

@@ -1,5 +1,19 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Reviewer-linked material intent and rejected approach guard
+
+At pinned Rust Code Mode source, a visually reviewed Paint requires a
+bounded issue-linked material correction intent. The host matches the
+reviewer issue and optional part ID, and refuses exact approach IDs
+provided as previously rejected by the independent reviewer. The SDK
+passes the frozen diagnosis and its SHA in the independent write approval,
+while Rust owns only actual pixel/UV/model-safe mutation. The host does
+not install a material recognition engine or persistent rejection database;
+strategy names remain caller declarations and are not semantic similarity
+proof. Positive and negative source cases authored, NOT_EXECUTED;
+material quality, cross-session experience transfer and native acceptance
+are UNVERIFIED.
+
 ## 2026-11-16 — Golden A/B source acceptance and immutable visual preflight
 
 Code Mode host source preserves the first independent reviewer outcome for

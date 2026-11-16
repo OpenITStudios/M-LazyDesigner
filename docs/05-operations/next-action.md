@@ -1,5 +1,22 @@
 # LazyDesigner Next Action
 
+**Rust reviewer-linked material correction control (2026-11-16; SOURCE_ONLY):**
+The source-owned Code Mode Paint path now requires a compact intent for
+independently reviewed Texture corrections: reviewer issue ID, stable
+causal approach ID, semantic part ID, material, observed cause, explicit
+treatment family and intended visual difference. A reviewer can add
+`partId` and a bounded rejected approach list. The host checks both
+against the guest's proposal and refuses a missing/wrong issue, wrong
+part or previously rejected key before any write approval. The existing
+Rust correction region/alpha/model preservation remains authoritative.
+The operator approval sees the exact declared plan and its digest.
+These source gates prevent unexamined repeat strategies but cannot detect
+newly renamed versions of the same bad formula or prove quality without
+an actual visual reviewer. Tests AUTHORED_NOT_RUN; no PC/native validation.
+Next material quality proof: real Tier1/2/3 matched-view close-ups,
+representative material patch acceptance and six-face coverage plus
+observed correction-to-acceptance outcomes under the held Golden A/B.
+
 **Rust Pillager Golden A/B source acceptance (2026-11-16; SOURCE_ONLY):**
 The existing host freezes the first reviewed decision for a selected SHA
 (no repeated-call downgrade of ACCEPTED), and both operator-selected PNG

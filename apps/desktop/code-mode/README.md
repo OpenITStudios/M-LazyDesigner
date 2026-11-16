@@ -1,5 +1,21 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Material-first correction control (2026-11-16; SOURCE_ONLY):**
+For a visually REJECTED Texture, the trusted Code Mode host now requires
+an issue-linked `correctionIntent` before Paint: stable reviewer issue ID,
+causal approach ID, semantic part ID, material class, suspected cause,
+treatment family, and expected visible change. The reviewer may optionally
+name the affected `partId` and exact previously rejected issue/approach
+pairs. The host refuses a missing/unknown issue, a different semantic part,
+or an identical rejected approach before write approval/native mutation.
+The normalized diagnosis and digest travel in the operator's approval
+descriptor, but are not inserted into `.bbmodel` and are not independent
+proof of a genuinely different artistic solution. Rejected approaches
+must come from a real reviewer or verified prior evaluation; renaming
+a strategy without changing its visual treatment is not convergence.
+General unreviewed exact-RGBA edits retain previous permissions.
+Positive/negative source regression tests AUTHORED_NOT_RUN.
+
 **Frozen Pillager quality case (source-only):** [Tier 1–3 Golden A/B](GOLDEN_PILLAGER_AB.md) now maps the actual Local rejected feedback to explicit source/native visual acceptance boundaries. A repeated reviewer read cannot downgrade an accepted source decision, and both chosen PNGs are rechecked before a scoped Paint. This Golden is not an installed quality evaluator or runtime-pass claim.
 
 

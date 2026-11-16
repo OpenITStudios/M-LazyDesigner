@@ -120,10 +120,13 @@ function normalizedVisualReview(input) {
   }
   const issues = input.issues.map(issue => {
     if (!issue || typeof issue !== 'object' || Array.isArray(issue) ||
-        Object.keys(issue).some(key => !['id','kind','observation'].includes(key)) ||
+        Object.keys(issue).some(key => !['id','kind','observation','partId'].includes(key)) ||
         typeof issue.id !== 'string' || !/^[a-z][a-z0-9_-]{0,47}$/.test(issue.id) ||
         !REVIEW_ISSUES.has(issue.kind) ||
         typeof issue.observation !== 'string' ||
+        (issue.partId !== undefined &&
+          (typeof issue.partId !== 'string' ||
+           !/^[a-z][a-z0-9_-]{0,63}$/.test(issue.partId))) ||
         issue.observation.trim() !== issue.observation ||
         issue.observation.length < 3 || issue.observation.length > 240 ||
         /[\x00-\x1f\x7f]/.test(issue.observation)) {
@@ -131,6 +134,7 @@ function normalizedVisualReview(input) {
     }
     return Object.freeze({
       id:issue.id,kind:issue.kind,observation:issue.observation,
+      ...(issue.partId ? {partId:issue.partId} : {}),
     });
   });
   if (new Set(issues.map(issue => issue.id)).size !== issues.length) {
@@ -600,8 +604,11 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_MATERIAL_INTENT_REQUIRED');
         }
         if (!materialIntent) throw new Error('CODE_MODE_MATERIAL_INTENT_REQUIRED');
-        if (!feedback.issues.some(issue => issue.id === materialIntent.issueId)) {
-          throw new Error('CODE_MODE_MATERIAL_ISSUE_NOT_REVIEWED');
+        const issue = feedback.issues.find(entry =>
+          entry.id === materialIntent.issueId);
+        if (!issue) throw new Error('CODE_MODE_MATERIAL_ISSUE_NOT_REVIEWED');
+        if (issue.partId && issue.partId !== materialIntent.partId) {
+          throw new Error('CODE_MODE_MATERIAL_TARGET_MISMATCH');
         }
         if (feedback.rejectedApproaches.some(item =>
             item.issueId === materialIntent.issueId &&

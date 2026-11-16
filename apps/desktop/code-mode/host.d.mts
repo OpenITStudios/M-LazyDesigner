@@ -107,6 +107,8 @@ export interface CodeModeVisualReviewerFeedback {
     kind:"FLAT_SHADING"|"MISSING_DETAIL"|"STYLE_MISMATCH"|
       "ALPHA_MISMATCH"|"UV_SEAM"|"SILHOUETTE"|"OTHER";
     observation:string;
+    /** Optional operator-observed semantic part identity; checked at Paint. */
+    partId?:string;
   }>;
   correctionScope?: TextureCorrectionScope;
   /** Actual rejected strategy keys, carried by the authorized reviewer. */
