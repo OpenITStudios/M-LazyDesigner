@@ -7,7 +7,7 @@
 use super::{
     bedrock_animation_curve_fidelity, export_bedrock_animations,
     export_bedrock_geometry, export_paint_png, sha256, valid_uuid,
-    AuthoringDocument, FACE_NAMES,
+    AuthoringDocument, OutlinerNode, FACE_NAMES,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -15,7 +15,9 @@ use std::collections::HashMap;
 type Result<T> = std::result::Result<T, String>;
 fn fail(code: &str) -> String { code.to_owned() }
 
-fn export_evidence(result: &Result<Vec<u8>>) -> (Value, bool) {
+fn export_evidence(
+    result: std::result::Result<&[u8], &String>,
+) -> (Value, bool) {
     match result {
         Ok(bytes) => (json!({
             "status":"source_exportable",
@@ -26,6 +28,165 @@ fn export_evidence(result: &Result<Vec<u8>>) -> (Value, bool) {
             "sha256":null, "bytes":null
         }), false),
     }
+}
+
+/// An intentionally narrow, conservative upper budget for a SINGLE numeric
+/// animation clip's Bone translations, in Blockbench model units (16/block).
+/// A parent-child chain can translate by at most the sum of each Bone's
+/// maximum keyframed displacement length. A linear/step vector lies within
+/// the convex hull of its endpoint values; no interpolation samples or
+/// guesses are needed. No guarantee for animated rotation, scale, Bezier,
+/// Catmull-Rom, unsupported clips, concurrent blends or native rendering.
+/// This is evidence for an optional authored visible_box, NEVER auto-paint or
+/// an implicit change to the canonical Geometry compiler.
+fn translation_clearance(
+    doc: &AuthoringDocument, static_bounds: &Value, saved_bounds: &Value,
+) -> Value {
+    const PIXELS_PER_BLOCK: f64 = 16.0;
+    const EPS: f64 = 1e-8;
+    fn unassessed(reason: &str) -> Value {
+        json!({
+            "scope":"single_clip_numeric_translation_clearance",
+            "status":"unassessed", "reason":reason,
+            "native_verdict":"NOT_EXECUTED", "visual_verdict":"UNVERIFIED",
+            "controller_blends":"NOT_ASSESSED",
+        })
+    }
+    fn maximum_chain(
+        nodes: &[OutlinerNode], local: &HashMap<&str, f64>,
+        inherited: f64, maximum: &mut f64,
+    ) -> bool {
+        for node in nodes {
+            if let OutlinerNode::Bone(bone) = node {
+                let reach = inherited + local.get(bone.uuid.as_str()).copied().unwrap_or(0.0);
+                if !reach.is_finite() { return false; }
+                *maximum = (*maximum).max(reach);
+                if !maximum_chain(&bone.children, local, reach, maximum) { return false; }
+            }
+        }
+        true
+    }
+    let mut maximum_reach: f64 = 0.0;
+    let mut position_tracks = 0usize;
+    let mut numeric_clips = 0usize;
+    for clip in &doc.animation_assets {
+        if !super::editable_transform_clip(clip, &doc.bones) {
+            return unassessed("OPAQUE_OR_UNSUPPORTED_CLIP");
+        }
+        numeric_clips += 1;
+        let Some(tracks) = clip.get("animators").and_then(Value::as_object) else {
+            return unassessed("OPAQUE_OR_UNSUPPORTED_CLIP");
+        };
+        let mut local: HashMap<&str, f64> = HashMap::new();
+        for (bone_uuid, track) in tracks {
+            if bone_uuid == "effects" { continue; }
+            let Some(frames) = track.get("keyframes").and_then(Value::as_array) else {
+                return unassessed("OPAQUE_OR_UNSUPPORTED_TRACK");
+            };
+            let mut has_position = false;
+            for frame in frames {
+                let Some(mode) = frame.get("interpolation").and_then(Value::as_str) else {
+                    return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
+                };
+                if mode != "linear" && mode != "step" {
+                    return unassessed("NONLINEAR_OR_UNBOUNDED_CURVE");
+                }
+                let Some(channel) = frame.get("channel").and_then(Value::as_str) else {
+                    return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
+                };
+                let Some(point) = frame.get("data_points").and_then(Value::as_array)
+                    .and_then(|values| values.first()) else {
+                    return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
+                };
+                let mut axes = [0.0_f64; 3];
+                for (axis, name) in ["x", "y", "z"].iter().enumerate() {
+                    let Some(value) = super::transform_axis(point.get(*name)) else {
+                        return unassessed("NONNUMERIC_TRANSFORM");
+                    };
+                    axes[axis] = value;
+                }
+                match channel {
+                    "position" => {
+                        has_position = true;
+                        let magnitude = axes[0].hypot(axes[1]).hypot(axes[2]);
+                        if !magnitude.is_finite() {
+                            return unassessed("TRANSLATION_MAGNITUDE_OVERFLOW");
+                        }
+                        let entry = local.entry(bone_uuid.as_str()).or_insert(0.0);
+                        *entry = (*entry).max(magnitude);
+                    },
+                    "rotation" if axes.iter().any(|axis| axis.abs() > EPS) =>
+                        return unassessed("ANIMATED_ROTATION_UNASSESSED"),
+                    "scale" if axes.iter().any(|axis| (*axis - 1.0).abs() > EPS) =>
+                        return unassessed("ANIMATED_SCALE_UNASSESSED"),
+                    "rotation" | "scale" => {},
+                    _ => return unassessed("UNSUPPORTED_CHANNEL"),
+                }
+            }
+            if has_position { position_tracks += 1; }
+        }
+        let mut clip_reach = 0.0_f64;
+        if !maximum_chain(&doc.hierarchy, &local, 0.0, &mut clip_reach) {
+            return unassessed("TRANSLATION_CHAIN_OVERFLOW");
+        }
+        maximum_reach = maximum_reach.max(clip_reach);
+    }
+    if maximum_reach <= EPS {
+        return json!({
+            "scope":"single_clip_numeric_translation_clearance",
+            "status":"no_numeric_translation", "numeric_clips":numeric_clips,
+            "position_tracks":position_tracks, "max_reach_model_units":0.0,
+            "native_verdict":"NOT_EXECUTED", "visual_verdict":"UNVERIFIED",
+            "controller_blends":"NOT_ASSESSED",
+        });
+    }
+    let (Some(width), Some(height), Some(center_y),
+         Some(actual_width), Some(actual_height), Some(actual_center_y)) = (
+        static_bounds["visible_bounds_width"].as_f64(),
+        static_bounds["visible_bounds_height"].as_f64(),
+        static_bounds["visible_bounds_offset"][1].as_f64(),
+        saved_bounds["width"].as_f64(),
+        saved_bounds["height"].as_f64(),
+        saved_bounds["offset"][1].as_f64(),
+    ) else { return unassessed("GEOMETRY_BOUNDS_UNAVAILABLE"); };
+    let shift = maximum_reach / PIXELS_PER_BLOCK;
+    let required_width = width + shift * 2.0;
+    let required_height = height + shift * 2.0;
+    let required_low = center_y - height / 2.0 - shift;
+    let required_high = center_y + height / 2.0 + shift;
+    let actual_low = actual_center_y - actual_height / 2.0;
+    let actual_high = actual_center_y + actual_height / 2.0;
+    if ![required_width, required_height, required_low, required_high,
+        actual_low, actual_high].iter().all(|value| value.is_finite()) {
+        return unassessed("GEOMETRY_REACH_OVERFLOW");
+    }
+    // Width is a horizontal X/Z diameter; height is a vertical interval.
+    // This asks whether the published box encloses the conservative sum,
+    // NOT whether the actual rendered pose is clipped in Minecraft.
+    let width_shortfall = (required_width - actual_width).max(0.0);
+    let below_shortfall = (actual_low - required_low).max(0.0);
+    let above_shortfall = (required_high - actual_high).max(0.0);
+    let review = width_shortfall > EPS || below_shortfall > EPS || above_shortfall > EPS;
+    json!({
+        "scope":"single_clip_numeric_translation_clearance",
+        "status":if review { "conservative_margin_shortfall" } else { "source_budget_covered" },
+        "numeric_clips":numeric_clips,
+        "position_tracks":position_tracks,
+        "max_reach_model_units":maximum_reach,
+        "max_reach_blocks":shift,
+        "required_conservative_bounds":{
+            "width":required_width, "height":required_height,
+            "offset":[0.0, center_y, 0.0]
+        },
+        "shortfall_blocks":{
+            "horizontal_width":width_shortfall,
+            "below":below_shortfall,
+            "above":above_shortfall
+        },
+        "native_verdict":"NOT_EXECUTED",
+        "visual_verdict":"UNVERIFIED",
+        "controller_blends":"NOT_ASSESSED",
+    })
 }
 
 /// Source-only consistency evidence, NOT a runtime bundle or validation of
@@ -178,9 +339,10 @@ pub fn inspect_bedrock_asset_handoff_page(
 
     // Reuse canonical exporters. These execute in memory only; their hashes
     // can be compared with individually published artifacts at the same SHA.
-    let geometry_output = export_bedrock_geometry(doc);
-    let (mut geometry, geo_ok) = export_evidence(&geometry_output);
-    if let Ok(bytes) = &geometry_output {
+    let geometry_output = super::geometry::export_bedrock_geometry_with_static_bounds(doc);
+    let (mut geometry, geo_ok) = export_evidence(
+        geometry_output.as_ref().map(|(bytes, _)| bytes.as_slice()));
+    if let Ok((bytes, static_bounds)) = &geometry_output {
         let parsed: Value = serde_json::from_slice(bytes)
             .map_err(|_| fail("ASSET_HANDOFF_GEOMETRY_READ_INVALID"))?;
         let description = &parsed["minecraft:geometry"][0]["description"];
@@ -193,15 +355,22 @@ pub fn inspect_bedrock_asset_handoff_page(
             if doc.extensions.contains_key("visible_box") {
                 "saved_visible_box_union"
             } else { "computed_static" });
+        if !doc.animation_assets.is_empty() {
+            // Reuse this SAME Geometry compiler's actual static envelope.
+            // No cloned model, second export, or replacement model authority.
+            let current = geometry["visible_bounds"].clone();
+            geometry["translation_clearance"] =
+                translation_clearance(doc, static_bounds, &current);
+        }
     }
     let png_output = export_paint_png(doc, texture_uuid);
-    let (texture, png_ok) = export_evidence(&png_output);
+    let (texture, png_ok) = export_evidence(png_output.as_ref().map(Vec::as_slice));
     let animation_required = !doc.animation_assets.is_empty();
     let compiled_animation = if animation_required {
         Some(export_bedrock_animations(doc))
     } else { None };
     let (mut animation, anim_ok) = if let Some(result) = &compiled_animation {
-        export_evidence(result)
+        export_evidence(result.as_ref().map(Vec::as_slice))
     } else {
         (json!({"status":"not_required","sha256":null,"bytes":null}), true)
     };
@@ -683,6 +852,112 @@ mod tests {
         assert_eq!(uncertain["animation"]["loop_seams"]["status"], "unsupported");
         assert_eq!(opaque.animation_assets[0]["unsupported_metadata"]["keep"], true);
         assert_eq!(session.document(), &snapshot);
+    }
+
+
+    #[test]
+    fn source_translation_clearance_detects_uncovered_motion_without_publishing_changes() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        const START: &str = "00000000-0000-4000-8000-000000008101";
+        const END: &str = "00000000-0000-4000-8000-000000008102";
+        let mut session = prepared();
+        let original = session.export().unwrap();
+        let before = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(before["geometry"]["translation_clearance"]["status"],
+            "no_numeric_translation");
+        session.apply(1, &[
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: START.into(), channel: "position".into(),
+                time: 0.0, value: [0.0, 0.0, 0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: END.into(), channel: "position".into(),
+                time: 1.0, value: [64.0, 0.0, 0.0],
+            },
+        ]).unwrap();
+        let authored = session.export().unwrap();
+        let short = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(short["status"], "source_consistent");
+        assert_eq!(short["geometry"]["translation_clearance"]["status"],
+            "conservative_margin_shortfall");
+        assert_eq!(short["geometry"]["translation_clearance"]["max_reach_model_units"],64.0);
+        assert_eq!(short["geometry"]["translation_clearance"]["required_conservative_bounds"]["width"],10.0);
+        assert_eq!(short["geometry"]["translation_clearance"]["shortfall_blocks"]["horizontal_width"],8.0);
+        assert_eq!(short["geometry"]["translation_clearance"]["controller_blends"],"NOT_ASSESSED");
+        assert_eq!(short["texture"]["sha256"],before["texture"]["sha256"]);
+        assert_eq!(short["geometry"]["sha256"],before["geometry"]["sha256"]);
+        assert_ne!(short["animation"]["sha256"],before["animation"]["sha256"]);
+        assert_eq!(session.export().unwrap(), authored);
+
+        session.apply(2, &[EditOperation::SetVisibleBox { bounds:[12.0, 12.0, 0.0] }]).unwrap();
+        let expanded = session.export().unwrap();
+        let covered = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(covered["status"], "source_consistent");
+        assert_eq!(covered["geometry"]["translation_clearance"]["status"],"source_budget_covered");
+        assert_eq!(covered["geometry"]["translation_clearance"]["shortfall_blocks"]["horizontal_width"],0.0);
+        assert_eq!(covered["geometry"]["translation_clearance"]["shortfall_blocks"]["below"],0.0);
+        assert_eq!(covered["geometry"]["translation_clearance"]["shortfall_blocks"]["above"],0.0);
+        assert_ne!(covered["geometry"]["sha256"],short["geometry"]["sha256"]);
+        assert_eq!(covered["texture"]["sha256"],short["texture"]["sha256"]);
+        assert_eq!(covered["animation"]["sha256"],short["animation"]["sha256"]);
+        assert_eq!(session.export().unwrap(),expanded);
+        assert_eq!(EditorSession::open(&expanded).unwrap().document(),session.document());
+        assert_ne!(original, authored);
+    }
+
+    #[test]
+    fn source_translation_clearance_refuses_unbounded_rotation_and_curves() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        const FIRST: &str = "00000000-0000-4000-8000-000000008201";
+        const SECOND: &str = "00000000-0000-4000-8000-000000008202";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: FIRST.into(), channel: "position".into(),
+                time: 0.0, value: [0.0,0.0,0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: SECOND.into(), channel: "position".into(),
+                time: 1.0, value: [16.0,0.0,0.0],
+            },
+            EditOperation::SetBoneTransformKeyframeInterpolation {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: SECOND.into(), channel: "position".into(),
+                interpolation: "catmullrom".into(),
+            },
+        ]).unwrap();
+        let curved = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(curved["geometry"]["translation_clearance"]["status"],"unassessed");
+        assert_eq!(curved["geometry"]["translation_clearance"]["reason"],
+            "NONLINEAR_OR_UNBOUNDED_CURVE");
+        assert_eq!(curved["geometry"]["status"],"source_exportable");
+
+        session.apply(2, &[EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: SECOND.into(), channel: "position".into(),
+            interpolation: "linear".into(),
+        }]).unwrap();
+        session.apply(3, &[EditOperation::AddBoneRotationKeyframe {
+            animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+            keyframe_uuid:"00000000-0000-4000-8000-000000008203".into(),
+            time:0.5, rotation:[0.0, 90.0, 0.0],
+        }]).unwrap();
+        let rotated = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(rotated["geometry"]["translation_clearance"]["status"],"unassessed");
+        assert_eq!(rotated["geometry"]["translation_clearance"]["reason"],
+            "ANIMATED_ROTATION_UNASSESSED");
+        let mut opaque = session.document().clone();
+        opaque.animation_assets[0]["unknown_imported"] = json!({"safe":true});
+        let unknown = inspect_bedrock_asset_handoff(&opaque,TEXTURE).unwrap();
+        assert_eq!(unknown["geometry"]["translation_clearance"]["status"],"unassessed");
+        assert_eq!(unknown["geometry"]["translation_clearance"]["reason"],
+            "OPAQUE_OR_UNSUPPORTED_CLIP");
+        assert_eq!(unknown["animation"]["status"],"blocked");
+        assert_eq!(opaque.animation_assets[0]["unknown_imported"]["safe"],true);
     }
 
     #[test]

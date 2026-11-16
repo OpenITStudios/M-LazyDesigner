@@ -409,6 +409,26 @@ export interface AssetHandoffInspection {
       width: number; height: number; offset: [number, number, number];
     };
     visible_bounds_source?: "computed_static" | "saved_visible_box_union";
+    /** Read-only budget, not rendered pose or Minecraft culling proof. */
+    translation_clearance?: {
+      scope: "single_clip_numeric_translation_clearance";
+      status: "no_numeric_translation" | "unassessed"
+        | "conservative_margin_shortfall" | "source_budget_covered";
+      reason?: string;
+      numeric_clips?: number;
+      position_tracks?: number;
+      max_reach_model_units?: number;
+      max_reach_blocks?: number;
+      required_conservative_bounds?: {
+        width: number; height: number; offset: [number, number, number];
+      };
+      shortfall_blocks?: {
+        horizontal_width: number; below: number; above: number;
+      };
+      native_verdict: "NOT_EXECUTED";
+      visual_verdict: "UNVERIFIED";
+      controller_blends: "NOT_ASSESSED";
+    };
   };
   texture: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };
   animation: {

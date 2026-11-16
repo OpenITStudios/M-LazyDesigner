@@ -384,7 +384,12 @@ fn merge_visible_box(static_bounds: Value, saved: Option<[f64; 3]>) -> Result<Va
 
 /// Export a separate Bedrock geometry file without touching the editable
 /// .bbmodel document, texture assets, animation tracks, revision or Undo stack.
-pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
+// Share the exact compiled static envelope with read-only source diagnostics.
+/// The ordinary exported Geometry file remains byte-identical; this helper
+/// adds no persistent state or second renderer.
+pub(super) fn export_bedrock_geometry_with_static_bounds(
+    doc: &AuthoringDocument,
+) -> Result<(Vec<u8>, Value)> {
     doc.validate()?;
     if has_per_texture_uv_rules(doc) {
         return Err(fail("GEOMETRY_EXPORT_UV_RULESET_UNSUPPORTED"));
@@ -416,7 +421,8 @@ pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     let version = if any_rotation { "1.21.0" }
         else if any_binding { "1.16.0" } else { "1.12.0" };
     let requested_bounds = saved_visible_box(doc)?;
-    let bounds = merge_visible_box(compiled_visible_bounds(&bones)?, requested_bounds)?;
+    let static_bounds = compiled_visible_bounds(&bones)?;
+    let bounds = merge_visible_box(static_bounds.clone(), requested_bounds)?;
     let json = json!({
         "format_version": version,
         "minecraft:geometry": [{
@@ -435,7 +441,13 @@ pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
         .map_err(|_| fail("GEOMETRY_EXPORT_SERIALIZE_FAILED"))?;
     bytes.push(b'\n');
     if bytes.len() > MAX_MODEL_BYTES { return Err(fail("GEOMETRY_EXPORT_TOO_LARGE")); }
-    Ok(bytes)
+    Ok((bytes, static_bounds))
+}
+
+/// Stable standalone Geometry export consumer. The extra read-only bounds
+/// returned by the internal compiler never change published resource bytes.
+pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
+    Ok(export_bedrock_geometry_with_static_bounds(doc)?.0)
 }
 
 // Test sources are authored for later authorized PC-local validation.
