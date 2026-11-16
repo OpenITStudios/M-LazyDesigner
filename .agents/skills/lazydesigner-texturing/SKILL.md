@@ -40,6 +40,26 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Material source-image evidence (conditional):** `decision_packet.texture_surface_regions` offers up to six approved, hash-bound **source image** annotations; `box_uv` is normalized in the reference picture, **not** the Blockbench UV atlas or a paint coordinate. Treat `omitted_count > 0` as incomplete discovery, not permission to ignore other surfaces. At a material/identity decision, use the relevant active-stage image IDs with `status(reference_package_path=..., include_reference_images=true, reference_image_ids=...)` **only if the actual approved images are not already in the active review context**. The source metadata alone does not provide material RGB, mapping or visual PASS. Pair the real images with current `get_texture`, mapped `capture_model_views`, and exact Cube-face UV only when the region-to-face identity needs resolution. See the conditional `references/fidelity-styling-verification.md`, not an always-loaded reference corpus.
 
+**Rust Code Mode professional pixel-art discipline (source target; NOT_EXECUTED):**
+At every material-scale treatment, apply the *current approved reference*
+and latest correction: readable value masses before decoration, material-
+appropriate hue/value shifts, deliberate connected pixel clusters, hard
+edge/contact logic, identity marks, quiet regions and restraint at native
+mapped-model scale. Do not substitute a checker/noise fill, evenly spaced
+horizontal bands or a three-swatch checklist for actual form-following art.
+Rust `texture_styling_face` is a read-only view of the *saved face-local*
+physical pixels after signed/rotated UV mapping; use it when deciding whether
+a representative face is still flat or banded, never as artistic PASS.
+Reviewed Rust `apply` now accounts for **every** permitted atlas rectangle
+and returns provisional `PAINT_SAVED_NOT_VISUALLY_ACCEPTED` regardless of
+tool success. The read-only `texturingReadiness` requires an independently
+reviewed six-view current snapshot and explicitly reviewer-named Cube faces,
+with intentional flat surfaces documented. It cannot replace live/native
+viewing or user acceptance. Corrections must recheck affected views and
+preserve previously accepted parts; inherit past rejected causal treatments
+from the authorized Workspace/Reference handoff rather than resetting them
+on each prompt/session. No additional per-pixel approval step.
+
 **Styling completion receipt (Local Blockbench authoring, source-only rule):**
 `paint_texture_transaction` may legitimately apply a BASE fill or a
 tiny identity correction, but its `structuredContent.texture_styling_evidence`

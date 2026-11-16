@@ -1,5 +1,18 @@
 # LazyDesigner Next Action
 
+**Rust professional Texturing source closure (2026-11-17; SOURCE_ONLY):**
+Existing guarded face-local Cube painting is now paired with a read-only
+actual local-orientation saved-face styling inspector, all-region
+post-correction diagnostics, and a Code Mode host readiness checkpoint.
+The guest cannot supply accepted face/style decisions, and saved Paint
+never equals material styling PASS. The checkpoint requires independent
+SHA-bound six-direction image review and reviewer-selected Cube faces,
+with explicit intentional-flat exceptions. Missing/incomplete native
+face evidence remains blocked; no viewer or native quality verification
+was run. Preserve root hold. Next proof level is authorized PC-local
+image review with actual material close-ups, not another source-only
+percentage.
+
 **Active Rust-only Texturing port (2026-11-17; SOURCE_ONLY):**
 The mistakenly Local-authored Paint crop warnings, reference cluster
 shade requirements, rotated-face band refusal and regression fixtures

@@ -1,5 +1,27 @@
 # LazyDesigner Current Validation
 
+## 2026-11-17 — Rust professional Texturing face-local candidates and review checkpoint (SOURCE_ONLY)
+
+At pinned Rust source, the canonical native PNG inspector now offers
+`texture_styling_face` over one explicit Cube UUID, local face and
+texture UUID, using the same signed/rotated face-local pixel map as guarded
+Cube painting. Face-local horizontal/vertical bands, one-color base,
+low value separation and high-transition noise are advisory *candidates*,
+never a quality score or false artistic PASS. The reviewed apply CLI
+reports all 1–16 declared correction rectangles and every unavailable
+region explicitly, not just the first crop. The Code Mode SDK and host
+expose these source reads. The host marks saved pixel mutations
+`PAINT_SAVED_NOT_VISUALLY_ACCEPTED` and offers a read-only
+`texturingReadiness` checkpoint that requires current SHA-bound
+six-view independent reviewer acceptance plus specific reviewed Cube
+faces, rejects falsely STYLED uniform faces, and checks paged saved-face
+coverage. It can say only REVIEWER_DECLARED_READY_FOR_USER_DECISION or
+BLOCKED, **never native/user/artistic PASS**. Missing human/visual-capable
+reviewer, camera proof, actual native render and cross-session style
+learning remain UNVERIFIED. Default run.mjs does not wire reviewer.
+Rust/Node positive/negative fixtures AUTHORED_NOT_RUN under current
+CI/PC/localtest hold; no test, native Paint or visual comparison executed.
+
 ## 2026-11-17 — Rust native Texturing candidate evaluation (SOURCE_ONLY)
 
 Ported legacy MCP Texturing improvements now also have a native

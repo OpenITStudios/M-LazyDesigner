@@ -9,7 +9,7 @@
  */
 const METHODS = Object.freeze([
   "projectInfo", "inspect", "catalog", "inspectBatch", "inspectApprovedMaterial", "inspectSelectedVisualPair", "inspectCubeSurfaces",
-  "inspectCubeFaceAlpha", "inspectTexture", "inspectTextureAlpha",
+  "inspectCubeFaceAlpha", "texturingReadiness", "inspectTexture", "inspectTextureAlpha",
   "inspectAnimation", "inspectAnimationTrack", "inspectAnimationTransformTrack", "audit",
   "newModel", "apply", "importPng", "exportPng", "exportGeometry", "exportAnimations",
 ]);

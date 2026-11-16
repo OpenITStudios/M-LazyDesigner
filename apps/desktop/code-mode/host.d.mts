@@ -24,6 +24,27 @@ export interface CodeModeRunReceipt {
   logs: string[];
   rpc_calls: number;
 }
+export interface CodeModeTexturingReadinessReceipt {
+  scope:"saved_model_texture_workflow_review";
+  source_model_sha256:string;
+  reviewer_declaration:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
+  view_count:number;visual_verdict:"UNVERIFIED";
+  texture_completion_attested:false;
+  status:"BLOCKED"|"REVIEWER_DECLARED_READY_FOR_USER_DECISION";
+  blockers:string[];
+  face_scan:{
+    scanned_cubes:number;total_cubes:number|null;
+    source_review_candidates:number;unresolved_source_faces:number;
+    complete:boolean;
+  }|null;
+  material_faces:{
+    scope:"reviewer_selected_cube_faces_only";
+    expected:number;inspected:number;
+    intentional_flat_exceptions:number;intentional_transparent_exceptions:number;
+    styling_warning_candidates:number;
+  }|null;
+  next:string;
+}
 export interface CodeModeGuestAPI {
   /** Null project indicates a New-model bootstrap in a trusted directory. */
   initial: CodeModeInitialReference;
@@ -54,7 +75,13 @@ export interface CodeModeGuestAPI {
       issues:Array<CodeModeVisualReviewerFeedback["issues"][number]>;
       correctionScope?:TextureCorrectionScope | null;
       rejectedApproaches:Array<{issueId:string;approachId:string}>;
+      rejectedTreatments:Array<{
+        partId:string;material:string;treatment:string;
+        failedAttempts:number;observation:string;
+      }>;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
+      /** Specific model Cube faces actually reviewed; separate from camera views. */
+      reviewedFaces:ReadonlyArray<Readonly<CodeModeReviewedTextureFace>>;
       viewReviews:ReadonlyArray<Readonly<{
         viewId:CodeModeVisualViewId;
         decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
@@ -93,6 +120,10 @@ export interface CodeModeGuestAPI {
       image_ingestion:"NOT_VERIFIED";
     };
   }>;
+  /** Read-only: explicit six-view reviewer declaration + saved face/atlas scan.
+   * Never native/material artistic PASS or user approval.
+   */
+  texturingReadiness(args:{project:string}):Promise<CodeModeTexturingReadinessReceipt>;
   inspectCubeSurfaces(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   inspectCubeFaceAlpha(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   inspectTexture(args: { project: string; index: number }): Promise<InspectReceipt>;
@@ -110,7 +141,13 @@ export interface CodeModeGuestAPI {
   newModel(args: { output: string; name: string; modelIdentifier: string }):
     Promise<CodeModeProjectReference & { receipt: OutputReceipt }>;
   apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent }):
-    Promise<CodeModeProjectReference & { receipt: ApplyReceipt }>;
+    Promise<CodeModeProjectReference & { receipt: ApplyReceipt;
+      texturing_workflow?:{
+        status:"PAINT_SAVED_NOT_VISUALLY_ACCEPTED";source_model_sha256:string;
+        style_evidence:ApplyReceipt["texture_styling_evidence"];
+        next:string;texture_completion_attested:false;
+      };
+    }>;
   /** PNG path is selected by the trusted host, never by guest code. */
   importPng(args: { project: string; output: string; uuid: string; name: string }):
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt }>;
@@ -145,6 +182,15 @@ export interface CodeModeReviewedMaterialCohort {
   capture_png_sha256?:string;
   view_id?:string;
 }
+/** Host-selected from a REAL rendered view comparison. Never supplied by guest. */
+export interface CodeModeReviewedTextureFace {
+  cubeUuid:string;
+  textureUuid:string;
+  face:CubeFaceSurface["side"];
+  style:"STYLED"|"INTENTIONAL_FLAT"|"INTENTIONAL_TRANSPARENT";
+  /** Why this exact face is shaded or intentionally flat in the reference. */
+  observation:string;
+}
 export type CodeModeVisualViewId="front"|"back"|"left"|"right"|
   "top"|"bottom"|"three_quarter";
 export interface CodeModeVisualReviewerFeedback {
@@ -157,6 +203,10 @@ export interface CodeModeVisualReviewerFeedback {
     decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
     observation:string;
   }>;
+  /** Required by a texturingReadiness decision; arbitrary six-view labels
+   * do not prove the selected material faces were examined. Max 32.
+   */
+  reviewedFaces?:CodeModeReviewedTextureFace[];
   issues:Array<{
     id:string;
     kind:"FLAT_SHADING"|"MISSING_DETAIL"|"STYLE_MISMATCH"|
@@ -168,6 +218,14 @@ export interface CodeModeVisualReviewerFeedback {
   correctionScope?: TextureCorrectionScope;
   /** Actual rejected strategy keys, carried by the authorized reviewer. */
   rejectedApproaches?:Array<{issueId:string;approachId:string}>;
+  /** From authorized Workspace history: two or more rejected attempts of
+   * the SAME part/material/treatment family; renaming approachId is not a
+   * different remedy. This is externally supplied review history, not a DB.
+   */
+  rejectedTreatments?:Array<{
+    partId:string;material:string;treatment:string;
+    failedAttempts:number;observation:string;
+  }>;
   /** Stage sample restricts Paint to one bounded atlas patch. Stage
    * propagation requires reviewer-declared accepted sample from the
    * CURRENT SHA-bound captured model; the host protects that patch.

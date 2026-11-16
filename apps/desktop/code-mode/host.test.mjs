@@ -1002,6 +1002,9 @@ test('reviewed material correction blocks missing, unrelated and previously reje
         expected:'CODE_MODE_MATERIAL_TARGET_MISMATCH'},
       {intent:baseIntent,expected:'CODE_MODE_MATERIAL_APPROACH_PREVIOUSLY_REJECTED'},
       {intent:{...baseIntent,approachId:'new-form-study'},
+        expected:'CODE_MODE_MATERIAL_TREATMENT_FAMILY_REPEAT_BLOCKED'},
+      {intent:{...baseIntent,approachId:'new-contact',
+        treatment:'contact_shadows'},
         expected:'CODE_MODE_MATERIAL_SAMPLE_REQUIRED'},
     ];
     const host=await createCodeModeHost({
@@ -1020,6 +1023,11 @@ test('reviewed material correction blocks missing, unrelated and previously reje
           preserveAlpha:true},
         rejectedApproaches:[{issueId:'helmet-flat',
           approachId:'helmet-flat-stripe'}],
+        rejectedTreatments:[{
+          partId:'tier2-helmet',material:'metal',
+          treatment:'form_value_masses',failedAttempts:2,
+          observation:'Two independent reference reviews rejected repeating horizontal-value stripes.',
+        }],
       }),
       authorizeMutation:()=>{approvals++;return true;},
       runner:async args=>{
@@ -1042,6 +1050,7 @@ test('reviewed material correction blocks missing, unrelated and previously reje
           assert.equal(response.ok,true);
           assert.deepEqual(response.result.review_feedback.rejectedApproaches,
             [{issueId:'helmet-flat',approachId:'helmet-flat-stripe'}]);
+          assert.equal(response.result.review_feedback.rejectedTreatments[0].failedAttempts,2);
           return {reviewed:true};
         });
         const item=cases[current-1];
@@ -2021,4 +2030,128 @@ test('Bedrock animation export guest routes to approved exact sibling without mo
     assert.equal(approvals[0].operation, 'exportAnimations');
     assert.equal(calls.filter((args) => args[0] === 'export-animation').length, 1);
     assert.ok(calls.find((args) => args[0] === 'export-animation').includes('--expected-sha256'));
+  }));
+
+test('Texturing readiness is BLOCKED without matched images and reviewer even if model loads',()=>
+  fixture(async input=>{
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      runner:async argv=>{
+        assert.equal(argv[0],'inspect');
+        return {status:'OK',sha256:HASH,summary:SUMMARY};
+      },
+      spawnImpl:()=>fakeGuest({method:'texturingReadiness',args:{project:'p0'}},
+        response=>{
+          assert.equal(response.ok,true);
+          assert.equal(response.result.status,'BLOCKED');
+          assert.equal(response.result.texture_completion_attested,false);
+          assert.ok(response.result.blockers.includes('INDEPENDENT_IMAGE_REVIEW_NOT_CONNECTED'));
+          return {state:response.result.status};
+        }),
+    });
+    const result=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
+    assert.equal(result.value.state,'BLOCKED');
+  }));
+test('Texturing readiness reads all saved Cube coverage only after independently reviewed six PNG pairs',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const views=['front','back','left','right','top','bottom'];
+    const chosen=[];
+    for(const viewId of views){
+      const referencePngPath=join(folder,'reference-'+viewId+'.png');
+      const capturePngPath=join(folder,'capture-'+viewId+'.png');
+      await writeFile(referencePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from(viewId)]));
+      await writeFile(capturePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('candidate-'+viewId)]));
+      chosen.push({viewId,referencePngPath,capturePngPath});
+    }
+    let step=0, inspectedPages=0, reviewerCalls=0, forceFlatWarning=false;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        ...chosen[0],captureModelSha256:HASH,
+        supportingViews:chosen.slice(1),requireSixDirections:true,
+      },
+      reviewVisualPair:()=>{
+        reviewerCalls++;
+        return {decision:'ACCEPTED',issues:[],viewReviews:views.map(viewId=>({
+          viewId,decision:'ACCEPTED',observation:'Material form is coherent in this matched view.',
+        })),reviewedFaces:[{cubeUuid:REVIEW_CUBE,
+          textureUuid:'tier2-atlas',face:'north',style:'STYLED',
+          observation:'The saved helmet face has deliberate form-based shading and controlled edge highlights.',
+        }]};
+      },
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair'){
+          const r=argv[argv.indexOf('--reference-sha256')+1];
+          const c=argv[argv.indexOf('--capture-sha256')+1];
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:r,capture_png_sha256:c,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:r,capture_png_sha256:c,
+              visual_verdict:'UNVERIFIED',silhouette:{status:'unassessed_opaque_background'}}};
+        }
+        assert.equal(argv[0],'inspect-batch');
+        const plan=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+        if(plan.requests[0]?.kind==='texture_styling_face'){
+          assert.deepEqual(plan.requests,[{
+            kind:'texture_styling_face',texture_uuid:'tier2-atlas',
+            cube_uuid:REVIEW_CUBE,face:'north',
+          }]);
+          return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
+            kind:'texture_styling_face',styling:{
+              scope:'saved_cube_face_local_pixels',
+              texture_uuid:'tier2-atlas',cube_uuid:REVIEW_CUBE,
+              face:'north',status:forceFlatWarning?'BASE_ONLY_CANDIDATE':'NOT_EVALUATED',
+              visible_pixels:16,
+              review_hints:forceFlatWarning?['UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE']:[],
+              visual_verdict:'UNVERIFIED',texture_completion_attested:false,
+            },
+          }]};
+        }
+        assert.deepEqual(plan.requests,[{
+          kind:'model_texture_coverage',offset:0,limit:8,attention_only:true,
+        }]);
+        inspectedPages++;
+        return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
+          kind:'model_texture_coverage',coverage:{
+            scope:'saved_face_texture_coverage_page',offset:0,total_cubes:1,
+            reviewed_cubes:1,review_candidates:0,
+            unresolved_reference_or_mapping_faces:0,next_offset:null,
+          },
+        }]};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:step++===0?'inspectSelectedVisualPair':'texturingReadiness',
+        args:{project:'p0'},
+      },response=>{
+        assert.equal(response.ok,true);
+        if(response.result.review_feedback){
+          assert.equal(response.result.review_feedback.decision,'ACCEPTED');
+          return {reviewed:true};
+        }
+        if (response.result.status==='BLOCKED'){
+          assert.ok(response.result.blockers.includes('UNIFORM_FACE_CANNOT_CLAIM_STYLED'));
+          return {sourceOnlyReady:false,flatRejected:true};
+        }
+        assert.equal(response.result.status,'REVIEWER_DECLARED_READY_FOR_USER_DECISION');
+        assert.equal(response.result.texture_completion_attested,false);
+        assert.equal(response.result.visual_verdict,'UNVERIFIED');
+        assert.equal(response.result.face_scan.complete,true);
+        assert.equal(response.result.material_faces.expected,1);
+        assert.equal(response.result.material_faces.inspected,1);
+        return {sourceOnlyReady:true};
+      }),
+    });
+    assert.equal((await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'}))
+      .value.reviewed,true);
+    assert.equal((await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'}))
+      .value.sourceOnlyReady,true);
+    forceFlatWarning=true;
+    const flat=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
+    assert.equal(flat.value.flatRejected,true);
+    assert.equal(reviewerCalls,1);
+    assert.equal(inspectedPages,2);
   }));

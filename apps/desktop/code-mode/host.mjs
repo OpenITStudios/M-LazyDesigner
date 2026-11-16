@@ -148,7 +148,7 @@ const MAX_REVIEW_ISSUES = 6;
 function normalizedVisualReview(input, viewIds = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key =>
-        !['decision','issues','correctionScope','rejectedApproaches','materialCohort','viewReviews'].includes(key)) ||
+        !['decision','issues','correctionScope','rejectedApproaches','rejectedTreatments','materialCohort','viewReviews','reviewedFaces'].includes(key)) ||
       !REVIEW_DECISIONS.has(input.decision) ||
       !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -208,6 +208,36 @@ function normalizedVisualReview(input, viewIds = []) {
     throw new Error('CODE_MODE_VISUAL_VIEW_REVIEW_INVALID');
   }
   const boundedViewReviews=Object.freeze(viewReviews);
+  // Accepted art remains an external reviewer declaration. Explicit saved
+  // Cube face identities stop a six-camera screenshot from substituting for
+  // material-specific source/UV evidence. No guest can add these records.
+  const suppliedFaces=input.reviewedFaces??[];
+  if (!Array.isArray(suppliedFaces) || suppliedFaces.length>32 ||
+      (input.decision!=='ACCEPTED' && suppliedFaces.length>0)) {
+    throw new Error('CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID');
+  }
+  const reviewedFaces=suppliedFaces.map(item=>{
+    if (!item || typeof item!=='object' || Array.isArray(item) ||
+        Object.keys(item).some(key=>![
+          'cubeUuid','textureUuid','face','style','observation',
+        ].includes(key)) ||
+        !['north','east','south','west','up','down'].includes(item.face) ||
+        !['STYLED','INTENTIONAL_FLAT','INTENTIONAL_TRANSPARENT'].includes(item.style) ||
+        ![item.cubeUuid,item.textureUuid].every(id=>
+          typeof id==='string' && /^[a-zA-Z0-9_-]{1,128}$/.test(id)) ||
+        typeof item.observation!=='string' ||
+        item.observation.trim()!==item.observation ||
+        item.observation.length<20 || item.observation.length>240 ||
+        /[\x00-\x1f\x7f]/.test(item.observation)) {
+      throw new Error('CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID');
+    }
+    return Object.freeze({...item});
+  });
+  if (new Set(reviewedFaces.map(x=>x.cubeUuid+':'+x.face)).size!==
+      reviewedFaces.length) {
+    throw new Error('CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID');
+  }
+  const boundedFaces=Object.freeze(reviewedFaces);
   if (input.decision === 'REJECTED') {
     if (issues.length === 0 || input.correctionScope === undefined) {
       throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -236,6 +266,35 @@ function normalizedVisualReview(input, viewIds = []) {
       item.issueId+':'+item.approachId)).size !== rejectedApproaches.length) {
       throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
     }
+    // Rejected material families are carried by the trusted reviewer from
+    // existing Workspace continuity. Two failed causal treatments cannot be
+    // retried merely by changing the model-authored approach ID.
+    const historical=input.rejectedTreatments??[];
+    if (!Array.isArray(historical) || historical.length>12) {
+      throw new Error('CODE_MODE_REJECTED_TREATMENT_HISTORY_INVALID');
+    }
+    const rejectedTreatments=historical.map(entry=>{
+      if (!entry || typeof entry!=='object' || Array.isArray(entry) ||
+          Object.keys(entry).some(key=>![
+            'partId','material','treatment','failedAttempts','observation',
+          ].includes(key)) ||
+          ![entry.partId,entry.material,entry.treatment].every(v=>
+            typeof v==='string' && /^[a-z][a-z0-9_-]{0,63}$/.test(v)) ||
+          !Number.isSafeInteger(entry.failedAttempts) ||
+          entry.failedAttempts<2 || entry.failedAttempts>20 ||
+          typeof entry.observation!=='string' ||
+          entry.observation.length<20 || entry.observation.length>240 ||
+          entry.observation.trim()!==entry.observation ||
+          /[\x00-\x1f\x7f]/.test(entry.observation)) {
+        throw new Error('CODE_MODE_REJECTED_TREATMENT_HISTORY_INVALID');
+      }
+      return Object.freeze({...entry});
+    });
+    if (new Set(rejectedTreatments.map(x=>
+      x.partId+':'+x.material+':'+x.treatment)).size!==
+      rejectedTreatments.length) {
+      throw new Error('CODE_MODE_REJECTED_TREATMENT_HISTORY_INVALID');
+    }
     const materialCohort = normalizedReviewedMaterialCohort(
       input.materialCohort,scope,issues);
     const normalized = Object.freeze({
@@ -252,24 +311,28 @@ function normalizedVisualReview(input, viewIds = []) {
       status:'RECORDED',decision:'REJECTED',
       issues:Object.freeze(issues),correctionScope:normalized,
       rejectedApproaches:Object.freeze(rejectedApproaches),
+      rejectedTreatments:Object.freeze(rejectedTreatments),
       materialCohort,
       face_source_evidence:null,
       viewReviews:boundedViewReviews,
+      reviewedFaces:Object.freeze([]),
       source:'TRUSTED_HOST_DECLARATION',
       visual_verdict:'UNVERIFIED',
     });
   }
   if (issues.length !== 0 || input.correctionScope !== undefined ||
       input.rejectedApproaches !== undefined ||
+      input.rejectedTreatments !== undefined ||
       input.materialCohort !== undefined) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
   }
   return Object.freeze({
     status:'RECORDED',decision:input.decision,
     issues:Object.freeze([]),correctionScope:null,
-    rejectedApproaches:Object.freeze([]),materialCohort:null,
+    rejectedApproaches:Object.freeze([]),rejectedTreatments:Object.freeze([]),
+    materialCohort:null,
     face_source_evidence:null,
-    viewReviews:boundedViewReviews,
+    viewReviews:boundedViewReviews,reviewedFaces:boundedFaces,
     source:'TRUSTED_HOST_DECLARATION',visual_verdict:'UNVERIFIED',
   });
 }
@@ -640,8 +703,9 @@ export async function createCodeModeHost({
       let feedback = prior ?? Object.freeze({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
-        rejectedApproaches:Object.freeze([]),materialCohort:null,
-        face_source_evidence:null,viewReviews:Object.freeze([]),
+        rejectedApproaches:Object.freeze([]),rejectedTreatments:Object.freeze([]),
+        materialCohort:null,face_source_evidence:null,viewReviews:Object.freeze([]),
+        reviewedFaces:Object.freeze([]),
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
       if (typeof reviewVisualPair === 'function' && prior === undefined) {
@@ -793,6 +857,167 @@ export async function createCodeModeHost({
         },
       };
     },
+    // Read-only terminal checkpoint. An accepted pixel transaction or empty
+    // histogram is NEVER evidence that professional pixel-art Texturing ended.
+    // This is a trusted-host source/view ledger, not a renderer, new approval
+    // database, or guest-driven artistic PASS.
+    texturingReadiness: async (args) => {
+      const p=selected(args);
+      if (Object.keys(args).some(key=>key!=='project')) {
+        throw new Error('CODE_MODE_TEXTURING_READINESS_ARGUMENT_INVALID');
+      }
+      const blocked=[];
+      if (visualPair===null || p.expectedSha256!==visualPair.modelSha) {
+        blocked.push('CURRENT_REVISION_RENDERED_VIEW_SET_MISSING');
+      }
+      if (typeof reviewVisualPair!=='function') {
+        blocked.push('INDEPENDENT_IMAGE_REVIEW_NOT_CONNECTED');
+      }
+      const feedback=visualPreflights.get(p.expectedSha256);
+      if (!feedback || feedback.decision!=='ACCEPTED') {
+        blocked.push('CURRENT_REVISION_NOT_ACCEPTED_BY_REVIEWER');
+      }
+      if (visualPair===null || !visualPair.requireSixDirections ||
+          CARDINAL_VIEWS.some(name=>
+            !visualViews.some(view=>view.viewId===name)) ||
+          feedback?.viewReviews.length!==visualViews.length ||
+          feedback?.viewReviews.some(view=>view.decision!=='ACCEPTED')) {
+        blocked.push('SIX_DIRECTION_REVIEW_INCOMPLETE');
+      }
+      const base={
+        scope:'saved_model_texture_workflow_review',
+        source_model_sha256:p.expectedSha256,
+        reviewer_declaration:feedback?.decision ?? 'UNVERIFIED',
+        view_count:visualViews.length,
+        visual_verdict:'UNVERIFIED',
+        texture_completion_attested:false,
+      };
+      if (!Array.isArray(feedback?.reviewedFaces) ||
+          feedback.reviewedFaces.length===0) {
+        blocked.push('MATERIAL_FACE_REVIEW_SCOPE_MISSING');
+      }
+      if (blocked.length) return {...base,status:'BLOCKED',
+        blockers:blocked,face_scan:null,material_faces:null,
+        next:'Obtain actual approved/current matched views, reviewer-selected Cube faces and independent review.'};
+      // Recheck image bytes AFTER review and BEFORE this read-only decision.
+      // A renamed/replaced file cannot inherit accepted view evidence.
+      await Promise.all(visualViews.flatMap(view=>[
+        pinnedReviewBytes(view.reference),pinnedReviewBytes(view.capture),
+      ]));
+      let cursor=0, pages=0, totalCubes=null, inspectedCubes=0;
+      let sourceCandidates=0, unresolvedFaces=0;
+      let scanError=null;
+      while (pages<32) {
+        let receipt;
+        try {
+          receipt=await p.inspectBatch([{kind:'model_texture_coverage',
+            offset:cursor,limit:8,attention_only:true}]);
+        }catch{
+          scanError='SOURCE_FACE_SCAN_UNAVAILABLE'; break;
+        }
+        const coverage=receipt.results?.[0]?.coverage;
+        if (receipt.sha256!==p.expectedSha256 ||
+            coverage?.scope!=='saved_face_texture_coverage_page' ||
+            coverage.offset!==cursor ||
+            !Number.isSafeInteger(coverage.total_cubes) ||
+            coverage.total_cubes<0 ||
+            (totalCubes!==null && totalCubes!==coverage.total_cubes) ||
+            !Number.isSafeInteger(coverage.reviewed_cubes) ||
+            coverage.reviewed_cubes<0 || coverage.reviewed_cubes>8 ||
+            !Number.isSafeInteger(coverage.review_candidates) ||
+            !Number.isSafeInteger(coverage.unresolved_reference_or_mapping_faces)) {
+          scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
+        }
+        totalCubes=coverage.total_cubes;
+        inspectedCubes+=coverage.reviewed_cubes;
+        sourceCandidates+=coverage.review_candidates;
+        unresolvedFaces+=coverage.unresolved_reference_or_mapping_faces;
+        pages++;
+        if(coverage.next_offset===null){cursor=null;break;}
+        if(!Number.isSafeInteger(coverage.next_offset) ||
+           coverage.next_offset<=cursor ||
+           coverage.next_offset>totalCubes) {
+          scanError='SOURCE_FACE_SCAN_CURSOR_INVALID';break;
+        }
+        cursor=coverage.next_offset;
+      }
+      if (scanError) blocked.push(scanError);
+      if (cursor!==null) blocked.push('SOURCE_FACE_SCAN_INCOMPLETE');
+      if (totalCubes===0) blocked.push('NO_MODEL_SURFACES');
+      if (unresolvedFaces>0) blocked.push('SOURCE_FACE_REFERENCES_NEED_REVIEW');
+      let inspectedFaces=0, flatExceptions=0, transparentExceptions=0, styleWarnings=0;
+      // The reviewer selected these actual Cube face/material identities;
+      // the model-written guest cannot cherry-pick only non-flat faces.
+      // A uniform saved face cannot be declared STYLED without an explicit,
+      // observed INTENTIONAL_FLAT exception. Statistical non-warnings are
+      // likewise not visual PASS.
+      const reviewFaces=feedback.reviewedFaces;
+      for (let start=0;start<reviewFaces.length;start+=8) {
+        const group=reviewFaces.slice(start,start+8);
+        let measured;
+        try {
+          measured=await p.inspectBatch(group.map(item=>({
+            kind:'texture_styling_face',texture_uuid:item.textureUuid,
+            cube_uuid:item.cubeUuid,face:item.face,
+          })));
+        }catch{
+          blocked.push('REVIEWED_FACE_SOURCE_INSPECTION_UNAVAILABLE');break;
+        }
+        if (measured.sha256!==p.expectedSha256 ||
+            measured.results?.length!==group.length) {
+          blocked.push('REVIEWED_FACE_SOURCE_INSPECTION_INVALID');break;
+        }
+        for (let i=0;i<group.length;i++) {
+          const selected=group[i];
+          const evidence=measured.results[i]?.styling;
+          if (measured.results[i]?.kind!=='texture_styling_face' ||
+              evidence?.scope!=='saved_cube_face_local_pixels' ||
+              evidence.cube_uuid!==selected.cubeUuid ||
+              evidence.texture_uuid!==selected.textureUuid ||
+              evidence.face!==selected.face ||
+              evidence.visual_verdict!=='UNVERIFIED' ||
+              evidence.texture_completion_attested!==false ||
+              !['BASE_ONLY_CANDIDATE','REVIEW_REQUIRED','NOT_EVALUATED']
+                .includes(evidence.status)) {
+            blocked.push('REVIEWED_FACE_SOURCE_INSPECTION_INVALID');break;
+          }
+          inspectedFaces++;
+          if (evidence.reason!==undefined ||
+              !Number.isSafeInteger(evidence.visible_pixels)) {
+            blocked.push('REVIEWED_FACE_SOURCE_NOT_EVALUATED');
+          } else if (evidence.visible_pixels===0 &&
+                     selected.style!=='INTENTIONAL_TRANSPARENT') {
+            blocked.push('INVISIBLE_FACE_CANNOT_CLAIM_STYLED');
+          } else if (evidence.visible_pixels>0 &&
+                     selected.style==='INTENTIONAL_TRANSPARENT') {
+            blocked.push('VISIBLE_FACE_CANNOT_CLAIM_TRANSPARENT');
+          } else if (evidence.status==='BASE_ONLY_CANDIDATE' &&
+                     selected.style==='STYLED') {
+            blocked.push('UNIFORM_FACE_CANNOT_CLAIM_STYLED');
+          }
+          if (selected.style==='INTENTIONAL_FLAT') flatExceptions++;
+          if (selected.style==='INTENTIONAL_TRANSPARENT') transparentExceptions++;
+          if (evidence.status==='REVIEW_REQUIRED') styleWarnings++;
+        }
+        if (blocked.some(code=>code.startsWith('REVIEWED_FACE_')))break;
+      }
+      return {...base,
+        status:blocked.length?'BLOCKED':'REVIEWER_DECLARED_READY_FOR_USER_DECISION',
+        blockers:blocked,
+        face_scan:{scanned_cubes:inspectedCubes,total_cubes:totalCubes,
+          source_review_candidates:sourceCandidates,
+          unresolved_source_faces:unresolvedFaces,
+          complete:cursor===null && !scanError},
+        material_faces:{scope:'reviewer_selected_cube_faces_only',
+          expected:reviewFaces.length,inspected:inspectedFaces,
+          intentional_flat_exceptions:flatExceptions,
+          intentional_transparent_exceptions:transparentExceptions,
+          styling_warning_candidates:styleWarnings},
+        next:blocked.length?
+          'Resolve named source/review gaps, keeping intentional transparency and hidden faces explicit.':
+          'Only user or authorized native visual acceptance can declare final artistic completion.',
+      };
+    },
     inspectCubeSurfaces: async (args) => selected(args).inspectCubeSurfaces(args.uuid),
     inspectCubeFaceAlpha: async (args) => selected(args).inspectCubeFaceAlpha(args.uuid),
     inspectTexture: async (args) => selected(args).inspectTexture(args.index),
@@ -880,6 +1105,13 @@ export async function createCodeModeHost({
             item.approachId === materialIntent.approachId)) {
           throw new Error('CODE_MODE_MATERIAL_APPROACH_PREVIOUSLY_REJECTED');
         }
+        if (feedback.rejectedTreatments.some(item =>
+            item.partId===materialIntent.partId &&
+            item.material===materialIntent.material &&
+            item.treatment===materialIntent.treatment &&
+            item.failedAttempts>=2)) {
+          throw new Error('CODE_MODE_MATERIAL_TREATMENT_FAMILY_REPEAT_BLOCKED');
+        }
         // Reviewer-backed material work is sample-first. An explicitly
         // specified exact-RGBA edit outside this visual-review workflow
         // retains the existing SDK/Rust authorization contract.
@@ -939,7 +1171,15 @@ export async function createCodeModeHost({
         // its next handle fails, retrying the same snapshot is unsafe.
         completedReviewedCorrections.add(p.expectedSha256);
       }
-      return { receipt, ...await register(output) };
+      const next=await register(output);
+      return { receipt, ...next,
+        ...(pixelEdit?{texturing_workflow:{
+          status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED',
+          source_model_sha256:next.sha256,
+          style_evidence:receipt.texture_styling_evidence??null,
+          next:'Inspect face-local material styling and review fresh mapped views before declaring STYLED.',
+          texture_completion_attested:false,
+        }}:{})};
     },
     importPng: async (args) => {
       const p = selected(args);
@@ -1213,7 +1453,7 @@ export function createCodeModeTool(host) {
   }
   return Object.freeze({
     name: 'lazydesigner_code_mode',
-    description: 'Execute bounded JavaScript against the approved Rust model via the isolated Code Mode guest. Use codemode.initial, codemode.inspectBatch, codemode.apply and other typed APIs; writes require independent host approval. No filesystem/network/shell access in the guest. Always report native visual results as UNVERIFIED without observation.',
+    description: 'Execute bounded JavaScript against the approved Rust model via the isolated Code Mode guest. Use codemode.initial, codemode.inspectBatch, codemode.apply and other typed APIs; writes require independent host approval. No filesystem/network/shell access in the guest. After Paint, use a fresh mapped-view review; invoke codemode.texturingReadiness only for end-of-Texturing readiness. Successful Paint and numeric styling hints never certify STYLED. Visual claims stay UNVERIFIED without real independent observation.',
     inputSchema: Object.freeze({
       type: 'object',
       additionalProperties: false,

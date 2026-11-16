@@ -58,3 +58,53 @@ test('out-of-bounds or forged styling crop refuses before CLI launch',async()=>{
   }
   assert.equal(writes,0);
 });
+
+test('face-local styling inspection uses the pinned Rust source and never claims art PASS',async()=>{
+  let launches=0;
+  const cube='00000000-0000-4000-8000-000000007102';
+  const client=createRustCodeModeClient({binary:'/abs/rust-cli',
+    runner:async argv=>{
+      launches++;
+      assert.equal(argv[0],'inspect-batch');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1],SHA);
+      const payload=JSON.parse(await readFile(
+        argv[argv.indexOf('--queries')+1],'utf8'));
+      assert.deepEqual(payload.requests,[{
+        kind:'texture_styling_face',texture_uuid:TEX,cube_uuid:cube,face:'north',
+      }]);
+      return {status:'OK',sha256:SHA,results:[{
+        kind:'texture_styling_face',styling:{
+          scope:'saved_cube_face_local_pixels',face:'north',
+          status:'REVIEW_REQUIRED',uv_rotation:90,
+          review_hints:['UNIFORM_HORIZONTAL_BANDS_REVIEW'],
+          visual_verdict:'UNVERIFIED',texture_completion_attested:false,
+        },
+      }]};
+    },
+  });
+  const report=await client.inspectBatch({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,
+    requests:[{kind:'texture_styling_face',texture_uuid:TEX,
+      cube_uuid:cube,face:'north'}],
+  });
+  assert.equal(report.results[0].styling.uv_rotation,90);
+  assert.equal(report.results[0].styling.visual_verdict,'UNVERIFIED');
+  assert.equal(launches,1);
+});
+test('face-local styling rejects bad IDs, face names and surplus fields before Rust',async()=>{
+  let launches=0;
+  const client=createRustCodeModeClient({binary:'/abs/rust-cli',runner:async()=>{
+    launches++;throw Error('NO_LAUNCH');
+  }});
+  for(const item of [
+    {texture_uuid:TEX,cube_uuid:'part bad',face:'north'},
+    {texture_uuid:TEX,cube_uuid:'part',face:'front'},
+    {texture_uuid:TEX,cube_uuid:'part',face:'north',claim:'PASS'},
+  ]){
+    await assert.rejects(client.inspectBatch({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,
+      requests:[{kind:'texture_styling_face',...item}],
+    }));
+  }
+  assert.equal(launches,0);
+});

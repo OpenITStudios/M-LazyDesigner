@@ -583,6 +583,29 @@ export interface TextureStylingEvidence {
   unique_visible_rgb?:number;approx_luma_span?:number|null;
   review_hints?:string[];reason?:string;note?:string;
 }
+/** Saved Cube face-local pixel candidates, never visual/artistic PASS. */
+export interface TextureStylingFaceEvidence {
+  scope:"saved_cube_face_local_pixels";
+  status:"BASE_ONLY_CANDIDATE"|"REVIEW_REQUIRED"|"NOT_EVALUATED";
+  texture_uuid:string;cube_uuid:string;face:CubeFaceSurface["side"];
+  face_size:[number,number];uv_rotation?:number;
+  uv_alias_exclusivity?:"NOT_ASSESSED";
+  mapped_render_review?:"REQUIRED";
+  visible_pixels?:number;unique_visible_rgb?:number;
+  approx_luma_span?:number|null;
+  review_hints:string[];reason?:string;
+  visual_verdict:"UNVERIFIED";texture_completion_attested:false;
+}
+/** All declared correction rectangles are accounted for, including missing evidence. */
+export interface TextureStylingCorrectionEvidence {
+  scope:"all_declared_correction_regions";
+  texture_uuid:string;region_count:number;
+  source_measured_regions:number;source_unavailable_regions:number;
+  warning_regions:number;coverage:"all_declared_regions_measured"|"partial";
+  regions:Array<TextureStylingEvidence & {index:number;source_measured:boolean}>;
+  visual_verdict:"UNVERIFIED";texture_completion_attested:false;
+  next?:string;
+}
 export type InspectBatchQuery =
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
@@ -593,6 +616,7 @@ export type InspectBatchQuery =
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
   | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion }
   | { kind: "texture_styling"; texture_uuid: string; region: MaterialPatchRegion }
+  | { kind: "texture_styling_face"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"] }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
@@ -643,6 +667,7 @@ export type InspectBatchResult =
   | { kind: "material_pair"; comparison: MaterialPairComparison }
   | { kind: "material_face_patch"; binding: MaterialFacePatchBinding }
   | { kind: "texture_styling"; styling: TextureStylingEvidence }
+  | { kind: "texture_styling_face"; styling: TextureStylingFaceEvidence }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }
@@ -670,8 +695,8 @@ export interface ApplyReceipt {
   output_sha256: string;
   summary: DocumentSummary;
   mutation: MutationReceipt;
-  /** Optional diagnostic of the first reviewed correction rectangle. */
-  texture_styling_evidence?:TextureStylingEvidence|null;
+  /** All declared rectangles, but never an artistic completion receipt. */
+  texture_styling_evidence?:TextureStylingCorrectionEvidence|TextureStylingEvidence|null;
   /** Returned by Rust only when a declared pixel scope was enforced. */
   correction_scope?: {
     status: "enforced";

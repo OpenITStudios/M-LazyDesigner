@@ -1,5 +1,41 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Professional pixel-art Texturing source workflow (2026-11-17; NOT_EXECUTED):**
+Code Mode now exposes a bounded `inspectBatch({kind:'texture_styling_face',
+texture_uuid,cube_uuid,face})` read. It decodes the real saved atlas
+through the SAME signed/rotated Cube face-local mapping used by
+`paint_cube_face_regions_guarded`, so a horizontal stripe disguised by
+a rotated atlas can still become a review candidate. It returns
+`visual_verdict:'UNVERIFIED'` and does **not** identify correct
+light direction, material identity or quality from color counts.
+
+Rust `apply` reports candidate styling evidence for **every** declared
+correction rectangle, including each skipped/unsupported/oversized
+region, rather than only the first. Code Mode host wraps Paint success
+as `texturing_workflow.status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED'`.
+No successful write may be narrated as STYLED/finished merely because
+the PNG changed. After a real operator-owned reviewed six-camera view set,
+`codemode.texturingReadiness({project})` reconciles current view/reviewer
+evidence, paged saved-face coverage, and up to 32 independently
+reviewer-selected Cube-local faces, each marked `STYLED`, `INTENTIONAL_FLAT`, or
+`INTENTIONAL_TRANSPARENT` with an observed reason. An opaque exact one-color
+face declared STYLED cannot clear this gate. Even a cleared gate returns
+`REVIEWER_DECLARED_READY_FOR_USER_DECISION`, never visual PASS or
+user acceptance. Without the actual independent reviewer callback
+(including the default `run.mjs` entrypoint), it remains BLOCKED.
+No native render/camera provenance is invented; matched-view observation
+is still the final artistic authority. Test sources authored NOT_EXECUTED.
+
+**Artist order, not extra tools:** approved reference/part → Geometry + UV
+approved → one material's value/base/shadow/highlight design → tiny
+face-local pixel clusters → representative visible face and seam review
+→ only compatible cohort propagation → six directions plus relevant
+occluded-face close-ups → simplification/noise removal → final human review.
+Use existing guarded Cube face-local Paint and protected correction scope;
+do not add procedural noise to satisfy numeric hints. Reviewer observations
+and rejected causal directions remain operator/workspace context across
+host sessions; no automatic persistent correction database is claimed.
+
 **Native Rust Texturing candidate evidence (2026-11-17; SOURCE_ONLY):**
 The Rust-native editor now uses its own canonical PNG decoder to
 provide a SHA-bound `texture_styling` Code Mode read over one

@@ -14,7 +14,7 @@ pub use correction_scope::TextureCorrectionScope;
 mod material_pair;
 pub use material_pair::{inspect_material_pair, MaterialPatchRegion};
 mod material_styling;
-pub use material_styling::inspect_texture_styling_region;
+pub use material_styling::{inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face};
 mod material_face;
 pub use material_face::inspect_material_face_patch;
 mod visual_pair;

@@ -1,5 +1,60 @@
 # Rust Code Mode — first-party local host integration
 
+## Rust Texturing professional-quality read/finish checkpoint (2026-11-17; SOURCE_ONLY)
+
+The guest can inspect real saved material pixels in correct Cube-local
+orientation with `inspectBatch({requests:[{kind:'texture_styling_face',
+texture_uuid,cube_uuid,face}]})`. This uses the existing signed/rotated
+native Paint mapper, not a second editor, renderer or independent material
+classifier. It highlights uniform visible colors, weak value, artificial
+bands or high-transition noise as **candidates only**. Intentional flat
+style, pixel-art clusters, protected identity and contact/edge shading
+still require an actually viewed approved reference and mapped model image.
+When a scoped Paint succeeds, its CLI receipt includes every permitted
+rectangle and explicit NOT_EVALUATED gaps; the Code Mode host returns
+`texturing_workflow.status='PAINT_SAVED_NOT_VISUALLY_ACCEPTED'`.
+
+The trusted reviewer can also return `rejectedTreatments` from
+existing authoritative Workspace/Reference continuity, with explicit
+`{partId,material,treatment,failedAttempts,observation}` records.
+Two failures for the same part/material/treatment family block another
+reviewed Paint using that family even if the guest changes approachId.
+Only a genuinely different remedy or new independently grounded diagnosis
+should proceed. No cross-session memory store is created: a new trusted
+host must be given the prior review history. Missing history must not
+be described as successfully learned.
+
+For a terminal decision, the model-facing guest calls
+`codemode.texturingReadiness({project})` **after**
+`codemode.inspectSelectedVisualPair({project})`, with the *same* current
+SHA-bound model and full front/back/left/right/top/bottom image pairs.
+The trusted `reviewVisualPair` callback must have actually inspected
+those images and returned an overall ACCEPTED, ACCEPTED per direction,
+plus `reviewedFaces` (up to 32) identifying each exact
+`{cubeUuid,textureUuid,face,style,observation}`. The style is
+`STYLED`, `INTENTIONAL_FLAT`, or `INTENTIONAL_TRANSPARENT`, and the observation must explain
+the seen material/face at meaningful depth; this is never accepted from
+model-written code. All unmeasured faces, malformed links, source coverage
+gaps, falsely-STYLED flat faces, and unacknowledged invisible faces remain BLOCKED. The host SHA-rechecks
+every selected image before decision and pages the existing model
+texture coverage read (bounded to 256 Cubes; larger scans are partial).
+Even a coherent checkpoint is **REVIEWER_DECLARED_READY_FOR_USER_DECISION**
+not source-certified texture perfection, native PASS or user approval.
+Selected reviewed faces are not proof every occluded face was seen.
+No external image-capable reviewer, native renderer or PC-local validation
+is connected by the default CLI; it returns BLOCKED in that mode.
+
+To approach professional pixel-art quality, the actual reviewer must
+observe and communicate material-specific form shading, deliberate
+connected shade clusters, meaningful hue shifts, protected identity,
+quiet/detail balance, seams and intentionally flat surfaces. AI-authored
+plans should use existing `paint_cube_face_regions_guarded` and current
+approved references, not noise or a fixed number of palette colors as a
+fake quality metric. Preserve the latest user correction and prior rejected
+causal treatments from the trusted Workspace/Reference handoff; this
+source does **not** create persistent review memory or an image model.
+Scoped Paint may remain valid BASE work, but cannot close Texturing.
+
 **State (2026-11-15):** HOST_SOURCE_AUTHORED, NOT_EXECUTED. The code path is implemented on Rust, but no Deno process, Rust binary, PC-local agent or native Blockbench has been observed running. Localtest and CI remain on hold.
 
 ### Operator-selected material baseline (source-only)

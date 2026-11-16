@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch, inspect_texture_styling_region, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -283,6 +283,7 @@ enum InspectBatchQuery {
     MaterialFacePatch { texture_uuid: String, cube_uuid: String, face: String,
         region: MaterialPatchRegion },
     TextureStyling { texture_uuid: String, region: MaterialPatchRegion },
+    TextureStylingFace { texture_uuid: String, cube_uuid: String, face: String },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
     TextureAlpha { uuid: String },
@@ -368,6 +369,11 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 let styling=inspect_texture_styling_region(
                     doc,batch_id(&texture_uuid)?,&region)?;
                 json!({"kind":"texture_styling","styling":styling})
+            },
+            InspectBatchQuery::TextureStylingFace {texture_uuid,cube_uuid,face} => {
+                let styling=inspect_texture_styling_face(doc,
+                    batch_id(&texture_uuid)?,batch_id(&cube_uuid)?,&face)?;
+                json!({"kind":"texture_styling_face","styling":styling})
             },
             InspectBatchQuery::Catalog { category, offset, limit } => {
                 let offset = offset.unwrap_or(0);
@@ -622,23 +628,32 @@ fn execute() -> Result<Value> {
                 plan.expected_revision, &plan.operations,
                 plan.correction_scope.as_ref(),
             )?;
-            // Read one bounded post-edit atlas patch on reviewed corrections.
-            // Unsupported/large regions cannot invalidate a committed valid
-            // Paint; they merely remain NOT_EVALUATED for style quality.
-            let styling_evidence=plan.correction_scope.as_ref().and_then(|scope|
-                scope.allowed_regions.first().map(|rect|{
-                    let region=MaterialPatchRegion{from:rect.from,to:rect.to};
-                    inspect_texture_styling_region(
-                        session.document(),&scope.texture_uuid,&region
-                    ).unwrap_or_else(|_|json!({
-                        "scope":"first_allowed_region_only",
-                        "status":"NOT_EVALUATED",
+            // Every declared correction region has an explicit diagnostic.
+            // Pixel statistics never certify form-following artistic quality;
+            // unmeasured regions stay visible in the receipt.
+            let styling_evidence=plan.correction_scope.as_ref().map(|scope|{
+                let regions:Vec<MaterialPatchRegion>=scope.allowed_regions.iter()
+                    .map(|r|MaterialPatchRegion{from:r.from,to:r.to}).collect();
+                inspect_texture_styling_regions(
+                    session.document(),&scope.texture_uuid,&regions
+                ).unwrap_or_else(|_|json!({
+                    "scope":"all_declared_correction_regions",
+                    "texture_uuid":scope.texture_uuid,
+                    "region_count":regions.len(),
+                    "source_measured_regions":0,
+                    "source_unavailable_regions":regions.len(),
+                    "warning_regions":0,
+                    "coverage":"partial",
+                    "regions":regions.iter().enumerate().map(|(index,r)|json!({
+                        "index":index,"region":r,"status":"NOT_EVALUATED",
+                        "source_measured":false,
                         "reason":"TEXTURE_STYLING_INSPECTION_UNAVAILABLE",
-                        "visual_verdict":"UNVERIFIED",
-                        "texture_completion_attested":false
-                    }))
-                })
-            );
+                        "review_hints":[]
+                    })).collect::<Vec<_>>(),
+                    "visual_verdict":"UNVERIFIED",
+                    "texture_completion_attested":false
+                }))
+            });
             let out = session.export()?;
             // Another writer may have changed the source while the batch ran.
             if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != actual_sha {
