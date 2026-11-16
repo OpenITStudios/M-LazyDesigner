@@ -1,5 +1,22 @@
 # LazyDesigner Next Action
 
+**Rust Pillager Golden A/B source acceptance (2026-11-16; SOURCE_ONLY):**
+The existing host freezes the first reviewed decision for a selected SHA
+(no repeated-call downgrade of ACCEPTED), and both operator-selected PNG
+files are re-hashed before scoped Paint, rejecting post-preflight image
+replacement. Source-authored positive/negative host cases cover both.
+The new apps/desktop/code-mode/GOLDEN_PILLAGER_AB.md specifies the actual
+Local Pillager complaints and evidence needed for Tier 1–3 acceptance:
+approved style/protected shield, visible artwork size, flat helmet,
+forbidden ornament, neutral hardware, rear/side/underside coverage,
+progressive tiers, repeated failed causal treatments and saved-file state.
+No independent review/native image, success rate or time-to-accepted
+result is observed. TEST_AUTHORED_NOT_RUN and LOCAL_TEST_DEFERRED.
+Next meaningful evidence level is a user-authorized PC-local matched
+Pillager image/capture and accepted/rejected review; do not activate CI
+or claim visual improvement from source alone.
+
+
 **Rust host-reviewed visual correction contract (2026-11-16; SOURCE_ONLY):**
 The source-only Code Mode visual pair can now optionally be presented as real
 PNG bytes to a separately authorized reviewer callback owned by the trusted

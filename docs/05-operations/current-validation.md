@@ -1,5 +1,22 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Golden A/B source acceptance and immutable visual preflight
+
+Code Mode host source preserves the first independent reviewer outcome for
+the selected source SHA; repeating the read cannot revoke ACCEPTED to
+authorize a guest edit. An image recheck immediately before Paint compares
+both actual PNG SHA-256 values to the operator-bound pair and refuses stale
+files before approval/native mutation. Source negative controls simulate
+post-review changes to reference and capture and a second reviewer outcome.
+Pillager acceptance/measurement is specified in
+apps/desktop/code-mode/GOLDEN_PILLAGER_AB.md from the historical Local
+feedback, but without copying private images or inventing passed golden
+samples. SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.
+No PC/native visual reviewer, acceptance metrics or texture-quality
+improvement has been observed. This is not a universal filesystem
+race-proofing claim.
+
+
 ## 2026-11-16 — Trusted reviewer feedback on pinned image pairs (SOURCE_ONLY)
 
 The existing single Code Mode host now admits an *optional* operator-owned

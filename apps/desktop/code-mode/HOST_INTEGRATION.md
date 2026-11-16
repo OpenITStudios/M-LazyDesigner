@@ -119,8 +119,12 @@ A reviewer callback is never an automatic classifier. Its bounded decision
 is a **host declaration**, not proof of agent image ingestion, native playback
 or artistic PASS. Missing, contradictory, overlong, stale or untrusted feedback
 must fail before granting correction authority. Review errors do not fall
-back silently to numeric acceptance. Source regression tests are authored but
-not executed during the current CI/native hold.
+back silently to numeric acceptance. Repeated review reads for the same
+bound .bbmodel SHA reuse the first reviewer decision, and both selected
+PNG files are freshly SHA-checked before any scoped Paint operation.
+See [Pillager Golden A/B](GOLDEN_PILLAGER_AB.md) for the real
+baseline/candidate evidence and rejection matrix. Source regression tests
+are authored but not executed during the current CI/native hold.
 
 ## Programmatic execution architecture
 

@@ -1,5 +1,8 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Frozen Pillager quality case (source-only):** [Tier 1–3 Golden A/B](GOLDEN_PILLAGER_AB.md) now maps the actual Local rejected feedback to explicit source/native visual acceptance boundaries. A repeated reviewer read cannot downgrade an accepted source decision, and both chosen PNGs are rechecked before a scoped Paint. This Golden is not an installed quality evaluator or runtime-pass claim.
+
+
 **Trusted image review and correction scope (2026-11-16; SOURCE_ONLY):**
 `createCodeModeHost` can now receive an optional, independently operator-owned
 `reviewVisualPair` function alongside the SHA-pinned `preselectedVisualPair`.
