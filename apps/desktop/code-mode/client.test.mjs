@@ -1153,7 +1153,9 @@ test('asset handoff is a single SHA-bound read without PNG data or write authori
           selected_texture_uuid:'texture-1',blockers:['SELECTED_TEXTURE_NOT_BOUND'],
           total_issues:6,issue_offset:0,next_issue_offset:null,
           issues:[],
-          geometry:{status:'source_exportable',sha256:'a'.repeat(64),bytes:100},
+          geometry:{status:'source_exportable',sha256:'a'.repeat(64),bytes:100,
+            visible_bounds_source:'computed_static',
+            visible_bounds:{width:2,height:2,offset:[0,0,0]}},
           texture:{status:'blocked',reason:'PAINT_EXPORT_TEXTURE_UNSUPPORTED'},
           animation:{status:'not_required'},
           faces:{total:6,selected_texture:0,other_texture:0,unresolved:0,
@@ -1167,6 +1169,9 @@ test('asset handoff is a single SHA-bound read without PNG data or write authori
   ]);
   assert.equal(result.results[0].kind,'asset_handoff');
   assert.equal(result.results[0].handoff.native_verdict,'NOT_EXECUTED');
+  assert.equal(result.results[0].handoff.geometry.visible_bounds_source,'computed_static');
+  assert.deepEqual(result.results[0].handoff.geometry.visible_bounds,
+    {width:2,height:2,offset:[0,0,0]});
   assert.equal(calls.length,1);
   await assert.rejects(project.inspectBatch([
     {kind:'asset_handoff',texture_uuid:'texture-1',file_path:'/secrets'},
@@ -1283,6 +1288,43 @@ test('precise face texture correction uses one SHA-pinned approved Rust plan', a
   });
   await assert.rejects(noApproval.apply({
     input:'/abs/model.bbmodel',output:'/abs/one-face.bbmodel',
+    expectedSha256:SHA,operations:[operation],
+  }),/CODE_MODE_MUTATION_AUTHORITY_REQUIRED/);
+});
+
+test('authored visible_box uses one host-approved SHA-pinned Rust edit', async () => {
+  const operation = {op:'set_visible_box',bounds:[6,6,1]};
+  const approvals=[];
+  const plans=[];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:async request=>{
+      approvals.push(request);
+      return request.operation==='apply' && request.expectedSha256===SHA;
+    },
+    runner:async argv=>{
+      assert.equal(argv[0],'apply');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1],SHA);
+      plans.push(JSON.parse(await readFile(argv[argv.indexOf('--plan')+1],'utf8')));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:1,changed_uuids:['project-visible-box'],
+      }};
+    },
+  });
+  const result=await client.apply({
+    input:'/abs/model.bbmodel',output:'/abs/model-visible.bbmodel',
+    expectedSha256:SHA,operations:[operation],
+  });
+  assert.deepEqual(plans,[{expected_revision:0,operations:[operation]}]);
+  assert.deepEqual(approvals[0].operationKinds,['set_visible_box']);
+  assert.equal(approvals[0].operationCount,1);
+  assert.match(approvals[0].planSha256,/^[0-9a-f]{64}$/);
+  assert.deepEqual(result.mutation.changed_uuids,['project-visible-box']);
+  const untrusted=createRustCodeModeClient({
+    binary:BIN,runner:async()=>{throw Error('write should not be called');},
+  });
+  await assert.rejects(untrusted.apply({
+    input:'/abs/model.bbmodel',output:'/abs/model-visible.bbmodel',
     expectedSha256:SHA,operations:[operation],
   }),/CODE_MODE_MUTATION_AUTHORITY_REQUIRED/);
 });

@@ -93,6 +93,7 @@ export type EditOperation =
   | { op: "enable_imported_paint_texture"; texture_index: number }
   | { op: "import_paint_texture"; uuid: string; name: string; source: string }
   | { op: "set_empty_atlas_resolution"; width: number; height: number }
+  | { op: "set_visible_box"; bounds: [number, number, number] }
   | { op: "assign_cube_texture"; cube_uuid: string; texture_uuid: string }
   | { op: "assign_cube_face_texture"; cube_uuid: string; face: CubeFacePaintPatch["face"]; texture_uuid: string }
   | { op: "paint_texture_pixel"; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
@@ -400,7 +401,15 @@ export interface AssetHandoffInspection {
     uv_out_of_bounds: number; uv_zero_area: number;
     uv_projection_unsupported: number;
   };
-  geometry: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };
+  geometry: {
+    status: "source_exportable" | "blocked";
+    sha256: string | null; bytes: number | null; reason?: string;
+    /** In blocks; from the actual in-memory Bedrock Geometry resource. */
+    visible_bounds?: {
+      width: number; height: number; offset: [number, number, number];
+    };
+    visible_bounds_source?: "computed_static" | "saved_visible_box_union";
+  };
   texture: { status: "source_exportable" | "blocked"; sha256: string | null; bytes: number | null; reason?: string };
   animation: {
     status: "source_exportable" | "blocked" | "not_required";

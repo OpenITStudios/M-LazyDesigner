@@ -15,11 +15,11 @@ use std::collections::HashMap;
 type Result<T> = std::result::Result<T, String>;
 fn fail(code: &str) -> String { code.to_owned() }
 
-fn export_evidence(result: Result<Vec<u8>>) -> (Value, bool) {
+fn export_evidence(result: &Result<Vec<u8>>) -> (Value, bool) {
     match result {
         Ok(bytes) => (json!({
             "status":"source_exportable",
-            "sha256":sha256(&bytes), "bytes":bytes.len()
+            "sha256":sha256(bytes), "bytes":bytes.len()
         }), true),
         Err(code) => (json!({
             "status":"blocked", "reason":code,
@@ -178,11 +178,30 @@ pub fn inspect_bedrock_asset_handoff_page(
 
     // Reuse canonical exporters. These execute in memory only; their hashes
     // can be compared with individually published artifacts at the same SHA.
-    let (geometry, geo_ok) = export_evidence(export_bedrock_geometry(doc));
-    let (texture, png_ok) = export_evidence(export_paint_png(doc, texture_uuid));
+    let geometry_output = export_bedrock_geometry(doc);
+    let (mut geometry, geo_ok) = export_evidence(&geometry_output);
+    if let Ok(bytes) = &geometry_output {
+        let parsed: Value = serde_json::from_slice(bytes)
+            .map_err(|_| fail("ASSET_HANDOFF_GEOMETRY_READ_INVALID"))?;
+        let description = &parsed["minecraft:geometry"][0]["description"];
+        geometry["visible_bounds"] = json!({
+            "width":description["visible_bounds_width"],
+            "height":description["visible_bounds_height"],
+            "offset":description["visible_bounds_offset"],
+        });
+        geometry["visible_bounds_source"] = json!(
+            if doc.extensions.contains_key("visible_box") {
+                "saved_visible_box_union"
+            } else { "computed_static" });
+    }
+    let png_output = export_paint_png(doc, texture_uuid);
+    let (texture, png_ok) = export_evidence(&png_output);
     let animation_required = !doc.animation_assets.is_empty();
-    let (mut animation, anim_ok) = if animation_required {
-        export_evidence(export_bedrock_animations(doc))
+    let compiled_animation = if animation_required {
+        Some(export_bedrock_animations(doc))
+    } else { None };
+    let (mut animation, anim_ok) = if let Some(result) = &compiled_animation {
+        export_evidence(result)
     } else {
         (json!({"status":"not_required","sha256":null,"bytes":null}), true)
     };
@@ -531,6 +550,34 @@ mod tests {
         assert_eq!(blocked["geometry"]["status"], "source_exportable");
         assert_eq!(doc, altered);
         assert_eq!(original.cubes[0].faces, altered.cubes[0].faces);
+    }
+
+    #[test]
+    fn authored_visible_bounds_are_read_from_real_geometry_export_without_mutation() {
+        let mut session = prepared();
+        let baseline = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(baseline["geometry"]["status"],"source_exportable");
+        assert_eq!(baseline["geometry"]["visible_bounds_source"],"computed_static");
+        assert_eq!(baseline["geometry"]["visible_bounds"]["width"],2.0);
+        assert_eq!(baseline["geometry"]["visible_bounds"]["height"],2.0);
+        assert_eq!(baseline["geometry"]["visible_bounds"]["offset"],json!([0.0,0.0,0.0]));
+        let original = session.document().clone();
+        session.apply(1, &[EditOperation::SetVisibleBox {
+            bounds:[12.0,4.0,0.0],
+        }]).unwrap();
+        let saved = session.document().clone();
+        let expanded = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(expanded["geometry"]["visible_bounds_source"],"saved_visible_box_union");
+        assert_eq!(expanded["geometry"]["visible_bounds"]["width"],12.0);
+        assert_eq!(expanded["geometry"]["visible_bounds"]["height"],4.0);
+        assert_eq!(expanded["geometry"]["visible_bounds"]["offset"],json!([0.0,0.0,0.0]));
+        assert_ne!(baseline["geometry"]["sha256"],expanded["geometry"]["sha256"]);
+        assert_eq!(baseline["texture"]["sha256"],expanded["texture"]["sha256"]);
+        assert_eq!(baseline["animation"]["sha256"],expanded["animation"]["sha256"]);
+        assert_eq!(original.cubes,saved.cubes);
+        assert_eq!(original.animation_assets,saved.animation_assets);
+        assert_eq!(session.document(),&saved);
+        assert_eq!(expanded["native_verdict"],"NOT_EXECUTED");
     }
 
     #[test]

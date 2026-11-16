@@ -333,6 +333,55 @@ fn compiled_visible_bounds(bones: &[Value]) -> Result<Value> {
     }))
 }
 
+/// Blockbench saves Project.visible_box as [width, height, offsetY] in a
+/// .bbmodel. A human/agent can deliberately enlarge it for animation poses.
+/// Keep the authored value separate from the automatic static mesh envelope.
+/// This editor admits a finite positive range, without silent clamping.
+pub(super) fn valid_visible_box(value: [f64; 3]) -> bool {
+    value[0].is_finite() && value[0] > 0.0 && value[0] <= 10_000.0 &&
+    value[1].is_finite() && value[1] > 0.0 && value[1] <= 10_000.0 &&
+    value[2].is_finite() && value[2].abs() <= 10_000.0
+}
+
+fn saved_visible_box(doc: &AuthoringDocument) -> Result<Option<[f64; 3]>> {
+    let Some(value) = doc.extensions.get("visible_box") else { return Ok(None); };
+    let vector: [f64; 3] = serde_json::from_value(value.clone())
+        .map_err(|_| fail("GEOMETRY_EXPORT_VISIBLE_BOX_INVALID"))?;
+    if !valid_visible_box(vector) {
+        return Err(fail("GEOMETRY_EXPORT_VISIBLE_BOX_INVALID"));
+    }
+    Ok(Some(vector))
+}
+
+/// Native Blockbench calculates visible bounds as the union of its saved
+/// visible_box floor and current Geometry. Preserve that union semantics:
+/// never shrink static bounds, and do not erase a deliberate offset envelope.
+fn merge_visible_box(static_bounds: Value, saved: Option<[f64; 3]>) -> Result<Value> {
+    let Some([requested_width, requested_height, requested_y]) = saved else {
+        return Ok(static_bounds);
+    };
+    let width = static_bounds["visible_bounds_width"].as_f64()
+        .ok_or_else(|| fail("GEOMETRY_EXPORT_BOUNDS_INVALID"))?;
+    let height = static_bounds["visible_bounds_height"].as_f64()
+        .ok_or_else(|| fail("GEOMETRY_EXPORT_BOUNDS_INVALID"))?;
+    let center_y = static_bounds["visible_bounds_offset"][1].as_f64()
+        .ok_or_else(|| fail("GEOMETRY_EXPORT_BOUNDS_INVALID"))?;
+    let low = (center_y - height * 0.5)
+        .min(requested_y - requested_height * 0.5);
+    let high = (center_y + height * 0.5)
+        .max(requested_y + requested_height * 0.5);
+    let combined_height = high - low;
+    let combined_y = (high + low) * 0.5;
+    if !combined_height.is_finite() || !combined_y.is_finite() {
+        return Err(fail("GEOMETRY_EXPORT_BOUNDS_INVALID"));
+    }
+    Ok(json!({
+        "visible_bounds_width":width.max(requested_width),
+        "visible_bounds_height":combined_height,
+        "visible_bounds_offset":[0.0, combined_y, 0.0],
+    }))
+}
+
 /// Export a separate Bedrock geometry file without touching the editable
 /// .bbmodel document, texture assets, animation tracks, revision or Undo stack.
 pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
@@ -366,7 +415,8 @@ pub fn export_bedrock_geometry(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     if bones.is_empty() { return Err(fail("GEOMETRY_EXPORT_EMPTY")); }
     let version = if any_rotation { "1.21.0" }
         else if any_binding { "1.16.0" } else { "1.12.0" };
-    let bounds = compiled_visible_bounds(&bones)?;
+    let requested_bounds = saved_visible_box(doc)?;
+    let bounds = merge_visible_box(compiled_visible_bounds(&bones)?, requested_bounds)?;
     let json = json!({
         "format_version": version,
         "minecraft:geometry": [{
@@ -662,6 +712,157 @@ mod tests {
             json!([-2.0,1.0,0.0]));
         assert_eq!(session.export().unwrap(),saved);
         assert_eq!(super::super::EditorSession::open(&saved).unwrap().document(),session.document());
+    }
+
+    // SOURCE_AUTHORED_NOT_RUN: Blockbench Project.visible_box is an explicit
+    // floor for the dynamic animation envelope, not a replacement for
+    // generated static Geometry dimensions.
+    #[test]
+    fn saved_visible_box_unions_exact_width_height_and_offset() {
+        let mut doc = AuthoringDocument::import_bbmodel(BASIC).unwrap();
+        let first: Value = serde_json::from_slice(
+            &export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let baseline = &first["minecraft:geometry"][0]["description"];
+        assert_eq!(baseline["visible_bounds_width"],json!(2.0));
+        assert_eq!(baseline["visible_bounds_height"],json!(2.0));
+        assert_eq!(baseline["visible_bounds_offset"],json!([0.0,0.0,0.0]));
+
+        doc.extensions.insert("visible_box".into(),json!([4.0,6.0,2.0]));
+        let before = doc.clone();
+        let derived: Value = serde_json::from_slice(
+            &export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let bounds = &derived["minecraft:geometry"][0]["description"];
+        assert_eq!(bounds["visible_bounds_width"],json!(4.0));
+        assert_eq!(bounds["visible_bounds_height"],json!(6.0));
+        assert_eq!(bounds["visible_bounds_offset"],json!([0.0,2.0,0.0]));
+        assert_eq!(doc, before);
+        assert_eq!(AuthoringDocument::import_bbmodel(
+            &doc.export_bbmodel().unwrap()).unwrap(),doc);
+
+        doc.extensions.insert("visible_box".into(),json!([0.25,0.5,0.0]));
+        let smaller: Value = serde_json::from_slice(
+            &export_bedrock_geometry(&doc).unwrap()).unwrap();
+        assert_eq!(&smaller["minecraft:geometry"][0]["description"],baseline);
+
+        doc.extensions.insert("visible_box".into(),json!([2.0,2.0,8.0]));
+        let offset: Value = serde_json::from_slice(
+            &export_bedrock_geometry(&doc).unwrap()).unwrap();
+        let bounds = &offset["minecraft:geometry"][0]["description"];
+        assert_eq!(bounds["visible_bounds_width"],json!(2.0));
+        assert_eq!(bounds["visible_bounds_height"],json!(10.0));
+        assert_eq!(bounds["visible_bounds_offset"],json!([0.0,4.0,0.0]));
+    }
+
+    // The default static envelope cannot cover arbitrary animation offsets.
+    // A saved visible_box supplies an explicit user-chosen dynamic minimum,
+    // without requiring our headless source exporter to guess animation pose
+    // reachability or alter the underlying animation keyframes.
+    #[test]
+    fn animation_translation_can_keep_a_separately_authored_visible_envelope() {
+        const CLIP: &str = "00000000-0000-4000-8000-000000009361";
+        const FRAME: &str = "00000000-0000-4000-8000-000000009362";
+        let mut session = super::super::EditorSession::open(BASIC).unwrap();
+        let bone_uuid = session.document().bones[0].uuid.clone();
+        session.apply(0, &[
+            super::super::EditOperation::CreateAnimation {
+                uuid:CLIP.into(), name:"animation.large_swing".into(), length:1.0,
+            },
+            super::super::EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:CLIP.into(), bone_uuid,
+                keyframe_uuid:FRAME.into(), channel:"position".into(),
+                time:0.5, value:[64.0,0.0,0.0],
+            },
+        ]).unwrap();
+        let original = session.document().clone();
+        let original_geo: Value = serde_json::from_slice(
+            &export_bedrock_geometry(session.document()).unwrap()).unwrap();
+        assert_eq!(original_geo["minecraft:geometry"][0]["description"]
+            ["visible_bounds_width"],json!(2.0));
+        session.apply(1, &[super::super::EditOperation::SetVisibleBox {
+            bounds:[12.0,4.0,0.0],
+        }]).unwrap();
+        let expanded: Value = serde_json::from_slice(
+            &export_bedrock_geometry(session.document()).unwrap()).unwrap();
+        let bounds = &expanded["minecraft:geometry"][0]["description"];
+        assert_eq!(bounds["visible_bounds_width"],json!(12.0));
+        assert_eq!(bounds["visible_bounds_height"],json!(4.0));
+        assert_eq!(bounds["visible_bounds_offset"],json!([0.0,0.0,0.0]));
+        assert_eq!(session.document().animation_assets,original.animation_assets);
+        assert_eq!(session.document().cubes,original.cubes);
+        let saved = session.export().unwrap();
+        assert_eq!(super::super::EditorSession::open(&saved).unwrap()
+            .document(),session.document());
+    }
+
+    #[test]
+    fn malformed_saved_visible_box_is_preserved_in_bbmodel_but_refused_by_geometry_export() {
+        let baseline = AuthoringDocument::import_bbmodel(BASIC).unwrap();
+        for value in [
+            json!([0.0,2.0,0.0]),json!([2.0,-1.0,0.0]),
+            json!([1.0,2.0]),json!("untrusted"),
+            json!([1.0,2.0,10001.0]),
+        ] {
+            let mut doc = baseline.clone();
+            doc.extensions.insert("visible_box".into(),value.clone());
+            // A pre-existing malformed project property must not be silently
+            // normalized or destroyed by the editable .bbmodel codec.
+            let encoded = doc.export_bbmodel().unwrap();
+            let reopened = AuthoringDocument::import_bbmodel(&encoded).unwrap();
+            assert_eq!(reopened.extensions["visible_box"],value);
+            assert_eq!(export_bedrock_geometry(&reopened).unwrap_err(),
+                "GEOMETRY_EXPORT_VISIBLE_BOX_INVALID");
+        }
+        assert_eq!(export_bedrock_geometry(&baseline).is_ok(),true);
+    }
+
+    #[test]
+    fn authoring_visible_box_is_revision_guarded_and_undoable_without_asset_edits() {
+        let mut session = super::super::EditorSession::open(BASIC).unwrap();
+        let before = session.document().clone();
+        session.apply(0,&[super::super::EditOperation::SetVisibleBox {
+            bounds:[6.0,6.0,1.0],
+        }]).unwrap();
+        let saved = session.document().clone();
+        assert_eq!(saved.extensions["visible_box"],json!([6.0,6.0,1.0]));
+        assert_eq!(saved.cubes,before.cubes);
+        assert_eq!(saved.bones,before.bones);
+        assert_eq!(saved.texture_assets,before.texture_assets);
+        assert_eq!(saved.animation_assets,before.animation_assets);
+        let output:Value = serde_json::from_slice(
+            &export_bedrock_geometry(session.document()).unwrap()).unwrap();
+        let bounds=&output["minecraft:geometry"][0]["description"];
+        assert_eq!(bounds["visible_bounds_width"],json!(6.0));
+        assert_eq!(bounds["visible_bounds_height"],json!(6.0));
+        assert_eq!(bounds["visible_bounds_offset"],json!([0.0,1.0,0.0]));
+        let exported = session.export().unwrap();
+        let reopened = super::super::EditorSession::open(&exported).unwrap();
+        assert_eq!(reopened.document(),session.document());
+        assert_eq!(session.apply(1,&[super::super::EditOperation::SetVisibleBox {
+            bounds:[0.0,4.0,0.0]
+        }]).unwrap_err(),"VISIBLE_BOX_INVALID");
+        assert_eq!(session.document(),&saved);
+        session.undo(1).unwrap();
+        assert_eq!(session.document(),&before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(),&saved);
+    }
+
+    #[test]
+    fn saved_visibility_setting_does_not_lock_empty_atlas_resolution() {
+        let mut session = super::super::EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Empty", "empty").unwrap()).unwrap();
+        session.apply(0, &[super::super::EditOperation::SetVisibleBox {
+            bounds:[4.0,6.0,0.0],
+        }]).unwrap();
+        session.apply(1, &[super::super::EditOperation::SetEmptyAtlasResolution {
+            width:64,height:64,
+        }]).unwrap();
+        assert_eq!(session.document().extensions["visible_box"],
+            json!([4.0,6.0,0.0]));
+        assert_eq!(session.document().resolution.width,64);
+        assert_eq!(session.document().resolution.height,64);
+        assert_eq!(super::super::EditorSession::open(
+            &session.export().unwrap()).unwrap().document(),session.document());
     }
 
     #[test]

@@ -814,7 +814,19 @@ mod tests {
         assert_eq!(results[0]["handoff"]["status"],"source_consistent");
         assert_eq!(results[0]["handoff"]["faces"]["selected_texture"],6);
         assert_eq!(results[0]["handoff"]["animation"]["status"],"not_required");
+        assert_eq!(results[0]["handoff"]["geometry"]["visible_bounds_source"],"computed_static");
+        assert_eq!(results[0]["handoff"]["geometry"]["visible_bounds"]["width"],json!(2.0));
         assert_eq!(results[0]["handoff"]["visual_verdict"],"UNVERIFIED");
+        let mut user_visible_box = doc.clone();
+        user_visible_box.extensions.insert("visible_box".into(),json!([12.0,4.0,0.0]));
+        let visible = inspect_batch(&user_visible_box, vec![InspectBatchQuery::AssetHandoff {
+            texture_uuid:TEX.into(),offset:None,limit:None,
+        }]).unwrap();
+        assert_eq!(visible[0]["handoff"]["geometry"]["visible_bounds_source"],
+            "saved_visible_box_union");
+        assert_eq!(visible[0]["handoff"]["geometry"]["visible_bounds"]["width"],json!(12.0));
+        assert_eq!(visible[0]["handoff"]["geometry"]["visible_bounds"]["height"],json!(4.0));
+        assert_eq!(doc.extensions.get("visible_box"),None);
         assert_eq!(results[1]["kind"],"audit");
         assert!(!serde_json::to_string(&results).unwrap().contains("data:image/png"));
         assert_eq!(session.document(),&doc);

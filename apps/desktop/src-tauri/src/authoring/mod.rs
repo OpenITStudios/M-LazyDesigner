@@ -257,6 +257,8 @@ pub enum EditOperation {
     EnableImportedPaintTexture { texture_index: usize },
     ImportPaintTexture { uuid: String, name: String, source: String },
     SetEmptyAtlasResolution { width: u32, height: u32 },
+    // Blockbench Project.visible_box [width, height, offsetY] in model blocks.
+    SetVisibleBox { bounds: [f64; 3] },
     AssignCubeTexture { cube_uuid: String, texture_uuid: String },
     AssignCubeFaceTexture { cube_uuid: String, face: String, texture_uuid: String },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
@@ -1675,7 +1677,7 @@ pub fn can_set_empty_atlas_resolution(doc: &AuthoringDocument) -> bool {
     doc.texture_assets.is_empty() && doc.animation_assets.is_empty() &&
     doc.meta.extra.is_empty() && doc.resolution.extra.is_empty() &&
     doc.extensions.keys().all(|key|
-        matches!(key.as_str(), "name" | "model_identifier")) &&
+        matches!(key.as_str(), "name" | "model_identifier" | "visible_box")) &&
     !has_per_texture_uv_rules(doc)
 }
 
@@ -2743,6 +2745,16 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             paint::adopt(texture, width, height)?;
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
+        }
+        EditOperation::SetVisibleBox { bounds } => {
+            if !geometry::valid_visible_box(*bounds) {
+                return Err(fail("VISIBLE_BOX_INVALID"));
+            }
+            // Keep the authored animation envelope in the canonical
+            // .bbmodel Project property. The Geometry exporter combines it
+            // with computed static bounds; no Cube, PNG or Animation edits.
+            doc.extensions.insert("visible_box".into(), json!(bounds));
+            Ok("project-visible-box".into())
         }
         EditOperation::SetEmptyAtlasResolution { width, height } => {
             if !can_set_empty_atlas_resolution(doc) {
