@@ -200,6 +200,8 @@ test('host forwards correction scope through guest RPC and bound Rust plan', () 
         approvals.push(request);
         return request.operation === 'apply' &&
           request.correctionScope?.textureUuid === 'approved-tier-2' &&
+          JSON.stringify(request.correctionScope.allowedRegions) ===
+            JSON.stringify([{from:[1,1],to:[2,2]}]) &&
           request.correctionScope.regionCount === 1;
       },
       runner: async argv => {

@@ -644,7 +644,7 @@ export interface MutationRequest {
   textureUuid?: string;
   operationCount?: number;
   operationKinds?: readonly string[];
-  correctionScope?: Readonly<{ textureUuid: string; regionCount: number; preserveAlpha: boolean }>;
+  correctionScope?: Readonly<{ textureUuid: string; allowedRegions: ReadonlyArray<Readonly<{ from: readonly [number, number]; to: readonly [number, number] }>>; regionCount: number; preserveAlpha: boolean }>;
   planSha256?: string;
 }
 export declare function createRustCodeModeClient(options: {

@@ -415,6 +415,9 @@ export function createRustCodeModeClient({
         operationKinds: Object.freeze(operations.map((op) => op?.op ?? null)),
         ...(scope ? { correctionScope: Object.freeze({
           textureUuid:scope.texture_uuid,
+          allowedRegions:Object.freeze(scope.allowed_regions.map(rect => Object.freeze({
+            from:Object.freeze([...rect.from]), to:Object.freeze([...rect.to]),
+          }))),
           regionCount:scope.allowed_regions.length,
           preserveAlpha:scope.preserve_alpha,
         }) } : {}),

@@ -11,7 +11,9 @@ For RGB-only grading, preserveAlpha additionally prohibits alpha changes even
 inside the allowed regions. The guard is enforced before revision/Undo commit
 and before the no-overwrite publish. It is optional for general model creation
 or deliberate structural edits, but should be supplied for corrections of
-already-approved visual regions. The trusted host approves the whole bound
+already-approved visual regions. The host receives the exact immutable allowed rectangles in its approval
+request, so an operator-owned policy can compare them against authorized
+regions rather than trusting model-generated claims. The trusted host approves the whole bound
 plan; source SHA and region restrictions do not establish that a visual
 reference was actually compared or that material shading is professionally
 correct. The Rust receipt retains visual_verdict: UNVERIFIED.

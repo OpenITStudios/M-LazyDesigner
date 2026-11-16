@@ -37,8 +37,12 @@ test('approved correction scope is bound to the serialized Rust plan and approva
       allowed_regions:[{from:[1,1],to:[3,3]}],preserve_alpha:true}
   });
   assert.deepEqual(approvals[0].correctionScope,{
-    textureUuid:'approved-tier-2',regionCount:1,preserveAlpha:true,
+    textureUuid:'approved-tier-2',
+    allowedRegions:[{from:[1,1],to:[3,3]}],
+    regionCount:1,preserveAlpha:true,
   });
+  assert.ok(Object.isFrozen(approvals[0].correctionScope.allowedRegions));
+  assert.ok(Object.isFrozen(approvals[0].correctionScope.allowedRegions[0].from));
   assert.match(approvals[0].planSha256,/^[a-f0-9]{64}$/);
   assert.equal(result.correction_scope.visual_verdict,'UNVERIFIED');
 });
