@@ -1,0 +1,163 @@
+{
+  "schema": "lazydesigner-public-session-dataset-2",
+  "source_session": "01a1ce36-c247-7082-b528-d1ff8b59001a",
+  "source_snapshot_bytes": 370355226,
+  "source_snapshot_sha256": "21eb558bbbc2fb8dcdb3864e35f3777f417acb58fa0c43a72a65412da3e5510a",
+  "base_commit": "a0b3613848edd88a2bee4d6c04f5795b67f12356",
+  "branch": "Local",
+  "coverage": "Entire available public event stream in this one session; overlaps the earlier 2026-11-12 archive.",
+  "first_timestamp": "2026-11-12T05:24:50.680Z",
+  "last_timestamp": "2026-11-16T11:05:04.003Z",
+  "counts": {
+    "public_items": 9040,
+    "counts": {
+      "UserMessage": 152,
+      "AgentMessage": 381,
+      "CommandExecution": 756,
+      "Extension": 12,
+      "McpToolCall": 7724,
+      "FileChange": 7,
+      "ImageView": 8
+    },
+    "provider_supplement_items": 1970,
+    "response_counts": {
+      "function_call_output": 87,
+      "custom_tool_call": 899,
+      "custom_tool_call_output": 909,
+      "function_call": 75
+    },
+    "error_marker_records": {
+      "UNKNOWN_OUTCOME": 49,
+      "RUNTIME_CLIENT_NOT_READY": 26,
+      "CATALOG_STALE": 28,
+      "postcondition mismatch": 15,
+      "CAPABILITY_NOT_FOUND": 13,
+      "ANIMATION_CHECKPOINT_UNSAVED": 2,
+      "PROJECT_CONTEXT_LOST": 3
+    },
+    "redactions": {},
+    "media_count": 3916,
+    "attachment_references": 167,
+    "missing_attachment_references": 8,
+    "parse_errors": 0,
+    "first_timestamp": "2026-11-12T05:24:50.680Z",
+    "last_timestamp": "2026-11-16T11:05:04.003Z"
+  },
+  "asset_snapshots": [
+    {
+      "path": "current-asset/ctf_pillager.bbmodel",
+      "bytes": 216586,
+      "sha256": "49a408e30f90b6b7d414a2f05c5683e97a02d1e1e6bd20dcab44ea2f53cd7391"
+    },
+    {
+      "path": "current-asset/tier_1_recruit.png",
+      "bytes": 13649,
+      "sha256": "ca4ce64beae58330e13de2dd42393626c5f70891f54bf223a8470efd45a16e54"
+    },
+    {
+      "path": "current-asset/tier_2_militia.png",
+      "bytes": 18106,
+      "sha256": "f64f5e03e54388dcc3d4a595e49e2122bdd8b32b0944521b27bf898cc0184e27"
+    },
+    {
+      "path": "current-asset/tier_3_ranged_marksman.png",
+      "bytes": 17617,
+      "sha256": "8f130250710cc6ef3260364f7bbe88c5f0134e33fe655e2ec3bc7b6a30b4543a"
+    },
+    {
+      "path": "current-asset/README.md",
+      "bytes": 5850,
+      "sha256": "db7b050ce09cb8462eec36163bc027da6ffb9055feb662fe0094c0e4f0840b07"
+    },
+    {
+      "path": "current-asset/tier-3-helmet-detail.png",
+      "bytes": 85702,
+      "sha256": "7145357f5105d2c50d726286d802fcac17acd2a09047a27acbf1985c10a9813c"
+    },
+    {
+      "path": "current-asset/tier-3-front.png",
+      "bytes": 25028,
+      "sha256": "18854410fb9b9378817a0144387deb1a6499a058998fe8d8f46c2af66711e16b"
+    },
+    {
+      "path": "current-asset/tier-3-back.png",
+      "bytes": 24606,
+      "sha256": "3b21fddba70fc4e6bd5a6358f8e045f410d013fa4247c3af42543ef5dc7e76c6"
+    },
+    {
+      "path": "current-asset/tier-3-three-quarter.png",
+      "bytes": 66458,
+      "sha256": "1a3ff59dca2425b186f1ca372130375fd01593e3a9dd8e506fa1d39e2bdc7b89"
+    }
+  ],
+  "exclusions": [
+    "Private reasoning",
+    "System/developer messages",
+    "Compaction summaries",
+    "Session/account metadata",
+    "Other chats"
+  ],
+  "limitations": [
+    "Not an account-wide export",
+    "Provider supplement overlaps public events; do not count twice",
+    "Source-truncated results stay truncated",
+    "Latest asset snapshots are not reconstructed intermediate states",
+    "Visual quality is user-rejected; native save and pixel equality are not acceptance"
+  ],
+  "files": [
+    {
+      "path": "transcript.jsonl.gz",
+      "bytes": 24871190,
+      "sha256": "a09f4d2fbc8829ab794a8de76c9cb90605b98c2e49665cfec00b5a5b270b6f48"
+    },
+    {
+      "path": "provider-tools.jsonl.gz",
+      "bytes": 1214247,
+      "sha256": "996179e042207cad288f9a6509c47c9e1a26d7ca49a4541722cc5c1d450cc711"
+    },
+    {
+      "path": "messages.md",
+      "bytes": 234263,
+      "sha256": "feb25b8b74f971b9d8109037c0830d8c9f5d02048c81995530b26c47a457126a"
+    },
+    {
+      "path": "metrics.json",
+      "bytes": 882,
+      "sha256": "0ae3ab4a1277064ad4474cf545ddd88eb541cf2fcfa7078dc324bec1658e7de1"
+    },
+    {
+      "path": "evidence.zip",
+      "bytes": 65382333,
+      "sha256": "362b0fa55349a70060799b3df49c4a23690240876696459b536ce972c2de6491"
+    },
+    {
+      "path": "export-public-session.mjs",
+      "bytes": 9626,
+      "sha256": "5527a46bc0208adc41bd51936b51e2254a1daec58a5585ee445b81112054aab2"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3583,
+      "sha256": "ac6b46a7f641a7b496c0c86bcd4483951f7a664b6ad9cfeb8a15d1268ea2287e"
+    },
+    {
+      "path": "analysis.md",
+      "bytes": 9603,
+      "sha256": "cf18bba7243948c53d8abcbc139fe16b8d8eacd4645896e3a8b4961712713390"
+    }
+  ],
+  "archive_paths": "Forward-slash ZIP entry names verified; current-asset/ctf_pillager.bbmodel and media-index.json present.",
+  "privacy_validation": {
+    "allowed_public_item_types_only": true,
+    "private_reasoning_items": 0,
+    "high_confidence_credential_pattern_findings": 0,
+    "missing_attachment_references": 8
+  },
+  "publication": {
+    "branch": "Local",
+    "base_commit": "a0b3613848edd88a2bee4d6c04f5795b67f12356",
+    "authorization": "User explicitly renewed GitHub publication request after prior automatic review rejection",
+    "receipt": "Final assistant response supplies actual remote commit verification"
+  },
+  "rendered_messages_normalization": "Trailing whitespace and final blank lines normalized in messages.md only; transcript JSONL retains original public text."
+}

@@ -1,0 +1,35 @@
+{
+  "public_items": 9040,
+  "counts": {
+    "UserMessage": 152,
+    "AgentMessage": 381,
+    "CommandExecution": 756,
+    "Extension": 12,
+    "McpToolCall": 7724,
+    "FileChange": 7,
+    "ImageView": 8
+  },
+  "provider_supplement_items": 1970,
+  "response_counts": {
+    "function_call_output": 87,
+    "custom_tool_call": 899,
+    "custom_tool_call_output": 909,
+    "function_call": 75
+  },
+  "error_marker_records": {
+    "UNKNOWN_OUTCOME": 49,
+    "RUNTIME_CLIENT_NOT_READY": 26,
+    "CATALOG_STALE": 28,
+    "postcondition mismatch": 15,
+    "CAPABILITY_NOT_FOUND": 13,
+    "ANIMATION_CHECKPOINT_UNSAVED": 2,
+    "PROJECT_CONTEXT_LOST": 3
+  },
+  "redactions": {},
+  "media_count": 3916,
+  "attachment_references": 167,
+  "missing_attachment_references": 8,
+  "parse_errors": 0,
+  "first_timestamp": "2026-11-12T05:24:50.680Z",
+  "last_timestamp": "2026-11-16T11:05:04.003Z"
+}
