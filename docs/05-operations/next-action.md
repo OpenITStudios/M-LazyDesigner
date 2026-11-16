@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Paged Texture decode reuse (2026-11-16):** Source now shares one short-lived RGBA8 decode per referenced atlas across the eight-Cube texture-coverage page; standalone six-face reports, unknown/invalid PNG refusal, `.bbmodel` and CLI/Code Mode contracts are unchanged. Source regression AUTHORED_NOT_RUN; performance and native/visual acceptance remain UNVERIFIED. Continue Geometry/Texturing/Animation asset fidelity and editable Blockbench export, UI last.
+
 **Animation consumer integration (2026-11-16):** Existing read-only Tauri pose projection now reflects supported authored `once/loop/hold` clips and exposes `loopMode`, with strict invalid/zero-length/opaque refusal. Existing playhead processing now wraps or holds time under the source-backed mode without changing layout or model data. Rust/JS regressions AUTHORED_NOT_RUN, native Blockbench playback still UNVERIFIED. Continue source-level Geometry/Texturing/Animation correctness and native-export readiness; UI/UX design remains last.
 
 **Animation source continuation (2026-11-16):** `set_animation_loop_mode` now covers Blockbench's pinned `once/loop/hold` clip modes for admitted numeric-linear Bone tracks; other supported edit/retiming operations preserve the declared playback mode. Strict importer/edit admission refuses malformed/opaque loop metadata and zero-duration looping, never silently interpreting unknown fields as once. Code Mode inspection reports the supported loop mode and length; Tauri preview does not claim loop/hold parity. Regression source AUTHORED_NOT_RUN and native Blockbench acceptance pending. Continue asset-first Geometry/Texturing/Animation correctness, UI/UX last.

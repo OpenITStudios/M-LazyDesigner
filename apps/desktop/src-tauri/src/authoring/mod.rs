@@ -1385,6 +1385,16 @@ pub fn inspect_paint_alpha(doc: &AuthoringDocument, texture_uuid: &str) -> Resul
 /// evidence for UV pixels, never a native visual or paint-quality verdict.
 /// Unsafe UV rules refuse rather than fabricating observed coverage.
 pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result<Value> {
+    let mut decoded = Vec::new();
+    inspect_cube_uv_alpha_with_cache(doc, cube_uuid, &mut decoded)
+}
+
+/// Reuse decoded read-only PNGs for multiple Cubes in a single bounded page.
+/// The caller discards this scratch cache after the read; edits never see stale pixels.
+fn inspect_cube_uv_alpha_with_cache(
+    doc: &AuthoringDocument, cube_uuid: &str,
+    decoded: &mut Vec<(usize, Vec<u8>)>,
+) -> Result<Value> {
     let surface = inspect_cube_surfaces(doc, cube_uuid)?;
     let uv = &surface["uv"];
     let box_uv = uv["box_uv"].as_bool() == Some(true);
@@ -1419,9 +1429,8 @@ pub fn inspect_cube_uv_alpha(doc: &AuthoringDocument, cube_uuid: &str) -> Result
         .ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
     let width = doc.resolution.width;
     let height = doc.resolution.height;
-    // Scratch memory only, scoped to this one read, not a second scene/texture
-    // cache. At most six explicitly referenced textures are decoded.
-    let mut decoded: Vec<(usize, Vec<u8>)> = Vec::new();
+    // A one-Cube read uses a fresh scratch cache. The paged consumer reuses
+    // it for up to eight Cubes without storing model/bitmap state.
     let mut projected = Vec::with_capacity(FACE_NAMES.len());
     for face in faces {
         let side = face["side"].as_str()

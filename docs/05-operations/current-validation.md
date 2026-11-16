@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Paged Texture coverage shared PNG decode (SOURCE_ONLY)
+
+The Rust model Texture-coverage reader now reuses decoded RGBA8 pixels of a referenced atlas across up to eight Cube inspections within one immutable page. Direct six-face inspection keeps fresh read-local decoding; no cached data crosses model edits or changes exported `.bbmodel`/CLI/Code Mode payload shapes. Authored regression compares page and per-Cube face outcomes for shared textures, verifies cache cardinality and corrupt PNG refusal. No Cargo/Node/native tests executed, no measured end-to-end speedup or visual acceptance claimed.
+
 ## 2026-11-16 — Functional Animation preview mode integration (SOURCE_ONLY)
 
 Aligned the existing Tauri AnimationView's read-only selected-clip projection with the canonical Rust once/loop/hold authoring subset. New `loopMode` is saved metadata, not another model owner. Unknown/opaque import and zero-length repeating clips remain preview-unsupported; admitted numeric-linear Bone channels can be displayed for all source-backed loop modes. The existing elapsed-time helper and RustEditorPage handler now implement preview playhead once-reset, loop-wrap and hold-final-pose without altering layout or authoring data. Authored Rust/Node regressions NOT_EXECUTED; native Windows/Blockbench playback and animation quality still UNVERIFIED.

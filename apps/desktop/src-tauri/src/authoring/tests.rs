@@ -1457,12 +1457,27 @@ fn model_texture_coverage_pages_alpha_references_and_undo_without_source_mutatio
         source_uuid:CUBE.into(), new_uuid:OTHER.into(),
     }]).unwrap();
     let after_copy = session.document().clone();
+    // Both Cubes use one atlas. Its decoded pixels must be reused within a
+    // page without altering the public six-face report for either Cube.
+    let mut decoded = Vec::new();
+    for uuid in [CUBE, OTHER] {
+        let cached = inspect_cube_uv_alpha_with_cache(&after_copy, uuid, &mut decoded).unwrap();
+        assert_eq!(cached, inspect_cube_uv_alpha(&after_copy, uuid).unwrap());
+        assert_eq!(decoded.len(), 1);
+    }
     let page = inspect_model_texture_coverage(&after_copy, 0, 1).unwrap();
     assert_eq!(page["total_cubes"], json!(2));
     assert_eq!(page["next_offset"], json!(1));
     let second_page = inspect_model_texture_coverage(&after_copy, 1, 1).unwrap();
     assert_eq!(second_page["cubes"][0]["cube_uuid"], json!(OTHER));
     assert_eq!(second_page["next_offset"], Value::Null);
+    let shared_page = inspect_model_texture_coverage(&after_copy, 0, 2).unwrap();
+    assert_eq!(shared_page["reviewed_cubes"], json!(2));
+    assert_eq!(shared_page["cubes"][0]["faces"], page["cubes"][0]["faces"]);
+    assert_eq!(shared_page["cubes"][1]["faces"], second_page["cubes"][0]["faces"]);
+    let mut corrupt = after_copy.clone();
+    corrupt.texture_assets[0]["source"] = json!("data:image/png;base64,AAAA");
+    assert!(inspect_model_texture_coverage(&corrupt, 0, 2).is_err());
     assert_eq!(session.document(), &after_copy);
     assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
         after_copy);
