@@ -122,6 +122,13 @@ async function pinnedVisualPair(source, options, modelSha) {
     ]);
     return Object.freeze({reference,capture,viewId:selected.viewId});
   }));
+  // The same PNG file cannot be relabeled as different camera directions.
+  // Different files with equal pixels are still NOT camera provenance;
+  // independent human/renderer evidence is required for that distinction.
+  if (new Set(views.map(v=>v.reference.path)).size!==views.length ||
+      new Set(views.map(v=>v.capture.path)).size!==views.length) {
+    throw new Error('CODE_MODE_VISUAL_VIEW_SET_INVALID');
+  }
   const [primary,...additionalViews]=views;
   return Object.freeze({
     ...primary,modelSha,
@@ -890,9 +897,15 @@ export async function createCodeModeHost({
             preserveAlpha:feedback.correctionScope.preserveAlpha,
           })) throw new Error('CODE_MODE_MATERIAL_SAMPLE_REGION_REQUIRED');
         } else {
-          if (visualViews.length > 1 &&
-              (feedback.viewReviews.length !== visualViews.length ||
-               feedback.viewReviews.some(view=>view.decision==='UNVERIFIED'))) {
+          // A single front view is sufficient for a small sample, never
+          // enough authority for broad material propagation. All six
+          // operator-selected rendered directions must have an explicit,
+          // independent non-UNVERIFIED review first.
+          if (!visualPair.requireSixDirections ||
+              CARDINAL_VIEWS.some(name=>
+                !visualViews.some(view=>view.viewId===name)) ||
+              feedback.viewReviews.length!==visualViews.length ||
+              feedback.viewReviews.some(view=>view.decision==='UNVERIFIED')) {
             throw new Error('CODE_MODE_VISUAL_VIEW_COVERAGE_UNVERIFIED');
           }
           if (cohort.sampleVerdict !== 'ACCEPTED' ||

@@ -1,5 +1,17 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Six rendered directions required for broad material propagation (2026-11-16; SOURCE_ONLY):**
+The operator-selected six-camera view option is now mandatory for
+`materialCohort.phase:'propagation'`, not for the initial small sample.
+The host refuses a front-only material propagation, any missing
+front/back/left/right/top/bottom view, any `UNVERIFIED` view review,
+and reused reference/capture file paths masquerading as new directions.
+Reviewer acceptance is still a declaration about actually presented
+images; six distinct files or identical pixel statistics do NOT prove
+camera provenance or professional shading quality. The local small
+sample and legacy unreviewed exact-RGBA edits keep their prior path.
+Native tests remain deferred; all new tests are source-authored only.
+
 **Operator-selected multi-view model review (2026-11-16; SOURCE_ONLY):**
 One existing `preselectedVisualPair` may now include up to six
 `supportingViews` (each with its own explicit `viewId`, reference PNG

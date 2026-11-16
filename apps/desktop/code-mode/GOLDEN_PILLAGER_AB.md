@@ -53,7 +53,9 @@ Geometry/UV and Animation remain their respective authoring owners; do not repai
 
 ## Multi-view acceptance gate for source-only Rust workflow
 
-The operator may select six actual rendered view pairs with
+Broad reviewed texture propagation **requires** six selected camera
+pairs; local representative sample correction may use one relevant view.
+The operator must select six actual rendered view pairs with
 `preselectedVisualPair.supportingViews` and
 `requireSixDirections:true`. These images are not extracted from
 the six saved Cube alpha faces. They must have one source model

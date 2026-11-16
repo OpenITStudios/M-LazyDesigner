@@ -1170,14 +1170,27 @@ test('representative material is constrained; propagation requires fresh accepte
 
     // A NEW selected .bbmodel source and new model capture are required.
     const candidate=join(folder,'representative.bbmodel');
+    const reviewedDirections=[];
+    for(const viewId of ['back','left','right','top','bottom']){
+      const referencePngPath=join(folder,'approved-propagation-'+viewId+'.png');
+      const capturePngPath=join(folder,'current-propagation-'+viewId+'.png');
+      await writeFile(referencePngPath,png);
+      await writeFile(capturePngPath,afterBytes);
+      reviewedDirections.push({viewId,referencePngPath,capturePngPath});
+    }
     const propagationHost=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input:candidate,
       preselectedVisualPair:{
         referencePngPath:reference,capturePngPath:after,
         captureModelSha256:modifiedSha,viewId:'front',
+        supportingViews:reviewedDirections,requireSixDirections:true,
       },
       reviewVisualPair:()=>({
         decision:'REJECTED',
+        viewReviews:['front','back','left','right','top','bottom'].map(viewId=>({
+          viewId,decision:viewId==='front'?'REJECTED':'ACCEPTED',
+          observation:'The selected material view was reviewed with the current image.',
+        })),
         issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
           partId:'tier2-helmet',
           observation:'Sample is acceptable; other metal faces still need styling.'}],
@@ -1570,6 +1583,11 @@ test('missing/duplicate/unsupported camera directions cannot create a six-view h
       {...chosen.options,supportingViews:chosen.options.supportingViews.map((v,i)=>
         i===0?{...v,untrustedPath:'/tmp/evil.png'}:v)},
       {...chosen.options,requireSixDirections:'yes'},
+      {...chosen.options,supportingViews:[
+        {...chosen.options.supportingViews[0],
+          capturePngPath:chosen.options.capturePngPath},
+        ...chosen.options.supportingViews.slice(1),
+      ]},
     ];
     for(const options of variants){
       let spawns=0,cliCalls=0;

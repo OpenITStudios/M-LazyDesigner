@@ -264,8 +264,11 @@ The above is a **contract example**, not evidence that the actual
 Pillager renders were reviewed. An overall ACCEPTED decision is
 invalid while any selected view is rejected or unknown. Rejected
 material can still receive a bounded representative patch, but
-**propagation** with a selected UNVERIFIED direction is held until
-an independently observed, source-fresh review is available.
+**propagation** requires all six operator-selected cardinal directions,
+with a declared review for each. A missing cardinal direction or
+an independently observed, source-fresh review is available. Identical
+reference/capture paths under multiple view labels are rejected;
+separate file paths still do not authenticate actual camera orientation.
 An ACCEPTED view is only a reviewer declaration about that
 selected image/view, not Minecraft or Blockbench material PASS.
 
