@@ -295,6 +295,10 @@ test('material reference cannot be spoofed by guest generic read or altered duri
         correctionScope:{textureUuid:'tier-1-master',
           allowedRegions:[{from:[0,0],to:[2,2]}],preserveAlpha:true},
       }},
+      {method:'apply',args:{project:'p0',output:'unscoped-paint.bbmodel',
+        operations:[{op:'paint_texture_rectangle',texture_index:1,
+          from:[0,0],to:[2,2],rgba:[1,2,3,255],erase:false}],
+      }},
     ]) {
       const called=[];
       const host=await createCodeModeHost({
@@ -306,7 +310,7 @@ test('material reference cannot be spoofed by guest generic read or altered duri
         },
         spawnImpl:()=>fakeGuest(request,response=>{
           assert.equal(response.ok,false);
-          assert.match(response.code,/CODE_MODE_MATERIAL_REFERENCE_HOST_ONLY|CODE_MODE_MATERIAL_MASTER_PROTECTED/);
+          assert.match(response.code,/CODE_MODE_MATERIAL_REFERENCE_HOST_ONLY|CODE_MODE_MATERIAL_MASTER_PROTECTED|CODE_MODE_MATERIAL_CORRECTION_SCOPE_REQUIRED/);
           return {refused:true};
         }),
       });

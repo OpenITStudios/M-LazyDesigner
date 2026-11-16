@@ -15,6 +15,10 @@ never a material or artistic PASS. Candidate regions with flat color can be
 flagged relative to a visibly varied master, but intentional flat materials
 remain valid. The generic guest inspectBatch cannot invoke `material_pair`
 and a scoped paint cannot target the operator-selected master directly.
+While a trusted master is configured, any Code Mode pixel-authoring operation
+must supply a Rust-enforced `correctionScope`; omitting it now fails before
+operator approval and before native mutation. Generic independent structural
+edits remain governed by ordinary operator approval.
 This only applies to an explicitly selected master texture within the same
 model; standalone photographs/reference renders, cross-mesh UV differences,
 semantic material matching, actual image ingestion and user approval are

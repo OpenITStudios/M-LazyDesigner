@@ -12,8 +12,10 @@ material styling PASS. The Code Mode guest uses the existing `inspect-batch`
 transport but cannot freely choose the *approved* reference UUID; only
 `inspectApprovedMaterial` injects an operator-selected master in the
 trusted Node host, returning the project source SHA. The original master
-is blocked as a scoped correction target; ordinary legacy/source editing
-remains separately authorized. Positive/negative Rust/Node/source-host
+is blocked as a scoped correction target. With an operator-selected
+master, every guest pixel-authoring operation must supply correctionScope
+and the host refuses unscoped Paint before approval/native mutation.
+Non-Paint and legacy/unbound flows retain existing authorization policy. Positive/negative Rust/Node/source-host
 regressions authored, NOT_EXECUTED; actual host, Blockbench visual
 review, source image pairs and time-to-acceptance remain UNVERIFIED.
 

@@ -21,6 +21,13 @@ const MAX_RPC_BYTES = 128 * 1024;
 const MAX_STDOUT_BYTES = 1024 * 1024;
 const MAX_CALLS = 64;
 const MAX_PROJECTS = 16;
+const PIXEL_MUTATIONS = new Set([
+  'paint_texture_pixel', 'paint_texture_stroke', 'paint_texture_brush',
+  'paint_texture_rectangle', 'paint_texture_rectangles',
+  'paint_cube_uv_faces', 'paint_cube_uv_faces_guarded',
+  'paint_cube_face_regions_guarded', 'recolor_cube_faces_palette_guarded',
+  'paint_texture_fill', 'isolate_cube_box_uv',
+]);
 const TIMEOUT_MS = 90000;
 const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -286,11 +293,18 @@ export async function createCodeModeHost({
     },
     apply: async (args) => {
       const p = selected(args);
-      // A scoped correction cannot target the selected immutable visual
-      // baseline. Any separate master revision needs a new operator decision.
-      if (referenceMaster !== null &&
-          args.correctionScope?.textureUuid === referenceMaster) {
-        throw new Error('CODE_MODE_MATERIAL_MASTER_PROTECTED');
+      if (referenceMaster !== null) {
+        // Bound to a human/operator-selected master: all pixel authoring
+        // must use the exact Rust-enforced region guard. Do not let the
+        // model bypass preservation by omitting correctionScope.
+        if (Array.isArray(args.operations) &&
+            args.operations.some(op => PIXEL_MUTATIONS.has(op?.op)) &&
+            args.correctionScope === undefined) {
+          throw new Error('CODE_MODE_MATERIAL_CORRECTION_SCOPE_REQUIRED');
+        }
+        if (args.correctionScope?.textureUuid === referenceMaster) {
+          throw new Error('CODE_MODE_MATERIAL_MASTER_PROTECTED');
+        }
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,
