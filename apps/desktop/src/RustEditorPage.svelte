@@ -4,7 +4,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
-  import { projectedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
+  import { prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
   import { supportedFaceUvRotation } from './rustTextureProjection';
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
@@ -140,9 +140,12 @@
   $: timelineRows = projectedTransformTimelineRows(
     selectedAnimation, snapshot?.bones ?? [],
   );
-  // UI-only derived transform pose, never a Rust model mutation.
+  // Group/validate/sort source keyframes only when the Rust animation
+  // snapshot changes, not whenever requestAnimationFrame advances the time.
+  $: preparedBonePose = prepareBoneTransformPose(selectedAnimation);
+  // Derived view-only pose: Rust owns the animation and exported values.
   $: previewBoneTransforms = workspaceMode === 'animate'
-    ? projectedBoneTransformPose(selectedAnimation, animationTime) : null;
+    ? samplePreparedBoneTransformPose(preparedBonePose, animationTime) : null;
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
   $: faceRotation = supportedFaceUvRotation(selectedCube?.faces[selectedFace]);

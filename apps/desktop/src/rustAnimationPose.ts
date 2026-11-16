@@ -14,6 +14,12 @@ export type BoneTransformPose = {
 };
 const CHANNELS: readonly TransformChannel[] = ['rotation', 'position', 'scale'];
 
+/** Validated, sorted read-only projection of one Rust/Tauri animation snapshot. */
+export type PreparedBoneTransformPose = {
+  readonly length: number;
+  readonly tracks: ReadonlyMap<string, ReadonlyMap<TransformChannel, readonly TransformKeyframeView[]>>;
+};
+
 function boundedFrames(animation: AnimationView): TransformKeyframeView[] | null {
   if (!animation.previewSupported || !Number.isFinite(animation.length) ||
       animation.length < 0 || animation.length > 3600) return null;
@@ -67,26 +73,42 @@ function grouped(
   return bones;
 }
 
+/** Prepare on animation snapshot changes, not on each playback frame. */
+export function prepareBoneTransformPose(
+  animation: AnimationView | null | undefined,
+): PreparedBoneTransformPose | null {
+  if (!animation) return null;
+  const tracks = grouped(animation);
+  return tracks ? { length: animation.length, tracks } : null;
+}
+
 function interpolate(frames: readonly TransformKeyframeView[], time: number): Vec3 {
   if (time <= frames[0].time) return [...frames[0].value] as Vec3;
   if (time >= frames[frames.length - 1].time) {
     return [...frames[frames.length - 1].value] as Vec3;
   }
-  const next = frames.findIndex((frame) => frame.time >= time);
-  const previous = frames[next - 1];
-  const after = frames[next];
+  // Per-channel frames were validated and sorted once at snapshot arrival.
+  // Binary search avoids scanning the entire track at every preview frame.
+  let low = 1;
+  let high = frames.length - 1;
+  while (low < high) {
+    const mid = low + Math.floor((high - low) / 2);
+    if (frames[mid].time >= time) high = mid;
+    else low = mid + 1;
+  }
+  const previous = frames[low - 1];
+  const after = frames[low];
   const alpha = (time - previous.time) / (after.time - previous.time);
   return previous.value.map((axis, index) =>
     axis + (after.value[index] - axis) * alpha) as Vec3;
 }
 
-export function projectedBoneTransformPose(
-  animation: AnimationView | null | undefined, time: number,
+export function samplePreparedBoneTransformPose(
+  prepared: PreparedBoneTransformPose | null | undefined, time: number,
 ): Record<string, BoneTransformPose> | null {
-  if (!animation || !Number.isFinite(time) || time < 0 ||
-      time > animation.length) return null;
-  const tracks = grouped(animation);
-  if (!tracks) return null;
+  if (!prepared || !Number.isFinite(time) || time < 0 ||
+      time > prepared.length) return null;
+  const tracks = prepared.tracks;
   // A null prototype ensures user-provided UUIDs cannot alter object methods.
   const pose = Object.create(null) as Record<string, BoneTransformPose>;
   for (const [boneUuid, channels] of tracks) {
@@ -102,6 +124,13 @@ export function projectedBoneTransformPose(
     pose[boneUuid] = result;
   }
   return pose;
+}
+
+/** Preserve the direct single-call API for existing non-playback consumers. */
+export function projectedBoneTransformPose(
+  animation: AnimationView | null | undefined, time: number,
+): Record<string, BoneTransformPose> | null {
+  return samplePreparedBoneTransformPose(prepareBoneTransformPose(animation), time);
 }
 
 /** Compatibility view for existing rotation-only animation consumers. */

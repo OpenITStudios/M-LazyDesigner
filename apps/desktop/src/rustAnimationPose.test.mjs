@@ -1,7 +1,7 @@
 // Source-authored Node regression only; NOT_EXECUTED under repo test hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectedBoneRotationPose, projectedBoneTransformPose, projectedRotationTimelineRows, projectedTransformTimelineRows } from './rustAnimationPose.ts';
+import { prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedBoneRotationPose, projectedBoneTransformPose, projectedRotationTimelineRows, projectedTransformTimelineRows } from './rustAnimationPose.ts';
 
 const rotation = (boneUuid, time, values) => ({
   uuid: `kf-${boneUuid}-${time}`, boneUuid, time, rotation: values,
@@ -112,6 +112,45 @@ test('Rotation Position and Scale keyframes linearly interpolate independently',
   assert.deepEqual(projectedBoneRotationPose(clip,1)['bone-a'], [0,45,0]);
   assert.equal(Object.getPrototypeOf(pose), null);
   assert.equal(JSON.stringify(clip),before);
+});
+
+// SOURCE-AUTHORED_NOT_RUN: model revision swaps produce a new prepared view,
+// whereas playback reuses validated and time-sorted data for every frame.
+test('prepared pose matches direct scrubbing and refreshes on new snapshot', () => {
+  const clip = {
+    ...animation([]),
+    transformKeyframes: [
+      { uuid:'p2', boneUuid:'bone-a', channel:'position', time:2, value:[4,0,0] },
+      { uuid:'p0', boneUuid:'bone-a', channel:'position', time:0, value:[0,0,0] },
+      { uuid:'r1', boneUuid:'bone-a', channel:'rotation', time:1, value:[0,45,0] },
+    ],
+  };
+  const saved = JSON.stringify(clip);
+  const prepared = prepareBoneTransformPose(clip);
+  assert.ok(prepared);
+  for (const time of [0, 0.25, 0.5, 1, 1.5, 2]) {
+    assert.deepEqual(samplePreparedBoneTransformPose(prepared, time),
+      projectedBoneTransformPose(clip, time));
+  }
+  assert.equal(Object.getPrototypeOf(samplePreparedBoneTransformPose(prepared, 1)), null);
+  for (const time of [-1, 2.01, Number.NaN, Infinity]) {
+    assert.equal(samplePreparedBoneTransformPose(prepared, time), null);
+  }
+  const revision = {
+    ...clip,
+    transformKeyframes: clip.transformKeyframes.map((frame) => frame.uuid === 'p2'
+      ? {...frame, value:[8,0,0]} : frame),
+  };
+  const updated = prepareBoneTransformPose(revision);
+  assert.deepEqual(samplePreparedBoneTransformPose(prepared, 1)['bone-a'].position, [2,0,0]);
+  assert.deepEqual(samplePreparedBoneTransformPose(updated, 1)['bone-a'].position, [4,0,0]);
+  assert.equal(JSON.stringify(clip), saved);
+  assert.equal(prepareBoneTransformPose(null), null);
+  assert.equal(samplePreparedBoneTransformPose(null, 0), null);
+  assert.equal(prepareBoneTransformPose({...clip, previewSupported:false}), null);
+  assert.equal(prepareBoneTransformPose({...clip, transformKeyframes:[
+    ...clip.transformKeyframes, {...clip.transformKeyframes[0],uuid:'p3'}
+  ]}), null);
 });
 
 test('per-Bone channel timeline groups and orders by Rust Bone list and time', () => {

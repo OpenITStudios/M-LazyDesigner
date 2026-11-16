@@ -2,6 +2,8 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Animation preview cost correction (2026-11-16):** Read-only Svelte pose playback now prepares and validates sorted numeric-linear keyframes only on Rust/Tauri selected-animation snapshot change; each frame reuses the prepared projection and binary-searches tracks. This avoids redundant per-frame grouping/sorting and does not alter Rust authoring, `.bbmodel`, or deferred UI/UX. Source parity/invalidation regressions AUTHORED_NOT_RUN, native timing and quality UNVERIFIED. Continue three asset domains and editable Blockbench handoff.
+
 **Paged Texture decode reuse (2026-11-16):** Source now shares one short-lived RGBA8 decode per referenced atlas across the eight-Cube texture-coverage page; standalone six-face reports, unknown/invalid PNG refusal, `.bbmodel` and CLI/Code Mode contracts are unchanged. Source regression AUTHORED_NOT_RUN; performance and native/visual acceptance remain UNVERIFIED. Continue Geometry/Texturing/Animation asset fidelity and editable Blockbench export, UI last.
 
 **Animation consumer integration (2026-11-16):** Existing read-only Tauri pose projection now reflects supported authored `once/loop/hold` clips and exposes `loopMode`, with strict invalid/zero-length/opaque refusal. Existing playhead processing now wraps or holds time under the source-backed mode without changing layout or model data. Rust/JS regressions AUTHORED_NOT_RUN, native Blockbench playback still UNVERIFIED. Continue source-level Geometry/Texturing/Animation correctness and native-export readiness; UI/UX design remains last.

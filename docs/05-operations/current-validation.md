@@ -1,5 +1,9 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Read-only animation preview sampling cost (SOURCE_ONLY)
+
+The existing Rust editor preview now prepares validated/sorted numeric-linear Bone tracks when the selected Rust/Tauri snapshot changes, and reuses them for playback frames. Per-channel interpolation uses binary search rather than a linear scan of keyframes. Direct pose/timeline helpers remain compatible; Rust remains the only authored document authority. Source regression covers prepared-versus-direct samples, boundary times, replacement snapshots and invalid-input refusal. Tests NOT_EXECUTED; measured FPS and native Blockbench parity UNVERIFIED.
+
 ## 2026-11-16 — Paged Texture coverage shared PNG decode (SOURCE_ONLY)
 
 The Rust model Texture-coverage reader now reuses decoded RGBA8 pixels of a referenced atlas across up to eight Cube inspections within one immutable page. Direct six-face inspection keeps fresh read-local decoding; no cached data crosses model edits or changes exported `.bbmodel`/CLI/Code Mode payload shapes. Authored regression compares page and per-Cube face outcomes for shared textures, verifies cache cardinality and corrupt PNG refusal. No Cargo/Node/native tests executed, no measured end-to-end speedup or visual acceptance claimed.
