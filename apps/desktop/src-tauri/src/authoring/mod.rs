@@ -928,7 +928,7 @@ fn has_external_uuid_references(doc: &AuthoringDocument, uuid: &str) -> bool {
 
 // The editable subset intentionally excludes unsupported interpolation and
 // point extensions. Step holds the previous key until the next key time.
-/// Strict bounded numeric linear/step transform subset from Blockbench v5.2.1
+/// Strict bounded numeric linear/step/Catmull-Rom subset from Blockbench v5.2.1
 /// BoneAnimator: rotation offsets in degrees, position offsets in model
 /// units, and multiplicative scales (identity [1,1,1]). This slice
 /// deliberately refuses negative/excessive scales rather than pretending
@@ -956,7 +956,7 @@ fn editable_transform_frame(frame: &Value) -> bool {
     if !fields.keys().all(|key| matches!(key.as_str(),
         "uuid" | "channel" | "time" | "interpolation" | "data_points")) ||
        !matches!(frame.get("interpolation").and_then(Value::as_str),
-           Some("linear" | "step")) ||
+           Some("linear" | "step" | "catmullrom")) ||
        !frame.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
        !frame.get("time").and_then(Value::as_f64)
            .is_some_and(|v| v.is_finite() && v >= 0.0) {
@@ -1258,7 +1258,7 @@ pub fn inspect_rotation_track(
     Ok(json!({
         // Keep the legacy scope label for existing read clients; this
         // explicit field declares the now-admitted outgoing segment modes.
-        "scope":"linear_bone_rotation", "interpolation_modes":["linear","step"],
+        "scope":"linear_bone_rotation", "interpolation_modes":["linear","step","catmullrom"],
         "recognized":true, "visual_verdict":"UNVERIFIED",
         "animation_uuid":animation_uuid, "bone_uuid":bone_uuid,
         "total_frames":total, "offset":offset,
@@ -1267,7 +1267,7 @@ pub fn inspect_rotation_track(
     }))
 }
 
-/// Bounded Code Mode read of an admitted numeric linear/step Bone channel authored
+/// Bounded Code Mode read of an admitted numeric linear/step/Catmull-Rom Bone channel authored
 /// by Rust. Unknown imported clips or expressions are never interpreted or
 /// normalized, and no raw keyframe extensions are returned to the agent.
 pub fn inspect_transform_track(
@@ -1331,7 +1331,7 @@ pub fn inspect_transform_track(
     Ok(json!({
         // The legacy scope identifier is stable across read consumers.
         "scope":"linear_bone_transform", "recognized":true,
-        "interpolation_modes":["linear","step"],
+        "interpolation_modes":["linear","step","catmullrom"],
         "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
         "bone_uuid":bone_uuid, "channel":channel,
         "loop_mode":saved_animation_loop(animation).unwrap_or("once"),
@@ -2111,7 +2111,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(uuid.clone())
         }
         EditOperation::SetAnimationLoopMode { animation_uuid, mode } => {
-            // Only admitted numeric linear/step Bone clips without opaque fields can
+            // Only admitted numeric linear/step/Catmull-Rom Bone clips without opaque fields can
             // change their playback policy. Source-backed Blockbench v5.2.1
             // stores exactly once, loop, hold in the .bbmodel clip.
             if !matches!(mode.as_str(), "once" | "loop" | "hold") {
@@ -2155,7 +2155,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 // Never choose the first target silently.
                 return Err(fail("ANIMATION_ID_AMBIGUOUS"));
             }
-            // All admitted numeric linear/step transform channels are kept
+            // All admitted numeric linear/step/Catmull-Rom transform channels are kept
             // byte-for-byte. No keyframe may be discarded by shortening.
             if !editable_transform_clip(animation, &doc.bones) {
                 return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
@@ -2177,7 +2177,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(animation_uuid.clone())
         }
         EditOperation::ScaleAnimationTimeline { animation_uuid, factor } => {
-            // Numeric linear/step Animation tracks can be retimed in a
+            // Numeric linear/step/Catmull-Rom Animation tracks can be retimed in a
             // single transaction. No keyframe payload, UUID, Bone identity,
             // channel or interpolation is rewritten or guessed.
             if !factor.is_finite() || !(0.1..=10.0).contains(factor) {
@@ -2452,7 +2452,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             // The outgoing segment belongs to the earlier keyframe; a
             // change is therefore targeted at one exact key UUID/channel.
             if !supported_transform_channel(channel) ||
-               !matches!(interpolation.as_str(), "linear" | "step") {
+               !matches!(interpolation.as_str(), "linear" | "step" | "catmullrom") {
                 return Err(fail("ANIMATION_INTERPOLATION_INVALID"));
             }
             let matches: Vec<_> = doc.animation_assets.iter().enumerate()

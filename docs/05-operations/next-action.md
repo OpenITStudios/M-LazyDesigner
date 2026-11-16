@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Animation Catmull-Rom continuation (2026-11-16):** Strict numeric Bone Position/Rotation/Scale tracks now admit saved `linear/step/catmullrom` through the canonical Rust EditOperation, including mode preservation on retime, clip loop and Undo. The read-only Tauri/TypeScript projection evaluates value-indexed Catmull-Rom with adjacent keys and loop-end neighbours on already prepared tracks; numeric Step still overrides its outgoing segment. Code Mode admits the mode and source inspection retains legacy scope names while exposing saved interpolation. Source regressions AUTHORED_NOT_RUN; real Blockbench playback, native loop seams and matched perf remain UNVERIFIED. Remaining material Animation work includes correct Bezier time/value handle authoring and evaluation, animation effects/controller semantics, then actual editable .bbmodel handoff; UI/UX deferred.
+
+
 **Animation numeric Step source continuation (2026-11-16):** `set_bone_transform_keyframe_interpolation` extends the exact supported Bone Position/Rotation/Scale subset to Blockbench-saved `linear/step` modes. Tauri now projects the saved mode and existing prepared pose sampling holds previous Step values until the following exact key time. Code Mode inspection/edits, timeline retiming and Undo remain Rust-owned, no new GUI or engine. Source tests authored NOT_EXECUTED; real Blockbench playback, interpolated pose quality and performance comparison remain UNVERIFIED. Next priority: evaluate support for advanced interpolation with correct saved Bezier/Catmull-Rom data and preview, plus native .bbmodel acceptance. Preserve user-prioritized Geometry/Texturing/Animation over UI/UX.
 
 

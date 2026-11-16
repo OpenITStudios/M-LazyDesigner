@@ -432,7 +432,7 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                     };
                     let Some(interpolation) = frame.get("interpolation")
                         .and_then(Value::as_str)
-                        .filter(|mode| matches!(*mode, "linear" | "step")) else {
+                        .filter(|mode| matches!(*mode, "linear" | "step" | "catmullrom")) else {
                         preview_supported = false; continue;
                     };
                     if !frame.as_object().is_some_and(|map| map.keys().all(|key|
@@ -1614,6 +1614,12 @@ mod tests {
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
         doc.animation_assets[0]["animators"][bone]["keyframes"][0]
             ["interpolation"] = json!("catmullrom");
+        let curved = animation_views(&doc);
+        assert!(curved[0].preview_supported);
+        assert_eq!(curved[0].transform_keyframes[0].interpolation,"catmullrom");
+        // Imported Bezier handles are still opaque and never previewed.
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["interpolation"] = json!("bezier");
         let refused = animation_views(&doc);
         assert!(!refused[0].preview_supported);
         assert!(refused[0].transform_keyframes.is_empty());

@@ -1,5 +1,6 @@
-// Read-only numeric linear/step Bone Animation pose for the Rust/Tauri subset.
-// This does not evaluate Molang, effects, Bezier, Catmull-Rom or controllers.
+// Read-only numeric linear/step/Catmull-Rom Bone pose, not Molang/effects/
+// Bezier/controller evaluation. Blockbench's SplineCurve uses uniform
+// Catmull-Rom interpolation on the ordered numeric values.
 // Position is an offset from the Bone bind origin; Scale multiplies bind pose.
 // Pinned Blockbench v5.2.1 BoneAnimator.displayPosition/displayScale.
 import type {
@@ -17,6 +18,7 @@ const CHANNELS: readonly TransformChannel[] = ['rotation', 'position', 'scale'];
 /** Validated, sorted read-only projection of one Rust/Tauri animation snapshot. */
 export type PreparedBoneTransformPose = {
   readonly length: number;
+  readonly loopMode: 'once' | 'loop' | 'hold';
   readonly tracks: ReadonlyMap<string, ReadonlyMap<TransformChannel, readonly TransformKeyframeView[]>>;
 };
 
@@ -50,7 +52,8 @@ function grouped(
         !Number.isFinite(frame.time) || frame.time < 0 ||
         frame.time > animation.length ||
         (frame.interpolation !== undefined &&
-          frame.interpolation !== 'linear' && frame.interpolation !== 'step') ||
+          frame.interpolation !== 'linear' && frame.interpolation !== 'step' &&
+          frame.interpolation !== 'catmullrom') ||
         !Array.isArray(frame.value) || frame.value.length !== 3 ||
         !frame.value.every((axis) =>
           typeof axis === 'number' && Number.isFinite(axis) &&
@@ -80,11 +83,33 @@ export function prepareBoneTransformPose(
   animation: AnimationView | null | undefined,
 ): PreparedBoneTransformPose | null {
   if (!animation) return null;
+  // Legacy rotation-only test fixtures have no loop metadata. Actual Rust
+  // snapshots always include a supported explicit once/loop/hold value.
+  const loopMode = animation.loopMode ?? 'once';
+  if (loopMode !== 'once' && loopMode !== 'loop' && loopMode !== 'hold') return null;
   const tracks = grouped(animation);
-  return tracks ? { length: animation.length, tracks } : null;
+  return tracks ? { length: animation.length, loopMode, tracks } : null;
 }
 
-function interpolate(frames: readonly TransformKeyframeView[], time: number): Vec3 {
+/** Three.js SplineCurve's uniform Catmull-Rom y interpolation on key values.
+ * The original Blockbench evaluator uses the neighbouring keyframes by
+ * *index*, not time-scaled tangents. It ignores the SplineCurve x coordinate
+ * after setting the index-normalized parameter. Preserve that behavior.
+ */
+function catmullRom(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, alpha: number): Vec3 {
+  const t2 = alpha * alpha;
+  const t3 = t2 * alpha;
+  return p1.map((value, i) => 0.5 * (
+    2 * value + (-p0[i] + p2[i]) * alpha +
+    (2 * p0[i] - 5 * value + 4 * p2[i] - p3[i]) * t2 +
+    (-p0[i] + 3 * value - 3 * p2[i] + p3[i]) * t3
+  )) as Vec3;
+}
+
+function interpolate(
+  frames: readonly TransformKeyframeView[], time: number,
+  loopMode: PreparedBoneTransformPose['loopMode'],
+): Vec3 {
   if (time <= frames[0].time) return [...frames[0].value] as Vec3;
   if (time >= frames[frames.length - 1].time) {
     return [...frames[frames.length - 1].value] as Vec3;
@@ -103,10 +128,24 @@ function interpolate(frames: readonly TransformKeyframeView[], time: number): Ve
   // Blockbench's Step belongs to the earlier keyframe. At the next key's
   // exact time its own value takes effect, rather than holding the old pose.
   if (time === after.time) return [...after.value] as Vec3;
-  // Compatibility for older rotation-only projections without a saved mode:
-  // canonical Rust/Tauri frames always include linear or step explicitly.
+  // The outgoing Step of the earlier keyframe takes precedence.
   if (previous.interpolation === 'step') return [...previous.value] as Vec3;
   const alpha = (time - previous.time) / (after.time - previous.time);
+  if (previous.interpolation === 'catmullrom' ||
+      after.interpolation === 'catmullrom') {
+    // Match pinned Blockbench BoneAnimator.interpolate: for a loop with
+    // >= 3 keys, the absent first/last neighbour is the second-to-last/
+    // second key. Sampling of the wrap seam itself remains separately gated.
+    const prior = frames[low - 2] ??
+      (loopMode === 'loop' && frames.length >= 3
+        ? frames[frames.length - 2] : previous);
+    const following = frames[low + 1] ??
+      (loopMode === 'loop' && frames.length >= 3
+        ? frames[1] : after);
+    return catmullRom(prior.value, previous.value,
+      after.value, following.value, alpha);
+  }
+  // Legacy fixtures missing the field preserve their linear behavior.
   return previous.value.map((axis, index) =>
     axis + (after.value[index] - axis) * alpha) as Vec3;
 }
@@ -125,10 +164,14 @@ export function samplePreparedBoneTransformPose(
     };
     for (const channel of CHANNELS) {
       const frames = channels.get(channel);
-      if (frames?.length) result[channel] = interpolate(frames, time);
+      if (frames?.length) result[channel] = interpolate(frames, time, prepared.loopMode);
     }
+    // A valid key set can have a spline overshoot; never render a
+    // nonfinite/out-of-domain derived pose as if it were authored.
     if (!Object.values(result).every((values) =>
-        values.every((value) => Number.isFinite(value)))) return null;
+        values.every((value) => Number.isFinite(value) &&
+          Math.abs(value) <= 100_000)) ||
+        result.scale.some((value) => value < 0 || value > 100)) return null;
     pose[boneUuid] = result;
   }
   return pose;

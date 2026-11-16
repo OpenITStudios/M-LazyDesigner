@@ -204,11 +204,86 @@ test('numeric Step holds prior Bone values and snaps on the next keyframe time',
   ])[0].frames[0].interpolation,'step');
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: pinned Blockbench SplineCurve uses indexed,
+// uniform Catmull-Rom y values and the neighbouring numeric keyframes.
+test('Catmull-Rom uses adjacent keys on three Bone transform channels', () => {
+  const clip = {
+    ...animation([]), length: 3, loopMode: 'once',
+    transformKeyframes: [
+      {uuid:'p0',boneUuid:'root',channel:'position',time:0,
+        value:[0,0,0],interpolation:'linear'},
+      {uuid:'p1',boneUuid:'root',channel:'position',time:1,
+        value:[0,0,0],interpolation:'catmullrom'},
+      {uuid:'p2',boneUuid:'root',channel:'position',time:2,
+        value:[10,0,0],interpolation:'linear'},
+      {uuid:'p3',boneUuid:'root',channel:'position',time:3,
+        value:[10,0,0],interpolation:'linear'},
+      {uuid:'r0',boneUuid:'root',channel:'rotation',time:0,
+        value:[0,0,0],interpolation:'step'},
+      {uuid:'r1',boneUuid:'root',channel:'rotation',time:1,
+        value:[0,90,0],interpolation:'catmullrom'},
+      {uuid:'r2',boneUuid:'root',channel:'rotation',time:2,
+        value:[0,0,0],interpolation:'linear'},
+      {uuid:'s0',boneUuid:'root',channel:'scale',time:0,
+        value:[1,1,1],interpolation:'catmullrom'},
+      {uuid:'s2',boneUuid:'root',channel:'scale',time:2,
+        value:[2,2,2],interpolation:'linear'},
+    ],
+  };
+  const before=JSON.stringify(clip);
+  const prepared=prepareBoneTransformPose(clip);
+  assert.ok(prepared);
+  const at0=samplePreparedBoneTransformPose(prepared,0.5);
+  // Linear preceding + Catmull after still selects the spline segment.
+  assert.deepEqual(at0.root.position,[-0.625,0,0]);
+  assert.deepEqual(at0.root.rotation,[0,0,0]); // Step takes priority
+  assert.deepEqual(at0.root.scale,[1.203125,1.203125,1.203125]);
+  const at1=samplePreparedBoneTransformPose(prepared,1);
+  assert.deepEqual(at1.root.position,[0,0,0]);
+  assert.deepEqual(at1.root.rotation,[0,90,0]);
+  const quarter=samplePreparedBoneTransformPose(prepared,1.25);
+  assert.deepEqual(quarter.root.position,[2.03125,0,0]);
+  const midpoint=samplePreparedBoneTransformPose(prepared,1.5);
+  assert.deepEqual(midpoint.root.position,[5,0,0]);
+  const threeQuarter=samplePreparedBoneTransformPose(prepared,1.75);
+  assert.deepEqual(threeQuarter.root.position,[7.96875,0,0]);
+  assert.deepEqual(samplePreparedBoneTransformPose(prepared,3).root.position,[10,0,0]);
+  assert.deepEqual(projectedBoneTransformPose(clip,1.25),quarter);
+  assert.equal(JSON.stringify(clip),before);
+  assert.equal(Object.getPrototypeOf(quarter),null);
+  assert.equal(projectedTransformTimelineRows(clip,[{uuid:'root',name:'Root'}])
+    .find(row=>row.channel==='position').frames[1].interpolation,'catmullrom');
+});
+
+test('Catmull-Rom loop neighbours wrap at track edges without editing keyframes', () => {
+  const make = (loopMode) => ({
+    ...animation([]), loopMode,
+    transformKeyframes: [
+      {uuid:'a',boneUuid:'arm',channel:'position',time:0,
+        value:[0,0,0],interpolation:'catmullrom'},
+      {uuid:'b',boneUuid:'arm',channel:'position',time:1,
+        value:[5,0,0],interpolation:'catmullrom'},
+      {uuid:'c',boneUuid:'arm',channel:'position',time:2,
+        value:[10,0,0],interpolation:'linear'},
+    ],
+  });
+  const once=prepareBoneTransformPose(make('once'));
+  const loop=prepareBoneTransformPose(make('loop'));
+  assert.ok(once && loop);
+  assert.deepEqual(samplePreparedBoneTransformPose(once,0.5).arm.position,[2.1875,0,0]);
+  assert.deepEqual(samplePreparedBoneTransformPose(loop,0.5).arm.position,[1.875,0,0]);
+  assert.deepEqual(samplePreparedBoneTransformPose(once,1.5).arm.position,[7.8125,0,0]);
+  assert.deepEqual(samplePreparedBoneTransformPose(loop,1.5).arm.position,[8.125,0,0]);
+  // Loop time wrapping is owned separately by the existing playhead helper.
+  assert.equal(samplePreparedBoneTransformPose(loop,2.5),null);
+});
+
 test('unknown or malformed interpolation cannot produce a false supported pose', () => {
   const base = {uuid:'k0',boneUuid:'bone',channel:'position',
     time:0,value:[0,0,0],interpolation:'step'};
   const mk = frame => ({...animation([]),transformKeyframes:[frame]});
-  for (const interpolation of ['bezier','catmullrom','ease','STEP',null,42]) {
+  for (const interpolation of ['bezier','ease','STEP',null,42]) {
     assert.equal(prepareBoneTransformPose(mk({...base,interpolation})),null);
     assert.equal(projectedBoneTransformPose(mk({...base,interpolation}),0),null);
   }

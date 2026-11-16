@@ -55,7 +55,7 @@ export type RotationKeyframeView = {
 };
 /** Numeric Bone channels; only linear/step source interpolation is admitted. */
 export type TransformChannel = 'rotation' | 'position' | 'scale';
-export type TransformInterpolation = 'linear' | 'step';
+export type TransformInterpolation = 'linear' | 'step' | 'catmullrom';
 export type TransformKeyframeView = {
   uuid: string;
   boneUuid: string;

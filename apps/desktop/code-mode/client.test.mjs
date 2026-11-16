@@ -278,6 +278,43 @@ test('Code Mode routes supported transform-channel reads and refuses unknown cha
 });
 
 
+
+// SOURCE_AUTHORED_NOT_RUN: a Catmull-Rom interpolation change is one
+// explicit, SHA-pinned edit under the same trusted host authorization.
+test('Code Mode submits Catmull-Rom Bone interpolation as one Rust edit', async () => {
+  const operation = {
+    op: 'set_bone_transform_keyframe_interpolation',
+    animation_uuid: 'clip-1', bone_uuid: 'bone-1',
+    keyframe_uuid: 'key-1', channel: 'position',
+    interpolation: 'catmullrom',
+  };
+  let plan;
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: request => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async argv => {
+      plan = JSON.parse(await readFile(argv[argv.indexOf('--plan') + 1], 'utf8'));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:1,changed_uuids:['key-1'],
+      }};
+    },
+  });
+  const receipt = await client.apply({
+    input:'/abs/rig.bbmodel',output:'/abs/rig-spline.bbmodel',
+    expectedSha256:SHA,operations:[operation],
+  });
+  assert.deepEqual(plan,{expected_revision:0,operations:[operation]});
+  assert.deepEqual(approvals[0].operationKinds,[
+    'set_bone_transform_keyframe_interpolation',
+  ]);
+  assert.equal(approvals[0].operationCount,1);
+  assert.deepEqual(receipt.mutation.changed_uuids,['key-1']);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: one approved Rust subtree command replaces
 // per-Bone/per-Cube AI operations without bypassing host authorization.
 test('Code Mode forwards one approved Bone subtree copy without per-child operations', async () => {

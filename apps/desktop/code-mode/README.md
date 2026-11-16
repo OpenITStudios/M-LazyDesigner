@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Numeric Catmull-Rom source (2026-11-16):** The existing `set_bone_transform_keyframe_interpolation` typed Rust operation now accepts `interpolation:'catmullrom'` in addition to `linear/step`, for strictly admitted single-numeric-point Bone Position, Rotation and Scale keys. The mode is saved in the Blockbench keyframe field and preserved through other supported edits and timeline retiming. For AI-authored curves, add the numeric keys and set their interpolation in one approved Rust plan; do not simulate spline sampling in the Code Mode guest. `inspectAnimationTransformTrack` keeps legacy scope identifiers but reports per-key `interpolation` and the full admitted mode set. Rust/Tauri own saved state and read-only viewer interpolation; Bezier handles, Molang, controllers and effects are still opaque. Source regressions AUTHORED_NOT_RUN; no native Blockbench playback or performance comparison.
+
+
 **Numeric Bone Step (2026-11-16; SOURCE_ONLY):** One typed Rust `set_bone_transform_keyframe_interpolation` operation takes `{animation_uuid, bone_uuid, keyframe_uuid, channel:'rotation'|'position'|'scale', interpolation:'linear'|'step'}`. It edits the outgoing segment of that exact keyframe under the current document/SHA and host authorization; the existing `add_bone_transform_keyframe` still creates `linear` by default. To create a Step key, add it and set its mode in one approved Rust edit plan. `inspectAnimationTransformTrack` returns explicit saved `interpolation` on supported numeric keys; legacy `scope` labels remain stable with `interpolation_modes` documenting the admitted `linear/step` subset. Imported Bezier, Catmull-Rom, Molang, effects and unknown metadata remain preserved but are not editable by this operation. Local runtime and native Blockbench playback NOT_EXECUTED.
 
 
