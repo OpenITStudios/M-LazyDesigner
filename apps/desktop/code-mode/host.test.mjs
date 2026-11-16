@@ -236,6 +236,105 @@ test('host forwards correction scope through guest RPC and bound Rust plan', () 
     assert.equal(approvals.length,1);
   }));
 
+// AUTHORING-SOURCE regression: actual material master UUID must originate
+// from the trusted operator, not the model-generated inspection selector.
+test('trusted host binds a selected master to the real Rust material read', () =>
+  fixture(async input => {
+    const selections=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      approvedMaterialReferenceUuid:'tier-1-master',
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'inspect-batch');
+        const args=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+        selections.push(args.requests[0]);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
+          kind:'material_pair',
+          comparison:{
+            scope:'saved_rgba8_material_patch_pair',
+            source_state:'measured',visual_verdict:'UNVERIFIED',
+            material_verdict:'NOT_EVALUATED',
+            reference_texture_uuid:'tier-1-master',
+            candidate_texture_uuid:'tier-2',
+          },
+        }]};
+      },
+      spawnImpl:()=>fakeGuest({method:'inspectApprovedMaterial',args:{
+        project:'p0',candidateTextureUuid:'tier-2',
+        referenceRegion:{from:[0,0],to:[2,2]},
+        candidateRegion:{from:[8,4],to:[10,6]},
+      }},response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.reference_binding.reference_texture_uuid,'tier-1-master');
+        assert.equal(response.result.reference_binding.source_model_sha256,HASH);
+        assert.equal(response.result.results[0].comparison.visual_verdict,'UNVERIFIED');
+        return {selected:response.result.reference_binding.reference_texture_uuid};
+      }),
+    });
+    const result=await host.execute({code:'return await codemode.inspectApprovedMaterial({});'});
+    assert.equal(result.value.selected,'tier-1-master');
+    assert.deepEqual(selections,[{
+      kind:'material_pair',reference_uuid:'tier-1-master',candidate_uuid:'tier-2',
+      reference_region:{from:[0,0],to:[2,2]},
+      candidate_region:{from:[8,4],to:[10,6]},
+    }]);
+  }));
+
+test('material reference cannot be spoofed by guest generic read or altered during scoped paint', () =>
+  fixture(async input => {
+    for(const request of [
+      {method:'inspectBatch',args:{project:'p0',requests:[{
+        kind:'material_pair',reference_uuid:'forged',
+        candidate_uuid:'tier-2',
+        reference_region:{from:[0,0],to:[2,2]},
+        candidate_region:{from:[0,0],to:[2,2]},
+      }]}},
+      {method:'apply',args:{project:'p0',output:'overwritten-master.bbmodel',
+        operations:[{op:'paint_texture_pixel',texture_index:0,x:1,y:1,rgba:[1,2,3,255]}],
+        correctionScope:{textureUuid:'tier-1-master',
+          allowedRegions:[{from:[0,0],to:[2,2]}],preserveAlpha:true},
+      }},
+    ]) {
+      const called=[];
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        approvedMaterialReferenceUuid:'tier-1-master',
+        runner:async argv=>{
+          called.push(argv[0]);
+          return {status:'OK',sha256:HASH,summary:SUMMARY};
+        },
+        spawnImpl:()=>fakeGuest(request,response=>{
+          assert.equal(response.ok,false);
+          assert.match(response.code,/CODE_MODE_MATERIAL_REFERENCE_HOST_ONLY|CODE_MODE_MATERIAL_MASTER_PROTECTED/);
+          return {refused:true};
+        }),
+      });
+      const result=await host.execute({code:'return await codemode.inspectBatch({});'});
+      assert.equal(result.value.refused,true);
+      assert.deepEqual(called,['inspect']);
+    }
+  }));
+
+test('missing operator-selected material master refuses comparative claims', () =>
+  fixture(async input => {
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      runner:async()=>({status:'OK',sha256:HASH,summary:SUMMARY}),
+      spawnImpl:()=>fakeGuest({method:'inspectApprovedMaterial',args:{
+        project:'p0',candidateTextureUuid:'tier-2',
+        referenceRegion:{from:[0,0],to:[2,2]},
+        candidateRegion:{from:[0,0],to:[2,2]},
+      }},response=>{
+        assert.equal(response.ok,false);
+        assert.equal(response.code,'CODE_MODE_MATERIAL_REFERENCE_UNBOUND');
+        return {unbound:true};
+      }),
+    });
+    const result=await host.execute({code:'return await codemode.inspectApprovedMaterial({});'});
+    assert.equal(result.value.unbound,true);
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {

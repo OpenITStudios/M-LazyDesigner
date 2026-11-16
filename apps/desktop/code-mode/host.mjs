@@ -83,7 +83,7 @@ async function checkFreshSibling(path, folder) {
  */
 export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
-  preselectedPngPath, runner, spawnImpl,
+  preselectedPngPath, approvedMaterialReferenceUuid, runner, spawnImpl,
 } = {}) {
   requireAbsolute(rustBinary, 'rustBinary');
   requireAbsolute(denoBinary, 'denoBinary');
@@ -127,6 +127,16 @@ export async function createCodeModeHost({
   const png = preselectedPngPath === undefined ? undefined :
     await regularFile(requireAbsolute(preselectedPngPath, 'preselectedPngPath'),
       'CODE_MODE_PNG_INPUT');
+  // Selected by the operator at host setup, never by model-authored JS.
+  // A name/UUID alone is not a human visual approval receipt.
+  if (approvedMaterialReferenceUuid !== undefined &&
+      (typeof approvedMaterialReferenceUuid !== 'string' ||
+       !approvedMaterialReferenceUuid ||
+       approvedMaterialReferenceUuid.length > 128 ||
+       /\s|[\x00-\x1f]/.test(approvedMaterialReferenceUuid))) {
+    throw new Error('CODE_MODE_MATERIAL_REFERENCE_INVALID');
+  }
+  const referenceMaster = approvedMaterialReferenceUuid ?? null;
 
   // Only one code session may be active per host. Operator approval is
   // invalidated when that session exits or times out.
@@ -211,7 +221,46 @@ export async function createCodeModeHost({
     catalog: async (args) => selected(args).catalog(args.kind, {
       offset: args.offset, limit: args.limit,
     }),
-    inspectBatch: async (args) => selected(args).inspectBatch(args.requests),
+    inspectBatch: async (args) => {
+      // Generic guest reads must never masquerade as the operator-selected
+      // approved master. The trust-bound method below injects that identity.
+      if (Array.isArray(args.requests) &&
+          args.requests.some(query => query?.kind === 'material_pair')) {
+        throw new Error('CODE_MODE_MATERIAL_REFERENCE_HOST_ONLY');
+      }
+      return selected(args).inspectBatch(args.requests);
+    },
+    inspectApprovedMaterial: async (args) => {
+      const model = selected(args);
+      if (referenceMaster === null) {
+        throw new Error('CODE_MODE_MATERIAL_REFERENCE_UNBOUND');
+      }
+      const receipt = await model.inspectBatch([{
+        kind:'material_pair',
+        reference_uuid:referenceMaster,
+        candidate_uuid:args.candidateTextureUuid,
+        reference_region:args.referenceRegion,
+        candidate_region:args.candidateRegion,
+      }]);
+      const measured = receipt.results?.[0]?.comparison;
+      if (receipt.sha256 !== model.expectedSha256 ||
+          measured?.reference_texture_uuid !== referenceMaster ||
+          measured?.candidate_texture_uuid !== args.candidateTextureUuid ||
+          measured?.scope !== 'saved_rgba8_material_patch_pair' ||
+          measured?.source_state !== 'measured' ||
+          measured?.visual_verdict !== 'UNVERIFIED') {
+        throw new Error('CODE_MODE_MATERIAL_REFERENCE_RESULT_INVALID');
+      }
+      return {
+        ...receipt,
+        reference_binding:{
+          kind:'operator_selected_model_texture',
+          reference_texture_uuid:referenceMaster,
+          source_model_sha256:model.expectedSha256,
+          visual_verdict:'UNVERIFIED',
+        },
+      };
+    },
     inspectCubeSurfaces: async (args) => selected(args).inspectCubeSurfaces(args.uuid),
     inspectCubeFaceAlpha: async (args) => selected(args).inspectCubeFaceAlpha(args.uuid),
     inspectTexture: async (args) => selected(args).inspectTexture(args.index),
@@ -237,6 +286,12 @@ export async function createCodeModeHost({
     },
     apply: async (args) => {
       const p = selected(args);
+      // A scoped correction cannot target the selected immutable visual
+      // baseline. Any separate master revision needs a new operator decision.
+      if (referenceMaster !== null &&
+          args.correctionScope?.textureUuid === referenceMaster) {
+        throw new Error('CODE_MODE_MATERIAL_MASTER_PROTECTED');
+      }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,
         correctionScope: args.correctionScope });

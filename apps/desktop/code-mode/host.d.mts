@@ -4,6 +4,7 @@ import type {
   ApplyReceipt, CatalogPage, DocumentSummary, EditOperation,
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
   MutationRequest, OutputReceipt, TextureCorrectionScope,
+  MaterialPatchRegion, MaterialPairComparison,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -29,6 +30,19 @@ export interface CodeModeGuestAPI {
   inspect(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   catalog(args: { project: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt>;
   inspectBatch(args: { project: string; requests: InspectBatchQuery[] }): Promise<InspectBatchReceipt>;
+  /** Host injects the operator-selected master UUID; the guest cannot supply it. */
+  inspectApprovedMaterial(args: {
+    project: string; candidateTextureUuid: string;
+    referenceRegion: MaterialPatchRegion; candidateRegion: MaterialPatchRegion;
+  }): Promise<InspectBatchReceipt & {
+    results: Array<{kind:"material_pair"; comparison:MaterialPairComparison}>;
+    reference_binding:{
+      kind:"operator_selected_model_texture";
+      reference_texture_uuid:string;
+      source_model_sha256:string;
+      visual_verdict:"UNVERIFIED";
+    };
+  }>;
   inspectCubeSurfaces(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   inspectCubeFaceAlpha(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   inspectTexture(args: { project: string; index: number }): Promise<InspectReceipt>;
@@ -69,6 +83,10 @@ export interface CodeModeHostOptions {
   authorizeMutation?: (request: Readonly<MutationRequest>) => boolean | Promise<boolean>;
   /** Optional file chosen by the operator; guest never selects its path. */
   preselectedPngPath?: string;
+  /** Exact existing master texture UUID independently selected by the operator
+   * for comparisons within the same .bbmodel; not a visual approval detector.
+   */
+  approvedMaterialReferenceUuid?: string;
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;

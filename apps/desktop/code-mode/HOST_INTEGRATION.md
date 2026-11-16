@@ -2,6 +2,33 @@
 
 **State (2026-11-15):** HOST_SOURCE_AUTHORED, NOT_EXECUTED. The code path is implemented on Rust, but no Deno process, Rust binary, PC-local agent or native Blockbench has been observed running. Localtest and CI remain on hold.
 
+### Operator-selected material baseline (source-only)
+
+To compare an already accepted model texture with a new tier, the trusted
+host may pass `approvedMaterialReferenceUuid: selectedExistingTextureUuid`
+when creating the host. No model-written script may provide or override
+the master UUID. The guest calls:
+
+~~~js
+const comparison = await codemode.inspectApprovedMaterial({
+  project: codemode.initial.project,
+  candidateTextureUuid: 'current-tier-2-texture-uuid',
+  referenceRegion: {from:[0,0],to:[16,16]},
+  candidateRegion: {from:[0,0],to:[16,16]},
+});
+~~~
+
+The two regions must represent comparable material patches with the same
+physical PNG dimensions. A real owner must choose matching regions; the
+engine cannot infer semantic correspondence from UV positions. The host
+injects its chosen master and source SHA into one strict Rust read. No
+bitmap pixels or arbitrary file paths enter the guest. It returns limited
+color-variation/alpha evidence and `visual_verdict: UNVERIFIED`.
+`inspectBatch({kind:'material_pair'})` is intentionally blocked for guest
+calls, and scoped paint cannot modify the selected master. Missing, stale,
+unsupported or unselected reference state refuses instead of guessing.
+Neither the host option nor the numeric stats confirm external reference
+images were viewed or that a human actually approved the material.
 ## Programmatic execution architecture
 
 ~~~text

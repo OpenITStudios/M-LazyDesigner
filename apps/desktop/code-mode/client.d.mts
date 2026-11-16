@@ -501,6 +501,39 @@ export interface InspectReceipt {
   track?: RotationTrackInspection | TransformTrackInspection;
 }
 /** One host-authored read batch; unknown selectors fail closed in JS/Rust. */
+/** One explicit physical PNG crop, with an exclusive end coordinate. */
+export interface MaterialPatchRegion { from: Vec2; to: Vec2; }
+/** Numeric comparison only. Matched raw pixel sizes are mandatory. */
+export interface MaterialPairComparison {
+  scope: "saved_rgba8_material_patch_pair";
+  reference_authority: "CALLER_DECLARED";
+  source_state: "measured";
+  visual_verdict: "UNVERIFIED";
+  material_verdict: "NOT_EVALUATED";
+  reference_texture_uuid: string;
+  candidate_texture_uuid: string;
+  reference_region: MaterialPatchRegion;
+  candidate_region: MaterialPatchRegion;
+  region_pixels: number;
+  reference_pixels_sha256: string;
+  candidate_pixels_sha256: string;
+  reference: {
+    sampled_pixels: number;
+    visible_pixels: number;
+    transparent_pixels: number;
+    translucent_pixels: number;
+    opaque_pixels: number;
+    unique_visible_rgb: number;
+    approx_luma_min: number | null;
+    approx_luma_max: number | null;
+    horizontal_rgb_transitions: number;
+    vertical_rgb_transitions: number;
+  };
+  candidate: MaterialPairComparison["reference"];
+  different_rgba_pixels: number;
+  different_alpha_pixels: number;
+  attention_candidates: string[];
+}
 export type InspectBatchQuery =
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
@@ -508,6 +541,7 @@ export type InspectBatchQuery =
   | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
   | { kind: "asset_handoff"; texture_uuid: string; offset?: number; limit?: number }
   | { kind: "model_texture_coverage"; offset?: number; limit?: number; attention_only?: boolean }
+  | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
@@ -555,6 +589,7 @@ export type InspectBatchResult =
   | { kind: "cube_uv_sharing"; uv_sharing: CubeUvSharingInspection }
   | { kind: "asset_handoff"; handoff: AssetHandoffInspection }
   | { kind: "model_texture_coverage"; coverage: ModelTextureCoveragePage }
+  | { kind: "material_pair"; comparison: MaterialPairComparison }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }
   | { kind: "texture_alpha"; alpha: TextureAlphaInspection }

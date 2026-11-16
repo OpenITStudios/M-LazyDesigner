@@ -1,5 +1,25 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Host-selected material master and measured patch comparison (2026-11-16; SOURCE_ONLY):**
+For a Pillager-style tier correction, the trusted operator may configure
+`approvedMaterialReferenceUuid` for an already-accepted texture in the
+selected `.bbmodel`. The guest must call `codemode.inspectApprovedMaterial`
+with `project`, `candidateTextureUuid`, `referenceRegion` and
+`candidateRegion`; the host supplies the immutable master UUID and pinned
+model SHA, not an agent-supplied reference identity. Matched PNG rectangles
+use physical pixels, exclusive end coordinates and a 4,096-pixel limit.
+The canonical Rust RGBA8 decoder measures each crop's visible color variety,
+horizontal/vertical color transitions, rough luminance range, and alpha;
+pairwise RGBA/alpha differences and attention candidates are read-only and
+never a material or artistic PASS. Candidate regions with flat color can be
+flagged relative to a visibly varied master, but intentional flat materials
+remain valid. The generic guest inspectBatch cannot invoke `material_pair`
+and a scoped paint cannot target the operator-selected master directly.
+This only applies to an explicitly selected master texture within the same
+model; standalone photographs/reference renders, cross-mesh UV differences,
+semantic material matching, actual image ingestion and user approval are
+still unverified. Rust/Node regression source AUTHORED_NOT_RUN.
+
 **Scoped existing-texture correction (2026-11-16; SOURCE_ONLY):**
 The same approved Code Mode apply supports an optional correctionScope for one
 current atlas. Example: correctionScope: {textureUuid:'tier2-atlas',

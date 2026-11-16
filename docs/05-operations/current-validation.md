@@ -1,5 +1,22 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Model-local approved master material comparison in Rust
+
+At the exact source tree, `material_pair` reads two explicit equal-size
+RGBA8 texture crops from one unchanged Rust `AuthoringDocument`. The
+read-only report includes whole-atlas SHA256 identities, measured visible
+color variety, horizontal/vertical RGB transitions, approximate luminance
+extrema, transparent/opaque counts, different RGBA and alpha pixels and
+bounded review candidates. It never interprets a color-count metric as
+material styling PASS. The Code Mode guest uses the existing `inspect-batch`
+transport but cannot freely choose the *approved* reference UUID; only
+`inspectApprovedMaterial` injects an operator-selected master in the
+trusted Node host, returning the project source SHA. The original master
+is blocked as a scoped correction target; ordinary legacy/source editing
+remains separately authorized. Positive/negative Rust/Node/source-host
+regressions authored, NOT_EXECUTED; actual host, Blockbench visual
+review, source image pairs and time-to-acceptance remain UNVERIFIED.
+
 ## 2026-11-16 — Atomic source-bounded texture correction in Rust Code Mode
 
 Audited Local Pillager feedback exposed regressions where an accepted shield

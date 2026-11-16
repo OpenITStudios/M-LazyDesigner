@@ -1,5 +1,20 @@
 # LazyDesigner Next Action
 
+**Rust source-backed master-to-candidate material review (2026-11-16; SOURCE_ONLY):**
+Introduced a bounded immutable `material_pair` Rust read from one `.bbmodel`
+with a shared RGBA8 decoder and strict same-sized physical PNG crops. A
+trusted Code Mode host can select an existing material master UUID (for
+example the user-accepted Tier 1), inject it into a dedicated guest read,
+and prevent generic guest-controlled reference spoofing. Read evidence
+includes per-crop visible RGB diversity, axial transitions, alpha and pixel
+differences; no visual quality PASS is inferred. An existing scoped correction
+also refuses mutation of the host-selected master. Source tests authored
+for flat-vs-varied, unequal/unsupported regions, SHA/reference routing,
+guest spoofing, and missing master; NOT_EXECUTED. Next material work:
+outside-the-atlas approved image ingestion/provenance and actual matched
+native screenshot/artistic A/B acceptance. Do not add an AI score or auto
+propagate paint from numeric histogram alone.
+
 **Rust existing-texture correction safety (2026-11-16; SOURCE_ONLY):**
 The canonical Rust EditorSession now supports one optional scoped PNG correction
 on the Code Mode apply path. Exact RGBA8 regions and optional alpha protection

@@ -155,6 +155,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   cube_uv_sharing: ['uuid', 'texture_uuid'],
   asset_handoff: ['texture_uuid', 'offset', 'limit'],
   model_texture_coverage: ['offset', 'limit', 'attention_only'],
+  material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
   texture_alpha: ['uuid'],
@@ -166,6 +167,28 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   audit: [],
 });
 
+// Exact cropped atlas evidence. Identical physical dimensions are enforced in Rust.
+// Region limits match the existing owned 256x256 RGBA8 Paint decoder.
+function materialPatchRegion(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).some(key => !['from', 'to'].includes(key))) {
+    throw new TypeError('MATERIAL_PAIR_REGION_INVALID');
+  }
+  const point = xy => {
+    if (!Array.isArray(xy) || xy.length !== 2) {
+      throw new TypeError('MATERIAL_PAIR_REGION_INVALID');
+    }
+    return xy.map(n => Number(wholeNumber(n, 'material coordinate', 0, 256)));
+  };
+  const from = point(value.from), to = point(value.to);
+  if (from[0] >= to[0] || from[1] >= to[1]) {
+    throw new TypeError('MATERIAL_PAIR_REGION_INVALID');
+  }
+  if ((to[0]-from[0])*(to[1]-from[1]) > 4096) {
+    throw new TypeError('MATERIAL_PAIR_REGION_TOO_LARGE');
+  }
+  return {from, to};
+}
 function serializeInspectionQueries(requests) {
   if (!Array.isArray(requests) || requests.length < 1 || requests.length > 8) {
     throw new TypeError('Inspection batch must contain 1 through 8 selectors');
@@ -208,6 +231,8 @@ function serializeInspectionQueries(requests) {
           throw new TypeError('Unknown catalog category');
         }
         output.category = value;
+      } else if (field === 'reference_region' || field === 'candidate_region') {
+        output[field] = materialPatchRegion(value);
       } else {
         output[field] = nonempty(value, field);
         if (Buffer.byteLength(output[field], 'utf8') > 128) {
