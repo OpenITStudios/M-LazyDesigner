@@ -94,6 +94,7 @@ export type EditOperation =
   | { op: "import_paint_texture"; uuid: string; name: string; source: string }
   | { op: "set_empty_atlas_resolution"; width: number; height: number }
   | { op: "assign_cube_texture"; cube_uuid: string; texture_uuid: string }
+  | { op: "assign_cube_face_texture"; cube_uuid: string; face: CubeFacePaintPatch["face"]; texture_uuid: string }
   | { op: "paint_texture_pixel"; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
   | { op: "paint_texture_stroke"; texture_index: number; points: Vec2[]; rgba: [number, number, number, number] }
   | { op: "paint_texture_brush"; texture_index: number; points: Vec2[]; radius: number; rgba: [number, number, number, number]; erase: boolean }
@@ -369,6 +370,17 @@ export interface AssetHandoffInspection {
   visual_verdict: "UNVERIFIED";
   native_verdict: "NOT_EXECUTED";
   selected_texture_uuid: string;
+  /** Stable face order: model Cube list, then north/east/south/west/up/down. */
+  total_issues: number;
+  issue_offset: number;
+  next_issue_offset: number | null;
+  issues: Array<{
+    cube_uuid: string;
+    face: "north" | "east" | "south" | "west" | "up" | "down";
+    problem: "false_reference" | "unset_reference" | "other_texture" | "unresolved_reference";
+    reference_kind: "false" | "unset" | "index" | "uuid" | "unsupported";
+    referenced_texture_uuid: string | null;
+  }>;
   faces: {
     total: number; selected_texture: number; other_texture: number;
     unresolved: number; unset: number; false_reference: number;
@@ -404,7 +416,7 @@ export type InspectBatchQuery =
   | { kind: "cube_surfaces"; uuid: string }
   | { kind: "cube_face_alpha"; uuid: string }
   | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
-  | { kind: "asset_handoff"; texture_uuid: string }
+  | { kind: "asset_handoff"; texture_uuid: string; offset?: number; limit?: number }
   | { kind: "model_texture_coverage"; offset?: number; limit?: number }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }

@@ -17,7 +17,7 @@ mod animation_clip;
 mod animation_export;
 pub use animation_export::{export_bedrock_animations, bedrock_animation_curve_fidelity};
 mod asset_handoff;
-pub use asset_handoff::inspect_bedrock_asset_handoff;
+pub use asset_handoff::{inspect_bedrock_asset_handoff, inspect_bedrock_asset_handoff_page};
 mod effects;
 pub use effects::{inspect_animation_effect_events, AnimationEffectPoint};
 mod timeline_markers;
@@ -258,6 +258,7 @@ pub enum EditOperation {
     ImportPaintTexture { uuid: String, name: String, source: String },
     SetEmptyAtlasResolution { width: u32, height: u32 },
     AssignCubeTexture { cube_uuid: String, texture_uuid: String },
+    AssignCubeFaceTexture { cube_uuid: String, face: String, texture_uuid: String },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
@@ -2742,6 +2743,32 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                     .ok_or_else(|| fail("CUBE_FACE_DATA_INVALID"))?;
                 fields.insert("texture".into(), Value::String(texture_uuid.clone()));
             }
+            Ok(cube_uuid.clone())
+        }
+        EditOperation::AssignCubeFaceTexture { cube_uuid, face, texture_uuid } => {
+            // A single diagnosed face must never repaint/rebind other faces.
+            // The caller chooses the intended atlas; the inspector supplies
+            // evidence, not automatic mutation authority.
+            if has_per_texture_uv_rules(doc) {
+                return Err(fail("PAINT_TEXTURE_RULESET_UNSUPPORTED"));
+            }
+            if !FACE_NAMES.contains(&face.as_str()) {
+                return Err(fail("CUBE_FACE_INVALID"));
+            }
+            if !doc.texture_assets.iter().any(|asset|
+                asset.get("uuid").and_then(Value::as_str) == Some(texture_uuid.as_str())) {
+                return Err(fail("PAINT_TEXTURE_NOT_FOUND"));
+            }
+            let cube = doc.cubes.iter_mut().find(|cube| cube.uuid == *cube_uuid)
+                .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+            let target = cube.faces.get_mut(face).and_then(Value::as_object_mut)
+                .ok_or_else(|| fail("CUBE_FACE_DATA_INVALID"))?;
+            // Blockbench null means the side is intentionally missing.
+            // Refuse to turn it into geometry while correcting a texture.
+            if target.get("texture").is_some_and(Value::is_null) {
+                return Err(fail("CUBE_FACE_INTENTIONALLY_ABSENT"));
+            }
+            target.insert("texture".into(), Value::String(texture_uuid.clone()));
             Ok(cube_uuid.clone())
         }
         EditOperation::CreatePaintTexture { uuid, name } => {

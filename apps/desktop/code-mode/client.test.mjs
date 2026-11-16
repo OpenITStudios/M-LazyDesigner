@@ -1106,6 +1106,9 @@ test('asset handoff is a single SHA-bound read without PNG data or write authori
   const client = createRustCodeModeClient({
     binary: BIN,
     runner: async (argv) => {
+      if (argv[0] === 'inspect') {
+        return {status:'OK',sha256:SHA,summary:{revision:0}};
+      }
       calls.push(argv);
       assert.equal(argv[0], 'inspect-batch');
       assert.ok(argv.includes('--expected-sha256'));
@@ -1119,6 +1122,8 @@ test('asset handoff is a single SHA-bound read without PNG data or write authori
           scope:'bedrock_single_atlas_export_handoff',status:'blocked',
           visual_verdict:'UNVERIFIED',native_verdict:'NOT_EXECUTED',
           selected_texture_uuid:'texture-1',blockers:['SELECTED_TEXTURE_NOT_BOUND'],
+          total_issues:6,issue_offset:0,next_issue_offset:null,
+          issues:[],
           geometry:{status:'source_exportable',sha256:'a'.repeat(64),bytes:100},
           texture:{status:'blocked',reason:'PAINT_EXPORT_TEXTURE_UNSUPPORTED'},
           animation:{status:'not_required'},
@@ -1141,4 +1146,114 @@ test('asset handoff is a single SHA-bound read without PNG data or write authori
     {kind:'asset_handoff'},
   ]),/Missing required inspection selector field/);
   assert.equal(calls.length,1);
+});
+
+
+test('asset_handoff pages exact Cube-face issues with strict bounded read selectors', async () => {
+  const reads = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async (argv) => {
+      if (argv[0] === 'inspect') {
+        return {status:'OK',sha256:SHA,summary:{revision:0}};
+      }
+      assert.equal(argv[0], 'inspect-batch');
+      assert.equal(argv[argv.indexOf('--expected-sha256') + 1], SHA);
+      const requests = JSON.parse(
+        await readFile(argv[argv.indexOf('--queries') + 1], 'utf8')
+      ).requests;
+      reads.push(requests);
+      const offset = requests[0].offset ?? 0;
+      const issues = [
+        {cube_uuid:'cube-1',face:'north',problem:'false_reference',
+          reference_kind:'false',referenced_texture_uuid:null},
+        {cube_uuid:'cube-2',face:'east',problem:'other_texture',
+          reference_kind:'uuid',referenced_texture_uuid:'texture-2'},
+      ];
+      return {status:'OK',sha256:SHA,summary:{revision:0},
+        results:[{kind:'asset_handoff',handoff:{
+          scope:'bedrock_single_atlas_export_handoff',status:'blocked',
+          visual_verdict:'UNVERIFIED',native_verdict:'NOT_EXECUTED',
+          selected_texture_uuid:'texture-1',faces:{
+            total:12,selected_texture:10,other_texture:1,
+            unresolved:0,unset:0,false_reference:1,explicitly_absent:0,
+          },total_issues:2,issue_offset:offset,
+          next_issue_offset:offset === 0 ? 1 : null,
+          issues:[issues[offset]],
+          geometry:{status:'source_exportable',sha256:SHA,bytes:128},
+          texture:{status:'source_exportable',sha256:SHA,bytes:256},
+          animation:{status:'not_required',sha256:null,bytes:null},
+          blockers:['MULTIPLE_REFERENCED_TEXTURES','IMPLICIT_OR_UNASSIGNED_FACE_TEXTURES'],
+        }}]};
+    },
+  });
+  const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
+  const first = await project.inspectBatch([
+    {kind:'asset_handoff',texture_uuid:'texture-1',offset:0,limit:1},
+  ]);
+  assert.equal(first.results[0].handoff.issues[0].face,'north');
+  assert.equal(first.results[0].handoff.next_issue_offset,1);
+  const second = await project.inspectBatch([
+    {kind:'asset_handoff',texture_uuid:'texture-1',offset:1,limit:1},
+  ]);
+  assert.equal(second.results[0].handoff.issues[0].cube_uuid,'cube-2');
+  assert.equal(second.results[0].handoff.issues[0].referenced_texture_uuid,'texture-2');
+  assert.equal(second.results[0].handoff.next_issue_offset,null);
+  assert.deepEqual(reads,[
+    [{kind:'asset_handoff',texture_uuid:'texture-1',offset:0,limit:1}],
+    [{kind:'asset_handoff',texture_uuid:'texture-1',offset:1,limit:1}],
+  ]);
+  for (const bad of [
+    {kind:'asset_handoff',texture_uuid:'texture-1',limit:0},
+    {kind:'asset_handoff',texture_uuid:'texture-1',limit:33},
+    {kind:'asset_handoff',texture_uuid:'texture-1',offset:393217},
+    {kind:'asset_handoff',texture_uuid:'texture-1',offset:-1},
+    {kind:'asset_handoff',texture_uuid:'texture-1',limit:1,filename:'secret.png'},
+  ]) {
+    await assert.rejects(project.inspectBatch([bad]));
+  }
+  assert.equal(reads.length,2);
+});
+
+
+test('precise face texture correction uses one SHA-pinned approved Rust plan', async () => {
+  const approvals = [];
+  const writtenPlans = [];
+  const operation = {
+    op: 'assign_cube_face_texture', cube_uuid: 'cube-1',
+    face: 'north', texture_uuid: 'texture-1',
+  };
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: async (request) => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async (argv) => {
+      assert.equal(argv[0], 'apply');
+      assert.equal(argv[argv.indexOf('--expected-sha256') + 1], SHA);
+      const file = argv[argv.indexOf('--plan') + 1];
+      writtenPlans.push(JSON.parse(await readFile(file, 'utf8')));
+      return {status:'OK',mutation:{
+        revision:1,operation_count:1,changed_uuids:['cube-1'],
+      }};
+    },
+  });
+  const result = await client.apply({
+    input:'/abs/model.bbmodel',output:'/abs/one-face.bbmodel',
+    expectedSha256:SHA,operations:[operation],
+  });
+  assert.deepEqual(writtenPlans, [{expected_revision:0,operations:[operation]}]);
+  assert.equal(approvals.length,1);
+  assert.deepEqual(approvals[0].operationKinds,['assign_cube_face_texture']);
+  assert.equal(approvals[0].operationCount,1);
+  assert.match(approvals[0].planSha256,/^[a-f0-9]{64}$/);
+  assert.equal(result.mutation.changed_uuids[0],'cube-1');
+  const noApproval = createRustCodeModeClient({
+    binary:BIN,runner:async()=>{throw Error('write must never run');},
+  });
+  await assert.rejects(noApproval.apply({
+    input:'/abs/model.bbmodel',output:'/abs/one-face.bbmodel',
+    expectedSha256:SHA,operations:[operation],
+  }),/CODE_MODE_MUTATION_AUTHORITY_REQUIRED/);
 });

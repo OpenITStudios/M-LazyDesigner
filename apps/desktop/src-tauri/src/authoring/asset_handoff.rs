@@ -38,9 +38,26 @@ fn export_evidence(result: Result<Vec<u8>>) -> (Value, bool) {
 ///
 /// The caller's inspect-batch SHA guards that all returned exporter hashes
 /// describe the SAME immutable .bbmodel input.
+///
+/// Keep the compact two-argument caller stable; use the paged form to locate
+/// individual Cube/face corrections without exposing private PNG bytes.
 pub fn inspect_bedrock_asset_handoff(
     doc: &AuthoringDocument, texture_uuid: &str,
 ) -> Result<Value> {
+    inspect_bedrock_asset_handoff_page(doc, texture_uuid, 0, 16)
+}
+
+/// Issues are ordered by canonical Cube order then six-face order, not by
+/// severity or renderer visibility. Page indices refer only to faulty faces.
+/// Every page still reports whole-model totals and exporter output hashes.
+pub fn inspect_bedrock_asset_handoff_page(
+    doc: &AuthoringDocument, texture_uuid: &str,
+    offset: usize, limit: usize,
+) -> Result<Value> {
+    if offset > super::MAX_ELEMENTS * FACE_NAMES.len() ||
+       limit == 0 || limit > 32 {
+        return Err(fail("ASSET_HANDOFF_PAGE_INVALID"));
+    }
     doc.validate()?;
     if !valid_uuid(texture_uuid) {
         return Err(fail("ASSET_HANDOFF_TEXTURE_UUID_INVALID"));
@@ -59,35 +76,66 @@ pub fn inspect_bedrock_asset_handoff(
     let mut implicit = 0usize;
     let mut explicit_absent = 0usize;
     let mut all_faces = 0usize;
+    let mut total_issues = 0usize;
+    let mut issues = Vec::with_capacity(limit);
 
     for cube in &doc.cubes {
         for name in FACE_NAMES {
             all_faces += 1;
             let face = cube.faces.get(name).and_then(Value::as_object)
                 .ok_or_else(|| fail("ASSET_HANDOFF_FACE_UNSUPPORTED"))?;
-            let referenced = match face.get("texture") {
+            let (reference_kind, referenced): (&str, Option<usize>) = match face.get("texture") {
                 Some(Value::Null) => {
                     explicit_absent += 1;
                     continue;
                 },
                 Some(Value::Bool(false)) => {
                     no_texture += 1;
-                    continue;
+                    ("false", None)
                 },
                 None => {
                     implicit += 1;
-                    continue;
+                    ("unset", None)
                 },
-                Some(Value::Number(index)) => index.as_u64()
+                Some(Value::Number(index)) => ("index", index.as_u64()
                     .and_then(|index| usize::try_from(index).ok())
-                    .filter(|index| *index < doc.texture_assets.len()),
-                Some(Value::String(id)) => texture_indices.get(id.as_str()).copied(),
-                _ => None,
+                    .filter(|index| *index < doc.texture_assets.len())),
+                Some(Value::String(id)) => ("uuid", texture_indices.get(id.as_str()).copied()),
+                _ => ("unsupported", None),
             };
-            match referenced {
-                Some(index) if Some(index) == selected_index => referenced_selected += 1,
-                Some(_) => referenced_other += 1,
-                None => unresolved += 1,
+            let problem = match (reference_kind, referenced) {
+                ("false", _) => Some("false_reference"),
+                ("unset", _) => Some("unset_reference"),
+                (_, Some(index)) if Some(index) == selected_index => {
+                    referenced_selected += 1;
+                    None
+                },
+                (_, Some(_)) => {
+                    referenced_other += 1;
+                    Some("other_texture")
+                },
+                _ => {
+                    unresolved += 1;
+                    Some("unresolved_reference")
+                },
+            };
+            if let Some(problem) = problem {
+                if total_issues >= offset && issues.len() < limit {
+                    let referenced_texture_uuid = referenced
+                        .and_then(|index| doc.texture_assets.get(index))
+                        .and_then(|texture| texture.get("uuid"))
+                        .and_then(Value::as_str);
+                    // A location and identity, not an automatic destructive
+                    // repair. The agent must inspect intent/UV before editing.
+                    issues.push(json!({
+                        "cube_uuid":cube.uuid,
+                        "face":name,
+                        "problem":problem,
+                        "reference_kind":reference_kind,
+                        "referenced_texture_uuid":referenced_texture_uuid,
+                    }));
+                }
+                total_issues += 1;
             }
         }
     }
@@ -110,6 +158,7 @@ pub fn inspect_bedrock_asset_handoff(
     if !geo_ok { blockers.push("GEOMETRY_EXPORT_BLOCKED"); }
     if !png_ok { blockers.push("TEXTURE_EXPORT_BLOCKED"); }
     if !anim_ok { blockers.push("ANIMATION_EXPORT_BLOCKED"); }
+    if selected_index.is_none() { blockers.push("SELECTED_TEXTURE_NOT_FOUND"); }
     if referenced_selected == 0 { blockers.push("SELECTED_TEXTURE_NOT_BOUND"); }
     if referenced_other != 0 { blockers.push("MULTIPLE_REFERENCED_TEXTURES"); }
     if unresolved != 0 { blockers.push("UNRESOLVED_FACE_TEXTURE_REFERENCES"); }
@@ -133,6 +182,12 @@ pub fn inspect_bedrock_asset_handoff(
             "false_reference":no_texture,
             "explicitly_absent":explicit_absent
         },
+        "total_issues":total_issues,
+        "issue_offset":offset,
+        "next_issue_offset":if offset + issues.len() < total_issues {
+            Some(offset + issues.len())
+        } else { None },
+        "issues":issues,
         "geometry":geometry,
         "texture":texture,
         "animation":animation,
@@ -228,6 +283,150 @@ mod tests {
         assert_eq!(blocked["faces"]["false_reference"], 1);
         assert!(blocked["blockers"].as_array().unwrap().contains(
             &json!("IMPLICIT_OR_UNASSIGNED_FACE_TEXTURES")));
+    }
+
+    #[test]
+    fn paged_issue_locations_cover_all_faces_without_dropping_later_blindspots() {
+        let mut doc = prepared().document().clone();
+        for face in ["north", "east", "south", "west", "up"] {
+            doc.cubes[0].faces.get_mut(face).unwrap()["texture"] = Value::Bool(false);
+        }
+        let original = doc.clone();
+        let first = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 0, 2).unwrap();
+        let second = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 2, 2).unwrap();
+        let third = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 4, 2).unwrap();
+        assert_eq!(first["status"], "blocked");
+        assert_eq!(first["total_issues"], 5);
+        assert_eq!(first["faces"]["false_reference"], 5);
+        assert_eq!(first["issues"].as_array().unwrap().len(), 2);
+        assert_eq!(first["issues"][0]["cube_uuid"], CUBE);
+        assert_eq!(first["issues"][0]["face"], "north");
+        assert_eq!(first["issues"][0]["problem"], "false_reference");
+        assert_eq!(first["issues"][0]["reference_kind"], "false");
+        assert_eq!(first["issues"][0]["referenced_texture_uuid"], Value::Null);
+        assert_eq!(first["issues"][1]["face"], "east");
+        assert_eq!(first["next_issue_offset"], 2);
+        assert_eq!(second["issues"][0]["face"], "south");
+        assert_eq!(second["issues"][1]["face"], "west");
+        assert_eq!(second["next_issue_offset"], 4);
+        assert_eq!(third["issues"][0]["face"], "up");
+        assert_eq!(third["next_issue_offset"], Value::Null);
+        assert_eq!(first["geometry"], second["geometry"]);
+        assert_eq!(first["texture"], second["texture"]);
+        assert_eq!(first["animation"], second["animation"]);
+        assert_eq!(doc, original);
+    }
+
+    #[test]
+    fn other_texture_issue_identifies_exact_face_and_uuid_without_raw_png() {
+        let mut session = prepared();
+        session.apply(1, &[EditOperation::CreatePaintTexture {
+            uuid:SECOND.into(), name:"second.png".into(),
+        }]).unwrap();
+        let mut doc = session.document().clone();
+        doc.cubes[0].faces.get_mut("south").unwrap()["texture"] = json!(SECOND);
+        let report = inspect_bedrock_asset_handoff_page(&doc, TEXTURE, 0, 1).unwrap();
+        assert_eq!(report["total_issues"], 1);
+        assert_eq!(report["issues"][0]["cube_uuid"], CUBE);
+        assert_eq!(report["issues"][0]["face"], "south");
+        assert_eq!(report["issues"][0]["problem"], "other_texture");
+        assert_eq!(report["issues"][0]["reference_kind"], "uuid");
+        assert_eq!(report["issues"][0]["referenced_texture_uuid"], SECOND);
+        assert_eq!(report["next_issue_offset"], Value::Null);
+        assert!(!report.to_string().contains("data:image/png"));
+    }
+
+    #[test]
+    fn paging_rejects_unsafe_bounds_without_model_mutation() {
+        let doc = prepared().document().clone();
+        for (offset, limit) in [
+            (0, 0), (0, 33), (super::super::MAX_ELEMENTS * 6 + 1, 1)
+        ] {
+            assert_eq!(inspect_bedrock_asset_handoff_page(
+                &doc, TEXTURE, offset, limit).unwrap_err(),
+                "ASSET_HANDOFF_PAGE_INVALID");
+        }
+        let beyond = inspect_bedrock_asset_handoff_page(
+            &doc, TEXTURE, 12, 2).unwrap();
+        assert_eq!(beyond["total_issues"], 0);
+        assert_eq!(beyond["issues"], json!([]));
+        assert_eq!(beyond["next_issue_offset"], Value::Null);
+    }
+
+    #[test]
+    fn precise_face_rebind_fixes_handoff_without_changing_other_faces_or_assets() {
+        let mut session = prepared();
+        let original = session.document().clone();
+        session.apply(1, &[
+            EditOperation::CreatePaintTexture {
+                uuid:SECOND.into(), name:"other.png".into(),
+            },
+            EditOperation::AssignCubeFaceTexture {
+                cube_uuid:CUBE.into(), face:"north".into(), texture_uuid:SECOND.into(),
+            },
+        ]).unwrap();
+        let faulty = session.document().clone();
+        assert_eq!(faulty.cubes[0].faces["north"]["texture"], SECOND);
+        assert_eq!(faulty.cubes[0].faces["south"]["texture"], TEXTURE);
+        let report = inspect_bedrock_asset_handoff_page(&faulty, TEXTURE, 0, 1).unwrap();
+        assert_eq!(report["total_issues"], 1);
+        assert_eq!(report["issues"][0]["face"], "north");
+        assert_eq!(report["issues"][0]["problem"], "other_texture");
+        assert_eq!(report["status"], "blocked");
+        session.apply(2, &[EditOperation::AssignCubeFaceTexture {
+            cube_uuid:CUBE.into(), face:"north".into(), texture_uuid:TEXTURE.into(),
+        }]).unwrap();
+        let restored = session.document().clone();
+        let report = inspect_bedrock_asset_handoff(&restored, TEXTURE).unwrap();
+        assert_eq!(report["status"], "source_consistent");
+        assert_eq!(restored.cubes[0].faces["north"]["texture"], TEXTURE);
+        for side in ["east", "south", "west", "up", "down"] {
+            assert_eq!(restored.cubes[0].faces[side], original.cubes[0].faces[side]);
+        }
+        assert_eq!(restored.texture_assets[0], original.texture_assets[0]);
+        assert_eq!(restored.animation_assets, original.animation_assets);
+        let reopened = EditorSession::open(&session.export().unwrap()).unwrap();
+        assert_eq!(reopened.document(), &restored);
+        session.undo(3).unwrap();
+        assert_eq!(session.document(), &faulty);
+        session.redo(4).unwrap();
+        assert_eq!(session.document(), &restored);
+    }
+
+    #[test]
+    fn precise_face_rebind_refuses_null_invalid_and_foreign_uv_rules_atomically() {
+        let original = prepared().document().clone();
+        let correct = || EditOperation::AssignCubeFaceTexture {
+            cube_uuid:CUBE.into(), face:"north".into(), texture_uuid:TEXTURE.into(),
+        };
+        let mut absent = original.clone();
+        absent.cubes[0].faces.get_mut("north").unwrap()["texture"] = Value::Null;
+        let mut session = EditorSession::from_document(absent.clone()).unwrap();
+        assert_eq!(session.apply(0, &[correct()]).unwrap_err(),
+            "CUBE_FACE_INTENTIONALLY_ABSENT");
+        assert_eq!(session.document(), &absent);
+        assert!(!session.can_undo());
+        let mut session = EditorSession::from_document(original.clone()).unwrap();
+        let invalid = [
+            EditOperation::AssignCubeFaceTexture {
+                cube_uuid:CUBE.into(), face:"diagonal".into(), texture_uuid:TEXTURE.into(),
+            },
+            EditOperation::AssignCubeFaceTexture {
+                cube_uuid:CUBE.into(), face:"north".into(),
+                texture_uuid:"00000000-0000-4000-8000-000000009999".into(),
+            },
+        ];
+        assert_eq!(session.apply(0, &[invalid[0].clone()]).unwrap_err(), "CUBE_FACE_INVALID");
+        assert_eq!(session.apply(0, &[invalid[1].clone()]).unwrap_err(), "PAINT_TEXTURE_NOT_FOUND");
+        assert_eq!(session.document(), &original);
+        assert!(!session.can_undo());
+        let mut scoped = original.clone();
+        scoped.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+        let mut session = EditorSession::from_document(scoped.clone()).unwrap();
+        assert_eq!(session.apply(0, &[correct()]).unwrap_err(),
+            "PAINT_TEXTURE_RULESET_UNSUPPORTED");
+        assert_eq!(session.document(), &scoped);
+        assert!(!session.can_undo());
     }
 
     #[test]

@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -276,7 +276,7 @@ enum InspectBatchQuery {
     CubeSurfaces { uuid: String },
     CubeFaceAlpha { uuid: String },
     CubeUvSharing { uuid: String, texture_uuid: String },
-    AssetHandoff { texture_uuid: String },
+    AssetHandoff { texture_uuid: String, offset: Option<usize>, limit: Option<usize> },
     ModelTextureCoverage { offset: Option<usize>, limit: Option<usize> },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
@@ -334,9 +334,10 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                     doc, batch_id(&uuid)?, batch_id(&texture_uuid)?)?;
                 json!({"kind":"cube_uv_sharing","uv_sharing":uv_sharing})
             },
-            InspectBatchQuery::AssetHandoff { texture_uuid } => {
-                let handoff = inspect_bedrock_asset_handoff(
-                    doc, batch_id(&texture_uuid)?)?;
+            InspectBatchQuery::AssetHandoff { texture_uuid, offset, limit } => {
+                let handoff = inspect_bedrock_asset_handoff_page(
+                    doc, batch_id(&texture_uuid)?,
+                    offset.unwrap_or(0), limit.unwrap_or(16))?;
                 json!({"kind":"asset_handoff","handoff":handoff})
             },
             InspectBatchQuery::ModelTextureCoverage { offset, limit } => {
@@ -816,6 +817,30 @@ mod tests {
         assert_eq!(results[1]["kind"],"audit");
         assert!(!serde_json::to_string(&results).unwrap().contains("data:image/png"));
         assert_eq!(session.document(),&doc);
+        let mut damaged = doc.clone();
+        damaged.cubes[0].faces.get_mut("north").unwrap()["texture"] = json!(false);
+        damaged.cubes[0].faces.get_mut("east").unwrap()["texture"] = json!(false);
+        let first = inspect_batch(&damaged, vec![InspectBatchQuery::AssetHandoff {
+            texture_uuid:TEX.into(), offset:Some(0), limit:Some(1),
+        }]).unwrap();
+        let second = inspect_batch(&damaged, vec![InspectBatchQuery::AssetHandoff {
+            texture_uuid:TEX.into(), offset:Some(1), limit:Some(1),
+        }]).unwrap();
+        assert_eq!(first[0]["handoff"]["total_issues"], 2);
+        assert_eq!(first[0]["handoff"]["issues"][0]["cube_uuid"],
+            damaged.cubes[0].uuid);
+        assert_eq!(first[0]["handoff"]["issues"][0]["face"], "north");
+        assert_eq!(first[0]["handoff"]["next_issue_offset"], 1);
+        assert_eq!(second[0]["handoff"]["issues"][0]["face"], "east");
+        assert_eq!(second[0]["handoff"]["next_issue_offset"], Value::Null);
+        assert_eq!(first[0]["handoff"]["geometry"], second[0]["handoff"]["geometry"]);
+        assert_eq!(first[0]["handoff"]["texture"], second[0]["handoff"]["texture"]);
+        assert_eq!(damaged.cubes[0].faces["north"]["texture"], json!(false));
+        for (offset, limit) in [(0, 0), (0, 33), (393_217, 1)] {
+            assert_eq!(inspect_batch(&damaged, vec![InspectBatchQuery::AssetHandoff {
+                texture_uuid:TEX.into(), offset:Some(offset), limit:Some(limit),
+            }]).unwrap_err(), "ASSET_HANDOFF_PAGE_INVALID");
+        }
         assert!(serde_json::from_value::<InspectBatchInput>(json!({"requests":[
             {"kind":"asset_handoff","texture_uuid":TEX,"path":"/not/allowed"}
         ]})).is_err());
