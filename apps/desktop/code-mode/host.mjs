@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
-import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs';
+import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope } from './client.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -101,6 +101,103 @@ async function pinnedVisualPair(source, options, modelSha) {
     reference,capture,viewId:options.viewId,modelSha,
   });
 }
+// Operator review is input from a trusted host callback, not model-written code.
+// The callback may show *actual* images in a separately authorized reviewer UI;
+// the Code Mode guest receives bounded findings, never image bytes or paths.
+const REVIEW_DECISIONS = new Set(['ACCEPTED','REJECTED','UNVERIFIED']);
+const REVIEW_ISSUES = new Set([
+  'FLAT_SHADING','MISSING_DETAIL','STYLE_MISMATCH',
+  'ALPHA_MISMATCH','UV_SEAM','SILHOUETTE','OTHER',
+]);
+const MAX_REVIEW_ISSUES = 6;
+function normalizedVisualReview(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.keys(input).some(key =>
+        !['decision','issues','correctionScope'].includes(key)) ||
+      !REVIEW_DECISIONS.has(input.decision) ||
+      !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
+    throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+  }
+  const issues = input.issues.map(issue => {
+    if (!issue || typeof issue !== 'object' || Array.isArray(issue) ||
+        Object.keys(issue).some(key => !['id','kind','observation'].includes(key)) ||
+        typeof issue.id !== 'string' || !/^[a-z][a-z0-9_-]{0,47}$/.test(issue.id) ||
+        !REVIEW_ISSUES.has(issue.kind) ||
+        typeof issue.observation !== 'string' ||
+        issue.observation.trim() !== issue.observation ||
+        issue.observation.length < 3 || issue.observation.length > 240 ||
+        /[\x00-\x1f\x7f]/.test(issue.observation)) {
+      throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+    }
+    return Object.freeze({
+      id:issue.id,kind:issue.kind,observation:issue.observation,
+    });
+  });
+  if (new Set(issues.map(issue => issue.id)).size !== issues.length) {
+    throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+  }
+  if (input.decision === 'REJECTED') {
+    if (issues.length === 0 || input.correctionScope === undefined) {
+      throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+    }
+    let scope;
+    try { scope = normalizedCorrectionScope(input.correctionScope); }
+    catch { throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID'); }
+    if (!scope) throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+    const normalized = Object.freeze({
+      textureUuid:scope.texture_uuid,
+      allowedRegions:Object.freeze(scope.allowed_regions.map(region=>
+        Object.freeze({
+          from:Object.freeze([...region.from]),
+          to:Object.freeze([...region.to]),
+        })
+      )),
+      preserveAlpha:scope.preserve_alpha,
+    });
+    return Object.freeze({
+      status:'RECORDED',decision:'REJECTED',
+      issues:Object.freeze(issues),correctionScope:normalized,
+      source:'TRUSTED_HOST_DECLARATION',
+      visual_verdict:'UNVERIFIED',
+    });
+  }
+  if (issues.length !== 0 || input.correctionScope !== undefined) {
+    throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+  }
+  return Object.freeze({
+    status:'RECORDED',decision:input.decision,
+    issues:Object.freeze([]),correctionScope:null,
+    source:'TRUSTED_HOST_DECLARATION',visual_verdict:'UNVERIFIED',
+  });
+}
+// The SDK validates the requested scope again and Rust enforces its actual
+// changed pixels. The host additionally binds it to the reviewer's allowed
+// texture and pixel region, rather than trusting a model-declared rectangle.
+function correctionFitsReview(requested, reviewed) {
+  if (requested.texture_uuid !== reviewed.textureUuid ||
+      (reviewed.preserveAlpha && !requested.preserve_alpha)) return false;
+  return requested.allowed_regions.every(region=>
+    reviewed.allowedRegions.some(allowed=>
+      region.from[0]>=allowed.from[0] &&
+      region.from[1]>=allowed.from[1] &&
+      region.to[0]<=allowed.to[0] &&
+      region.to[1]<=allowed.to[1]
+    )
+  );
+}
+// Reopen and SHA-check at the review boundary: startup metadata is insufficient
+// if an image was replaced while the guest was doing other work.
+async function pinnedReviewBytes(selected) {
+  const current = await regularFile(selected.path,'CODE_MODE_VISUAL_REVIEW_INPUT');
+  if (current !== selected.path) throw new Error('CODE_MODE_VISUAL_REVIEW_INPUT_STALE');
+  const bytes = await readFile(current);
+  if (bytes.length < 8 || bytes.length > MAX_VISUAL_PNG_BYTES ||
+      createHash('sha256').update(bytes).digest('hex') !== selected.sha256) {
+    throw new Error('CODE_MODE_VISUAL_REVIEW_INPUT_STALE');
+  }
+  return bytes;
+}
+
 function outputName(name, suffix) {
   if (typeof name !== 'string' || !name || name.length > 128 ||
       name !== basename(name) || name.trim() !== name ||
@@ -137,7 +234,7 @@ async function checkFreshSibling(path, folder) {
 export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
   preselectedPngPath, approvedMaterialReferenceUuid,
-  preselectedVisualPair, runner, spawnImpl,
+  preselectedVisualPair, reviewVisualPair, runner, spawnImpl,
 } = {}) {
   requireAbsolute(rustBinary, 'rustBinary');
   requireAbsolute(denoBinary, 'denoBinary');
@@ -157,6 +254,11 @@ export async function createCodeModeHost({
   if (authorizeMutation !== undefined &&
       typeof authorizeMutation !== 'function') {
     throw new TypeError('authorizeMutation must be a trusted host function');
+  }
+  if (reviewVisualPair !== undefined &&
+      (typeof reviewVisualPair !== 'function' ||
+       preselectedVisualPair === undefined)) {
+    throw new TypeError('CODE_MODE_VISUAL_REVIEW_HOST_INVALID');
   }
   const source = input === undefined ? null :
     await regularFile(input, 'CODE_MODE_SOURCE');
@@ -238,7 +340,8 @@ export async function createCodeModeHost({
   let nextProject = initialProject ? 1 : 0;
   const visualPair = await pinnedVisualPair(
     source, preselectedVisualPair, initialProject?.expectedSha256 ?? null);
-  const reviewedVisualModels = new Set();
+  // One ephemeral review state per exact model SHA, not a second asset store.
+  const visualPreflights = new Map();
   const initialRef = Object.freeze(initialProject ? {
     project: 'p0', sha256: initialProject.expectedSha256,
     summary: initialProject.summary,
@@ -345,9 +448,50 @@ export async function createCodeModeHost({
           evidence.comparison?.capture_png_sha256 !== visualPair.capture.sha256) {
         throw new Error('CODE_MODE_VISUAL_PAIR_RESULT_INVALID');
       }
-      reviewedVisualModels.add(model.expectedSha256);
+      let feedback = Object.freeze({
+        status:'NOT_RECORDED',decision:'UNVERIFIED',
+        issues:Object.freeze([]),correctionScope:null,
+        source:'NONE',visual_verdict:'UNVERIFIED',
+      });
+      if (typeof reviewVisualPair === 'function') {
+        const execution = activeExecution;
+        if (!execution || execution.closed) {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
+        }
+        const [referenceBytes,captureBytes] = await Promise.all([
+          pinnedReviewBytes(visualPair.reference),
+          pinnedReviewBytes(visualPair.capture),
+        ]);
+        if (execution.closed || activeExecution !== execution) {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
+        }
+        // The host callback must present both actual buffers to its reviewer;
+        // a text/SHAs-only response has no authority to claim the AI saw images.
+        execution.pause();
+        let returned;
+        try {
+          returned = await reviewVisualPair(Object.freeze({
+            sourceModelSha256:model.expectedSha256,
+            viewId:visualPair.viewId,
+            reference:Object.freeze({
+              sha256:visualPair.reference.sha256,
+              pngBytes:Buffer.from(referenceBytes),
+            }),
+            capture:Object.freeze({
+              sha256:visualPair.capture.sha256,
+              pngBytes:Buffer.from(captureBytes),
+            }),
+          }));
+        } finally { execution.resume(); }
+        if (execution.closed || activeExecution !== execution) {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
+        }
+        feedback = normalizedVisualReview(returned);
+      }
+      visualPreflights.set(model.expectedSha256,feedback);
       return {
         ...evidence,
+        review_feedback:feedback,
         evidence_binding:{
           kind:'operator_selected_visual_pair',
           view_id:visualPair.viewId,
@@ -396,9 +540,26 @@ export async function createCodeModeHost({
         }
       }
       if (visualPair !== null && pixelEdit &&
-          !reviewedVisualModels.has(p.expectedSha256)) {
-        // This is evidence-consumption, never proof of image understanding.
+          !visualPreflights.has(p.expectedSha256)) {
+        // The numeric image preflight alone does not certify art quality.
         throw new Error('CODE_MODE_VISUAL_PREFLIGHT_REQUIRED');
+      }
+      if (visualPair !== null && pixelEdit &&
+          typeof reviewVisualPair === 'function') {
+        const feedback = visualPreflights.get(p.expectedSha256);
+        if (feedback?.decision === 'ACCEPTED') {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_ACCEPTED_PROTECTED');
+        }
+        if (feedback?.decision !== 'REJECTED') {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_REQUIRED');
+        }
+        let requested;
+        try { requested = normalizedCorrectionScope(args.correctionScope); }
+        catch { throw new Error('CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH'); }
+        if (!requested ||
+            !correctionFitsReview(requested,feedback.correctionScope)) {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
+        }
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,

@@ -1,5 +1,22 @@
 # LazyDesigner Next Action
 
+**Rust host-reviewed visual correction contract (2026-11-16; SOURCE_ONLY):**
+The source-only Code Mode visual pair can now optionally be presented as real
+PNG bytes to a separately authorized reviewer callback owned by the trusted
+Node host. Its bounded `ACCEPTED | REJECTED | UNVERIFIED` feedback, identified
+material defects, and operator-selected correction regions are returned as
+traceable data, not an AI-generated quality score. When configured, a
+rejected review permits scoped Paint only within its approved rectangles;
+accepted/review-unverified state prevents further Paint until source evidence
+and intent are reconciled. Rust remains the sole model/Undo owner, user
+authorization still gates writes, and model-generated Deno cannot select
+images or forge reviewer feedback. No PNG is persisted in a second store.
+SOURCE_REVIEWED + TEST_AUTHORED_NOT_RUN; host model visual ingestion and
+real user acceptance are NOT VERIFIED. A matched Golden A/B with actual
+Pillager reference/candidate and accepted/rejected human observations
+remains a later native/visual proof gate, not a prompt-count benchmark.
+
+
 **Rust reference/capture source provenance (2026-11-16; SOURCE_ONLY):**
 Read-only PNG pair inspection added to the canonical Rust CLI with strict
 reference/capture SHA and source .bbmodel SHA checks. Code Mode host can pin

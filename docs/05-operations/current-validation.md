@@ -1,5 +1,24 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Trusted reviewer feedback on pinned image pairs (SOURCE_ONLY)
+
+The existing single Code Mode host now admits an *optional* operator-owned
+visual review callback. It receives both original image buffers from the
+already SHA-pinned pair, after a fresh file/hash recheck. Its validated,
+bounded decision and issue descriptions remain distinct from Rust's
+technical image comparison; no PNG bytes or filesystem paths enter
+the Deno guest. A rejection needs at least one issue and an explicitly
+selected texture region. The existing Rust-enforced correction scope cannot
+extend outside the reviewer's region or weaken alpha constraints.
+Accepted/unverified feedback blocks guest Paint on the reviewed source;
+absent reviewer preserves the earlier numeric-only contract and clearly
+records NOT_RECORDED. No new public tool, model authority, persistent
+approval store or automatic image classifier is created.
+Regression source is AUTHORED_NOT_RUN; actual reviewer adapter, real
+picture viewing, hosted-agent instruction uptake, native material quality
+and user acceptance remain UNVERIFIED.
+
+
 ## 2026-11-16 — Bounded operator-selected visual PNG evidence (SOURCE_ONLY)
 
 The Rust library exposes a read-only RGB/RGBA8 PNG comparator for one

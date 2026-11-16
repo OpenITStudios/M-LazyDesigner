@@ -11,6 +11,14 @@ export interface TextureCorrectionScope {
   allowedRegions: Array<{ from: Vec2; to: Vec2 }>;
   preserveAlpha?: boolean;
 }
+/** Trusted-host reuse of the same correction admission used by the SDK.
+ * This is not an additional model-facing guest capability.
+ */
+export declare function normalizedCorrectionScope(scope?: TextureCorrectionScope): {
+  texture_uuid:string;
+  allowed_regions:Array<{from:Vec2;to:Vec2}>;
+  preserve_alpha:boolean;
+} | undefined;
 export interface PaintRectangleStep {
   from: Vec2;
   to: Vec2;

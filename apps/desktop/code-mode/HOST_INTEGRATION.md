@@ -71,6 +71,57 @@ obtained, **not** that the AI visually understood it. When the target lacks
 matched external image evidence, the review must remain UNVERIFIED and
 the existing accepted-asset contract is still open. Tests authored only.
 
+### Operator-owned review of actual image pixels (source only)
+
+A numeric `inspectSelectedVisualPair` preflight alone does **not** show images
+to the AI. To attach actual visual feedback, the independently authorized Node
+host may provide `reviewVisualPair` alongside `preselectedVisualPair`.
+It receives **both original PNG Buffer objects**, SHA-256 identities, the
+pinned `.bbmodel` SHA and selected view. No PNG or path is exposed to
+model-authored Deno code; no second renderer or image recognition engine is
+installed. A trusted human UI or separately authorized visual-capable host
+adapter is responsible for actually showing those pixels to its reviewer.
+
+~~~js
+const host = await createCodeModeHost({
+  ...trustedHostSettings,
+  preselectedVisualPair: approvedPair,
+  reviewVisualPair: async ({reference, capture, viewId, sourceModelSha256}) => {
+    // Operator-owned UI/vision adapter must genuinely display both PNG buffers.
+    // Example of its structured response AFTER independent visual inspection:
+    return {
+      decision:'REJECTED',
+      issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+        observation:'Helmet shading is flat relative to the approved master.'}],
+      correctionScope:{
+        textureUuid:'current-tier3-atlas',
+        allowedRegions:[{from:[8,8],to:[20,28]}],
+        preserveAlpha:true,
+      },
+    };
+  },
+});
+~~~
+
+Only `REJECTED` with bounded findings and an operator-chosen correction
+scope allows further Code Mode pixel correction for that pinned snapshot.
+The requested `correctionScope` must stay within a reviewer-permitted
+rectangle and may not weaken required alpha preservation. `ACCEPTED`
+protects the reviewed snapshot against further Paint, while `UNVERIFIED`
+keeps Paint held until usable evidence is obtained. Editing another
+asset/view requires separately selecting its exact source and images.
+The ordinary independently authorized write approval is **still required**,
+and Rust checks actual changed pixels/structure before mutation.
+
+If the callback is absent, the former metadata-only behavior remains, with
+`review_feedback.status='NOT_RECORDED'`; it grants no human-review claim.
+A reviewer callback is never an automatic classifier. Its bounded decision
+is a **host declaration**, not proof of agent image ingestion, native playback
+or artistic PASS. Missing, contradictory, overlong, stale or untrusted feedback
+must fail before granting correction authority. Review errors do not fall
+back silently to numeric acceptance. Source regression tests are authored but
+not executed during the current CI/native hold.
+
 ## Programmatic execution architecture
 
 ~~~text

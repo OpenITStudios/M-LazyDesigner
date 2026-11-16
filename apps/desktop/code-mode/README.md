@@ -1,5 +1,24 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Trusted image review and correction scope (2026-11-16; SOURCE_ONLY):**
+`createCodeModeHost` can now receive an optional, independently operator-owned
+`reviewVisualPair` function alongside the SHA-pinned `preselectedVisualPair`.
+It is passed both actual selected PNG buffers and source/view identities in
+trusted Node, not in Deno. The host returns only bounded issue evidence,
+`ACCEPTED | REJECTED | UNVERIFIED` and an allowed texture correction area;
+this is an operator declaration, never an automatic AI visual PASS.
+A `REJECTED` response authorizes the **review direction only**: exact
+`correctionScope` must remain within the reviewer-set atlas rectangles and
+respect mandatory alpha preservation, and a separate host write approval
+and Rust scoped mutation check still apply. `ACCEPTED` blocks further
+pixel changes on that reviewed snapshot. `UNVERIFIED`, invalid feedback
+or stale images cannot authorize Paint; with no reviewer configured the
+previous numeric preflight remains, explicitly `NOT_RECORDED`.
+No files, images or human verdict are persisted by this mechanism.
+Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
+and asset acceptance remain unverified.
+
+
 **Operator-selected reference/capture binding (2026-11-16; SOURCE_ONLY):**
 Code Mode host now supports an optional `preselectedVisualPair` made of
 two operator-selected still PNGs, their exact SHA-256, a view label and a

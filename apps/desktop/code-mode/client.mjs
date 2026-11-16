@@ -93,7 +93,7 @@ async function runBinary(binary, args) {
   return parseResponse(stdout);
 }
 // Exact source-pixel bounds, not artistic reference or user approval.
-function normalizedCorrectionScope(scope) {
+export function normalizedCorrectionScope(scope) {
   if (scope === undefined) return undefined;
   if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
       Object.keys(scope).some(key =>

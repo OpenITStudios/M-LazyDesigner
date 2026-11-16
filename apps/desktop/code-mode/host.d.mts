@@ -47,6 +47,14 @@ export interface CodeModeGuestAPI {
    * Image content is not streamed to the guest. No native/artistic PASS.
    */
   inspectSelectedVisualPair(args: { project: string }): Promise<VisualPairReceipt & {
+    review_feedback:{
+      status:"RECORDED"|"NOT_RECORDED";
+      decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
+      issues:Array<CodeModeVisualReviewerFeedback["issues"][number]>;
+      correctionScope?:TextureCorrectionScope | null;
+      source:"TRUSTED_HOST_DECLARATION"|"NONE";
+      visual_verdict:"UNVERIFIED";
+    };
     evidence_binding:{
       kind:"operator_selected_visual_pair";
       view_id:"front"|"back"|"left"|"right"|"top"|"bottom"|"three_quarter";
@@ -86,6 +94,20 @@ export interface CodeModeHost {
   initial: CodeModeInitialReference;
   execute(input: { code: string }): Promise<CodeModeRunReceipt>;
 }
+/** Host-declared review result. It must derive from actual image inspection
+ * by the independent operator/reviewer; the guest cannot submit it.
+ * Even ACCEPTED is not a native renderer PASS.
+ */
+export interface CodeModeVisualReviewerFeedback {
+  decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
+  issues:Array<{
+    id:string;
+    kind:"FLAT_SHADING"|"MISSING_DETAIL"|"STYLE_MISMATCH"|
+      "ALPHA_MISMATCH"|"UV_SEAM"|"SILHOUETTE"|"OTHER";
+    observation:string;
+  }>;
+  correctionScope?: TextureCorrectionScope;
+}
 export interface CodeModeHostOptions {
   rustBinary: string;
   denoBinary: string;
@@ -111,6 +133,17 @@ export interface CodeModeHostOptions {
     captureModelSha256:string;
     viewId:"front"|"back"|"left"|"right"|"top"|"bottom"|"three_quarter";
   };
+  /** Operator-owned, independent visual review adapter. The callback receives
+   * bounded original PNG bytes under trusted Node, not in the Deno guest.
+   * It must not claim a review unless the selected images were actually seen.
+   * If absent, results are numeric source evidence only.
+   */
+  reviewVisualPair?: (pair:Readonly<{
+    sourceModelSha256:string;
+    viewId:string;
+    reference:Readonly<{sha256:string;pngBytes:Buffer}>;
+    capture:Readonly<{sha256:string;pngBytes:Buffer}>;
+  }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>;
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;
