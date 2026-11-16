@@ -238,7 +238,8 @@ export async function createCodeModeHost({
     apply: async (args) => {
       const p = selected(args);
       const output = await outputPath(args.output, '.bbmodel');
-      const receipt = await p.apply({ output, operations: args.operations });
+      const receipt = await p.apply({ output, operations: args.operations,
+        correctionScope: args.correctionScope });
       return { receipt, ...await register(output) };
     },
     importPng: async (args) => {

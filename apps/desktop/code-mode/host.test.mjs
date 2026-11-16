@@ -1,7 +1,7 @@
 // Regression SOURCE ONLY. Repository localtest/CI remain on hold.
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
@@ -186,6 +186,52 @@ test('operator-approved Rust edit returns a newly pinned project handle', () =>
     assert.equal(approvals[0].operation, 'apply');
     assert.equal(approvals[0].operationKinds[0], 'translate_cube');
     assert.match(approvals[0].planSha256, /^[a-f0-9]{64}$/);
+  }));
+
+test('host forwards correction scope through guest RPC and bound Rust plan', () =>
+  fixture(async input => {
+    const approvals = [];
+    let scopeInRust;
+    const declared = {textureUuid:'approved-tier-2',
+      allowedRegions:[{from:[1,1],to:[2,2]}],preserveAlpha:true};
+    const host = await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation: request => {
+        approvals.push(request);
+        return request.operation === 'apply' &&
+          request.correctionScope?.textureUuid === 'approved-tier-2' &&
+          request.correctionScope.regionCount === 1;
+      },
+      runner: async argv => {
+        if(argv[0]==='apply'){
+          scopeInRust = JSON.parse(
+            await readFile(argv[argv.indexOf('--plan')+1],'utf8')
+          ).correction_scope;
+          return {status:'OK',source_sha256:HASH,output_sha256:'b'.repeat(64),
+            summary:{...SUMMARY,revision:1},
+            mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+        }
+        return {status:'OK',sha256:HASH,summary:SUMMARY};
+      },
+      spawnImpl:()=>fakeGuest({method:'apply',args:{
+        project:'p0',output:'candidate.bbmodel',
+        operations:[{op:'paint_texture_pixel',texture_index:0,
+          x:1,y:1,rgba:[70,80,90,255]}],
+        correctionScope:declared,
+      }}, response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.receipt.correction_scope,undefined);
+        return {approved:response.ok};
+      }),
+    });
+    const report = await host.execute({code:'return await codemode.apply({});'});
+    assert.equal(report.value.approved,true);
+    assert.deepEqual(scopeInRust,{
+      texture_uuid:'approved-tier-2',
+      allowed_regions:[{from:[1,1],to:[2,2]}],
+      preserve_alpha:true,
+    });
+    assert.equal(approvals.length,1);
   }));
 
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {

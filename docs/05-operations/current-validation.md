@@ -1,5 +1,22 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Atomic source-bounded texture correction in Rust Code Mode
+
+Audited Local Pillager feedback exposed regressions where an accepted shield
+and surrounding texture changed during a narrower grading request. At this
+Rust branch revision, an optional correction_scope in EditPlan declares one
+current atlas, half-open physical PNG rectangles, and preserve_alpha. Rust
+checks the entire post-edit document against the pre-edit snapshot and compares
+decoded RGBA8 before revision/Undo commit or CLI publication. Extra changed
+pixels, another texture, Cube/UV changes, animation/rig changes, altered model
+metadata, invalid bounds and alpha regressions fail closed. Code Mode SDK and
+host pass the exact scope as part of the permission-approved and SHA-pinned
+plan. Regression sources cover in-scope success, out-of-scope and mixed edits,
+alpha, metadata/invalid plans, JS validation and guest RPC propagation.
+**SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.** This is not
+an image-reference binding, material design evaluator, native rendering or
+human-approved visual PASS. No CI, native runtime or performance benchmark run.
+
 
 ## 2026-11-16 — Numeric Catmull-Rom Position/Scale conservative source clearance
 

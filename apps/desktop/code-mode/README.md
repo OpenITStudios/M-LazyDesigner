@@ -1,5 +1,22 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Scoped existing-texture correction (2026-11-16; SOURCE_ONLY):**
+The same approved Code Mode apply supports an optional correctionScope for one
+current atlas. Example: correctionScope: {textureUuid:'tier2-atlas',
+allowedRegions:[{from:[12,8],to:[18,24]}],preserveAlpha:true}.
+Coordinates are physical PNG pixels and to is exclusive, with at most 16
+rectangles. Rust refuses the whole edit when any other atlas pixel, another
+texture, Cube, UV, rig, animation, metadata or unknown model field changes.
+For RGB-only grading, preserveAlpha additionally prohibits alpha changes even
+inside the allowed regions. The guard is enforced before revision/Undo commit
+and before the no-overwrite publish. It is optional for general model creation
+or deliberate structural edits, but should be supplied for corrections of
+already-approved visual regions. The trusted host approves the whole bound
+plan; source SHA and region restrictions do not establish that a visual
+reference was actually compared or that material shading is professionally
+correct. The Rust receipt retains visual_verdict: UNVERIFIED.
+Rust/Node regression tests AUTHORED_NOT_RUN; native behavior UNVERIFIED.
+
 **Explicit Animation visibility envelope (2026-11-16; SOURCE_ONLY):** A trusted Code Mode host can authorize one standard SHA-pinned Rust `apply` operation `{op:'set_visible_box',bounds:[widthBlocks,heightBlocks,offsetYBlocks]}`. This stores the recognized Blockbench `.bbmodel.visible_box` project property, not a second Geometry file or a renderer-owned override. The existing Geometry exporter computes a conservative static envelope and takes the union with these user-authored minimum bounds to accommodate known animation reach without enlarging all models automatically. Invalid/nonfinite/beyond supported values refuse; permission approval, no-overwrite publisher, Undo/Redo and project source integrity are unchanged. Untrusted guest reads do not grant write authority. Node and Rust regressions AUTHORED_NOT_RUN; native culling under animation remains UNVERIFIED. The existing `asset_handoff` read returns Geometry-exported `visible_bounds: {width,height,offset}` in blocks and a `visible_bounds_source` flag; it is read-only and says nothing about arbitrary animation poses, so inspect actual motion and native culling separately.
 
 **Texture coverage focused agent read (2026-11-16; SOURCE_ONLY):** A Code Mode agent can request `{kind:'model_texture_coverage',offset:0,limit:4,attention_only:true}` through the existing SHA-pinned `inspectBatch` read. Rust still checks all six sides of each scanned Cube and shares decoded atlas pixels within the page, but emits only faces needing source review. `reviewed_cubes` and `next_offset` use the scanned Cube count even if `returned_cubes` is zero; follow every `next_offset` rather than treating an empty filtered page as completion. Inspect `fully_transparent_faces`, `partially_transparent_faces`, `translucent_faces` and `unresolved_reference_or_mapping_faces` without claiming a visual defect from alpha alone. Omit `attention_only` or set false for the original full result. New selector field is boolean-only and read-only; this is not automatic repaint, file publication or a native quality PASS. Source tests NOT_EXECUTED.

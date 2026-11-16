@@ -92,11 +92,49 @@ async function runBinary(binary, args) {
   }
   return parseResponse(stdout);
 }
-function serializePlan(operations) {
+// Exact source-pixel bounds, not artistic reference or user approval.
+function normalizedCorrectionScope(scope) {
+  if (scope === undefined) return undefined;
+  if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
+      Object.keys(scope).some(key =>
+        !['textureUuid', 'allowedRegions', 'preserveAlpha'].includes(key))) {
+    throw new TypeError('CORRECTION_SCOPE_INVALID');
+  }
+  const textureUuid = nonempty(scope.textureUuid, 'textureUuid');
+  if (Buffer.byteLength(textureUuid, 'utf8') > 128 || /\s/.test(textureUuid) ||
+      !Array.isArray(scope.allowedRegions) ||
+      scope.allowedRegions.length < 1 || scope.allowedRegions.length > 16 ||
+      (scope.preserveAlpha !== undefined && typeof scope.preserveAlpha !== 'boolean')) {
+    throw new TypeError('CORRECTION_SCOPE_INVALID');
+  }
+  const rectangles = scope.allowedRegions.map(rect => {
+    if (!rect || typeof rect !== 'object' || Array.isArray(rect) ||
+        Object.keys(rect).some(key => !['from', 'to'].includes(key))) {
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    const point = value => {
+      if (!Array.isArray(value) || value.length !== 2) {
+        throw new TypeError('CORRECTION_SCOPE_INVALID');
+      }
+      return value.map(n => Number(wholeNumber(n, 'coordinate', 0, 256)));
+    };
+    const from = point(rect.from), to = point(rect.to);
+    if (from[0] >= to[0] || from[1] >= to[1]) {
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    return {from, to};
+  });
+  return {texture_uuid:textureUuid, allowed_regions:rectangles,
+    preserve_alpha:scope.preserveAlpha ?? false};
+}
+function serializePlan(operations, correctionScope) {
   if (!Array.isArray(operations) || operations.length < 1 || operations.length > 128) {
     throw new TypeError('operations must contain 1 through 128 typed Rust operations');
   }
-  const payload = JSON.stringify({ expected_revision: 0, operations }, (_key, value) => {
+  const scope = normalizedCorrectionScope(correctionScope);
+  const payload = JSON.stringify({ expected_revision: 0, operations,
+    ...(scope ? {correction_scope:scope} : {}),
+  }, (_key, value) => {
     if (typeof value === 'number' && !Number.isFinite(value)) {
       throw new TypeError('Nonfinite operation value');
     }
@@ -362,18 +400,24 @@ export function createRustCodeModeClient({
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async apply({ input, output, expectedSha256, operations }) {
+    async apply({ input, output, expectedSha256, operations, correctionScope }) {
       const options = {
         input: absolute(input, 'input'),
         output: absolute(output, 'output'),
         'expected-sha256': hash(expectedSha256),
       };
-      const payload = serializePlan(operations);
+      const payload = serializePlan(operations, correctionScope);
+      const scope = normalizedCorrectionScope(correctionScope);
       const approval = await requestWrite('apply', {
         input: options.input, output: options.output,
         expectedSha256: options['expected-sha256'],
         operationCount: operations.length,
         operationKinds: Object.freeze(operations.map((op) => op?.op ?? null)),
+        ...(scope ? { correctionScope: Object.freeze({
+          textureUuid:scope.texture_uuid,
+          regionCount:scope.allowed_regions.length,
+          preserveAlpha:scope.preserve_alpha,
+        }) } : {}),
         planSha256: createHash('sha256').update(payload).digest('hex'),
       });
       const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-code-mode-'));
@@ -473,8 +517,8 @@ export async function openRustCodeModeProject(client, input) {
       client.inspectAnimationTransformTrack({
         input: path, animationUuid, boneUuid, channel, offset, limit, expectedSha256,
       }),
-    apply: ({ output, operations }) =>
-      client.apply({ input: path, output, expectedSha256, operations }),
+    apply: ({ output, operations, correctionScope }) =>
+      client.apply({ input: path, output, expectedSha256, operations, correctionScope }),
     exportPng: ({ output, textureUuid }) =>
       client.exportPng({ input: path, output, textureUuid, expectedSha256 }),
     exportGeometry: ({ output }) =>

@@ -2,6 +2,15 @@
 export type Vec3 = [number, number, number];
 export type Vec4 = [number, number, number, number];
 export type Vec2 = [number, number];
+/** An ephemeral source-guard for a correction to an EXISTING texture.
+ * All other .bbmodel data and all pixels outside the half-open rectangles
+ * must remain unchanged. This does not judge the visual style.
+ */
+export interface TextureCorrectionScope {
+  textureUuid: string;
+  allowedRegions: Array<{ from: Vec2; to: Vec2 }>;
+  preserveAlpha?: boolean;
+}
 export interface PaintRectangleStep {
   from: Vec2;
   to: Vec2;
@@ -573,6 +582,12 @@ export interface ApplyReceipt {
   output_sha256: string;
   summary: DocumentSummary;
   mutation: MutationReceipt;
+  /** Returned by Rust only when a declared pixel scope was enforced. */
+  correction_scope?: {
+    status: "enforced";
+    texture_uuid: string;
+    visual_verdict: "UNVERIFIED";
+  } | null;
 }
 export interface OutputReceipt {
   status: "OK";
@@ -610,7 +625,7 @@ export interface RustCodeModeClient {
     offset?: number; limit?: number; expectedSha256?: string;
   }): Promise<InspectReceipt & { track: TransformTrackInspection }>;
   audit(input: { input: string; expectedSha256?: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
-  apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
+  apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }): Promise<ApplyReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
   exportPng(input: { input: string; output: string; textureUuid: string; expectedSha256: string }): Promise<OutputReceipt>;
   exportGeometry(input: { input: string; output: string; expectedSha256: string }): Promise<OutputReceipt>;
@@ -629,6 +644,7 @@ export interface MutationRequest {
   textureUuid?: string;
   operationCount?: number;
   operationKinds?: readonly string[];
+  correctionScope?: Readonly<{ textureUuid: string; regionCount: number; preserveAlpha: boolean }>;
   planSha256?: string;
 }
 export declare function createRustCodeModeClient(options: {
@@ -668,7 +684,7 @@ export interface RustCodeModeProject {
     animationUuid: string, boneUuid: string, channel: TransformTrackInspection["channel"],
     options?: {offset?: number; limit?: number}
   ): Promise<InspectReceipt & {track: TransformTrackInspection}>;
-  apply(input: { output: string; operations: EditOperation[] }): Promise<ApplyReceipt>;
+  apply(input: { output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }): Promise<ApplyReceipt>;
   exportPng(input: { output: string; textureUuid: string }): Promise<OutputReceipt>;
   exportGeometry(input: { output: string }): Promise<OutputReceipt>;
   exportAnimations(input: { output: string }): Promise<OutputReceipt>;

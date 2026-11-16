@@ -3,7 +3,7 @@
 import type {
   ApplyReceipt, CatalogPage, DocumentSummary, EditOperation,
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
-  MutationRequest, OutputReceipt,
+  MutationRequest, OutputReceipt, TextureCorrectionScope,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -45,7 +45,7 @@ export interface CodeModeGuestAPI {
   audit(args: { project: string }): Promise<InspectReceipt>;
   newModel(args: { output: string; name: string; modelIdentifier: string }):
     Promise<CodeModeProjectReference & { receipt: OutputReceipt }>;
-  apply(args: { project: string; output: string; operations: EditOperation[] }):
+  apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }):
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt }>;
   /** PNG path is selected by the trusted host, never by guest code. */
   importPng(args: { project: string; output: string; uuid: string; name: string }):

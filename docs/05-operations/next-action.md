@@ -1,5 +1,19 @@
 # LazyDesigner Next Action
 
+**Rust existing-texture correction safety (2026-11-16; SOURCE_ONLY):**
+The canonical Rust EditorSession now supports one optional scoped PNG correction
+on the Code Mode apply path. Exact RGBA8 regions and optional alpha protection
+are checked against the original document before Undo/revision commit; no
+other Cube, rig, UV, animation, texture or opaque model field may change.
+Rust CLI refuses publication if the scope fails; the trusted SDK hashes the
+same scope inside its explicitly approved edit plan and guest RPC passes it
+through without introducing a second model engine. This addresses the
+observed Pillager previously-approved-region regression class, not visual
+style intelligence or reference-image loading. Positive/negative Rust/Node
+regression source AUTHORED_NOT_RUN. The next high-priority task is binding
+approved reference evidence and enforcing representative material comparison
+at correction boundaries, not treating a technical guard as visual PASS.
+
 
 **Numeric Catmull-Rom spline clearance (2026-11-16; SOURCE_ONLY):** The existing Bedrock `asset_handoff.geometry.translation_clearance` has a source-grounded conservative upper bound for numeric Catmull-Rom Position and Scale in addition to Rotation, Bezier and linear/step. The implementation uses the pinned Blockbench uniform SplineCurve's four neighboring values to derive Bernstein-control per-axis extrema, respecting outgoing Step and loop-neighbor cases. The typed Code Mode projection now reports `catmullrom_numeric_tracks`. The single Rust document, encoded Geometry/PNG/Animation outputs, SHA guard and no-overwrite publishers are unchanged. Rust positive/negative regression source AUTHORED_NOT_RUN; local/native culling, controller blending, real model visual reference quality and efficiency remain UNVERIFIED. Next work only for material source-observed Geometry/Texture/Animation fidelity defects; UI/UX and release remain deferred.
 
