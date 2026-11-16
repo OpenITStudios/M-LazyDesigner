@@ -175,6 +175,7 @@ export type EditOperation =
   | { op: 'import_paint_texture'; uuid: string; name: string; source: string }
   | { op: 'set_empty_atlas_resolution'; width: number; height: number }
   | { op: 'assign_cube_texture'; cube_uuid: string; texture_uuid: string }
+  | { op: 'assign_cube_face_texture'; cube_uuid: string; face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; texture_uuid: string }
   | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
   | { op: 'paint_texture_stroke'; texture_index: number; points: [number, number][]; rgba: [number, number, number, number] }
   | { op: 'paint_texture_brush'; texture_index: number; points: [number, number][]; radius: number; rgba: [number, number, number, number]; erase: boolean }
