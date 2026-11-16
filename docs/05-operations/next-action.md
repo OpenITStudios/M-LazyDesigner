@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Nested rig duplication (2026-11-16):** `duplicate_bone_subtree` now clones one Bone/Cube hierarchy as a single Rust operation, assigns deterministic descendant IDs and unique suffixed Bone names, and preserves existing Texture/UV and original Animation assets. Explicit subsequent translation or UV isolation is required for spatially/texturally independent copies. Generic Tauri/CLI and typed Code Mode share the source; regression source AUTHORED_NOT_RUN, Blockbench native export and comparative throughput UNVERIFIED. Continue Geometry/Texturing/Animation feature depth, source quality and editable .bbmodel acceptance; UI remains deferred.
+
+
 **Animation preview cost correction (2026-11-16):** Read-only Svelte pose playback now prepares and validates sorted numeric-linear keyframes only on Rust/Tauri selected-animation snapshot change; each frame reuses the prepared projection and binary-searches tracks. This avoids redundant per-frame grouping/sorting and does not alter Rust authoring, `.bbmodel`, or deferred UI/UX. Source parity/invalidation regressions AUTHORED_NOT_RUN, native timing and quality UNVERIFIED. Continue three asset domains and editable Blockbench handoff.
 
 **Paged Texture decode reuse (2026-11-16):** Source now shares one short-lived RGBA8 decode per referenced atlas across the eight-Cube texture-coverage page; standalone six-face reports, unknown/invalid PNG refusal, `.bbmodel` and CLI/Code Mode contracts are unchanged. Source regression AUTHORED_NOT_RUN; performance and native/visual acceptance remain UNVERIFIED. Continue Geometry/Texturing/Animation asset fidelity and editable Blockbench export, UI last.

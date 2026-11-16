@@ -128,6 +128,7 @@ export type EditOperation =
   | { op: 'rename_node'; uuid: string; name: string }
   | { op: 'remove_cube'; uuid: string }
   | { op: 'duplicate_cube'; source_uuid: string; new_uuid: string }
+  | { op: 'duplicate_bone_subtree'; source_uuid: string; new_uuid: string; name_suffix: string }
   | { op: 'reparent_node'; uuid: string; parent_uuid: string | null }
   | { op: 'remove_empty_bone'; uuid: string }
   | { op: 'set_face_uv'; uuid: string; face: string; uv: Vec4 }

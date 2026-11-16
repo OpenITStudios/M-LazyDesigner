@@ -34,7 +34,7 @@ fn supported_keys(properties: &Map<String, Value>, allowed: &[&str]) -> Result<(
     Ok(())
 }
 
-fn valid_bone_name(name: &str) -> bool {
+pub(super) fn valid_bone_name(name: &str) -> bool {
     !name.is_empty() && name.len() <= 128 &&
         name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
 }

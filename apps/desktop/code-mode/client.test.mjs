@@ -241,6 +241,39 @@ test('Code Mode routes supported transform-channel reads and refuses unknown cha
   assert.equal(calls.length, before);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: one approved Rust subtree command replaces
+// per-Bone/per-Cube AI operations without bypassing host authorization.
+test('Code Mode forwards one approved Bone subtree copy without per-child operations', async () => {
+  const operation = {
+    op: 'duplicate_bone_subtree', source_uuid: 'root-1',
+    new_uuid: 'root-2', name_suffix: '_right',
+  };
+  let plan;
+  const approvals = [];
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    authorizeMutation: (request) => {
+      approvals.push(request);
+      return request.operation === 'apply' && request.expectedSha256 === SHA;
+    },
+    runner: async (argv) => {
+      plan = JSON.parse(await readFile(argv[argv.indexOf('--plan') + 1], 'utf8'));
+      return { status: 'OK', mutation: {
+        revision: 1, operation_count: 1, changed_uuids: ['root-2'],
+      } };
+    },
+  });
+  const result = await client.apply({
+    input: '/abs/model.bbmodel', output: '/abs/model-clone.bbmodel',
+    expectedSha256: SHA, operations: [operation],
+  });
+  assert.deepEqual(plan, { expected_revision: 0, operations: [operation] });
+  assert.deepEqual(approvals[0].operationKinds, ['duplicate_bone_subtree']);
+  assert.equal(approvals[0].operationCount, 1);
+  assert.deepEqual(result.mutation.changed_uuids, ['root-2']);
+});
+
 test('Code Mode forwards a semantic Cube-face paint batch as one approved Rust operation', async () => {
   let plan;
   const patches = [

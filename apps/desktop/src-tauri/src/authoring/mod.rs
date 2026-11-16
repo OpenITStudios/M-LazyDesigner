@@ -11,6 +11,7 @@ mod geometry;
 mod paint;
 mod uv_sharing;
 mod texture_coverage;
+mod subtree;
 pub use uv_sharing::inspect_cube_uv_sharing;
 pub use texture_coverage::inspect_model_texture_coverage;
 pub mod storage;
@@ -146,6 +147,7 @@ pub enum EditOperation {
     AddBone { bone: Bone, parent_uuid: Option<String> },
     AddCube { cube: Cube, bone_uuid: String },
     DuplicateCube { source_uuid: String, new_uuid: String },
+    DuplicateBoneSubtree { source_uuid: String, new_uuid: String, name_suffix: String },
     ReparentNode { uuid: String, parent_uuid: Option<String> },
     RenameNode { uuid: String, name: String },
     RemoveCube { uuid: String },
@@ -1614,6 +1616,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 return Err(fail("OUTLINER_CUBE_REFERENCE_INVALID"));
             }
             doc.cubes.push(duplicate);
+            Ok(new_uuid.clone())
+        }
+        EditOperation::DuplicateBoneSubtree { source_uuid, new_uuid, name_suffix } => {
+            subtree::duplicate_bone_subtree(doc, source_uuid, new_uuid, name_suffix)?;
             Ok(new_uuid.clone())
         }
         EditOperation::ReparentNode { uuid, parent_uuid } => {

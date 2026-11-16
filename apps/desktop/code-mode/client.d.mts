@@ -34,6 +34,7 @@ export type EditOperation =
   | { op: "add_bone"; bone: Bone; parent_uuid: string | null }
   | { op: "add_cube"; cube: Cube; bone_uuid: string }
   | { op: "duplicate_cube"; source_uuid: string; new_uuid: string }
+  | { op: "duplicate_bone_subtree"; source_uuid: string; new_uuid: string; name_suffix: string }
   | { op: "reparent_node"; uuid: string; parent_uuid: string | null }
   | { op: "rename_node"; uuid: string; name: string }
   | { op: "remove_cube"; uuid: string }

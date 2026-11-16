@@ -1253,6 +1253,149 @@ fn guarded_cube_face_paint_rejects_implicit_and_unknown_uv_mappings() {
     assert_eq!(session.document().texture_assets, doc.texture_assets);
 }
 
+
+// SOURCE_AUTHORED_NOT_RUN: clone a nested textured/animated Bedrock rig
+// and translate it in one Rust Undo transaction.
+#[test]
+fn duplicate_bone_subtree_preserves_nested_outliner_texture_and_source_animation() {
+    const CLONE: &str = "00000000-0000-4000-8000-000000008901";
+    const CHILD: &str = "00000000-0000-4000-8000-000000000003";
+    let mut session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let receipt = session.apply(0, &[
+        EditOperation::DuplicateBoneSubtree {
+            source_uuid: BONE.into(), new_uuid: CLONE.into(),
+            name_suffix: "_copy".into(),
+        },
+        EditOperation::TranslateBoneSubtree {
+            uuid: CLONE.into(), delta: [8.0, 0.0, 0.0],
+        },
+    ]).unwrap();
+    assert_eq!(receipt.operation_count, 2);
+    assert_eq!(receipt.changed_uuids, vec![CLONE.to_owned()]);
+    let saved = session.document().clone();
+    assert_eq!(saved.cubes.len(), original.cubes.len() + 1);
+    assert_eq!(saved.bones.len(), original.bones.len() + 2);
+    assert_eq!(saved.hierarchy.len(), 2);
+    assert_eq!(saved.hierarchy[0], original.hierarchy[0]);
+    assert_eq!(saved.cubes[0], original.cubes[0]);
+    assert_eq!(saved.bones[0], original.bones[0]);
+    assert_eq!(saved.bones[1], original.bones[1]);
+    assert_eq!(saved.texture_assets, original.texture_assets);
+    assert_eq!(saved.animation_assets, original.animation_assets);
+    assert_eq!(saved.extensions, original.extensions);
+
+    let OutlinerNode::Bone(copied_root) = &saved.hierarchy[1] else {
+        panic!("duplicated root must remain a Bone");
+    };
+    assert_eq!(copied_root.uuid, CLONE);
+    assert_eq!(copied_root.is_open, Some(true));
+    let OutlinerNode::Bone(copied_child) = &copied_root.children[0] else {
+        panic!("nested Bone must be preserved");
+    };
+    assert_ne!(copied_child.uuid, CHILD);
+    assert_eq!(copied_child.uuid.len(), 36);
+    let OutlinerNode::Cube(copied_cube_id) = &copied_child.children[0] else {
+        panic!("nested Cube must be preserved");
+    };
+    assert_ne!(copied_cube_id, CUBE);
+    let bone = saved.bones.iter().find(|b| b.uuid == copied_root.uuid).unwrap();
+    let nested = saved.bones.iter().find(|b| b.uuid == copied_child.uuid).unwrap();
+    assert_eq!(bone.name, "root_bone_copy");
+    assert_eq!(nested.name, "child_bone_copy");
+    assert_eq!(bone.origin, Some([8.0, 0.0, 0.0]));
+    assert_eq!(nested.origin, Some([8.0, 2.0, 0.0]));
+    let copied_cube = saved.cubes.iter().find(|c| &c.uuid == copied_cube_id).unwrap();
+    assert_eq!(copied_cube.from, [8.0, 0.0, 0.0]);
+    assert_eq!(copied_cube.faces, original.cubes[0].faces);
+    assert_eq!(copied_cube.extra, original.cubes[0].extra);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    session.undo(1).unwrap();
+    assert_eq!(session.document(), &original);
+    session.redo(2).unwrap();
+    assert_eq!(session.document(), &saved);
+
+    // The same root UUID seed gives byte-identical descendant IDs.
+    let mut repeated = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    repeated.apply(0, &[
+        EditOperation::DuplicateBoneSubtree {
+            source_uuid: BONE.into(), new_uuid: CLONE.into(),
+            name_suffix: "_copy".into(),
+        },
+        EditOperation::TranslateBoneSubtree {
+            uuid: CLONE.into(), delta: [8.0, 0.0, 0.0],
+        },
+    ]).unwrap();
+    assert_eq!(repeated.export().unwrap(), session.export().unwrap());
+}
+
+#[test]
+fn duplicate_bone_subtree_refuses_name_id_bad_suffix_and_source_links_atomically() {
+    const CLONE: &str = "00000000-0000-4000-8000-000000008911";
+    const SECOND: &str = "00000000-0000-4000-8000-000000008912";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let original = session.document().clone();
+    let make = |source: &str, id: &str, suffix: &str| {
+        EditOperation::DuplicateBoneSubtree {
+            source_uuid: source.into(), new_uuid: id.into(),
+            name_suffix: suffix.into(),
+        }
+    };
+    for (source, id, suffix, error) in [
+        (BONE, BONE, "_copy", "BONE_DUPLICATE_ID_CONFLICT"),
+        (BONE, CUBE, "_copy", "BONE_DUPLICATE_ID_CONFLICT"),
+        ("missing", CLONE, "_copy", "BONE_NOT_FOUND"),
+        (BONE, CLONE, "", "BONE_DUPLICATE_SUFFIX_INVALID"),
+        (BONE, CLONE, " copy", "BONE_DUPLICATE_SUFFIX_INVALID"),
+        (BONE, CLONE, "_bad?", "BONE_DUPLICATE_SUFFIX_INVALID"),
+    ] {
+        assert_eq!(session.apply(0, &[make(source,id,suffix)]).unwrap_err(), error);
+        assert_eq!(session.document(), &original);
+    }
+    session.apply(0, &[make(BONE,CLONE,"_copy")]).unwrap();
+    let copied = session.document().clone();
+    assert_eq!(session.apply(1, &[make(BONE,SECOND,"_copy")]).unwrap_err(),
+        "BONE_DUPLICATE_NAME_CONFLICT");
+    assert_eq!(session.document(), &copied);
+
+    let mut linked = original.clone();
+    linked.bones[0].extra.insert("vendor_ref".into(), json!({"target":BONE}));
+    let mut unsafe_session = EditorSession::from_document(linked.clone()).unwrap();
+    assert_eq!(unsafe_session.apply(0, &[
+        EditOperation::SetCubeInflate { uuid:CUBE.into(), inflate:0.25 },
+        make(BONE,CLONE,"_copy"),
+    ]).unwrap_err(), "BONE_DUPLICATE_OPAQUE_REFERENCE_UNSUPPORTED");
+    assert_eq!(unsafe_session.document(), &linked);
+    assert_eq!(unsafe_session.summary().revision, 0);
+    assert!(!unsafe_session.can_undo());
+
+    let mut face_link = original.clone();
+    face_link.cubes[0].faces["north"]["vendor_link"] = json!(BONE);
+    let mut unsafe_face = EditorSession::from_document(face_link.clone()).unwrap();
+    assert_eq!(unsafe_face.apply(0, &[make(BONE,CLONE,"_copy")]).unwrap_err(),
+        "BONE_DUPLICATE_OPAQUE_REFERENCE_UNSUPPORTED");
+    assert_eq!(unsafe_face.document(), &face_link);
+}
+
+#[test]
+fn duplicate_bone_subtree_remains_editable_in_bedrock_geometry_export() {
+    const CLONE: &str = "00000000-0000-4000-8000-000000008921";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[EditOperation::DuplicateBoneSubtree {
+        source_uuid:BONE.into(), new_uuid:CLONE.into(),
+        name_suffix:"_right".into(),
+    }]).unwrap();
+    let geometry: Value = serde_json::from_slice(
+        &export_bedrock_geometry(session.document()).unwrap()).unwrap();
+    let bones = geometry["minecraft:geometry"][0]["bones"].as_array().unwrap();
+    assert_eq!(bones.len(), 2);
+    assert_eq!(bones[0]["name"], json!("root_bone"));
+    assert_eq!(bones[1]["name"], json!("root_bone_right"));
+    assert_eq!(bones[0]["cubes"], bones[1]["cubes"]);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+}
+
 // SOURCE-AUTHORED: one Cube's painted Box UV can be relocated without
 // erasing the shared source, then painted independently from its duplicate.
 #[test]

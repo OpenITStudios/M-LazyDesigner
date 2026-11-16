@@ -1,5 +1,10 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Recursive Bone hierarchy duplication (SOURCE_ONLY)
+
+Compared official Blockbench 5.2.1 Group.duplicate against the Rust Cube-only duplicate. Added one `duplicate_bone_subtree` authoring operation that preserves nested Bone/Cube Outliner order, pivots, UV and Texture assets while generating new UUIDs and export-safe names; original Animation tracks are not silently copied. Refuses ID/name conflicts and opaque metadata links into the copied source, without auto-remapping unknown fields. Shared Rust CLI/Tauri EditOperation and Code Mode type; no new engine or GUI. Rust source regressions cover nested painted/animated fixture, deterministic output, a single Undo for duplicate+move, geometry/.bbmodel export and invalid/atomic refusal; JS Code Mode plan/approval regression also authored. NOT_EXECUTED under active hold, native Blockbench quality and efficiency UNVERIFIED.
+
+
 ## 2026-11-16 — Read-only animation preview sampling cost (SOURCE_ONLY)
 
 The existing Rust editor preview now prepares validated/sorted numeric-linear Bone tracks when the selected Rust/Tauri snapshot changes, and reuses them for playback frames. Per-channel interpolation uses binary search rather than a linear scan of keyframes. Direct pose/timeline helpers remain compatible; Rust remains the only authored document authority. Source regression covers prepared-versus-direct samples, boundary times, replacement snapshots and invalid-input refusal. Tests NOT_EXECUTED; measured FPS and native Blockbench parity UNVERIFIED.
