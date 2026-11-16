@@ -5,7 +5,7 @@ import type {
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
   MutationRequest, OutputReceipt, TextureCorrectionScope,
   MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
-  MaterialCorrectionIntent,
+  MaterialCorrectionIntent, MaterialFacePatchBinding, CubeFaceSurface,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -55,6 +55,19 @@ export interface CodeModeGuestAPI {
       correctionScope?:TextureCorrectionScope | null;
       rejectedApproaches:Array<{issueId:string;approachId:string}>;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
+      face_source_evidence:Readonly<{
+        status:"six_saved_faces_inspected";
+        cube_uuid:string;face_count:6;
+        visual_verdict:"UNVERIFIED";
+        face_coverage_verdict:"UNVERIFIED";
+        faces:ReadonlyArray<Readonly<{
+          side:CubeFaceSurface["side"];
+          reference_kind:CubeFaceSurface["reference_kind"];
+          texture_uuid:string|null;
+          alpha_status:"measured"|"unsupported";
+          transparent_pixels:number|null;
+        }>>;
+      }> | null;
       source:"TRUSTED_HOST_DECLARATION"|"NONE";
       visual_verdict:"UNVERIFIED";
     };
@@ -108,7 +121,10 @@ export interface CodeModeHost {
 export interface CodeModeReviewedMaterialCohort {
   phase:"sample"|"propagation";
   issueId:string; partId:string; approachId:string;
+  /** Native Cube face selected by the reviewer, never a screen view. */
+  cubeUuid:string;face:CubeFaceSurface["side"];
   sampleRegion:{from:[number,number];to:[number,number]};
+  faceBinding?:MaterialFacePatchBinding;
   sampleVerdict?:"ACCEPTED"|"UNVERIFIED";
   approval_source?:"TRUSTED_REVIEWER_DECLARATION"|"NONE";
   visual_verdict?:"UNVERIFIED";
@@ -137,6 +153,7 @@ export interface CodeModeVisualReviewerFeedback {
   materialCohort?:{
     phase:"sample"|"propagation";
     issueId:string; partId:string; approachId:string;
+    cubeUuid:string;face:CubeFaceSurface["side"];
     sampleRegion:{from:[number,number];to:[number,number]};
     sampleVerdict?:"ACCEPTED";
   };

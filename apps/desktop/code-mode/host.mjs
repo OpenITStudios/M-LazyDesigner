@@ -185,6 +185,7 @@ function normalizedVisualReview(input) {
       issues:Object.freeze(issues),correctionScope:normalized,
       rejectedApproaches:Object.freeze(rejectedApproaches),
       materialCohort,
+      face_source_evidence:null,
       source:'TRUSTED_HOST_DECLARATION',
       visual_verdict:'UNVERIFIED',
     });
@@ -198,6 +199,7 @@ function normalizedVisualReview(input) {
     status:'RECORDED',decision:input.decision,
     issues:Object.freeze([]),correctionScope:null,
     rejectedApproaches:Object.freeze([]),materialCohort:null,
+    face_source_evidence:null,
     source:'TRUSTED_HOST_DECLARATION',visual_verdict:'UNVERIFIED',
   });
 }
@@ -209,11 +211,15 @@ function normalizedReviewedMaterialCohort(value, correctionScope, issues) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       Object.keys(value).some(key => ![
         'phase','issueId','partId','approachId','sampleRegion','sampleVerdict',
+        'cubeUuid','face',
       ].includes(key)) ||
       !['sample','propagation'].includes(value.phase) ||
       typeof value.issueId !== 'string' ||
       typeof value.partId !== 'string' ||
       typeof value.approachId !== 'string' ||
+      typeof value.cubeUuid !== 'string' ||
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(value.cubeUuid) ||
+      !['north','east','south','west','up','down'].includes(value.face) ||
       !/^[a-z][a-z0-9_-]{0,63}$/.test(value.issueId) ||
       !/^[a-z][a-z0-9_-]{0,63}$/.test(value.partId) ||
       !/^[a-z][a-z0-9_-]{0,63}$/.test(value.approachId) ||
@@ -244,6 +250,7 @@ function normalizedReviewedMaterialCohort(value, correctionScope, issues) {
   return Object.freeze({
     phase:value.phase,issueId:value.issueId,partId:value.partId,
     approachId:value.approachId,
+    cubeUuid:value.cubeUuid,face:value.face,
     sampleRegion:Object.freeze({
       from:Object.freeze([...region.from]),to:Object.freeze([...region.to]),
     }),
@@ -547,6 +554,7 @@ export async function createCodeModeHost({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
         rejectedApproaches:Object.freeze([]),materialCohort:null,
+        face_source_evidence:null,
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
       if (typeof reviewVisualPair === 'function' && prior === undefined) {
@@ -584,14 +592,70 @@ export async function createCodeModeHost({
         }
         feedback = normalizedVisualReview(returned);
         if (feedback.materialCohort) {
-          feedback = Object.freeze({
+          const cohort=feedback.materialCohort;
+          // Re-read the *actual* model through one pinned Rust inspection
+          // batch. Reviewer/guest part names cannot independently prove UV
+          // ownership, nor can an atlas rectangle define a rendered face.
+          const faces=await model.inspectBatch([
+            {kind:'material_face_patch',
+              texture_uuid:feedback.correctionScope.textureUuid,
+              cube_uuid:cohort.cubeUuid,face:cohort.face,
+              region:cohort.sampleRegion},
+            {kind:'cube_face_alpha',uuid:cohort.cubeUuid},
+          ]);
+          const binding=faces.results?.[0]?.binding;
+          const six=faces.results?.[1]?.face_alpha;
+          const matches=(x,y)=>Array.isArray(x)&&Array.isArray(y) &&
+            x.length===2&&y.length===2&&x.every((n,i)=>n===y[i]);
+          if (faces.sha256!==model.expectedSha256 ||
+              faces.results?.[0]?.kind!=='material_face_patch' ||
+              binding?.scope!=='source_explicit_cube_face_patch' ||
+              binding?.status!=='bound_source_only' ||
+              binding?.visual_verdict!=='UNVERIFIED' ||
+              binding?.texture_uuid!==feedback.correctionScope.textureUuid ||
+              binding?.cube_uuid!==cohort.cubeUuid ||
+              binding?.face!==cohort.face ||
+              !matches(binding?.sample_region?.from,cohort.sampleRegion.from) ||
+              !matches(binding?.sample_region?.to,cohort.sampleRegion.to) ||
+              faces.results?.[1]?.kind!=='cube_face_alpha' ||
+              six?.cube_uuid!==cohort.cubeUuid ||
+              six?.visual_verdict!=='UNVERIFIED' ||
+              six?.face_coverage_verdict!=='UNVERIFIED' ||
+              six?.face_count!==6 || !Array.isArray(six?.faces) ||
+              six.faces.length!==6 ||
+              new Set(six.faces.map(item=>item.side)).size!==6 ||
+              six.faces.some(item=>![
+                'north','east','south','west','up','down',
+              ].includes(item.side) || ![
+                'measured','unsupported',
+              ].includes(item.alpha?.status))) {
+            throw new Error('CODE_MODE_MATERIAL_FACE_BINDING_UNVERIFIED');
+          }
+          feedback=Object.freeze({
             ...feedback,
             materialCohort:Object.freeze({
-              ...feedback.materialCohort,
+              ...cohort,
+              faceBinding:Object.freeze(binding),
               source_model_sha256:model.expectedSha256,
               reference_png_sha256:visualPair.reference.sha256,
               capture_png_sha256:visualPair.capture.sha256,
               view_id:visualPair.viewId,
+            }),
+            face_source_evidence:Object.freeze({
+              status:'six_saved_faces_inspected',
+              cube_uuid:cohort.cubeUuid,
+              face_count:6,
+              visual_verdict:'UNVERIFIED',
+              face_coverage_verdict:'UNVERIFIED',
+              faces:Object.freeze(six.faces.map(item=>Object.freeze({
+                side:item.side,
+                reference_kind:item.saved_reference_kind,
+                texture_uuid:item.texture_uuid,
+                alpha_status:item.alpha.status,
+                // No PNG bytes and no false source/visual PASS.
+                transparent_pixels:item.alpha.status==='measured' ?
+                  item.alpha.region?.transparent_pixels ?? null : null,
+              }))),
             }),
           });
         }
