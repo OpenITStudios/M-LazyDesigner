@@ -127,6 +127,43 @@ export function normalizedCorrectionScope(scope) {
   return {texture_uuid:textureUuid, allowed_regions:rectangles,
     preserve_alpha:scope.preserveAlpha ?? false};
 }
+// Descriptive diagnosis only. No self-certifying visual quality claim.
+const CORRECTION_MATERIALS = new Set([
+  'metal','wood','stone','cloth','skin','glass','other',
+]);
+const CORRECTION_TREATMENTS = new Set([
+  'form_value_masses','contact_shadows','hand_painted_clusters',
+  'palette_roles','alpha_silhouette','artwork_footprint',
+]);
+export function normalizedMaterialCorrectionIntent(value) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).some(key => ![
+        'issueId','approachId','partId','material','cause','treatment',
+        'expectedChange',
+      ].includes(key))) {
+    throw new TypeError('MATERIAL_CORRECTION_INTENT_INVALID');
+  }
+  const token = input => typeof input === 'string' &&
+    /^[a-z][a-z0-9_-]{0,63}$/.test(input);
+  const statement = input => typeof input === 'string' &&
+    input.length >= 16 && input.length <= 240 &&
+    input.trim() === input && !/[\x00-\x1f\x7f]/.test(input);
+  if (!token(value.issueId) || !token(value.approachId) ||
+      !token(value.partId) ||
+      !CORRECTION_MATERIALS.has(value.material) ||
+      !CORRECTION_TREATMENTS.has(value.treatment) ||
+      !statement(value.cause) || !statement(value.expectedChange)) {
+    throw new TypeError('MATERIAL_CORRECTION_INTENT_INVALID');
+  }
+  return Object.freeze({
+    issueId:value.issueId, approachId:value.approachId,
+    partId:value.partId, material:value.material,
+    cause:value.cause, treatment:value.treatment,
+    expectedChange:value.expectedChange,
+  });
+}
+
 function serializePlan(operations, correctionScope) {
   if (!Array.isArray(operations) || operations.length < 1 || operations.length > 128) {
     throw new TypeError('operations must contain 1 through 128 typed Rust operations');
@@ -425,7 +462,7 @@ export function createRustCodeModeClient({
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async apply({ input, output, expectedSha256, operations, correctionScope }) {
+    async apply({ input, output, expectedSha256, operations, correctionScope, correctionIntent }) {
       const options = {
         input: absolute(input, 'input'),
         output: absolute(output, 'output'),
@@ -433,6 +470,7 @@ export function createRustCodeModeClient({
       };
       const payload = serializePlan(operations, correctionScope);
       const scope = normalizedCorrectionScope(correctionScope);
+      const intent = normalizedMaterialCorrectionIntent(correctionIntent);
       const approval = await requestWrite('apply', {
         input: options.input, output: options.output,
         expectedSha256: options['expected-sha256'],
@@ -446,6 +484,11 @@ export function createRustCodeModeClient({
           regionCount:scope.allowed_regions.length,
           preserveAlpha:scope.preserve_alpha,
         }) } : {}),
+        ...(intent ? {
+          materialCorrectionIntent:intent,
+          materialIntentSha256:createHash('sha256')
+            .update(JSON.stringify(intent)).digest('hex'),
+        } : {}),
         planSha256: createHash('sha256').update(payload).digest('hex'),
       });
       const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-code-mode-'));
@@ -560,8 +603,8 @@ export async function openRustCodeModeProject(client, input) {
       client.inspectAnimationTransformTrack({
         input: path, animationUuid, boneUuid, channel, offset, limit, expectedSha256,
       }),
-    apply: ({ output, operations, correctionScope }) =>
-      client.apply({ input: path, output, expectedSha256, operations, correctionScope }),
+    apply: ({ output, operations, correctionScope, correctionIntent }) =>
+      client.apply({ input: path, output, expectedSha256, operations, correctionScope, correctionIntent }),
     exportPng: ({ output, textureUuid }) =>
       client.exportPng({ input: path, output, textureUuid, expectedSha256 }),
     exportGeometry: ({ output }) =>

@@ -617,6 +617,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             textureUuid:'tier2-atlas',allowedRegions:[target],
             preserveAlpha:step!==3,
           },
+          correctionIntent:{"issueId":"helmet-flat","approachId":"helmet-value-masses","partId":"tier2-helmet","material":"metal","cause":"Helmet shadows and highlights form one generic horizontal band.","treatment":"form_value_masses","expectedChange":"Separate the base, shadow and highlights following the helmet curvature."},
         }},response=>{
           if(step===2 || step===3){
             assert.equal(response.ok,false);
@@ -647,6 +648,9 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(received.length,1);
     assert.equal(approvals.length,1);
     assert.equal(approvals[0].correctionScope.textureUuid,'tier2-atlas');
+    assert.equal(approvals[0].materialCorrectionIntent.issueId,'helmet-flat');
+    assert.equal(approvals[0].materialCorrectionIntent.approachId,'helmet-value-masses');
+    assert.match(approvals[0].materialIntentSha256,/^[a-f0-9]{64}$/);
     assert.deepEqual(calls,['inspect','inspect-visual-pair','apply','inspect']);
   }));
 

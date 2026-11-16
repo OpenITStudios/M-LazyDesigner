@@ -5,6 +5,7 @@ import type {
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
   MutationRequest, OutputReceipt, TextureCorrectionScope,
   MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
+  MaterialCorrectionIntent,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -52,6 +53,7 @@ export interface CodeModeGuestAPI {
       decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
       issues:Array<CodeModeVisualReviewerFeedback["issues"][number]>;
       correctionScope?:TextureCorrectionScope | null;
+      rejectedApproaches:Array<{issueId:string;approachId:string}>;
       source:"TRUSTED_HOST_DECLARATION"|"NONE";
       visual_verdict:"UNVERIFIED";
     };
@@ -81,7 +83,7 @@ export interface CodeModeGuestAPI {
   audit(args: { project: string }): Promise<InspectReceipt>;
   newModel(args: { output: string; name: string; modelIdentifier: string }):
     Promise<CodeModeProjectReference & { receipt: OutputReceipt }>;
-  apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }):
+  apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent }):
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt }>;
   /** PNG path is selected by the trusted host, never by guest code. */
   importPng(args: { project: string; output: string; uuid: string; name: string }):
@@ -107,6 +109,8 @@ export interface CodeModeVisualReviewerFeedback {
     observation:string;
   }>;
   correctionScope?: TextureCorrectionScope;
+  /** Actual rejected strategy keys, carried by the authorized reviewer. */
+  rejectedApproaches?:Array<{issueId:string;approachId:string}>;
 }
 export interface CodeModeHostOptions {
   rustBinary: string;

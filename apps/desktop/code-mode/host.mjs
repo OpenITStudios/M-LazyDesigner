@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
-import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope } from './client.mjs';
+import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -113,7 +113,7 @@ const MAX_REVIEW_ISSUES = 6;
 function normalizedVisualReview(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key =>
-        !['decision','issues','correctionScope'].includes(key)) ||
+        !['decision','issues','correctionScope','rejectedApproaches'].includes(key)) ||
       !REVIEW_DECISIONS.has(input.decision) ||
       !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -144,6 +144,26 @@ function normalizedVisualReview(input) {
     try { scope = normalizedCorrectionScope(input.correctionScope); }
     catch { throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID'); }
     if (!scope) throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+    const prior = input.rejectedApproaches ?? [];
+    if (!Array.isArray(prior) || prior.length > 12) {
+      throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+    }
+    const rejectedApproaches = prior.map(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item) ||
+          Object.keys(item).some(key => !['issueId','approachId'].includes(key)) ||
+          typeof item.issueId !== 'string' ||
+          typeof item.approachId !== 'string' ||
+          !/^[a-z][a-z0-9_-]{0,63}$/.test(item.issueId) ||
+          !/^[a-z][a-z0-9_-]{0,63}$/.test(item.approachId) ||
+          !issues.some(issue => issue.id === item.issueId)) {
+        throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+      }
+      return Object.freeze({issueId:item.issueId,approachId:item.approachId});
+    });
+    if (new Set(rejectedApproaches.map(item =>
+      item.issueId+':'+item.approachId)).size !== rejectedApproaches.length) {
+      throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
+    }
     const normalized = Object.freeze({
       textureUuid:scope.texture_uuid,
       allowedRegions:Object.freeze(scope.allowed_regions.map(region=>
@@ -157,16 +177,19 @@ function normalizedVisualReview(input) {
     return Object.freeze({
       status:'RECORDED',decision:'REJECTED',
       issues:Object.freeze(issues),correctionScope:normalized,
+      rejectedApproaches:Object.freeze(rejectedApproaches),
       source:'TRUSTED_HOST_DECLARATION',
       visual_verdict:'UNVERIFIED',
     });
   }
-  if (issues.length !== 0 || input.correctionScope !== undefined) {
+  if (issues.length !== 0 || input.correctionScope !== undefined ||
+      input.rejectedApproaches !== undefined) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
   }
   return Object.freeze({
     status:'RECORDED',decision:input.decision,
     issues:Object.freeze([]),correctionScope:null,
+    rejectedApproaches:Object.freeze([]),
     source:'TRUSTED_HOST_DECLARATION',visual_verdict:'UNVERIFIED',
   });
 }
@@ -457,6 +480,7 @@ export async function createCodeModeHost({
       let feedback = prior ?? Object.freeze({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
+        rejectedApproaches:Object.freeze([]),
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
       if (typeof reviewVisualPair === 'function' && prior === undefined) {
@@ -550,6 +574,7 @@ export async function createCodeModeHost({
         // The numeric image preflight alone does not certify art quality.
         throw new Error('CODE_MODE_VISUAL_PREFLIGHT_REQUIRED');
       }
+      let materialIntent;
       if (visualPair !== null && pixelEdit &&
           typeof reviewVisualPair === 'function') {
         if (completedReviewedCorrections.has(p.expectedSha256)) {
@@ -569,6 +594,20 @@ export async function createCodeModeHost({
             !correctionFitsReview(requested,feedback.correctionScope)) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
         }
+        try {
+          materialIntent = normalizedMaterialCorrectionIntent(args.correctionIntent);
+        } catch {
+          throw new Error('CODE_MODE_MATERIAL_INTENT_REQUIRED');
+        }
+        if (!materialIntent) throw new Error('CODE_MODE_MATERIAL_INTENT_REQUIRED');
+        if (!feedback.issues.some(issue => issue.id === materialIntent.issueId)) {
+          throw new Error('CODE_MODE_MATERIAL_ISSUE_NOT_REVIEWED');
+        }
+        if (feedback.rejectedApproaches.some(item =>
+            item.issueId === materialIntent.issueId &&
+            item.approachId === materialIntent.approachId)) {
+          throw new Error('CODE_MODE_MATERIAL_APPROACH_PREVIOUSLY_REJECTED');
+        }
       }
       if (visualPair !== null && pixelEdit) {
         // An image may change after preflight. Verify BOTH original PNGs
@@ -580,7 +619,8 @@ export async function createCodeModeHost({
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,
-        correctionScope: args.correctionScope });
+        correctionScope: args.correctionScope,
+        ...(materialIntent ? {correctionIntent:materialIntent} : {}) });
       if (visualPair !== null && typeof reviewVisualPair === 'function' && pixelEdit) {
         // The CLI committed its no-overwrite result. Even if registering
         // its next handle fails, retrying the same snapshot is unsafe.

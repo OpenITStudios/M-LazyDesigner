@@ -19,6 +19,21 @@ export declare function normalizedCorrectionScope(scope?: TextureCorrectionScope
   allowed_regions:Array<{from:Vec2;to:Vec2}>;
   preserve_alpha:boolean;
 } | undefined;
+/** Structured guest-proposed diagnosis. The reviewer must still assess art. */
+export interface MaterialCorrectionIntent {
+  issueId:string;
+  approachId:string;
+  partId:string;
+  material:"metal"|"wood"|"stone"|"cloth"|"skin"|"glass"|"other";
+  treatment:"form_value_masses"|"contact_shadows"|"hand_painted_clusters"|
+    "palette_roles"|"alpha_silhouette"|"artwork_footprint";
+  cause:string;
+  expectedChange:string;
+}
+/** One canonical shared strict schema, not a new model/paint engine. */
+export declare function normalizedMaterialCorrectionIntent(
+  value?:MaterialCorrectionIntent
+):Readonly<MaterialCorrectionIntent> | undefined;
 export interface PaintRectangleStep {
   from: Vec2;
   to: Vec2;
@@ -699,7 +714,7 @@ export interface RustCodeModeClient {
     offset?: number; limit?: number; expectedSha256?: string;
   }): Promise<InspectReceipt & { track: TransformTrackInspection }>;
   audit(input: { input: string; expectedSha256?: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
-  apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }): Promise<ApplyReceipt>;
+  apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent }): Promise<ApplyReceipt>;
   inspectVisualPair(input: {
     input: string; expectedSha256: string;
     referencePng: string; capturePng: string;
@@ -724,6 +739,9 @@ export interface MutationRequest {
   operationCount?: number;
   operationKinds?: readonly string[];
   correctionScope?: Readonly<{ textureUuid: string; allowedRegions: ReadonlyArray<Readonly<{ from: readonly [number, number]; to: readonly [number, number] }>>; regionCount: number; preserveAlpha: boolean }>;
+  /** Operator-visible declared material diagnosis, separate from Rust plan. */
+  materialCorrectionIntent?:Readonly<MaterialCorrectionIntent>;
+  materialIntentSha256?:string;
   planSha256?: string;
 }
 export declare function createRustCodeModeClient(options: {
@@ -763,7 +781,7 @@ export interface RustCodeModeProject {
     animationUuid: string, boneUuid: string, channel: TransformTrackInspection["channel"],
     options?: {offset?: number; limit?: number}
   ): Promise<InspectReceipt & {track: TransformTrackInspection}>;
-  apply(input: { output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }): Promise<ApplyReceipt>;
+  apply(input: { output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent }): Promise<ApplyReceipt>;
   exportPng(input: { output: string; textureUuid: string }): Promise<OutputReceipt>;
   exportGeometry(input: { output: string }): Promise<OutputReceipt>;
   exportAnimations(input: { output: string }): Promise<OutputReceipt>;
