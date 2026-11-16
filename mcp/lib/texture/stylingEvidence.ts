@@ -11,9 +11,27 @@ export function inspectPaintStylingEvidence(
   rgba: ArrayLike<number>, width: number, height: number
 ) {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
-      width < 1 || height < 1 || width * height > 1_048_576 ||
+      width < 1 || height < 1 ||
+      !Number.isSafeInteger(width * height) ||
       rgba.length !== width * height * 4) {
     throw new Error("TEXTURE_STYLING_EVIDENCE_BITMAP_INVALID");
+  }
+  if (width * height > 1_048_576) {
+    // Optional quality evidence must NEVER break a valid large-atlas
+    // native Paint. The writer owns the actual atlas-size admission.
+    return {
+      scope:"affected_atlas_crop_only" as const,
+      status:"NOT_EVALUATED" as const,
+      reason:"REGION_TOO_LARGE_FOR_STYLING_DIAGNOSTIC" as const,
+      sampled_visible_pixels:null,
+      color_bucket_count:null,
+      dominant_visible_ratio:null,
+      luminance_span:null,
+      review_hints:[],
+      visual_verdict:"UNVERIFIED" as const,
+      texture_completion_attested:false as const,
+      note:"Diagnostic skipped for a large changed atlas crop; actual mapped-model visual review is still required.",
+    };
   }
   const profile = analyzeTextureColorProfile(rgba, width, height, {
     maxSamples: 4096, paletteSize: 4,

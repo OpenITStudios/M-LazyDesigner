@@ -42,6 +42,13 @@ test("stepped clusters still need actual shaded mapped-model evidence for qualit
   expect(result.visual_verdict).toBe("UNVERIFIED");
   expect(result.texture_completion_attested).toBe(false);
 });
+test("large valid bitmap does not fail native painting just because optional evidence is bounded",()=>{
+  const w=1025,h=1025;
+  const result=inspectPaintStylingEvidence({length:w*h*4},w,h);
+  expect(result.status).toBe("NOT_EVALUATED");
+  expect(result.visual_verdict).toBe("UNVERIFIED");
+  expect(result.texture_completion_attested).toBe(false);
+});
 test("malformed bitmap input is never silently treated as style clearance",()=>{
   expect(()=>inspectPaintStylingEvidence(new Uint8Array(3),8,8))
     .toThrow("TEXTURE_STYLING_EVIDENCE_BITMAP_INVALID");
