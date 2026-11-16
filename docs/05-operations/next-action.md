@@ -1,5 +1,9 @@
 # LazyDesigner Next Action
 
+
+**Numeric Catmull-Rom spline clearance (2026-11-16; SOURCE_ONLY):** The existing Bedrock `asset_handoff.geometry.translation_clearance` has a source-grounded conservative upper bound for numeric Catmull-Rom Position and Scale in addition to Rotation, Bezier and linear/step. The implementation uses the pinned Blockbench uniform SplineCurve's four neighboring values to derive Bernstein-control per-axis extrema, respecting outgoing Step and loop-neighbor cases. The typed Code Mode projection now reports `catmullrom_numeric_tracks`. The single Rust document, encoded Geometry/PNG/Animation outputs, SHA guard and no-overwrite publishers are unchanged. Rust positive/negative regression source AUTHORED_NOT_RUN; local/native culling, controller blending, real model visual reference quality and efficiency remain UNVERIFIED. Next work only for material source-observed Geometry/Texture/Animation fidelity defects; UI/UX and release remain deferred.
+
+
 **Bezier control-value motion bound (2026-11-16; SOURCE_ONLY):** The canonical Rust Geometry/Texture/Animation `asset_handoff.geometry.translation_clearance` now supports bounded numeric Bezier Position and Scale control-value extrema (per axis, not unsafe endpoint-only or shared-time sampling) and rotation-only Catmull-Rom, using the existing pivot/Scale hierarchy budget and original exporter. Catmull-Rom Position/Scale is explicitly unassessed, and simultaneous Controller blending, opaque/Molang sources, native culling and actual visual quality remain outside this proof tier. Code Mode type projection and Rust positive/negative regression source are included; `TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED`. No new tools, renderer, persistent state, release or UI work. Next source scope remains actual Geometry/Texture/Animation compatibility defects and source-level acceptance, not benchmark claims without native proof.
 
 

@@ -425,6 +425,8 @@ export interface AssetHandoffInspection {
       bezier_bone_tracks?: number;
       /** Catmull-Rom admitted only for rigid numeric Rotation; no Position/Scale spline bound. */
       catmullrom_rotation_tracks?: number;
+      /** Catmull Position/Scale cohorts conservatively bounded from neighbor controls. */
+      catmullrom_numeric_tracks?: number;
       /** Largest product of per-Bone max axis scale (>=1) along one hierarchy path. */
       max_scale_chain_amplification?: number;
       coverage_mode?: "translation_only" | "pivot_rotation_envelope" | "scaled_pivot_envelope";

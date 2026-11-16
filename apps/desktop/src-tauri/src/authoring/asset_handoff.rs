@@ -30,6 +30,58 @@ fn export_evidence(
     }
 }
 
+/// A conservative numeric bound for uniform Catmull-Rom intervals, derived
+/// from the same four neighboring values used by pinned Blockbench SplineCurve
+/// and Rust's read-only pose projection. It is NOT a native Bedrock sample.
+/// For [p0,p1,p2,p3], the cubic Bezier-equivalent scalar controls are:
+/// p1, p1+(p2-p0)/6, p2-(p3-p1)/6, p2. Convex hull bounds every u in [0,1].
+/// Preserve saved Step > Catmull precedence and index-neighbor loop wrapping.
+/// Each axis is bounded independently; no assumed synchronized 3D extremum.
+/// Input frames belong to one validated, numeric Bone channel.
+fn catmullrom_control_bounds(frames: &[&Value], looping: bool) -> Result<Option<[f64; 3]>> {
+    if frames.len() < 2 { return Ok(None); }
+    let mut maximum = [0.0_f64; 3];
+    let mut found = false;
+    let values = |frame: &Value| -> Result<[f64; 3]> {
+        let point = frame.get("data_points").and_then(Value::as_array)
+            .and_then(|points| points.first())
+            .ok_or_else(|| fail("CATMULL_BOUND_FRAME_UNSUPPORTED"))?;
+        let axis = |name: &str| super::transform_axis(point.get(name))
+            .ok_or_else(|| fail("CATMULL_BOUND_AXIS_UNSUPPORTED"));
+        Ok([axis("x")?, axis("y")?, axis("z")?])
+    };
+    for i in 0..frames.len() - 1 {
+        let before = frames[i];
+        let after = frames[i + 1];
+        let old_mode = before.get("interpolation").and_then(Value::as_str);
+        let new_mode = after.get("interpolation").and_then(Value::as_str);
+        if old_mode == Some("step") ||
+            (old_mode != Some("catmullrom") && new_mode != Some("catmullrom")) {
+            continue;
+        }
+        let prior = if i > 0 { frames[i - 1] }
+            else if looping && frames.len() >= 3 { frames[frames.len() - 2] }
+            else { before };
+        let following = if i + 2 < frames.len() { frames[i + 2] }
+            else if looping && frames.len() >= 3 { frames[1] }
+            else { after };
+        let p0 = values(prior)?;
+        let p1 = values(before)?;
+        let p2 = values(after)?;
+        let p3 = values(following)?;
+        for axis in 0..3 {
+            let control1 = p1[axis] + (p2[axis] - p0[axis]) / 6.0;
+            let control2 = p2[axis] - (p3[axis] - p1[axis]) / 6.0;
+            let extreme = [p1[axis], control1, control2, p2[axis]].into_iter()
+                .map(f64::abs).fold(0.0_f64, f64::max);
+            if !extreme.is_finite() { return Err(fail("CATMULL_BOUND_OVERFLOW")); }
+            maximum[axis] = maximum[axis].max(extreme);
+        }
+        found = true;
+    }
+    Ok(found.then_some(maximum))
+}
+
 /// Conservative source-only upper budget for ONE authored numeric clip.
 /// Linear/step Bone Position uses the maximum nested sum of vector lengths;
 /// Bone Rotation (any numeric angle) uses the canonical compiled Geometry's
@@ -41,8 +93,9 @@ fn export_evidence(
 /// This does NOT measure visual poses, native culling, simultaneous controller
 /// blends or opaque/Molang data. Bezier Position/Scale uses per-axis cubic
 /// control-value bounds (time handles differ per axis), without sampling.
-/// Catmull-Rom Position/Scale is intentionally unassessed: splines overshoot.
-/// Numeric Catmull/Bezier Rotation needs only the compiled pivot radius.
+/// Catmull-Rom Position/Scale uses uniform spline control bounds including
+/// neighbor/wrap values; it is not treated as endpoint-linear. Numeric
+/// Catmull/Bezier Rotation needs only the compiled pivot radius.
 /// Preserve the original scope/status fields for typed Code Mode compatibility.
 fn translation_clearance(
     doc: &AuthoringDocument, static_bounds: &Value, saved_bounds: &Value,
@@ -88,6 +141,7 @@ fn translation_clearance(
     let mut scale_tracks = 0usize;
     let mut bezier_bone_tracks = 0usize;
     let mut catmullrom_rotation_tracks = 0usize;
+    let mut catmullrom_numeric_tracks = 0usize;
     let mut has_animated_rotation = false;
     let mut has_animated_scale = false;
     let mut maximum_scale_growth = 1.0_f64;
@@ -112,6 +166,8 @@ fn translation_clearance(
             let mut has_scale = false;
             let mut has_bezier = false;
             let mut has_rotation_catmullrom = false;
+            let mut has_catmullrom_numeric = false;
+            let mut catmullrom_position = false;
             let mut bezier_position = false;
             // Bezier per-axis time inversion may use DIFFERENT parameters.
             // Bound each axis independently, then take the Euclidean norm.
@@ -124,12 +180,13 @@ fn translation_clearance(
                     return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
                 };
                 if mode == "catmullrom" {
-                    // A rotation always preserves rigid distances. Numeric
-                    // Catmull Position/Scale can overshoot their keyframes.
-                    if channel != "rotation" {
+                    if channel == "rotation" {
+                        has_rotation_catmullrom = true;
+                    } else if channel == "position" || channel == "scale" {
+                        has_catmullrom_numeric = true;
+                    } else {
                         return unassessed("NONLINEAR_OR_UNBOUNDED_CURVE");
                     }
-                    has_rotation_catmullrom = true;
                 } else if mode != "linear" && mode != "step" && mode != "bezier" {
                     return unassessed("NONLINEAR_OR_UNBOUNDED_CURVE");
                 }
@@ -218,8 +275,45 @@ fn translation_clearance(
                     _ => return unassessed("UNSUPPORTED_CHANNEL"),
                 }
             }
+            if has_catmullrom_numeric {
+                let looping = clip.get("loop").and_then(Value::as_str) == Some("loop");
+                for channel in ["position", "scale"] {
+                    let mut chosen: Vec<&Value> = frames.iter()
+                        .filter(|frame| frame.get("channel").and_then(Value::as_str) == Some(channel))
+                        .collect();
+                    chosen.sort_by(|a, b| a["time"].as_f64().unwrap_or(0.0)
+                        .total_cmp(&b["time"].as_f64().unwrap_or(0.0)));
+                    let bounds = match catmullrom_control_bounds(&chosen, looping) {
+                        Ok(bounds) => bounds,
+                        Err(_) => return unassessed("CATMULL_BOUND_UNAVAILABLE"),
+                    };
+                    if let Some(bounds) = bounds {
+                        match channel {
+                            "position" => {
+                                catmullrom_position = true;
+                                for axis in 0..3 {
+                                    position_component_bounds[axis] =
+                                        position_component_bounds[axis].max(bounds[axis]);
+                                }
+                            },
+                            "scale" => {
+                                let factor = bounds.into_iter().fold(1.0_f64, f64::max);
+                                if !factor.is_finite() { return unassessed("CATMULL_SCALE_OVERFLOW"); }
+                                let entry = local_scale.entry(bone_uuid.as_str()).or_insert(1.0);
+                                *entry = (*entry).max(factor);
+                                if factor != 1.0 {
+                                    has_animated_scale = true;
+                                    if !has_scale { has_scale = true; scale_tracks += 1; }
+                                }
+                            },
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+                catmullrom_numeric_tracks += 1;
+            }
             if has_position { position_tracks += 1; }
-            if bezier_position {
+            if bezier_position || catmullrom_position {
                 let magnitude = position_component_bounds[0]
                     .hypot(position_component_bounds[1])
                     .hypot(position_component_bounds[2]);
@@ -249,6 +343,7 @@ fn translation_clearance(
             "scale_tracks":0, "max_scale_chain_amplification":1.0,
             "bezier_bone_tracks":bezier_bone_tracks,
             "catmullrom_rotation_tracks":catmullrom_rotation_tracks,
+            "catmullrom_numeric_tracks":catmullrom_numeric_tracks,
             "position_tracks":position_tracks, "max_reach_model_units":0.0,
             "native_verdict":"NOT_EXECUTED", "visual_verdict":"UNVERIFIED",
             "controller_blends":"NOT_ASSESSED",
@@ -309,6 +404,7 @@ fn translation_clearance(
         "scale_tracks":scale_tracks,
         "bezier_bone_tracks":bezier_bone_tracks,
         "catmullrom_rotation_tracks":catmullrom_rotation_tracks,
+        "catmullrom_numeric_tracks":catmullrom_numeric_tracks,
         "max_scale_chain_amplification":maximum_scale_growth,
         "coverage_mode":coverage_mode,
         "rotation_radius_model_units":rotation_radius,
@@ -1436,6 +1532,99 @@ mod tests {
         assert_eq!(rejected["geometry"]["translation_clearance"]["status"],"unassessed");
         assert_eq!(rejected["geometry"]["translation_clearance"]["reason"],
             "NONLINEAR_OR_UNBOUNDED_CURVE");
+    }
+
+
+    #[test]
+    fn catmullrom_bernstein_controls_enclose_overshoot_and_respect_step() {
+        let frames = vec![
+            json!({"time":0.0,"interpolation":"linear",
+                "data_points":[{"x":0.0,"y":0.0,"z":0.0}]}),
+            json!({"time":0.25,"interpolation":"catmullrom",
+                "data_points":[{"x":10.0,"y":0.0,"z":0.0}]}),
+            json!({"time":0.75,"interpolation":"catmullrom",
+                "data_points":[{"x":10.0,"y":0.0,"z":0.0}]}),
+            json!({"time":1.0,"interpolation":"linear",
+                "data_points":[{"x":0.0,"y":0.0,"z":0.0}]}),
+        ];
+        let views: Vec<&Value> = frames.iter().collect();
+        // The middle Catmull segment has cubic controls 10+10/6.
+        // Max key value 10 is insufficient to bound its possible overshoot.
+        let reach = catmullrom_control_bounds(&views, false).unwrap().unwrap();
+        assert!(reach[0] > 11.6 && reach[0] < 11.7);
+        assert_eq!(reach[1],0.0);
+        assert_eq!(reach[2],0.0);
+        assert!(catmullrom_control_bounds(&views, true).unwrap().unwrap()[0] >= reach[0]);
+        let mut step = frames.clone();
+        step[1]["interpolation"] = json!("step");
+        step[2]["interpolation"] = json!("linear");
+        let only_first_segment: Vec<&Value> = step.iter().collect();
+        // Previous Step takes priority over following Catmull; no middle
+        // spline remains in this adapted fixture.
+        assert_eq!(catmullrom_control_bounds(&only_first_segment, false).unwrap(),None);
+
+        let mut invalid = frames.clone();
+        invalid[1]["data_points"][0]["x"] = json!("not-a-number");
+        let corrupted: Vec<&Value> = invalid.iter().collect();
+        assert_eq!(catmullrom_control_bounds(&corrupted, false).unwrap_err(),
+            "CATMULL_BOUND_AXIS_UNSUPPORTED");
+    }
+
+    #[test]
+    fn catmullrom_position_and_scale_handoff_uses_neighbor_controls_without_editing_assets() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        let baseline = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        const TIMES: [f64;4] = [0.0,0.25,0.75,1.0];
+        let mut operations = Vec::new();
+        for (index,time) in TIMES.iter().enumerate() {
+            let displacement = if index == 1 || index == 2 { 16.0 } else { 0.0 };
+            let scale = if index == 1 || index == 2 { 2.0 } else { 1.0 };
+            operations.push(EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:format!("00000000-0000-4000-8000-{:012}", 8801 + index),
+                channel:"position".into(),time:*time,value:[displacement,0.0,0.0],
+            });
+            operations.push(EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:format!("00000000-0000-4000-8000-{:012}", 8901 + index),
+                channel:"scale".into(),time:*time,value:[scale,1.0,1.0],
+            });
+        }
+        session.apply(1,&operations).unwrap();
+        let mut curves = Vec::new();
+        for id in [8802,8803] {
+            curves.push(EditOperation::SetBoneTransformKeyframeInterpolation {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:format!("00000000-0000-4000-8000-{id:012}"),
+                channel:"position".into(),interpolation:"catmullrom".into(),
+            });
+        }
+        for id in [8902,8903] {
+            curves.push(EditOperation::SetBoneTransformKeyframeInterpolation {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:format!("00000000-0000-4000-8000-{id:012}"),
+                channel:"scale".into(),interpolation:"catmullrom".into(),
+            });
+        }
+        session.apply(2,&curves).unwrap();
+        let source_before = session.export().unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        let clearance = &report["geometry"]["translation_clearance"];
+        assert_eq!(report["status"],"source_consistent");
+        assert_eq!(clearance["catmullrom_numeric_tracks"],1);
+        assert_eq!(clearance["coverage_mode"],"scaled_pivot_envelope");
+        let movement = clearance["max_reach_model_units"].as_f64().unwrap();
+        let scale = clearance["max_scale_chain_amplification"].as_f64().unwrap();
+        assert!(movement > 18.6 && movement < 18.7);
+        assert!(scale > 2.16 && scale < 2.17);
+        assert_eq!(clearance["native_verdict"],"NOT_EXECUTED");
+        assert_eq!(report["geometry"]["sha256"],baseline["geometry"]["sha256"]);
+        assert_eq!(report["texture"]["sha256"],baseline["texture"]["sha256"]);
+        assert_ne!(report["animation"]["sha256"],baseline["animation"]["sha256"]);
+        assert_eq!(session.export().unwrap(),source_before);
+        assert_eq!(EditorSession::open(&source_before).unwrap().document(),
+            session.document());
     }
 
     #[test]
