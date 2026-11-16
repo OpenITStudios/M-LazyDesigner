@@ -1,5 +1,16 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Reviewed texture mutation admission boundary
+
+The same trusted Code Mode host refuses non-Paint `apply` operations and
+full PNG imports during independently reviewed material sample/propagation
+sessions. These paths would otherwise bypass sample-scope handling with
+no pixelEdit classification. Explicit new texture imports and structure
+work must be separately authorized in their proper workflow; general
+unreviewed authoring behavior is unchanged. Source negative regression
+authored, NOT_EXECUTED. This is an admission constraint, not native
+guarantee that a color treatment is artistically correct.
+
 ## 2026-11-16 — Representative material patch gate in Rust Code Mode
 
 The independent reviewer can declare one small sample atlas rectangle

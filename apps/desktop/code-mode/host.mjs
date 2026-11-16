@@ -636,6 +636,15 @@ export async function createCodeModeHost({
     },
     apply: async (args) => {
       const p = selected(args);
+      const reviewedTextureSession = visualPair !== null &&
+        typeof reviewVisualPair === 'function';
+      // When an operator binds a reviewed texture correction, an unrelated
+      // structural/import operation must not bypass the sample scope by
+      // making the existing pixelEdit predicate false.
+      if (reviewedTextureSession && (!Array.isArray(args.operations) ||
+          args.operations.some(op => !PIXEL_MUTATIONS.has(op?.op)))) {
+        throw new Error('CODE_MODE_REVIEWED_CORRECTION_PAINT_ONLY');
+      }
       const pixelEdit = Array.isArray(args.operations) &&
         args.operations.some(op => PIXEL_MUTATIONS.has(op?.op));
       if (referenceMaster !== null || visualPair !== null) {
@@ -741,6 +750,12 @@ export async function createCodeModeHost({
     },
     importPng: async (args) => {
       const p = selected(args);
+      if (visualPair !== null && typeof reviewVisualPair === 'function') {
+        // Even a host-preselected PNG import is a new full-texture write,
+        // not a reviewer-bound bounded RGB correction. Require a separate
+        // operator-authorized asset-import session, never a silent bypass.
+        throw new Error('CODE_MODE_REVIEWED_TEXTURE_IMPORT_SEPARATE_HOST');
+      }
       if (!png) throw new Error('CODE_MODE_PNG_NOT_PRESELECTED_BY_HOST');
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await client.importPng({

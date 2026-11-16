@@ -1,5 +1,15 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Reviewed Texturing mutation boundary (2026-11-16; SOURCE_ONLY):**
+An independently reviewed sample/cohort host now refuses non-Paint
+`apply` operations and PNG imports on that same reviewed source. This
+prevents agent-generated geometry/UV/texture replacement from bypassing
+the allowed material sample rectangle. Explicitly selected independent
+asset-import or structural work must use a separate host/owner and its
+ordinary permissions. Unreviewed general authoring remains unchanged.
+Canonical Rust still validates every scoped Paint result. Negative
+host regression source AUTHORED_NOT_RUN.
+
 **Representative material patch before styling propagation (2026-11-16; SOURCE_ONLY):**
 For independent reference-driven styling, a REJECTED review must now
 include `materialCohort`. During `phase:'sample'`, the reviewer selects

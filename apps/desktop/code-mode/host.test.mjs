@@ -1258,6 +1258,77 @@ test('invalid source-only sample review declarations fail before Paint', () =>
     }
   }));
 
+test('reviewed texture host rejects non-paint apply and imported PNG bypasses', () =>
+  fixture(async input=>{
+    const dir=dirname(input);
+    const ref=join(dir,'reference.png'),cap=join(dir,'capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);await writeFile(cap,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    let step=0, writes=0, approvals=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedPngPath:ref,
+      preselectedVisualPair:{
+        referencePngPath:ref,capturePngPath:cap,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:()=>({
+        decision:'REJECTED',
+        issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+          partId:'tier2-helmet',observation:'Helmet material is too flat.'}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+        materialCohort:{phase:'sample',issueId:'helmet-flat',
+          partId:'tier2-helmet',approachId:'form-following-metal',
+          sampleRegion:{from:[1,1],to:[5,5]}},
+      }),
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async args=>{
+        if(args[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(args[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'},
+        };
+        writes++;
+        throw Error('unreviewed texture or structure mutation attempted');
+      },
+      spawnImpl:()=>{
+        step++;
+        if(step===1)return fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },response=>{
+          assert.equal(response.ok,true);
+          return {reviewed:true};
+        });
+        if(step===2)return fakeGuest({method:'apply',args:{
+          project:'p0',output:'structural.bbmodel',
+          operations:[{op:'translate_cube',uuid:'cube-1',delta:[1,0,0]}],
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_REVIEWED_CORRECTION_PAINT_ONLY');
+          return {denied:true};
+        });
+        return fakeGuest({method:'importPng',args:{
+          project:'p0',output:'replacement.bbmodel',name:'replacement',
+          uuid:'new-texture-uuid',
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_REVIEWED_TEXTURE_IMPORT_SEPARATE_HOST');
+          return {denied:true};
+        });
+      },
+    });
+    assert.equal((await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.reviewed,true);
+    assert.equal((await host.execute({code:'return codemode.apply({project:"p0"});'})).value.denied,true);
+    assert.equal((await host.execute({code:'return codemode.importPng({project:"p0"});'})).value.denied,true);
+    assert.equal(writes,0);
+    assert.equal(approvals,0);
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {
