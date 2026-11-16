@@ -2,7 +2,7 @@
 //! SOURCE ONLY: Windows CLI, filesystem and Blockbench behavior NOT_EXECUTED.
 
 use lazydesigner::authoring::{
-    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage, inspect_animation_effect_events,
+    sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
     inspect_bedrock_asset_handoff_page, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
@@ -277,7 +277,7 @@ enum InspectBatchQuery {
     CubeFaceAlpha { uuid: String },
     CubeUvSharing { uuid: String, texture_uuid: String },
     AssetHandoff { texture_uuid: String, offset: Option<usize>, limit: Option<usize> },
-    ModelTextureCoverage { offset: Option<usize>, limit: Option<usize> },
+    ModelTextureCoverage { offset: Option<usize>, limit: Option<usize>, attention_only: Option<bool> },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
     TextureAlpha { uuid: String },
@@ -340,9 +340,10 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                     offset.unwrap_or(0), limit.unwrap_or(16))?;
                 json!({"kind":"asset_handoff","handoff":handoff})
             },
-            InspectBatchQuery::ModelTextureCoverage { offset, limit } => {
-                let coverage = inspect_model_texture_coverage(doc,
-                    offset.unwrap_or(0), limit.unwrap_or(4))?;
+            InspectBatchQuery::ModelTextureCoverage { offset, limit, attention_only } => {
+                let coverage = inspect_model_texture_coverage_filtered(doc,
+                    offset.unwrap_or(0), limit.unwrap_or(4),
+                    attention_only.unwrap_or(false))?;
                 json!({"kind":"model_texture_coverage","coverage":coverage})
             },
             InspectBatchQuery::Catalog { category, offset, limit } => {
@@ -938,10 +939,30 @@ mod tests {
             json!("saved_face_texture_coverage_page"));
         assert_eq!(inspected[0]["coverage"]["reviewed_cubes"], json!(1));
         assert_eq!(inspected[0]["coverage"]["visual_verdict"], json!("UNVERIFIED"));
+        assert_eq!(inspected[0]["coverage"]["attention_only"], json!(false));
         assert_eq!(doc, original);
+        let mut mixed = doc.clone();
+        mixed.cubes[0].faces["north"]["texture"] = Value::Null;
+        let focused: InspectBatchInput = serde_json::from_str(
+            r#"{"requests":[{"kind":"model_texture_coverage","offset":0,"limit":1,"attention_only":true}]}"#
+        ).unwrap();
+        let compact = inspect_batch(&mixed, focused.requests).unwrap();
+        let item = &compact[0]["coverage"];
+        assert_eq!(item["attention_only"], json!(true));
+        assert_eq!(item["reviewed_cubes"], json!(1));
+        assert_eq!(item["returned_cubes"], json!(1));
+        assert_eq!(item["returned_faces"], json!(5));
+        assert_eq!(item["review_candidates"], json!(5));
+        assert_eq!(item["cubes"][0]["faces"].as_array().unwrap().len(), 5);
+        assert_eq!(item["cubes"][0]["faces"][0]["side"], json!("east"));
+        assert_eq!(item["next_offset"], Value::Null);
+        assert_eq!(mixed.cubes[0].faces["north"]["texture"], Value::Null);
+        assert!(serde_json::from_str::<InspectBatchInput>(
+            r#"{"requests":[{"kind":"model_texture_coverage","attention_only":"yes"}]}"#
+        ).is_err());
         assert_eq!(inspect_batch(&doc, vec![
             InspectBatchQuery::ModelTextureCoverage {
-                offset: Some(0), limit: Some(9)
+                offset: Some(0), limit: Some(9), attention_only: None
             }
         ]).unwrap_err(), "TEXTURE_COVERAGE_PAGE_INVALID");
         assert!(serde_json::from_str::<InspectBatchInput>(

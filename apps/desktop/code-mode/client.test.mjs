@@ -68,38 +68,67 @@ test('Code Mode catalog and metadata inspection remain read-only and bounded', a
   assert.equal(calls.length, 3);
 });
 
-test('Code Mode sends bounded source texture-coverage pages using one read batch', async () => {
+test('Code Mode pages all six faces or attention-only candidates from one SHA-pinned Rust read', async () => {
   const calls = [];
   const client = createRustCodeModeClient({
     binary: BIN,
     runner: async (argv) => {
+      if (argv[0] === 'inspect') {
+        return {status:'OK', sha256:SHA, summary:{revision:0}};
+      }
       calls.push(argv);
+      assert.equal(argv[0], 'inspect-batch');
+      assert.equal(argv[argv.indexOf('--expected-sha256') + 1], SHA);
       const queries = JSON.parse(await readFile(argv[argv.indexOf('--queries') + 1], 'utf8'));
-      assert.deepEqual(queries, { requests: [{
-        kind: 'model_texture_coverage', offset: 0, limit: 2,
-      }] });
-      return { status: 'OK', sha256: SHA, summary: { revision: 0 },
-        results: [{ kind: 'model_texture_coverage', coverage: {
-          scope: 'saved_face_texture_coverage_page', visual_verdict: 'UNVERIFIED',
-          total_cubes: 2, reviewed_cubes: 2, next_offset: null,
-          review_candidates: 1, cubes: [],
-        } }] };
+      const attentionOnly = queries.requests[0].attention_only === true;
+      assert.deepEqual(queries, { requests: [attentionOnly
+        ? {kind:'model_texture_coverage',offset:1,limit:2,attention_only:true}
+        : {kind:'model_texture_coverage',offset:0,limit:2}] });
+      return {status:'OK',sha256:SHA,summary:{revision:0},results:[
+        {kind:'model_texture_coverage',coverage:{
+          scope:'saved_face_texture_coverage_page',
+          visual_verdict:'UNVERIFIED',face_coverage_verdict:'UNVERIFIED',
+          attention_only:attentionOnly,total_cubes:3,
+          offset:attentionOnly ? 1 : 0,limit:2,
+          reviewed_cubes:2,returned_cubes:attentionOnly ? 1 : 2,
+          returned_faces:attentionOnly ? 1 : 12,
+          review_candidates:1,fully_transparent_faces:1,
+          partially_transparent_faces:0,translucent_faces:0,
+          unresolved_reference_or_mapping_faces:0,
+          next_offset:attentionOnly ? null : 2,
+          cubes:attentionOnly ? [{cube_uuid:'cube-3',review_candidates:1,faces:[
+            {side:'up',reference_kind:'uuid',texture_uuid:'texture-1',
+              status:'fully_transparent_pixels',reason:null,
+              alpha_pixels:{sampled:4,transparent:4,translucent:0,opaque:0}},
+          ]}] : [],
+        }},
+      ]};
     },
   });
   const project = await openRustCodeModeProject(client, '/abs/model.bbmodel');
-  const result = await project.inspectBatch([
-    { kind: 'model_texture_coverage', offset: 0, limit: 2 },
+  const full = await project.inspectBatch([
+    {kind:'model_texture_coverage',offset:0,limit:2},
   ]);
-  assert.equal(result.results[0].coverage.visual_verdict, 'UNVERIFIED');
-  assert.equal(result.results[0].coverage.review_candidates, 1);
-  assert.equal(calls.length, 1);
-  await assert.rejects(project.inspectBatch([
-    { kind: 'model_texture_coverage', offset: 0, limit: 9 },
-  ]), /limit/);
-  await assert.rejects(project.inspectBatch([
-    { kind: 'model_texture_coverage', offset: 0, limit: 2, unsafe: true },
-  ]), /Unknown inspection selector or field/);
-  assert.equal(calls.length, 1);
+  assert.equal(full.results[0].coverage.attention_only,false);
+  assert.equal(full.results[0].coverage.reviewed_cubes,2);
+  const focus = await project.inspectBatch([
+    {kind:'model_texture_coverage',offset:1,limit:2,attention_only:true},
+  ]);
+  assert.equal(focus.results[0].coverage.attention_only,true);
+  assert.equal(focus.results[0].coverage.returned_cubes,1);
+  assert.equal(focus.results[0].coverage.returned_faces,1);
+  assert.equal(focus.results[0].coverage.cubes[0].faces[0].status,'fully_transparent_pixels');
+  assert.equal(focus.results[0].coverage.face_coverage_verdict,'UNVERIFIED');
+  for (const query of [
+    {kind:'model_texture_coverage',offset:0,limit:9,attention_only:true},
+    {kind:'model_texture_coverage',offset:0,limit:2,attention_only:'true'},
+    {kind:'model_texture_coverage',offset:0,limit:2,attention_only:1},
+    {kind:'model_texture_coverage',offset:0,limit:2,attention_only:null},
+    {kind:'model_texture_coverage',offset:0,limit:2,attention_only:true,unsafe:true},
+  ]) {
+    await assert.rejects(project.inspectBatch([query]));
+  }
+  assert.equal(calls.length,2);
 });
 
 test('Code Mode forwards strict explicit UV-sharing selector without allowing unknown query fields', async () => {

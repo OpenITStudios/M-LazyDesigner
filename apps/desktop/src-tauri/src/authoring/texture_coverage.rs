@@ -12,6 +12,16 @@ const MAX_PAGE: usize = 8;
 pub fn inspect_model_texture_coverage(
     doc: &AuthoringDocument, offset: usize, limit: usize,
 ) -> Result<Value> {
+    inspect_model_texture_coverage_filtered(doc, offset, limit, false)
+}
+
+/// Return only source faces that require review. Pages are still indexed by
+/// SCANNED Cube position, not emitted Cube count, so blank/healthy pages never
+/// shift or repeat the next page. This is a read projection, not a new atlas
+/// decoder or proof that transparent pixels are unintentional.
+pub fn inspect_model_texture_coverage_filtered(
+    doc: &AuthoringDocument, offset: usize, limit: usize, attention_only: bool,
+) -> Result<Value> {
     if offset > 65_536 || limit == 0 || limit > MAX_PAGE {
         return Err("TEXTURE_COVERAGE_PAGE_INVALID".into());
     }
@@ -22,12 +32,17 @@ pub fn inspect_model_texture_coverage(
     let mut cubes = Vec::new();
     let mut review_candidates = 0u64;
     let mut fully_transparent = 0u64;
+    let mut partially_transparent = 0u64;
+    let mut translucent = 0u64;
     let mut unresolved = 0u64;
+    let mut reviewed_cubes = 0usize;
+    let mut returned_faces = 0usize;
     // No persistent cache: the immutable page shares decoded PNGs only within
     // this read and discards them before any later model revision.
     let mut decoded = Vec::new();
 
     for cube in doc.cubes.iter().skip(offset).take(limit) {
+        reviewed_cubes += 1;
         let inspected = inspect_cube_uv_alpha_with_cache(doc, &cube.uuid, &mut decoded)?;
         let faces = inspected["faces"].as_array()
             .ok_or_else(|| "TEXTURE_COVERAGE_FACES_INVALID".to_string())?;
@@ -77,31 +92,41 @@ pub fn inspect_model_texture_coverage(
                 },
                 _ => return Err("TEXTURE_COVERAGE_REFERENCE_INVALID".into()),
             };
-            if status != "absent_declared" && status != "measured_nontransparent_pixels" {
+            let needs_review = status != "absent_declared" &&
+                status != "measured_nontransparent_pixels";
+            if needs_review {
                 cube_attention += 1;
                 review_candidates += 1;
             }
             if status == "fully_transparent_pixels" { fully_transparent += 1; }
+            if status == "partially_transparent_pixels" { partially_transparent += 1; }
+            if status == "translucent_pixels" { translucent += 1; }
             if status == "implicit_texture_unresolved" ||
                status == "mapping_unsupported" || status == "no_explicit_texture" {
                 unresolved += 1;
             }
-            compact_faces.push(json!({
-                "side":face["side"],
-                "reference_kind":reference,
-                "texture_uuid":face["texture_uuid"],
-                "status":status,
-                "reason":reason,
-                "alpha_pixels":pixels,
+            if !attention_only || needs_review {
+                compact_faces.push(json!({
+                    "side":face["side"],
+                    "reference_kind":reference,
+                    "texture_uuid":face["texture_uuid"],
+                    "status":status,
+                    "reason":reason,
+                    "alpha_pixels":pixels,
+                }));
+                returned_faces += 1;
+            }
+        }
+        if !attention_only || cube_attention > 0 {
+            cubes.push(json!({
+                "cube_uuid":cube.uuid,
+                "review_candidates":cube_attention,
+                "faces":compact_faces,
             }));
         }
-        cubes.push(json!({
-            "cube_uuid":cube.uuid,
-            "review_candidates":cube_attention,
-            "faces":compact_faces,
-        }));
     }
-    let end = offset.saturating_add(cubes.len());
+    // The scan cursor MUST NOT depend on the filtered result length.
+    let end = offset.saturating_add(reviewed_cubes);
     let next_offset = (end < total).then_some(end);
     let report = json!({
         "scope":"saved_face_texture_coverage_page",
@@ -110,9 +135,14 @@ pub fn inspect_model_texture_coverage(
         "total_cubes":total,
         "offset":offset,
         "limit":limit,
-        "reviewed_cubes":cubes.len(),
+        "attention_only":attention_only,
+        "reviewed_cubes":reviewed_cubes,
+        "returned_cubes":cubes.len(),
+        "returned_faces":returned_faces,
         "review_candidates":review_candidates,
         "fully_transparent_faces":fully_transparent,
+        "partially_transparent_faces":partially_transparent,
+        "translucent_faces":translucent,
         "unresolved_reference_or_mapping_faces":unresolved,
         "next_offset":next_offset,
         "cubes":cubes,

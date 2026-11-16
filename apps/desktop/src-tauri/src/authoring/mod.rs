@@ -26,7 +26,7 @@ mod face_regions;
 pub use bezier::{parse_saved_bezier_handles, valid_track_segments, BezierKeyframeHandles};
 mod palette;
 pub use uv_sharing::inspect_cube_uv_sharing;
-pub use texture_coverage::inspect_model_texture_coverage;
+pub use texture_coverage::{inspect_model_texture_coverage, inspect_model_texture_coverage_filtered};
 pub mod storage;
 pub use geometry::export_bedrock_geometry;
 

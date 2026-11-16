@@ -3386,6 +3386,95 @@ fn isolate_box_uv_refuses_full_or_unknown_atlas_without_partial_mutation() {
     assert_eq!(other.document(),&foreign);
 }
 
+// SOURCE_ONLY / NOT_EXECUTED: attention-only reporting reduces agent output,
+// not the number of Cubes or six faces scanned. A transparent UV region may be
+// intentional and must never be presented as an automatic repaint instruction.
+#[test]
+fn texture_coverage_attention_only_filters_healthy_cubes_without_skipping_pages() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009975";
+    const HEALTHY: &str = "00000000-0000-4000-8000-000000009976";
+    const LATER: &str = "00000000-0000-4000-8000-000000009977";
+    let mut initial = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    initial.apply(0, &[
+        EditOperation::CreatePaintTexture { uuid:TEX.into(), name:"atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(), texture_uuid:TEX.into() },
+        EditOperation::DuplicateCube { source_uuid:CUBE.into(), new_uuid:HEALTHY.into() },
+        EditOperation::DuplicateCube { source_uuid:CUBE.into(), new_uuid:LATER.into() },
+    ]).unwrap();
+    let mut doc = initial.document().clone();
+    // A separate 4x4 atlas region makes the middle Cube fully painted.
+    for face in doc.cubes[1].faces.values_mut() {
+        face["uv"] = json!([8.0,0.0,12.0,4.0]);
+    }
+    // Deliberately absent is not a review candidate; unassigned is.
+    doc.cubes[2].faces["north"]["texture"] = Value::Null;
+    doc.cubes[2].faces["east"]["texture"] = json!(false);
+    // Distinct material coverage states on first Cube.
+    doc.cubes[0].faces["up"]["uv"] = json!([12.0,0.0,16.0,4.0]);
+    doc.cubes[0].faces["down"]["uv"] = json!([16.0,0.0,20.0,4.0]);
+    let mut painted = EditorSession::from_document(doc).unwrap();
+    painted.apply(0, &[
+        EditOperation::PaintTextureRectangle {
+            texture_index:0,from:[8,0],to:[11,3],
+            rgba:[30,40,50,255],erase:false,
+        },
+        EditOperation::PaintTexturePixel {
+            texture_index:0,x:0,y:0,rgba:[255,0,0,255],
+        },
+        EditOperation::PaintTextureRectangle {
+            texture_index:0,from:[12,0],to:[15,3],
+            rgba:[90,110,120,128],erase:false,
+        },
+    ]).unwrap();
+    let saved = painted.document().clone();
+    let all = inspect_model_texture_coverage(&saved,0,3).unwrap();
+    assert_eq!(all["attention_only"], json!(false));
+    assert_eq!(all["reviewed_cubes"], json!(3));
+    assert_eq!(all["returned_cubes"], json!(3));
+    assert_eq!(all["returned_faces"], json!(18));
+    assert_eq!(all["cubes"][1]["faces"][0]["status"],
+        json!("measured_nontransparent_pixels"));
+
+    let compact = inspect_model_texture_coverage_filtered(&saved,0,3,true).unwrap();
+    assert_eq!(compact["attention_only"], json!(true));
+    assert_eq!(compact["visual_verdict"], json!("UNVERIFIED"));
+    assert_eq!(compact["reviewed_cubes"], json!(3));
+    assert_eq!(compact["returned_cubes"], json!(2));
+    assert_eq!(compact["returned_faces"], json!(11));
+    assert_eq!(compact["review_candidates"], json!(11));
+    assert_eq!(compact["fully_transparent_faces"], json!(1));
+    assert_eq!(compact["partially_transparent_faces"], json!(8));
+    assert_eq!(compact["translucent_faces"], json!(1));
+    assert_eq!(compact["unresolved_reference_or_mapping_faces"], json!(1));
+    assert_eq!(compact["cubes"][0]["cube_uuid"], json!(CUBE));
+    assert_eq!(compact["cubes"][1]["cube_uuid"], json!(LATER));
+    assert_eq!(compact["cubes"][0]["faces"][4]["status"], json!("translucent_pixels"));
+    assert_eq!(compact["cubes"][0]["faces"][5]["status"], json!("fully_transparent_pixels"));
+    assert_eq!(compact["cubes"][1]["faces"][0]["side"], json!("east"));
+    assert_eq!(compact["cubes"][1]["faces"][0]["status"], json!("no_explicit_texture"));
+    assert!(!compact.to_string().contains("data:image/png"));
+
+    let first = inspect_model_texture_coverage_filtered(&saved,0,1,true).unwrap();
+    let healthy = inspect_model_texture_coverage_filtered(&saved,1,1,true).unwrap();
+    let later = inspect_model_texture_coverage_filtered(&saved,2,1,true).unwrap();
+    assert_eq!(first["next_offset"], json!(1));
+    assert_eq!(healthy["reviewed_cubes"], json!(1));
+    assert_eq!(healthy["returned_cubes"], json!(0));
+    assert_eq!(healthy["returned_faces"], json!(0));
+    assert_eq!(healthy["review_candidates"], json!(0));
+    assert_eq!(healthy["cubes"], json!([]));
+    assert_eq!(healthy["next_offset"], json!(2));
+    assert_eq!(later["returned_cubes"], json!(1));
+    assert_eq!(later["cubes"][0]["cube_uuid"], json!(LATER));
+    assert_eq!(later["next_offset"], Value::Null);
+    assert_eq!(saved, *painted.document());
+    assert_eq!(AuthoringDocument::import_bbmodel(&painted.export().unwrap()).unwrap(),saved);
+    let beyond = inspect_model_texture_coverage_filtered(&saved,3,1,true).unwrap();
+    assert_eq!(beyond["reviewed_cubes"], json!(0));
+    assert_eq!(beyond["returned_cubes"], json!(0));
+    assert_eq!(beyond["next_offset"], Value::Null);
+}
+
 // AUTHORED_NOT_RUN: an agent can ask about several Cube faces in one
 // bounded Rust read without claiming that nontransparent pixels are visible.
 #[test]

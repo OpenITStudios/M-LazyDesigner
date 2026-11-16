@@ -116,7 +116,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   cube_face_alpha: ['uuid'],
   cube_uv_sharing: ['uuid', 'texture_uuid'],
   asset_handoff: ['texture_uuid', 'offset', 'limit'],
-  model_texture_coverage: ['offset', 'limit'],
+  model_texture_coverage: ['offset', 'limit', 'attention_only'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
   texture_alpha: ['uuid'],
@@ -155,6 +155,11 @@ function serializeInspectionQueries(requests) {
             kind === 'animation_timeline_markers' || kind === 'asset_handoff' ? 32 : 64) :
             (field === 'offset' && kind === 'asset_handoff' ? 393216 : 65536),
         ));
+      } else if (field === 'attention_only') {
+        if (typeof value !== 'boolean') {
+          throw new TypeError('Inspection attention_only must be a boolean');
+        }
+        output.attention_only = value;
       } else if (field === 'channel') {
         if (!['rotation', 'position', 'scale'].includes(value)) {
           throw new TypeError('Unsupported transform channel');
@@ -173,7 +178,7 @@ function serializeInspectionQueries(requests) {
       }
     }
     for (const field of allowed) {
-      if (!['offset', 'limit'].includes(field) && output[field] === undefined) {
+      if (!['offset', 'limit', 'attention_only'].includes(field) && output[field] === undefined) {
         throw new TypeError('Missing required inspection selector field: ' + field);
       }
     }

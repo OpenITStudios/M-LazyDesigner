@@ -311,9 +311,16 @@ export interface ModelTextureCoveragePage {
   total_cubes: number;
   offset: number;
   limit: number;
+  /** false retains the historical six-face report; true emits only review candidates. */
+  attention_only: boolean;
+  /** Scanned Cube count; independent of the number returned by filtering. */
   reviewed_cubes: number;
+  returned_cubes: number;
+  returned_faces: number;
   review_candidates: number;
   fully_transparent_faces: number;
+  partially_transparent_faces: number;
+  translucent_faces: number;
   unresolved_reference_or_mapping_faces: number;
   next_offset: number | null;
   cubes: TextureCoverageCube[];
@@ -424,7 +431,7 @@ export type InspectBatchQuery =
   | { kind: "cube_face_alpha"; uuid: string }
   | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
   | { kind: "asset_handoff"; texture_uuid: string; offset?: number; limit?: number }
-  | { kind: "model_texture_coverage"; offset?: number; limit?: number }
+  | { kind: "model_texture_coverage"; offset?: number; limit?: number; attention_only?: boolean }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
   | { kind: "texture_alpha"; uuid: string }
