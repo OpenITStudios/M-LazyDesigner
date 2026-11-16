@@ -1,6 +1,6 @@
 //! Bounded source-only model Texture/UV alpha review.
 //! A saved atlas alpha histogram is never proof that a visible face is painted.
-use super::{AuthoringDocument, Result, inspect_cube_uv_alpha_with_cache};
+use super::{AuthoringDocument, Result, inspect_cube_uv_alpha_validated};
 use serde_json::{json, Value};
 
 const MAX_PAGE: usize = 8;
@@ -25,9 +25,11 @@ pub fn inspect_model_texture_coverage_filtered(
     if offset > 65_536 || limit == 0 || limit > MAX_PAGE {
         return Err("TEXTURE_COVERAGE_PAGE_INVALID".into());
     }
-    // The underlying six-face inspector validates the document as well;
-    // empty pages must still validate and reject malformed source data.
+    // Validate the ENTIRE document exactly once even for empty pages.
+    // Per-Cube processing borrows only Cubes from that validated document;
+    // revalidating all model assets eight times per page would be redundant.
     doc.validate()?;
+    let texture_indices = super::indexed_texture_uuids(doc);
     let total = doc.cubes.len();
     let mut cubes = Vec::new();
     let mut review_candidates = 0u64;
@@ -43,7 +45,8 @@ pub fn inspect_model_texture_coverage_filtered(
 
     for cube in doc.cubes.iter().skip(offset).take(limit) {
         reviewed_cubes += 1;
-        let inspected = inspect_cube_uv_alpha_with_cache(doc, &cube.uuid, &mut decoded)?;
+        let inspected = inspect_cube_uv_alpha_validated(
+            doc, cube, &mut decoded, &texture_indices)?;
         let faces = inspected["faces"].as_array()
             .ok_or_else(|| "TEXTURE_COVERAGE_FACES_INVALID".to_string())?;
         let mut compact_faces = Vec::with_capacity(faces.len());

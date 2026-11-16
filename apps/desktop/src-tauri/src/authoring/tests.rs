@@ -3475,6 +3475,66 @@ fn texture_coverage_attention_only_filters_healthy_cubes_without_skipping_pages(
     assert_eq!(beyond["next_offset"], Value::Null);
 }
 
+// TEST_AUTHORED_NOT_RUN: bounded page validation occurs once before scanning,
+// but every public per-Cube read still validates the entire input. The fixture
+// uses eight real Cube references to exercise the maximum page budget.
+#[test]
+fn texture_coverage_full_page_preserves_public_projection_and_global_refusal() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009931";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture {
+            uuid: TEX.into(), name: "bounded.png".into(),
+        },
+        EditOperation::AssignCubeTexture {
+            cube_uuid: CUBE.into(), texture_uuid: TEX.into(),
+        },
+    ]).unwrap();
+    let duplicates: Vec<EditOperation> = (0..7).map(|i|
+        EditOperation::DuplicateCube {
+            source_uuid: CUBE.into(),
+            new_uuid: format!("00000000-0000-4000-8000-0000000099{i:02}"),
+        }
+    ).collect();
+    session.apply(1, &duplicates).unwrap();
+    let saved = session.document().clone();
+    assert_eq!(saved.cubes.len(), 8);
+    let full = inspect_model_texture_coverage_filtered(&saved, 0, 8, false).unwrap();
+    assert_eq!(full["reviewed_cubes"], json!(8));
+    assert_eq!(full["returned_cubes"], json!(8));
+    assert_eq!(full["returned_faces"], json!(48));
+    assert_eq!(full["fully_transparent_faces"], json!(48));
+    assert_eq!(full["review_candidates"], json!(48));
+    assert_eq!(full["next_offset"], Value::Null);
+    let focused = inspect_model_texture_coverage_filtered(&saved, 0, 8, true).unwrap();
+    assert_eq!(focused["cubes"], full["cubes"]);
+    assert_eq!(focused["fully_transparent_faces"], full["fully_transparent_faces"]);
+    assert_eq!(focused["reviewed_cubes"], full["reviewed_cubes"]);
+    for (index, cube) in saved.cubes.iter().enumerate() {
+        let standalone = inspect_cube_uv_alpha(&saved, &cube.uuid).unwrap();
+        assert_eq!(full["cubes"][index]["cube_uuid"], json!(cube.uuid));
+        assert_eq!(standalone["faces"].as_array().unwrap().len(), 6);
+        assert_eq!(standalone["faces"][0]["alpha"]["region"]["transparent_pixels"],
+            json!(16));
+        assert_eq!(full["cubes"][index]["faces"][0]["alpha_pixels"]["transparent"],
+            standalone["faces"][0]["alpha"]["region"]["transparent_pixels"]);
+    }
+    // The page entry must still reject corruption in an out-of-page Cube.
+    let mut malformed = saved.clone();
+    malformed.cubes[7].faces.remove("north");
+    for offset in [0, 8, 100] {
+        assert_eq!(inspect_model_texture_coverage_filtered(
+            &malformed, offset, 1, true).unwrap_err(), "CUBE_FACES_INCOMPLETE");
+    }
+    assert_eq!(inspect_cube_surfaces(&malformed, CUBE).unwrap_err(),
+        "CUBE_FACES_INCOMPLETE");
+    assert_eq!(inspect_cube_uv_alpha(&malformed, CUBE).unwrap_err(),
+        "CUBE_FACES_INCOMPLETE");
+    assert_eq!(session.document(), &saved);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        saved);
+}
+
 // AUTHORED_NOT_RUN: an agent can ask about several Cube faces in one
 // bounded Rust read without claiming that nontransparent pixels are visible.
 #[test]

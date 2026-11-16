@@ -1122,6 +1122,25 @@ pub fn inspect_cube_surfaces(doc: &AuthoringDocument, cube_uuid: &str) -> Result
     doc.validate()?;
     let cube = doc.cubes.iter().find(|cube| cube.uuid == cube_uuid)
         .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+    let texture_indices = indexed_texture_uuids(doc);
+    inspect_cube_surfaces_validated(doc, cube, &texture_indices)
+}
+
+/// A single document-scoped UUID lookup table for standalone or paged reads.
+/// Duplicate UUIDs are already rejected by doc.validate() at the call boundary.
+fn indexed_texture_uuids(doc: &AuthoringDocument) -> HashMap<&str, usize> {
+    doc.texture_assets.iter().enumerate().filter_map(|(index, texture)|
+        texture.get("uuid").and_then(Value::as_str).map(|uuid| (uuid, index)))
+        .collect()
+}
+
+/// Internal, prevalidated projection for six-face batch consumers. The
+/// public entry above remains a full standalone validation boundary.
+/// Only pass a Cube borrowed from this already validated document.
+fn inspect_cube_surfaces_validated(
+    doc: &AuthoringDocument, cube: &Cube,
+    texture_indices: &HashMap<&str, usize>,
+) -> Result<Value> {
     let per_texture_uv_rules = has_per_texture_uv_rules(doc);
     let mut faces = Vec::with_capacity(FACE_NAMES.len());
     for name in FACE_NAMES {
@@ -1144,9 +1163,8 @@ pub fn inspect_cube_surfaces(doc: &AuthoringDocument, cube_uuid: &str) -> Result
                 ("index", Some(index))
             },
             Some(Value::String(id)) => {
-                let index = doc.texture_assets.iter().position(|texture|
-                    texture.get("uuid").and_then(Value::as_str) == Some(id.as_str())
-                ).ok_or_else(|| fail("CUBE_FACE_TEXTURE_UNSUPPORTED"))?;
+                let index = texture_indices.get(id.as_str()).copied()
+                    .ok_or_else(|| fail("CUBE_FACE_TEXTURE_UNSUPPORTED"))?;
                 ("uuid", Some(index))
             },
             _ => return Err(fail("CUBE_FACE_TEXTURE_UNSUPPORTED")),
@@ -1504,11 +1522,24 @@ fn inspect_cube_uv_alpha_with_cache(
     doc: &AuthoringDocument, cube_uuid: &str,
     decoded: &mut Vec<(usize, Vec<u8>)>,
 ) -> Result<Value> {
-    let surface = inspect_cube_surfaces(doc, cube_uuid)?;
-    let uv = &surface["uv"];
-    let box_uv = uv["box_uv"].as_bool() == Some(true);
+    doc.validate()?;
     let cube = doc.cubes.iter().find(|cube| cube.uuid == cube_uuid)
         .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+    let texture_indices = indexed_texture_uuids(doc);
+    inspect_cube_uv_alpha_validated(doc, cube, decoded, &texture_indices)
+}
+
+/// An immutable page validates once before iterating its own Cubes. This
+/// function must receive a Cube reference from that validated document and
+/// never suppress an independently requested public validation.
+fn inspect_cube_uv_alpha_validated(
+    doc: &AuthoringDocument, cube: &Cube,
+    decoded: &mut Vec<(usize, Vec<u8>)>,
+    texture_indices: &HashMap<&str, usize>,
+) -> Result<Value> {
+    let surface = inspect_cube_surfaces_validated(doc, cube, texture_indices)?;
+    let uv = &surface["uv"];
+    let box_uv = uv["box_uv"].as_bool() == Some(true);
     // The current Box UV net uses integer dimension semantics. Imported
     // float-grid or malformed mirroring flags are not silently approximated.
     let unsafe_box_rules = [
@@ -1608,7 +1639,7 @@ fn inspect_cube_uv_alpha_with_cache(
         "scope":if derived_box.is_some() {
             "derived_box_face_uv_alpha"
         } else { "saved_manual_face_uv_alpha" },
-        "cube_uuid":cube_uuid,
+        "cube_uuid":cube.uuid,
         "visual_verdict":"UNVERIFIED",
         "effective_material":"UNVERIFIED",
         "face_coverage_verdict":"UNVERIFIED",
