@@ -627,7 +627,9 @@ mod tests {
         assert_eq!(found["animation"]["loop_seams"]["issues"][0]["problem"],
             "endpoint_axis_difference");
         assert_eq!(found["animation"]["loop_seams"]["issues"][0]["bone_uuid"], BONE);
-        // Numerical Euler-axis differences are review candidates, not proof\n        // of a different 3D orientation or rendered loop artifact.\n        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["axis_delta"],
+        // Numerical Euler-axis differences are review candidates, not proof
+        // of a different 3D orientation or rendered loop artifact.
+        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["axis_delta"],
             json!([3.0, 0.0, 0.0]));
         assert_eq!(found["geometry"]["sha256"], clear["geometry"]["sha256"]);
         assert_eq!(found["texture"]["sha256"], clear["texture"]["sha256"]);
