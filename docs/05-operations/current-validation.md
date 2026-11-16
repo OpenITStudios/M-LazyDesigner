@@ -1,5 +1,17 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Mandatory six-view gate for broad reviewed Texture propagation
+
+A local small material sample can be reviewed with one operator-selected
+view. A broad independently reviewed propagation attempt requires all
+six cardinal reference/current-capture PNG pairs, same source model SHA,
+unique selected file paths and a per-view reviewer observation that
+is not UNVERIFIED. A missing side blocks before write approval.
+The reviewer still must actually view matched images; direction labels,
+hashes and numerical comparison alone do not certify camera provenance
+or material PASS. New positive/negative host regressions are source-only,
+TEST_AUTHORED_NOT_RUN, with local/native testing on hold.
+
 ## 2026-11-16 — Operator-selected multi-view PNG review contract (SOURCE_ONLY)
 
 The canonical Rust PNG pair inspector is reused for up to seven

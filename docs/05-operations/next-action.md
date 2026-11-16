@@ -1,5 +1,19 @@
 # LazyDesigner Next Action
 
+**Rust reviewed Texturing propagation requires six camera directions (2026-11-16; SOURCE_ONLY):**
+Earlier single-image Code Mode reviews are retained for small sampled
+Paint only. Broad independently reviewed material propagation now
+requires the explicit complete front/back/left/right/top/bottom
+operator-selected capture/reference set and a non-UNVERIFIED reviewer
+outcome for EACH view, bound to the same selected model SHA. Duplicate
+reference/capture file paths cannot be relabeled as multiple views.
+Read-only source receipts remain distinct from artistic/native PASS.
+Source-authored host regressions include an explicit front-only
+propagation refusal and six-camera positive, missing/duplicate
+direction, conflicting reviewer and stale-image negative cases.
+TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED; real six native screenshots
+and independent visual acceptance remain UNVERIFIED.
+
 **Rust Code Mode six rendered-camera view continuity (2026-11-16; SOURCE_ONLY):**
 Extended the single trusted host review to optionally pin actual
 reference/capture PNG pairs for multiple directions at one selected

@@ -1726,6 +1726,90 @@ test('additional unverified view prevents broad Paint and changed side capture b
     assert.equal(chosen.views.length,6);
   }));
 
+test('single front-camera sample acceptance cannot authorize all-surface material propagation', () =>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const reference=join(folder,'reference-front.png');
+    const capture=join(folder,'candidate-front.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,png);await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const intent={
+      issueId:'helmet-flat',partId:'tier2-helmet',
+      approachId:'form-following-metal',material:'metal',
+      cause:'The helmet has a flat horizontal band with missing form shadow.',
+      treatment:'form_value_masses',
+      expectedChange:'Rebuild form-following base and shadow clusters on metal.',
+    };
+    let approvals=0,writes=0,phase=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:reference,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:()=>({
+        decision:'REJECTED',
+        issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+          partId:'tier2-helmet',
+          observation:'The helmet material still needs treatment.'}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
+        materialCohort:{
+          phase:'propagation',issueId:'helmet-flat',
+          partId:'tier2-helmet',approachId:'form-following-metal',
+          cubeUuid:REVIEW_CUBE,face:'north',
+          sampleRegion:{from:[1,1],to:[5,5]},sampleVerdict:'ACCEPTED',
+        },
+      }),
+      authorizeMutation:()=>{approvals++;throw Error('must not authorize');},
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'},
+        };
+        if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,HASH);
+        writes++;
+        throw Error('must not call native Paint');
+      },
+      spawnImpl:()=>{
+        phase++;
+        if(phase===1)return fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },res=>{
+          assert.equal(res.ok,true);
+          assert.equal(res.result.review_feedback.materialCohort.sampleVerdict,'ACCEPTED');
+          assert.equal(res.result.view_evidence.length,1);
+          return {preflight:true};
+        });
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:'invalid-propagation.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,
+            x:9,y:9,rgba:[30,60,90,255]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[8,8],to:[10,10]}],preserveAlpha:true},
+          correctionIntent:intent,
+        }},res=>{
+          assert.equal(res.ok,false);
+          assert.equal(res.code,'CODE_MODE_VISUAL_VIEW_COVERAGE_UNVERIFIED');
+          return {blocked:true};
+        });
+      },
+    });
+    const first=await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    });
+    assert.equal(first.value.preflight,true);
+    const result=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(result.value.blocked,true);
+    assert.equal(approvals,0);
+    assert.equal(writes,0);
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {
