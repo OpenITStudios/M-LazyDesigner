@@ -457,6 +457,8 @@ export interface ApplyReceipt {
 }
 export interface OutputReceipt {
   status: "OK";
+  /** Present for Bedrock animation output. Bezier baking is an approximation. */
+  curve_fidelity?: "native" | "adaptive_bezier_approximation";
   output_sha256: string;
   source_sha256?: string;
   sha256?: string;

@@ -5,6 +5,7 @@ use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
     export_paint_png, export_bedrock_geometry, export_bedrock_animations,
+    bedrock_animation_curve_fidelity,
     has_per_texture_uv_rules, can_set_empty_atlas_resolution,
     can_add_paint_texture, parse_saved_bezier_handles, valid_track_segments,
     saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
@@ -163,6 +164,7 @@ pub struct GeometryExportReceipt {
 pub struct AnimationExportReceipt {
     sha256: String,
     byte_count: usize,
+    curve_fidelity: &'static str,
 }
 
 fn failure(code: &'static str, detail: impl Into<String>) -> DesktopError {
@@ -1119,6 +1121,7 @@ pub async fn rust_editor_export_bedrock_animations(
     storage::publish_new_animation(&path, &bytes, MAX_MODEL_BYTES).map_err(model_failure)?;
     Ok(Some(AnimationExportReceipt {
         sha256: sha256(&bytes), byte_count: bytes.len(),
+        curve_fidelity: bedrock_animation_curve_fidelity(active.session.document()),
     }))
 }
 
@@ -1199,6 +1202,7 @@ mod tests {
         let bytes = export_bedrock_animations(session.document()).unwrap();
         let output: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(output["format_version"], "1.8.0");
+        assert_eq!(bedrock_animation_curve_fidelity(session.document()), "native");
         assert!(output["animations"].get("animation.idle").is_some());
         assert_eq!(session.document(), &before);
         let mut opaque = before;

@@ -358,6 +358,9 @@
     onLegacy();
   }
   type GeometryExportReceipt = { sha256: string; byteCount: number };
+  type AnimationExportReceipt = GeometryExportReceipt & {
+    curveFidelity: 'native' | 'adaptive_bezier_approximation';
+  };
   async function exportGeometry() {
     if (!snapshot || busy || loading || paintStroke) return;
     const epoch = snapshot.epoch;
@@ -381,13 +384,15 @@
     const revision = snapshot.revision;
     busy = true; closeMenus(); error = '';
     try {
-      const receipt = await invoke<GeometryExportReceipt | null>(
+      const receipt = await invoke<AnimationExportReceipt | null>(
         'rust_editor_export_bedrock_animations',
         { expectedEpoch: epoch, expectedRevision: revision },
       );
       if (receipt) {
         notice = 'Bedrock animations exported (' + receipt.byteCount +
-          ' bytes). The editable .bbmodel and history remain unchanged.';
+          ' bytes). The editable .bbmodel and history remain unchanged.' +
+          (receipt.curveFidelity === 'adaptive_bezier_approximation'
+            ? ' Bezier curves were approximated using bounded adaptive keyframes.' : '');
       }
     } catch (cause) { showError(cause); }
     finally { busy = false; }

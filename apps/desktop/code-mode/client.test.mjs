@@ -1077,13 +1077,14 @@ test('Bedrock animation export uses exact SHA, trusted approval and one CLI writ
     runner: async (args) => {
       calls.push(args);
       return { status: 'OK', source_sha256: SHA, output_sha256: SHA,
-        bytes: 128, format: 'minecraft:animation' };
+        bytes: 128, format: 'minecraft:animation', curve_fidelity: 'adaptive_bezier_approximation' };
     },
   });
   const receipt = await client.exportAnimations({
     input: '/abs/model.bbmodel', output: '/abs/model.animation.json', expectedSha256: SHA,
   });
   assert.equal(receipt.format, 'minecraft:animation');
+  assert.equal(receipt.curve_fidelity, 'adaptive_bezier_approximation');
   assert.equal(approvals.length, 1);
   assert.equal(approvals[0].operation, 'exportAnimations');
   assert.equal(approvals[0].expectedSha256, SHA);

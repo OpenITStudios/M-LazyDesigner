@@ -1,9 +1,10 @@
 //! Strict Bedrock Entity animation JSON output from the canonical Rust document.
-//! Independent of .bbmodel persistence; no controller, Molang or Bezier baking.
+//! Independent of .bbmodel persistence; no controller or Molang execution.
 //! Reference: JannisX11/blockbench v5.2.1 bedrock_animation.js and keyframe.js.
 //! SOURCE ONLY: no Rust, Blockbench or native export has been executed.
 
-use super::{editable_transform_clip, saved_animation_loop, transform_axis, AuthoringDocument, MAX_MODEL_BYTES};
+use super::{bezier, editable_transform_clip, saved_animation_loop, transform_axis,
+    valid_animation_transform_value, AuthoringDocument, MAX_MODEL_BYTES};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 
@@ -27,48 +28,211 @@ fn time_key(time: f64) -> Result<String> {
     Ok(out)
 }
 
-fn channel_value(frame: &Value, channel: &str) -> Result<Value> {
-    let point = frame.get("data_points").and_then(Value::as_array)
-        .and_then(|points| points.first())
+// Both the editable .bbmodel and the Bedrock resource use the same numeric
+// single-data-point source. The signs are a codec concern, never a model edit.
+fn raw_axes(frame: &Value) -> Result<[f64; 3]> {
+    let points = frame.get("data_points").and_then(Value::as_array)
         .ok_or_else(|| fail("ANIMATION_EXPORT_FRAME_UNSUPPORTED"))?;
-    let mut v = [0.0_f64; 3];
+    if points.len() != 1 { return Err(fail("ANIMATION_EXPORT_FRAME_UNSUPPORTED")); }
+    let point = &points[0];
+    let mut values = [0.0_f64; 3];
     for (axis, key) in ["x", "y", "z"].iter().enumerate() {
-        v[axis] = transform_axis(point.get(*key))
+        values[axis] = transform_axis(point.get(*key))
             .ok_or_else(|| fail("ANIMATION_EXPORT_FRAME_UNSUPPORTED"))?;
     }
-    // Blockbench Bedrock keyframe exporter inverts local X for position
-    // and X/Y for rotation, not scale.
-    if matches!(channel, "position" | "rotation") { v[0] = -v[0]; }
-    if channel == "rotation" { v[1] = -v[1]; }
-    Ok(json!(v))
+    Ok(values)
+}
+
+fn bedrock_axes(mut values: [f64; 3], channel: &str) -> Value {
+    // Pinned Blockbench 5.2.1 Bedrock animation coordinate convention.
+    if matches!(channel, "position" | "rotation") { values[0] = -values[0]; }
+    if channel == "rotation" { values[1] = -values[1]; }
+    json!(values)
+}
+
+fn channel_value(frame: &Value, channel: &str) -> Result<Value> {
+    Ok(bedrock_axes(raw_axes(frame)?, channel))
+}
+
+const MAX_BAKED_CHANNEL_KEYS: usize = 4096;
+const MAX_BAKED_INTERIOR_PER_SEGMENT: usize = 255;
+const MAX_BAKE_DEPTH: usize = 8;
+const DEFAULT_RIGHT_TIME: f64 = 0.1;
+const DEFAULT_LEFT_TIME: f64 = -0.1;
+
+// Numerical conversion from the cubic time/value representation used by
+// admitted monotone handles. This is the same mathematical interpolation as
+// the Rust editor's read-only pose projection, not a copy of Blockbench code.
+struct BezierSegment {
+    start: f64,
+    end: f64,
+    x: [[f64; 4]; 3],
+    y: [[f64; 4]; 3],
+}
+
+fn cubic(points: [f64; 4], t: f64) -> f64 {
+    let remain = 1.0 - t;
+    remain * remain * remain * points[0]
+        + 3.0 * remain * remain * t * points[1]
+        + 3.0 * remain * t * t * points[2]
+        + t * t * t * points[3]
+}
+
+impl BezierSegment {
+    fn from_frames(before: &Value, after: &Value) -> Result<Self> {
+        let start = before["time"].as_f64().ok_or_else(|| fail("ANIMATION_EXPORT_TIME_INVALID"))?;
+        let end = after["time"].as_f64().ok_or_else(|| fail("ANIMATION_EXPORT_TIME_INVALID"))?;
+        let gap = end - start;
+        if !gap.is_finite() || gap <= 1e-6 {
+            return Err(fail("ANIMATION_EXPORT_BAKE_TIME_INVALID"));
+        }
+        let start_values = raw_axes(before)?;
+        let end_values = raw_axes(after)?;
+        let a = bezier::parse_saved_bezier_handles(before);
+        let b = bezier::parse_saved_bezier_handles(after);
+        let mut x = [[0.0_f64; 4]; 3];
+        let mut y = [[0.0_f64; 4]; 3];
+        for axis in 0..3 {
+            let right_time = a.as_ref().map(|h| h.right_time[axis])
+                .unwrap_or(DEFAULT_RIGHT_TIME).clamp(0.0, gap);
+            let left_time = b.as_ref().map(|h| h.left_time[axis])
+                .unwrap_or(DEFAULT_LEFT_TIME).clamp(-gap, 0.0);
+            if right_time > gap + left_time + 1e-9 {
+                return Err(fail("ANIMATION_EXPORT_BAKE_TIME_NONMONOTONE"));
+            }
+            x[axis] = [start, start + right_time, end + left_time, end];
+            y[axis] = [
+                start_values[axis],
+                start_values[axis] + a.as_ref().map(|h| h.right_value[axis]).unwrap_or(0.0),
+                end_values[axis] + b.as_ref().map(|h| h.left_value[axis]).unwrap_or(0.0),
+                end_values[axis],
+            ];
+        }
+        Ok(Self { start, end, x, y })
+    }
+
+    fn sample(&self, time: f64, channel: &str) -> Result<[f64; 3]> {
+        if !time.is_finite() || time < self.start || time > self.end {
+            return Err(fail("ANIMATION_EXPORT_BAKE_TIME_INVALID"));
+        }
+        let mut values = [0.0_f64; 3];
+        for axis in 0..3 {
+            // Each time curve is monotone after source admission. Binary
+            // search is bounded, avoiding untrusted curve-based iterations.
+            let mut low = 0.0;
+            let mut high = 1.0;
+            for _ in 0..30 {
+                let mid = (low + high) * 0.5;
+                if cubic(self.x[axis], mid) < time { low = mid; }
+                else { high = mid; }
+            }
+            values[axis] = cubic(self.y[axis], (low + high) * 0.5);
+        }
+        if !valid_animation_transform_value(channel, values) {
+            return Err(fail("ANIMATION_EXPORT_BAKE_VALUE_UNSUPPORTED"));
+        }
+        Ok(values)
+    }
+}
+
+/// Adaptive subdivision checks midpoint and quarter-point errors against
+/// linear Bedrock interpolation. This is a bounded numerical approximation,
+/// not a proof of identical native playback at every real-valued instant.
+fn bake_between(
+    segment: &BezierSegment, channel: &str,
+    start_time: f64, start: [f64; 3], end_time: f64, end: [f64; 3],
+    depth: usize, interior: &mut Vec<(f64, [f64; 3])>,
+) -> Result<()> {
+    let tolerance = match channel {
+        "rotation" => 0.05,
+        "position" => 0.005,
+        "scale" => 0.0025,
+        _ => return Err(fail("ANIMATION_EXPORT_BAKE_CHANNEL_UNSUPPORTED")),
+    };
+    let mut needs_split = false;
+    for fraction in [0.25, 0.5, 0.75] {
+        let time = start_time + (end_time - start_time) * fraction;
+        let expected = segment.sample(time, channel)?;
+        for axis in 0..3 {
+            let linear = start[axis] + (end[axis] - start[axis]) * fraction;
+            if (expected[axis] - linear).abs() > tolerance { needs_split = true; }
+        }
+    }
+    if !needs_split { return Ok(()); }
+    if depth >= MAX_BAKE_DEPTH || interior.len() >= MAX_BAKED_INTERIOR_PER_SEGMENT {
+        return Err(fail("ANIMATION_EXPORT_BAKE_BUDGET_EXCEEDED"));
+    }
+    let middle_time = start_time + (end_time - start_time) * 0.5;
+    if middle_time <= start_time || middle_time >= end_time {
+        return Err(fail("ANIMATION_EXPORT_BAKE_TIME_PRECISION_UNSUPPORTED"));
+    }
+    let middle = segment.sample(middle_time, channel)?;
+    bake_between(segment, channel, start_time, start, middle_time, middle, depth + 1, interior)?;
+    if interior.len() >= MAX_BAKED_INTERIOR_PER_SEGMENT {
+        return Err(fail("ANIMATION_EXPORT_BAKE_BUDGET_EXCEEDED"));
+    }
+    interior.push((middle_time, middle));
+    bake_between(segment, channel, middle_time, middle, end_time, end, depth + 1, interior)
+}
+
+fn insert_key(values: &mut Map<String, Value>, time: f64, value: Value) -> Result<()> {
+    if values.len() >= MAX_BAKED_CHANNEL_KEYS {
+        return Err(fail("ANIMATION_EXPORT_BAKE_CHANNEL_LIMIT"));
+    }
+    if values.insert(time_key(time)?, value).is_some() {
+        return Err(fail("ANIMATION_EXPORT_TIMECODE_COLLISION"));
+    }
+    Ok(())
 }
 
 fn compile_bone_channel(frames: &mut Vec<&Value>, channel: &str) -> Result<Value> {
-    frames.sort_by(|a,b| a["time"].as_f64().unwrap_or(0.0)
+    frames.sort_by(|a, b| a["time"].as_f64().unwrap_or(0.0)
         .total_cmp(&b["time"].as_f64().unwrap_or(0.0)));
     let mut values = Map::new();
     let mut previous: Option<&Value> = None;
     for &frame in frames.iter() {
         let mode = frame.get("interpolation").and_then(Value::as_str)
             .ok_or_else(|| fail("ANIMATION_EXPORT_FRAME_UNSUPPORTED"))?;
-        // Bedrock's Bezier path needs explicit sampling/baking; the
-        // admitted one-point Catmull-Rom editor shape also needs a
-        // verified pre/post transfer. Refuse rather than flatten a curve.
-        if !matches!(mode, "linear" | "step") {
-            return Err(fail("ANIMATION_EXPORT_INTERPOLATION_REQUIRES_BAKE"));
+        let now_time = frame["time"].as_f64()
+            .ok_or_else(|| fail("ANIMATION_EXPORT_TIME_INVALID"))?;
+        if let Some(before) = previous {
+            let before_mode = before.get("interpolation").and_then(Value::as_str)
+                .ok_or_else(|| fail("ANIMATION_EXPORT_FRAME_UNSUPPORTED"))?;
+            // The read-only editor's precedence is Step > Catmull-Rom >
+            // Bezier > Linear. Bake only the intervals that actually use
+            // Bezier; a Step or Catmull segment must not be overwritten.
+            let bezier_interval = before_mode != "step" &&
+                before_mode != "catmullrom" && mode != "catmullrom" &&
+                (before_mode == "bezier" || mode == "bezier");
+            if bezier_interval {
+                let segment = BezierSegment::from_frames(before, frame)?;
+                let mut interior = Vec::new();
+                bake_between(&segment, channel, segment.start, raw_axes(before)?,
+                    segment.end, raw_axes(frame)?, 0, &mut interior)?;
+                for (time, value) in interior {
+                    insert_key(&mut values, time, bedrock_axes(value, channel))?;
+                }
+            }
         }
-        let key = time_key(frame["time"].as_f64()
-            .ok_or_else(|| fail("ANIMATION_EXPORT_TIME_INVALID"))?)?;
         let now = channel_value(frame, channel)?;
-        let value = if previous.is_some_and(|old|
-            old.get("interpolation").and_then(Value::as_str) == Some("step")) {
-            json!({"pre":channel_value(previous.unwrap(),channel)?,"post":now})
+        let value = if mode == "catmullrom" {
+            // Pinned Blockbench Keyframe.compileBedrockKeyframe uses one-point
+            // pre/post values (getArray(1) clamps to the only point).
+            let include_pre = previous.is_none() && now_time > 0.0 ||
+                previous.is_some_and(|old| old.get("interpolation")
+                    .and_then(Value::as_str) != Some("catmullrom"));
+            if include_pre {
+                json!({"pre":now.clone(),"post":now,"lerp_mode":"catmullrom"})
+            } else {
+                json!({"post":now,"lerp_mode":"catmullrom"})
+            }
+        } else if previous.is_some_and(|old| old.get("interpolation")
+            .and_then(Value::as_str) == Some("step")) {
+            json!({"pre":channel_value(previous.unwrap(), channel)?,"post":now})
         } else {
             now
         };
-        if values.insert(key, value).is_some() {
-            return Err(fail("ANIMATION_EXPORT_TIMECODE_COLLISION"));
-        }
+        insert_key(&mut values, now_time, value)?;
         previous = Some(frame);
     }
     Ok(Value::Object(values))
@@ -109,6 +273,22 @@ fn compile_effects(track: &Value, compiled: &mut Map<String, Value>) -> Result<(
         if !events.is_empty() { compiled.insert(output_key.into(), Value::Object(events)); }
     }
     Ok(())
+}
+
+/// A read-only, conservative quality receipt. Only Bezier is resampled;
+/// Catmull-Rom retains a native lerp_mode. An opaque clip is refused by the
+/// exporter before the receipt is used by any publisher.
+pub fn bedrock_animation_curve_fidelity(doc: &AuthoringDocument) -> &'static str {
+    if doc.animation_assets.iter().any(|clip|
+        clip.get("animators").and_then(Value::as_object)
+            .is_some_and(|tracks| tracks.values().any(|track|
+                track.get("keyframes").and_then(Value::as_array)
+                    .is_some_and(|frames| frames.iter().any(|frame|
+                        frame.get("interpolation").and_then(Value::as_str) == Some("bezier"))))) {
+        "adaptive_bezier_approximation"
+    } else {
+        "native"
+    }
 }
 
 /// Export the whole admitted set in one deterministic Bedrock animation file.
@@ -252,26 +432,161 @@ mod tests {
     }
 
     #[test]
-    fn rejects_opaque_and_unbaked_curves_without_partial_output() {
+    fn catmullrom_uses_native_bedrock_lerp_mode_and_preserves_opaque_refusal() {
         let mut s = EditorSession::open(SAMPLE.as_bytes()).unwrap();
         s.apply(0, &[
-            EditOperation::CreateAnimation { uuid: CLIP.into(), name: "animation.walk".into(), length: 1.0 },
+            EditOperation::CreateAnimation { uuid: CLIP.into(), name: "animation.walk".into(), length: 2.0 },
             EditOperation::AddBoneTransformKeyframe {
                 animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
                 channel: "rotation".into(), time: 0.0, value: [12.0, 34.0, 56.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "rotation".into(), time: 1.0, value: [24.0, 32.0, 42.0],
             },
             EditOperation::SetBoneTransformKeyframeInterpolation {
                 animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
                 channel: "rotation".into(), interpolation: "catmullrom".into(),
             },
+            EditOperation::SetBoneTransformKeyframeInterpolation {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "rotation".into(), interpolation: "catmullrom".into(),
+            },
         ]).unwrap();
+        assert_eq!(bedrock_animation_curve_fidelity(s.document()), "native");
         let saved = s.export().unwrap();
-        assert_eq!(export_bedrock_animations(s.document()).unwrap_err(),
-            "ANIMATION_EXPORT_INTERPOLATION_REQUIRES_BAKE");
+        let out: Value = serde_json::from_slice(
+            &export_bedrock_animations(s.document()).unwrap()).unwrap();
+        let rotation = &out["animations"]["animation.walk"]["bones"]["root_bone"]["rotation"];
+        assert_eq!(rotation["0.0"], json!({"post":[-12.0,-34.0,56.0],"lerp_mode":"catmullrom"}));
+        assert_eq!(rotation["1.0"], json!({"post":[-24.0,-32.0,42.0],"lerp_mode":"catmullrom"}));
         assert_eq!(s.export().unwrap(), saved);
         let mut unknown = s.document().clone();
         unknown.animation_assets[0]["unrecognized_payload"] = json!({"script":"opaque"});
         assert_eq!(export_bedrock_animations(&unknown).unwrap_err(),
             "ANIMATION_EXPORT_CLIP_UNSUPPORTED");
+    }
+
+    #[test]
+    fn mixed_linear_to_catmullrom_emits_explicit_pre_without_baking() {
+        let mut s = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+        const THIRD: &str = "00000000-0000-4000-8000-000000009974";
+        s.apply(0, &[
+            EditOperation::CreateAnimation { uuid: CLIP.into(), name: "animation.mix".into(), length: 3.0 },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
+                channel: "position".into(), time: 0.0, value: [1.0, 2.0, 3.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "position".into(), time: 1.0, value: [4.0, 5.0, 6.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: THIRD.into(),
+                channel: "position".into(), time: 2.0, value: [7.0, 8.0, 9.0],
+            },
+            EditOperation::SetBoneTransformKeyframeInterpolation {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "position".into(), interpolation: "catmullrom".into(),
+            },
+            EditOperation::SetBoneTransformKeyframeInterpolation {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: THIRD.into(),
+                channel: "position".into(), interpolation: "catmullrom".into(),
+            },
+        ]).unwrap();
+        let out: Value = serde_json::from_slice(
+            &export_bedrock_animations(s.document()).unwrap()).unwrap();
+        let track = &out["animations"]["animation.mix"]["bones"]["root_bone"]["position"];
+        assert_eq!(track.as_object().unwrap().len(), 3);
+        assert_eq!(track["1.0"],
+            json!({"pre":[-4.0,5.0,6.0],"post":[-4.0,5.0,6.0],"lerp_mode":"catmullrom"}));
+        assert_eq!(track["2.0"],
+            json!({"post":[-7.0,8.0,9.0],"lerp_mode":"catmullrom"}));
+    }
+
+    #[test]
+    fn bezier_is_baked_with_bounded_adaptive_keys_without_changing_editor_clip() {
+        let mut s = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+        let first = BezierKeyframeHandles {
+            linked: false,
+            left_time: [-0.1; 3], left_value: [0.0; 3],
+            right_time: [0.1; 3], right_value: [8.0, 0.0, 0.0],
+        };
+        let second = BezierKeyframeHandles {
+            linked: false,
+            left_time: [-0.1; 3], left_value: [-8.0, 0.0, 0.0],
+            right_time: [0.1; 3], right_value: [0.0; 3],
+        };
+        s.apply(0, &[
+            EditOperation::CreateAnimation { uuid: CLIP.into(), name: "animation.ease".into(), length: 1.0 },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
+                channel: "position".into(), time: 0.0, value: [0.0, 0.0, 0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "position".into(), time: 1.0, value: [10.0, 0.0, 0.0],
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
+                channel: "position".into(), handles: first,
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "position".into(), handles: second,
+            },
+        ]).unwrap();
+        assert_eq!(bedrock_animation_curve_fidelity(s.document()),
+            "adaptive_bezier_approximation");
+        let saved = s.export().unwrap();
+        let data: Value = serde_json::from_slice(
+            &export_bedrock_animations(s.document()).unwrap()).unwrap();
+        let track = data["animations"]["animation.ease"]["bones"]["root_bone"]["position"]
+            .as_object().unwrap();
+        assert!(track.len() > 2);
+        assert!(track.len() < MAX_BAKED_CHANNEL_KEYS);
+        assert_eq!(track["0.0"], json!([0.0, 0.0, 0.0]));
+        assert_eq!(track["1.0"], json!([-10.0, 0.0, 0.0]));
+        assert!(track.iter().any(|(time, value)|
+            time.parse::<f64>().is_ok_and(|time| time > 0.0 && time < 1.0) &&
+            value.as_array().is_some()));
+        assert_eq!(s.export().unwrap(), saved);
+        assert_eq!(EditorSession::open(&saved).unwrap().document(), s.document());
+    }
+
+    #[test]
+    fn unsafe_scale_bezier_fails_without_altering_source_model() {
+        let mut s = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+        s.apply(0, &[
+            EditOperation::CreateAnimation { uuid: CLIP.into(), name: "animation.unsafe".into(), length: 1.0 },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
+                channel: "scale".into(), time: 0.0, value: [1.0, 1.0, 1.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "scale".into(), time: 1.0, value: [1.0, 1.0, 1.0],
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: FIRST.into(),
+                channel: "scale".into(), handles: BezierKeyframeHandles {
+                    linked: false,
+                    left_time: [-0.1; 3], left_value: [0.0; 3],
+                    right_time: [0.1; 3], right_value: [1000.0, 0.0, 0.0],
+                },
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid: CLIP.into(), bone_uuid: BONE.into(), keyframe_uuid: SECOND.into(),
+                channel: "scale".into(), handles: BezierKeyframeHandles {
+                    linked: false,
+                    left_time: [-0.1; 3], left_value: [1000.0, 0.0, 0.0],
+                    right_time: [0.1; 3], right_value: [0.0; 3],
+                },
+            },
+        ]).unwrap();
+        let original = s.export().unwrap();
+        assert_eq!(export_bedrock_animations(s.document()).unwrap_err(),
+            "ANIMATION_EXPORT_BAKE_VALUE_UNSUPPORTED");
+        assert_eq!(s.export().unwrap(), original);
     }
 }

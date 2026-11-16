@@ -378,7 +378,8 @@ test('Bedrock animation export guest routes to approved exact sibling without mo
       runner: async (args) => {
         calls.push(args);
         if (args[0] === 'export-animation') {
-          return { status: 'OK', source_sha256: HASH, output_sha256: HASH, bytes: 100 };
+          return { status: 'OK', source_sha256: HASH, output_sha256: HASH, bytes: 100,
+            curve_fidelity: 'adaptive_bezier_approximation' };
         }
         return { status: 'OK', sha256: HASH, summary: SUMMARY };
       },
@@ -387,6 +388,7 @@ test('Bedrock animation export guest routes to approved exact sibling without mo
       }, (response) => {
         assert.equal(response.ok, true);
         assert.equal(response.result.bytes, 100);
+        assert.equal(response.result.curve_fidelity, 'adaptive_bezier_approximation');
         return { emitted: true };
       }),
     });
