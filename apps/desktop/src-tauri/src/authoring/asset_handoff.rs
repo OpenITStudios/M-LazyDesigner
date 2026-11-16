@@ -6,7 +6,7 @@
 
 use super::{
     bedrock_animation_curve_fidelity, export_bedrock_animations,
-    export_bedrock_geometry, export_paint_png, sha256, valid_uuid,
+    export_paint_png, sha256, valid_uuid,
     AuthoringDocument, OutlinerNode, FACE_NAMES,
 };
 use serde_json::{json, Value};
@@ -30,17 +30,16 @@ fn export_evidence(
     }
 }
 
-/// An intentionally narrow, conservative upper budget for a SINGLE numeric
-/// animation clip's Bone translations, in Blockbench model units (16/block).
-/// A parent-child chain can translate by at most the sum of each Bone's
-/// maximum keyframed displacement length. A linear/step vector lies within
-/// the convex hull of its endpoint values; no interpolation samples or
-/// guesses are needed. No guarantee for animated rotation, scale, Bezier,
-/// Catmull-Rom, unsupported clips, concurrent blends or native rendering.
-/// This is evidence for an optional authored visible_box, NEVER auto-paint or
-/// an implicit change to the canonical Geometry compiler.
+/// Conservative source-only upper budget for ONE authored numeric clip.
+/// Linear/step Bone Position uses the maximum nested sum of vector lengths;
+/// Bone Rotation (any numeric angle) uses the canonical compiled Geometry's
+/// pivot-chain radius. This does NOT measure visual poses, native culling,
+/// controller blends, Scale, Molang or non-linear interpolation. The existing
+/// scope string is retained for typed Code Mode compatibility; coverage_mode
+/// distinguishes the two proven source subsets.
 fn translation_clearance(
     doc: &AuthoringDocument, static_bounds: &Value, saved_bounds: &Value,
+    compiled_bones: &[Value],
 ) -> Value {
     const PIXELS_PER_BLOCK: f64 = 16.0;
     fn unassessed(reason: &str) -> Value {
@@ -67,6 +66,8 @@ fn translation_clearance(
     }
     let mut maximum_reach: f64 = 0.0;
     let mut position_tracks = 0usize;
+    let mut rotation_tracks = 0usize;
+    let mut has_animated_rotation = false;
     let mut numeric_clips = 0usize;
     for clip in &doc.animation_assets {
         if !super::editable_transform_clip(clip, &doc.bones) {
@@ -83,6 +84,7 @@ fn translation_clearance(
                 return unassessed("OPAQUE_OR_UNSUPPORTED_TRACK");
             };
             let mut has_position = false;
+            let mut has_rotation = false;
             for frame in frames {
                 let Some(mode) = frame.get("interpolation").and_then(Value::as_str) else {
                     return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
@@ -114,8 +116,16 @@ fn translation_clearance(
                         let entry = local.entry(bone_uuid.as_str()).or_insert(0.0);
                         *entry = (*entry).max(magnitude);
                     },
-                    "rotation" if axes.iter().any(|axis| *axis != 0.0) =>
-                        return unassessed("ANIMATED_ROTATION_UNASSESSED"),
+                    "rotation" if axes.iter().any(|axis| *axis != 0.0) => {
+                        // Rotation magnitude is irrelevant to the pivot
+                        // sphere; treat even very small nonzero keys as
+                        // requiring the full conservative envelope.
+                        has_animated_rotation = true;
+                        if !has_rotation {
+                            has_rotation = true;
+                            rotation_tracks += 1;
+                        }
+                    },
                     "scale" if axes.iter().any(|axis| *axis != 1.0) =>
                         return unassessed("ANIMATED_SCALE_UNASSESSED"),
                     "rotation" | "scale" => {},
@@ -130,10 +140,11 @@ fn translation_clearance(
         }
         maximum_reach = maximum_reach.max(clip_reach);
     }
-    if maximum_reach == 0.0 {
+    if maximum_reach == 0.0 && !has_animated_rotation {
         return json!({
             "scope":"single_clip_numeric_translation_clearance",
             "status":"no_numeric_translation", "numeric_clips":numeric_clips,
+            "coverage_mode":"translation_only", "rotation_tracks":0,
             "position_tracks":position_tracks, "max_reach_model_units":0.0,
             "native_verdict":"NOT_EXECUTED", "visual_verdict":"UNVERIFIED",
             "controller_blends":"NOT_ASSESSED",
@@ -149,10 +160,23 @@ fn translation_clearance(
         saved_bounds["offset"][1].as_f64(),
     ) else { return unassessed("GEOMETRY_BOUNDS_UNAVAILABLE"); };
     let shift = maximum_reach / PIXELS_PER_BLOCK;
-    let required_width = width + shift * 2.0;
-    let required_height = height + shift * 2.0;
-    let required_low = center_y - height / 2.0 - shift;
-    let required_high = center_y + height / 2.0 + shift;
+    let (required_width, required_height, required_low, required_high,
+         required_center_y, coverage_mode, rotation_radius) = if has_animated_rotation {
+        // Work exclusively from the SAME canonical compiled Geometry bones
+        // already emitted for this handoff. A global conservative sphere
+        // covers arbitrary Bone angles and fixed Cube rotations; no sampling.
+        let radius = match super::geometry::compiled_rotation_envelope_radius(compiled_bones) {
+            Ok(value) => value,
+            Err(_) => return unassessed("GEOMETRY_ROTATION_ENVELOPE_UNAVAILABLE"),
+        };
+        let total = (radius + maximum_reach) / PIXELS_PER_BLOCK;
+        (total * 2.0, total * 2.0, -total, total,
+         0.0, "pivot_rotation_envelope", Some(radius))
+    } else {
+        (width + shift * 2.0, height + shift * 2.0,
+         center_y - height / 2.0 - shift, center_y + height / 2.0 + shift,
+         center_y, "translation_only", None)
+    };
     let actual_low = actual_center_y - actual_height / 2.0;
     let actual_high = actual_center_y + actual_height / 2.0;
     if ![required_width, required_height, required_low, required_high,
@@ -171,11 +195,14 @@ fn translation_clearance(
         "status":if review { "conservative_margin_shortfall" } else { "source_budget_covered" },
         "numeric_clips":numeric_clips,
         "position_tracks":position_tracks,
+        "rotation_tracks":rotation_tracks,
+        "coverage_mode":coverage_mode,
+        "rotation_radius_model_units":rotation_radius,
         "max_reach_model_units":maximum_reach,
         "max_reach_blocks":shift,
         "required_conservative_bounds":{
             "width":required_width, "height":required_height,
-            "offset":[0.0, center_y, 0.0]
+            "offset":[0.0, required_center_y, 0.0]
         },
         "shortfall_blocks":{
             "horizontal_width":width_shortfall,
@@ -358,8 +385,10 @@ pub fn inspect_bedrock_asset_handoff_page(
             // Reuse this SAME Geometry compiler's actual static envelope.
             // No cloned model, second export, or replacement model authority.
             let current = geometry["visible_bounds"].clone();
+            let compiled_bones = parsed["minecraft:geometry"][0]["bones"]
+                .as_array().ok_or_else(|| fail("ASSET_HANDOFF_GEOMETRY_BONES_INVALID"))?;
             geometry["translation_clearance"] =
-                translation_clearance(doc, static_bounds, &current);
+                translation_clearance(doc, static_bounds, &current, compiled_bones);
         }
     }
     let png_output = export_paint_png(doc, texture_uuid);
@@ -906,8 +935,54 @@ mod tests {
         assert_ne!(original, authored);
     }
 
+
     #[test]
-    fn source_translation_clearance_refuses_unbounded_rotation_and_curves() {
+    fn rotation_only_pivot_reach_reviews_visible_box_and_preserves_other_assets() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::SetBoneOrigin {
+                uuid:BONE.into(), origin:[48.0,0.0,0.0],
+            },
+            EditOperation::AddBoneRotationKeyframe {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008301".into(),
+                time:0.5, rotation:[0.0,90.0,0.0],
+            },
+        ]).unwrap();
+        let saved = session.export().unwrap();
+        let first = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(first["status"],"source_consistent");
+        assert_eq!(first["geometry"]["translation_clearance"]["status"],
+            "conservative_margin_shortfall");
+        assert_eq!(first["geometry"]["translation_clearance"]["coverage_mode"],
+            "pivot_rotation_envelope");
+        assert_eq!(first["geometry"]["translation_clearance"]["rotation_tracks"],1);
+        assert_eq!(first["geometry"]["translation_clearance"]["max_reach_model_units"],0.0);
+        assert!(first["geometry"]["translation_clearance"]["rotation_radius_model_units"]
+            .as_f64().unwrap() > 48.0);
+        assert_eq!(first["geometry"]["translation_clearance"]["visual_verdict"],"UNVERIFIED");
+        assert_eq!(first["geometry"]["sha256"],
+            json!(sha256(&super::super::export_bedrock_geometry(session.document()).unwrap())));
+        assert_eq!(session.export().unwrap(),saved);
+
+        session.apply(2, &[EditOperation::SetVisibleBox {
+            bounds:[64.0,64.0,0.0],
+        }]).unwrap();
+        let published = session.export().unwrap();
+        let covered = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(covered["geometry"]["translation_clearance"]["status"],
+            "source_budget_covered");
+        assert_eq!(covered["geometry"]["translation_clearance"]["shortfall_blocks"]["horizontal_width"],0.0);
+        assert_eq!(covered["texture"]["sha256"],first["texture"]["sha256"]);
+        assert_eq!(covered["animation"]["sha256"],first["animation"]["sha256"]);
+        assert_ne!(covered["geometry"]["sha256"],first["geometry"]["sha256"]);
+        assert_eq!(session.export().unwrap(),published);
+        assert_eq!(EditorSession::open(&published).unwrap().document(),session.document());
+    }
+
+    #[test]
+    fn source_translation_clearance_bounds_rotation_but_refuses_nonlinear_curves() {
         const BONE: &str = "00000000-0000-4000-8000-000000000001";
         const FIRST: &str = "00000000-0000-4000-8000-000000008201";
         const SECOND: &str = "00000000-0000-4000-8000-000000008202";
@@ -946,20 +1021,23 @@ mod tests {
             time:0.5, rotation:[0.0, 90.0, 0.0],
         }]).unwrap();
         let rotated = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
-        assert_eq!(rotated["geometry"]["translation_clearance"]["status"],"unassessed");
-        assert_eq!(rotated["geometry"]["translation_clearance"]["reason"],
-            "ANIMATED_ROTATION_UNASSESSED");
-        // Even a tiny nonzero rotation cannot be admitted into a strictly
-        // translation-only reach bound for an arbitrarily large rig.
+        assert_eq!(rotated["geometry"]["translation_clearance"]["status"],
+            "conservative_margin_shortfall");
+        assert_eq!(rotated["geometry"]["translation_clearance"]["coverage_mode"],
+            "pivot_rotation_envelope");
+        assert_eq!(rotated["geometry"]["translation_clearance"]["rotation_tracks"],1);
+        // Even a tiny nonzero rotation needs the same conservative pivot
+        // envelope; actual Euler pose/culling is not inferred.
         session.apply(4, &[EditOperation::UpdateBoneRotationKeyframe {
             animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
             keyframe_uuid:"00000000-0000-4000-8000-000000008203".into(),
             time:0.5, rotation:[0.0, 1e-10, 0.0],
         }]).unwrap();
         let tiny = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
-        assert_eq!(tiny["geometry"]["translation_clearance"]["status"],"unassessed");
-        assert_eq!(tiny["geometry"]["translation_clearance"]["reason"],
-            "ANIMATED_ROTATION_UNASSESSED");
+        assert_eq!(tiny["geometry"]["translation_clearance"]["status"],
+            "conservative_margin_shortfall");
+        assert_eq!(tiny["geometry"]["translation_clearance"]["coverage_mode"],
+            "pivot_rotation_envelope");
         let mut opaque = session.document().clone();
         opaque.animation_assets[0]["unknown_imported"] = json!({"safe":true});
         let unknown = inspect_bedrock_asset_handoff(&opaque,TEXTURE).unwrap();

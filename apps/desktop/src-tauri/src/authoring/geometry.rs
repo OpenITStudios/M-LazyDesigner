@@ -226,6 +226,82 @@ fn distance3(a: [f64; 3], b: [f64; 3]) -> f64 {
     length3(std::array::from_fn(|i| a[i] - b[i]))
 }
 
+
+/** Conservative radius for arbitrary rigid Bone rotations about the same
+ * compiled Bone/Cube pivots actually used in Bedrock Geometry export.
+ * For each Cube corner, apply triangle inequality along its root-to-leaf
+ * pivot chain. Bone traversal is parent-first in the canonical exporter.
+ *
+ * Work: O(Bones + Cubes * 8); transient memory: O(Bones). This does not
+ * evaluate native poses, motion timing or scales; the resulting upper bound
+ * deliberately exceeds many actual animations and includes static padding.
+ */
+pub(super) fn compiled_rotation_envelope_radius(bones: &[Value]) -> Result<f64> {
+    #[derive(Clone, Copy)]
+    struct PivotSpan {
+        outer: [f64; 3],
+        inner: [f64; 3],
+        path_length: f64,
+    }
+    let mut by_name: HashMap<&str, PivotSpan> = HashMap::new();
+    let mut max_radius = 0.0_f64;
+    for bone in bones {
+        let name = bone["name"].as_str()
+            .ok_or_else(|| fail("GEOMETRY_ROTATION_ENVELOPE_INVALID"))?;
+        let pivot = vec3_resource(&bone["pivot"])?;
+        let path = if let Some(parent) = bone.get("parent").and_then(Value::as_str) {
+            let ancestor = by_name.get(parent).copied()
+                .ok_or_else(|| fail("GEOMETRY_ROTATION_ENVELOPE_PARENT_MISSING"))?;
+            PivotSpan {
+                outer: ancestor.outer,
+                inner: pivot,
+                path_length: ancestor.path_length + distance3(ancestor.inner, pivot),
+            }
+        } else {
+            PivotSpan { outer: pivot, inner: pivot, path_length: 0.0 }
+        };
+        if let Some(cubes) = bone.get("cubes") {
+            let cubes = cubes.as_array()
+                .ok_or_else(|| fail("GEOMETRY_ROTATION_ENVELOPE_INVALID"))?;
+            for cube in cubes {
+                let origin = vec3_resource(&cube["origin"])?;
+                let size = vec3_resource(&cube["size"])?;
+                let inflate = cube.get("inflate").and_then(Value::as_f64)
+                    .unwrap_or(0.0).abs();
+                let cube_path = if let Some(pivot) = cube.get("pivot") {
+                    let cube_pivot = vec3_resource(pivot)?;
+                    PivotSpan {
+                        outer: path.outer,
+                        inner: cube_pivot,
+                        path_length: path.path_length + distance3(path.inner, cube_pivot),
+                    }
+                } else { path };
+                let base = length3(cube_path.outer) + cube_path.path_length;
+                for mask in 0_u8..8 {
+                    let point: [f64; 3] = std::array::from_fn(|axis| {
+                        origin[axis] + if (mask & (1_u8 << axis)) == 0 {
+                            -inflate
+                        } else {
+                            size[axis] + inflate
+                        }
+                    });
+                    let radius = base + distance3(cube_path.inner, point);
+                    if !radius.is_finite() {
+                        return Err(fail("GEOMETRY_ROTATION_ENVELOPE_OVERFLOW"));
+                    }
+                    max_radius = max_radius.max(radius);
+                }
+            }
+        }
+        by_name.insert(name, path);
+    }
+    let padded = max_radius + VISIBLE_PAD_PIXELS;
+    if !padded.is_finite() {
+        return Err(fail("GEOMETRY_ROTATION_ENVELOPE_OVERFLOW"));
+    }
+    Ok(padded)
+}
+
 /// Use the same generated Cube origin/size/inflate and Bone pivots that
 /// actually appear in *.geo.json. An unrotated rig uses a padded static AABB.
 /// For any rotated pivot chain, fall back to a conservative radial enclosure:
@@ -458,6 +534,27 @@ mod tests {
     use serde_json::json;
 
     const BASIC: &[u8] = include_bytes!("../../fixtures/bedrock-basic.bbmodel");
+
+
+    #[test]
+    fn compiled_rotation_envelope_includes_nested_pivots_and_cube_offset() {
+        let compiled = vec![
+            json!({"name":"root","pivot":[0.0,0.0,0.0]}),
+            json!({"name":"child","parent":"root","pivot":[16.0,0.0,0.0],
+                "cubes":[{"origin":[32.0,0.0,0.0],"size":[1.0,1.0,1.0]}]}),
+        ];
+        let radius = compiled_rotation_envelope_radius(&compiled).unwrap();
+        // Root-to-child pivot (16) + Cube-corner offset (~17) + 8 pad.
+        assert!(radius > 40.0 && radius < 42.0);
+        let mut invalid = compiled.clone();
+        invalid[1]["parent"] = json!("missing");
+        assert_eq!(compiled_rotation_envelope_radius(&invalid).unwrap_err(),
+            "GEOMETRY_ROTATION_ENVELOPE_PARENT_MISSING");
+        invalid[1]["parent"] = json!("root");
+        invalid[1]["cubes"][0]["origin"] = json!([null,0.0,0.0]);
+        assert_eq!(compiled_rotation_envelope_radius(&invalid).unwrap_err(),
+            "GEOMETRY_EXPORT_BOUNDS_INVALID");
+    }
 
     #[test]
     fn bedrock_geometry_exports_bone_hierarchy_coordinates_and_face_uv() {

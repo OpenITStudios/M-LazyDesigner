@@ -417,6 +417,11 @@ export interface AssetHandoffInspection {
       reason?: string;
       numeric_clips?: number;
       position_tracks?: number;
+      /** Exact numeric Bone rotations use a whole-model pivot sphere. */
+      rotation_tracks?: number;
+      coverage_mode?: "translation_only" | "pivot_rotation_envelope";
+      /** Padded compiled pivot radius, model units; null for translation-only. */
+      rotation_radius_model_units?: number | null;
       max_reach_model_units?: number;
       max_reach_blocks?: number;
       required_conservative_bounds?: {
