@@ -43,6 +43,7 @@ export type EditOperation =
   | { op: "set_animation_length"; animation_uuid: string; length: number }
   | { op: "set_animation_loop_mode"; animation_uuid: string; mode: "once" | "loop" | "hold" }
   | { op: "scale_animation_timeline"; animation_uuid: string; factor: number }
+  | { op: "set_bone_transform_keyframe_interpolation"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; interpolation: "linear" | "step" }
   | { op: "add_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
   | { op: "update_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale"; time: number; value: Vec3 }
   | { op: "remove_bone_transform_keyframe"; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: "rotation" | "position" | "scale" }

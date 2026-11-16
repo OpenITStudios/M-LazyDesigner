@@ -53,14 +53,17 @@ export type RotationKeyframeView = {
   time: number;
   rotation: Vec3;
 };
-/** Linear numeric source channels only, never opaque imported Molang. */
+/** Numeric Bone channels; only linear/step source interpolation is admitted. */
 export type TransformChannel = 'rotation' | 'position' | 'scale';
+export type TransformInterpolation = 'linear' | 'step';
 export type TransformKeyframeView = {
   uuid: string;
   boneUuid: string;
   channel: TransformChannel;
   time: number;
   value: Vec3;
+  /** Tauri always supplies the source-backed value; older read fixtures may omit it. */
+  interpolation?: TransformInterpolation;
 };
 
 export type AnimationView = {
@@ -120,6 +123,7 @@ export type EditOperation =
   | { op: 'set_animation_length'; animation_uuid: string; length: number }
   | { op: 'set_animation_loop_mode'; animation_uuid: string; mode: 'once' | 'loop' | 'hold' }
   | { op: 'scale_animation_timeline'; animation_uuid: string; factor: number }
+  | { op: 'set_bone_transform_keyframe_interpolation'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; interpolation: TransformInterpolation }
   | { op: 'add_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'update_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel; time: number; value: Vec3 }
   | { op: 'remove_bone_transform_keyframe'; animation_uuid: string; bone_uuid: string; keyframe_uuid: string; channel: TransformChannel }

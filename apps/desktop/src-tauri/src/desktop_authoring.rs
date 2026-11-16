@@ -90,6 +90,7 @@ pub struct TransformKeyframeView {
     channel: String,
     time: f64,
     value: [f64; 3],
+    interpolation: String,
 }
 
 #[derive(Serialize)]
@@ -429,10 +430,14 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                         .filter(|c| matches!(*c, "rotation" | "position" | "scale")) else {
                         preview_supported = false; continue;
                     };
-                    if frame.get("interpolation").and_then(Value::as_str) != Some("linear") ||
-                       !frame.as_object().is_some_and(|map| map.keys().all(|key|
-                            matches!(key.as_str(),
-                                "uuid" | "channel" | "time" | "interpolation" | "data_points"))) {
+                    let Some(interpolation) = frame.get("interpolation")
+                        .and_then(Value::as_str)
+                        .filter(|mode| matches!(*mode, "linear" | "step")) else {
+                        preview_supported = false; continue;
+                    };
+                    if !frame.as_object().is_some_and(|map| map.keys().all(|key|
+                        matches!(key.as_str(),
+                            "uuid" | "channel" | "time" | "interpolation" | "data_points"))) {
                         preview_supported = false; continue;
                     }
                     let Some(id) = frame.get("uuid").and_then(Value::as_str)
@@ -479,6 +484,7 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                     transform_keyframes.push(TransformKeyframeView {
                         uuid: id.to_owned(), bone_uuid: bone_uuid.clone(),
                         channel: channel.to_owned(), time, value,
+                        interpolation: interpolation.to_owned(),
                     });
                     if channel == "rotation" {
                         rotation_keyframes.push(RotationKeyframeView {
@@ -1564,6 +1570,56 @@ mod tests {
         assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
     }
 
+
+    // SOURCE_AUTHORED_NOT_RUN: step is carried as explicit saved metadata
+    // from Rust to Tauri. No unverified keyframe is presented as a pose.
+    #[test]
+    fn animation_projection_keeps_step_interpolation_and_refuses_unsupported_modes() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let bone = "00000000-0000-4000-8000-000000000001";
+        let anim = "00000000-0000-4000-8000-000000009991";
+        doc.animation_assets.push(json!({
+            "uuid":anim, "name":"step_pose", "loop":"once", "length":2.0,
+            "animators":{}
+        }));
+        doc.animation_assets[0]["animators"][bone] = json!({
+            "type":"bone", "name":"root_bone", "keyframes":[
+                {"uuid":"p0","channel":"position","time":0.0,
+                 "interpolation":"step",
+                 "data_points":[{"x":"0","y":"0","z":"0"}]},
+                {"uuid":"p2","channel":"position","time":2.0,
+                 "interpolation":"linear",
+                 "data_points":[{"x":"4","y":"0","z":"0"}]},
+                {"uuid":"r0","channel":"rotation","time":0.0,
+                 "interpolation":"step",
+                 "data_points":[{"x":"0","y":"45","z":"0"}]}
+            ]
+        });
+        let original = doc.clone();
+        let projected = animation_views(&doc);
+        assert!(projected[0].preview_supported);
+        assert_eq!(projected[0].transform_keyframes.len(),3);
+        assert_eq!(projected[0].transform_keyframes[0].interpolation,"step");
+        assert_eq!(projected[0].transform_keyframes[1].interpolation,"linear");
+        assert_eq!(projected[0].transform_keyframes[2].interpolation,"step");
+        let store = EditorStore {
+            epoch:1,active:Some(ActiveModel {
+                session:EditorSession::from_document(doc.clone()).unwrap(),
+                source_path:None,source_sha:None,saved_canonical_sha:None,dirty:true,
+            }),
+        };
+        let view = project(&store).unwrap();
+        assert_eq!(view.animations[0].transform_keyframes[0].interpolation,"step");
+        assert_eq!(store.active.as_ref().unwrap().session.document(), &original);
+        doc.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["interpolation"] = json!("catmullrom");
+        let refused = animation_views(&doc);
+        assert!(!refused[0].preview_supported);
+        assert!(refused[0].transform_keyframes.is_empty());
+        assert_eq!(original.animation_assets[0]["animators"][bone]["keyframes"][0]
+            ["interpolation"],json!("step"));
+    }
 
     // Authored-only Rust/Tauri regression; native playback remains held.
     #[test]

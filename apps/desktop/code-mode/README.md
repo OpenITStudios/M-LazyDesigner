@@ -33,6 +33,9 @@ No `eval`, `node:vm`, untrusted remote JS endpoint, cloud Worker loader, implici
 
 ## Compact API (types in client.d.mts)
 
+**Numeric Bone Step (2026-11-16; SOURCE_ONLY):** One typed Rust `set_bone_transform_keyframe_interpolation` operation takes `{animation_uuid, bone_uuid, keyframe_uuid, channel:'rotation'|'position'|'scale', interpolation:'linear'|'step'}`. It edits the outgoing segment of that exact keyframe under the current document/SHA and host authorization; the existing `add_bone_transform_keyframe` still creates `linear` by default. To create a Step key, add it and set its mode in one approved Rust edit plan. `inspectAnimationTransformTrack` returns explicit saved `interpolation` on supported numeric keys; legacy `scope` labels remain stable with `interpolation_modes` documenting the admitted `linear/step` subset. Imported Bezier, Catmull-Rom, Molang, effects and unknown metadata remain preserved but are not editable by this operation. Local runtime and native Blockbench playback NOT_EXECUTED.
+
+
 **Explicit material-palette variants (Rust source only):** `recolor_cube_faces_palette_guarded` accepts one `texture_uuid`, 1–16 `targets: [{cube_uuid,faces:[...]}]` and 1–32 exact `palette: [{from:[r,g,b],to:[r,g,b]}]` RGB pairs. The source RGB must be grounded in approved/current PNG pixels; a material name is *not* an input from which Rust invents a swatch. Rust reuses its guarded saved face-to-atlas mapping and one PNG pass to preserve all original material clusters and per-pixel alpha, and refuses face/atlas aliases or unsupported source formats. When creating an appearance variant, write to an authorized new output file, not over the source. The Code Mode host still requires independent write approval; tests NOT_EXECUTED, artistic/native acceptance UNVERIFIED.
 
 

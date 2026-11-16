@@ -206,6 +206,10 @@ pub enum EditOperation {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
         channel: String, time: f64, value: [f64; 3],
     },
+    SetBoneTransformKeyframeInterpolation {
+        animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
+        channel: String, interpolation: String,
+    },
     RemoveBoneTransformKeyframe {
         animation_uuid: String, bone_uuid: String, keyframe_uuid: String,
         channel: String,
@@ -922,9 +926,9 @@ fn has_external_uuid_references(doc: &AuthoringDocument, uuid: &str) -> bool {
     outliner_extra_references_uuid(&doc.hierarchy, uuid)
 }
 
-// The editable subset intentionally excludes unknown interpolation and
-// point extensions. Imported advanced frames remain unmodified.
-/// Strict bounded linear transform subset from Blockbench v5.2.1
+// The editable subset intentionally excludes unsupported interpolation and
+// point extensions. Step holds the previous key until the next key time.
+/// Strict bounded numeric linear/step transform subset from Blockbench v5.2.1
 /// BoneAnimator: rotation offsets in degrees, position offsets in model
 /// units, and multiplicative scales (identity [1,1,1]). This slice
 /// deliberately refuses negative/excessive scales rather than pretending
@@ -951,7 +955,8 @@ fn editable_transform_frame(frame: &Value) -> bool {
     let Some(fields) = frame.as_object() else { return false; };
     if !fields.keys().all(|key| matches!(key.as_str(),
         "uuid" | "channel" | "time" | "interpolation" | "data_points")) ||
-       frame.get("interpolation").and_then(Value::as_str) != Some("linear") ||
+       !matches!(frame.get("interpolation").and_then(Value::as_str),
+           Some("linear" | "step")) ||
        !frame.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid) ||
        !frame.get("time").and_then(Value::as_f64)
            .is_some_and(|v| v.is_finite() && v >= 0.0) {
@@ -1246,12 +1251,14 @@ pub fn inspect_rotation_track(
         };
         keyframes.push(json!({
             "uuid":frame["uuid"],
-            "time":frame["time"],
+            "time":frame["time"], "interpolation":frame["interpolation"],
             "rotation":[axis("x")?, axis("y")?, axis("z")?]
         }));
     }
     Ok(json!({
-        "scope":"linear_bone_rotation",
+        // Keep the legacy scope label for existing read clients; this
+        // explicit field declares the now-admitted outgoing segment modes.
+        "scope":"linear_bone_rotation", "interpolation_modes":["linear","step"],
         "recognized":true, "visual_verdict":"UNVERIFIED",
         "animation_uuid":animation_uuid, "bone_uuid":bone_uuid,
         "total_frames":total, "offset":offset,
@@ -1260,7 +1267,7 @@ pub fn inspect_rotation_track(
     }))
 }
 
-/// Bounded Code Mode read of the exact numeric linear Bone channel authored
+/// Bounded Code Mode read of an admitted numeric linear/step Bone channel authored
 /// by Rust. Unknown imported clips or expressions are never interpreted or
 /// normalized, and no raw keyframe extensions are returned to the agent.
 pub fn inspect_transform_track(
@@ -1318,10 +1325,13 @@ pub fn inspect_transform_track(
         ];
         selected.push(json!({
             "uuid":frame["uuid"], "time":frame["time"], "value":value,
+            "interpolation":frame["interpolation"],
         }));
     }
     Ok(json!({
+        // The legacy scope identifier is stable across read consumers.
         "scope":"linear_bone_transform", "recognized":true,
+        "interpolation_modes":["linear","step"],
         "visual_verdict":"UNVERIFIED", "animation_uuid":animation_uuid,
         "bone_uuid":bone_uuid, "channel":channel,
         "loop_mode":saved_animation_loop(animation).unwrap_or("once"),
@@ -2101,7 +2111,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(uuid.clone())
         }
         EditOperation::SetAnimationLoopMode { animation_uuid, mode } => {
-            // Only numeric-linear Bone clips with no opaque fields can
+            // Only admitted numeric linear/step Bone clips without opaque fields can
             // change their playback policy. Source-backed Blockbench v5.2.1
             // stores exactly once, loop, hold in the .bbmodel clip.
             if !matches!(mode.as_str(), "once" | "loop" | "hold") {
@@ -2145,7 +2155,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 // Never choose the first target silently.
                 return Err(fail("ANIMATION_ID_AMBIGUOUS"));
             }
-            // All admitted numeric linear transform channels are kept
+            // All admitted numeric linear/step transform channels are kept
             // byte-for-byte. No keyframe may be discarded by shortening.
             if !editable_transform_clip(animation, &doc.bones) {
                 return Err(fail("ANIMATION_LENGTH_EDIT_UNSUPPORTED"));
@@ -2167,7 +2177,7 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(animation_uuid.clone())
         }
         EditOperation::ScaleAnimationTimeline { animation_uuid, factor } => {
-            // Numeric linear, once-only Animation tracks can be retimed in a
+            // Numeric linear/step Animation tracks can be retimed in a
             // single transaction. No keyframe payload, UUID, Bone identity,
             // channel or interpolation is rewritten or guessed.
             if !factor.is_finite() || !(0.1..=10.0).contains(factor) {
@@ -2433,6 +2443,54 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
                 "x":value[0].to_string(), "y":value[1].to_string(),
                 "z":value[2].to_string()
             });
+            Ok(keyframe_uuid.clone())
+        }
+        EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid, bone_uuid, keyframe_uuid, channel, interpolation,
+        } => {
+            // Blockbench 5.2.1 Keyframe.interpolation stores linear/step.
+            // The outgoing segment belongs to the earlier keyframe; a
+            // change is therefore targeted at one exact key UUID/channel.
+            if !supported_transform_channel(channel) ||
+               !matches!(interpolation.as_str(), "linear" | "step") {
+                return Err(fail("ANIMATION_INTERPOLATION_INVALID"));
+            }
+            let matches: Vec<_> = doc.animation_assets.iter().enumerate()
+                .filter(|(_, animation)| animation.get("uuid")
+                    .and_then(Value::as_str) == Some(animation_uuid.as_str()))
+                .map(|(i, _)| i).collect();
+            let index = match matches.as_slice() {
+                [] => return Err(fail("ANIMATION_NOT_FOUND")),
+                [index] => *index,
+                _ => return Err(fail("ANIMATION_ID_AMBIGUOUS")),
+            };
+            if !editable_transform_clip(&doc.animation_assets[index], &doc.bones) {
+                return Err(fail("ANIMATION_INTERPOLATION_UNSUPPORTED"));
+            }
+            let frames = doc.animation_assets[index]
+                .get_mut("animators").and_then(Value::as_object_mut)
+                .and_then(|tracks| tracks.get_mut(bone_uuid))
+                .and_then(|track| track.get_mut("keyframes"))
+                .and_then(Value::as_array_mut)
+                .ok_or_else(|| fail("ANIMATION_TRACK_NOT_FOUND"))?;
+            let matches: Vec<_> = frames.iter().enumerate()
+                .filter(|(_, frame)| frame.get("uuid")
+                    .and_then(Value::as_str) == Some(keyframe_uuid.as_str()))
+                .map(|(i, _)| i).collect();
+            let target = match matches.as_slice() {
+                [] => return Err(fail("ANIMATION_KEYFRAME_NOT_FOUND")),
+                [index] => *index,
+                _ => return Err(fail("ANIMATION_KEYFRAME_ID_AMBIGUOUS")),
+            };
+            if frames[target].get("channel").and_then(Value::as_str) !=
+               Some(channel.as_str()) {
+                return Err(fail("ANIMATION_KEYFRAME_CHANNEL_MISMATCH"));
+            }
+            if frames[target].get("interpolation").and_then(Value::as_str)
+                == Some(interpolation.as_str()) {
+                return Ok(keyframe_uuid.clone());
+            }
+            frames[target]["interpolation"] = json!(interpolation);
             Ok(keyframe_uuid.clone())
         }
         EditOperation::RemoveBoneTransformKeyframe {

@@ -1,5 +1,5 @@
-// Read-only linear numeric Animation pose for the bounded Rust/Tauri subset.
-// This does not evaluate Molang, effects, Bezier, loops or controllers.
+// Read-only numeric linear/step Bone Animation pose for the Rust/Tauri subset.
+// This does not evaluate Molang, effects, Bezier, Catmull-Rom or controllers.
 // Position is an offset from the Bone bind origin; Scale multiplies bind pose.
 // Pinned Blockbench v5.2.1 BoneAnimator.displayPosition/displayScale.
 import type {
@@ -49,6 +49,8 @@ function grouped(
         !CHANNELS.includes(frame.channel) ||
         !Number.isFinite(frame.time) || frame.time < 0 ||
         frame.time > animation.length ||
+        (frame.interpolation !== undefined &&
+          frame.interpolation !== 'linear' && frame.interpolation !== 'step') ||
         !Array.isArray(frame.value) || frame.value.length !== 3 ||
         !frame.value.every((axis) =>
           typeof axis === 'number' && Number.isFinite(axis) &&
@@ -98,6 +100,12 @@ function interpolate(frames: readonly TransformKeyframeView[], time: number): Ve
   }
   const previous = frames[low - 1];
   const after = frames[low];
+  // Blockbench's Step belongs to the earlier keyframe. At the next key's
+  // exact time its own value takes effect, rather than holding the old pose.
+  if (time === after.time) return [...after.value] as Vec3;
+  // Compatibility for older rotation-only projections without a saved mode:
+  // canonical Rust/Tauri frames always include linear or step explicitly.
+  if (previous.interpolation === 'step') return [...previous.value] as Vec3;
   const alpha = (time - previous.time) / (after.time - previous.time);
   return previous.value.map((axis, index) =>
     axis + (after.value[index] - axis) * alpha) as Vec3;

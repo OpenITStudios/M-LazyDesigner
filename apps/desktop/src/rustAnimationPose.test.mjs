@@ -153,6 +153,76 @@ test('prepared pose matches direct scrubbing and refreshes on new snapshot', () 
   ]}), null);
 });
 
+
+// SOURCE_AUTHORED_NOT_RUN: Blockbench 5.2.1 Step is an outgoing segment
+// mode. It holds the prior value until the next authored exact key time.
+test('numeric Step holds prior Bone values and snaps on the next keyframe time', () => {
+  const clip = {
+    ...animation([]),
+    transformKeyframes: [
+      {uuid:'p0',boneUuid:'bone-a',channel:'position',
+        time:0,value:[0,0,0],interpolation:'step'},
+      {uuid:'p1',boneUuid:'bone-a',channel:'position',
+        time:1,value:[2,0,0],interpolation:'linear'},
+      {uuid:'p2',boneUuid:'bone-a',channel:'position',
+        time:2,value:[4,0,0],interpolation:'linear'},
+      {uuid:'r0',boneUuid:'bone-a',channel:'rotation',
+        time:0,value:[0,0,0],interpolation:'linear'},
+      {uuid:'r2',boneUuid:'bone-a',channel:'rotation',
+        time:2,value:[0,90,0],interpolation:'linear'},
+      {uuid:'s0',boneUuid:'bone-a',channel:'scale',
+        time:0,value:[1,1,1],interpolation:'step'},
+      {uuid:'s2',boneUuid:'bone-a',channel:'scale',
+        time:2,value:[2,2,2],interpolation:'linear'},
+      {uuid:'q0',boneUuid:'bone-b',channel:'rotation',
+        time:0,value:[10,0,0],interpolation:'step'},
+      {uuid:'q2',boneUuid:'bone-b',channel:'rotation',
+        time:2,value:[60,0,0],interpolation:'linear'},
+    ],
+  };
+  const original = JSON.stringify(clip);
+  const prepared = prepareBoneTransformPose(clip);
+  assert.ok(prepared);
+  const expected = [
+    [0,   [0,0,0], 0,   [1,1,1], 10],
+    [0.5, [0,0,0], 22.5,[1,1,1], 10],
+    [1,   [2,0,0], 45,  [1,1,1], 10],
+    [1.5, [3,0,0], 67.5,[1,1,1], 10],
+    [2,   [4,0,0], 90,  [2,2,2], 60],
+  ];
+  for (const [time, position, ry, scale, secondRotation] of expected) {
+    const pose=samplePreparedBoneTransformPose(prepared,time);
+    assert.deepEqual(pose['bone-a'].position,position);
+    assert.deepEqual(pose['bone-a'].rotation,[0,ry,0]);
+    assert.deepEqual(pose['bone-a'].scale,scale);
+    assert.deepEqual(pose['bone-b'].rotation,[secondRotation,0,0]);
+    assert.deepEqual(pose,projectedBoneTransformPose(clip,time));
+  }
+  assert.equal(JSON.stringify(clip),original);
+  assert.deepEqual(projectedTransformTimelineRows(clip,[
+    {uuid:'bone-a',name:'Body'},{uuid:'bone-b',name:'Arm'}
+  ])[0].frames[0].interpolation,'step');
+});
+
+test('unknown or malformed interpolation cannot produce a false supported pose', () => {
+  const base = {uuid:'k0',boneUuid:'bone',channel:'position',
+    time:0,value:[0,0,0],interpolation:'step'};
+  const mk = frame => ({...animation([]),transformKeyframes:[frame]});
+  for (const interpolation of ['bezier','catmullrom','ease','STEP',null,42]) {
+    assert.equal(prepareBoneTransformPose(mk({...base,interpolation})),null);
+    assert.equal(projectedBoneTransformPose(mk({...base,interpolation}),0),null);
+  }
+  // The old test-only rotation shape has no mode and remains linear for
+  // backwards compatibility. Real Rust/Tauri emits the saved mode always.
+  assert.deepEqual(projectedBoneTransformPose(mk({
+    uuid:'k1',boneUuid:'bone',channel:'position',
+    time:1,value:[1,0,0],
+  }),0)['bone'].position,[1,0,0]);
+  assert.equal(projectedBoneTransformPose({
+    ...mk(base),previewSupported:false,
+  },0),null);
+});
+
 test('per-Bone channel timeline groups and orders by Rust Bone list and time', () => {
   const clip = {
     ...animation([]),

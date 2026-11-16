@@ -2,6 +2,9 @@
 
 ## Rust asset-first authoring — 2026-11-15
 
+**Animation numeric Step source continuation (2026-11-16):** `set_bone_transform_keyframe_interpolation` extends the exact supported Bone Position/Rotation/Scale subset to Blockbench-saved `linear/step` modes. Tauri now projects the saved mode and existing prepared pose sampling holds previous Step values until the following exact key time. Code Mode inspection/edits, timeline retiming and Undo remain Rust-owned, no new GUI or engine. Source tests authored NOT_EXECUTED; real Blockbench playback, interpolated pose quality and performance comparison remain UNVERIFIED. Next priority: evaluate support for advanced interpolation with correct saved Bezier/Catmull-Rom data and preview, plus native .bbmodel acceptance. Preserve user-prioritized Geometry/Texturing/Animation over UI/UX.
+
+
 **Texture palette-variant source continuation (2026-11-16):** `recolor_cube_faces_palette_guarded` now performs explicit approved RGB swatch replacement on up to 16 selected Cube face cohorts in one shared-atlas Rust edit, preserving hand-painted pattern detail, original alpha, hidden RGB and unrelated faces. Source color mapping is simultaneous and guards against implicit/overlapping/unsupported UV. No material recognition or procedural aesthetic judgment has been invented; exact user/reference swatches remain the source. CLI/Tauri/typed Code Mode contracts and regressions authored NOT_EXECUTED. Continue materially missing Texture UV ownership/variant fidelity, advanced Animation and native .bbmodel acceptance; comparative performance UNVERIFIED and UI/UX deferred.
 
 

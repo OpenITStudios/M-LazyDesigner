@@ -139,6 +139,163 @@ fn transform_keyframes_reject_unknown_molang_negative_scale_and_cross_channel_ed
     assert!(!opaque.can_undo());
 }
 
+
+// SOURCE_AUTHORED_NOT_RUN: pinned Blockbench 5.2.1 Step holds the prior
+// numeric Bone value until the next frame. The Rust codec owns saved modes,
+// while the Tauri renderer alone derives display poses.
+#[test]
+fn numeric_step_interpolation_roundtrips_updates_retimes_and_undoes() {
+    const ANIM:&str="00000000-0000-4000-8000-000000009871";
+    const P0:&str="00000000-0000-4000-8000-000000009872";
+    const P2:&str="00000000-0000-4000-8000-000000009873";
+    const R0:&str="00000000-0000-4000-8000-000000009874";
+    const S1:&str="00000000-0000-4000-8000-000000009875";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let initial=session.document().clone();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:ANIM.into(),name:"step_walk".into(),length:2.0,
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:P0.into(),
+            channel:"position".into(),time:0.0,value:[0.0,0.0,0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:P2.into(),
+            channel:"position".into(),time:2.0,value:[4.0,0.0,0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:R0.into(),
+            channel:"rotation".into(),time:0.0,value:[0.0,45.0,0.0],
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:S1.into(),
+            channel:"scale".into(),time:1.0,value:[1.0,1.25,1.0],
+        },
+        EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:P0.into(),
+            channel:"position".into(),interpolation:"step".into(),
+        },
+        EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:R0.into(),
+            channel:"rotation".into(),interpolation:"step".into(),
+        },
+        EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:S1.into(),
+            channel:"scale".into(),interpolation:"step".into(),
+        },
+    ]).unwrap();
+    let saved=session.document().clone();
+    let frames=saved.animation_assets[0]["animators"][BONE]["keyframes"]
+        .as_array().unwrap();
+    assert_eq!(frames.len(),4);
+    assert_eq!(frames[0]["interpolation"],json!("step"));
+    assert_eq!(frames[1]["interpolation"],json!("linear"));
+    assert_eq!(frames[2]["interpolation"],json!("step"));
+    assert_eq!(frames[3]["interpolation"],json!("step"));
+    let position=inspect_transform_track(&saved,ANIM,BONE,"position",0,8).unwrap();
+    assert_eq!(position["recognized"],json!(true));
+    assert_eq!(position["keyframes"][0]["interpolation"],json!("step"));
+    assert_eq!(position["keyframes"][1]["interpolation"],json!("linear"));
+    let rotation=inspect_transform_track(&saved,ANIM,BONE,"rotation",0,8).unwrap();
+    assert_eq!(rotation["keyframes"][0]["interpolation"],json!("step"));
+    let scale=inspect_transform_track(&saved,ANIM,BONE,"scale",0,8).unwrap();
+    assert_eq!(scale["keyframes"][0]["interpolation"],json!("step"));
+    assert_eq!(saved.cubes,initial.cubes);
+    assert_eq!(saved.bones,initial.bones);
+    assert_eq!(saved.texture_assets,initial.texture_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),saved);
+    assert_eq!(session.apply(1,&[EditOperation::SetBoneTransformKeyframeInterpolation {
+        animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:P0.into(),
+        channel:"position".into(),interpolation:"step".into(),
+    }]).unwrap_err(),"EDIT_NO_OP");
+    session.apply(1,&[
+        EditOperation::UpdateBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:P0.into(),
+            channel:"position".into(),time:0.5,value:[1.0,0.0,0.0],
+        },
+        EditOperation::ScaleAnimationTimeline {animation_uuid:ANIM.into(),factor:2.0},
+    ]).unwrap();
+    let retimed=session.document().clone();
+    assert_eq!(retimed.animation_assets[0]["length"],json!(4.0));
+    assert_eq!(retimed.animation_assets[0]["animators"][BONE]["keyframes"][0]["time"],json!(1.0));
+    assert_eq!(retimed.animation_assets[0]["animators"][BONE]["keyframes"][0]["interpolation"],json!("step"));
+    assert_eq!(retimed.animation_assets[0]["animators"][BONE]["keyframes"][1]["time"],json!(4.0));
+    assert_eq!(retimed.animation_assets[0]["animators"][BONE]["keyframes"][1]["interpolation"],json!("linear"));
+    session.undo(2).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(),&initial);
+    session.redo(4).unwrap();
+    assert_eq!(session.document(),&saved);
+    session.redo(5).unwrap();
+    assert_eq!(session.document(),&retimed);
+    session.apply(6,&[EditOperation::SetBoneTransformKeyframeInterpolation {
+        animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:P0.into(),
+        channel:"position".into(),interpolation:"linear".into(),
+    }]).unwrap();
+    assert_eq!(session.document().animation_assets[0]["animators"][BONE]
+        ["keyframes"][0]["interpolation"],json!("linear"));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *session.document());
+}
+
+#[test]
+fn numeric_step_interpolation_refuses_unknown_opaque_and_wrong_targets_atomically() {
+    const ANIM:&str="00000000-0000-4000-8000-000000009881";
+    const K:&str="00000000-0000-4000-8000-000000009882";
+    let mut session=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0,&[
+        EditOperation::CreateAnimation {
+            uuid:ANIM.into(),name:"step".into(),length:2.0,
+        },
+        EditOperation::AddBoneTransformKeyframe {
+            animation_uuid:ANIM.into(),bone_uuid:BONE.into(),keyframe_uuid:K.into(),
+            channel:"rotation".into(),time:0.0,value:[0.0,90.0,0.0],
+        },
+    ]).unwrap();
+    let saved=session.document().clone();
+    let op=|anim:&str,bone:&str,key:&str,channel:&str,interpolation:&str|
+        EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:anim.into(),bone_uuid:bone.into(),keyframe_uuid:key.into(),
+            channel:channel.into(),interpolation:interpolation.into(),
+        };
+    for (anim,bone,key,channel,interpolation,error) in [
+        (ANIM,BONE,K,"rotation","bezier","ANIMATION_INTERPOLATION_INVALID"),
+        (ANIM,BONE,K,"rotation","catmullrom","ANIMATION_INTERPOLATION_INVALID"),
+        (ANIM,BONE,K,"rotation","ease","ANIMATION_INTERPOLATION_INVALID"),
+        (ANIM,BONE,K,"bad","step","ANIMATION_INTERPOLATION_INVALID"),
+        ("notfound",BONE,K,"rotation","step","ANIMATION_NOT_FOUND"),
+        (ANIM,"notfound",K,"rotation","step","ANIMATION_TRACK_NOT_FOUND"),
+        (ANIM,BONE,"notfound","rotation","step","ANIMATION_KEYFRAME_NOT_FOUND"),
+        (ANIM,BONE,K,"position","step","ANIMATION_KEYFRAME_CHANNEL_MISMATCH"),
+    ] {
+        assert_eq!(session.apply(1,&[
+            EditOperation::SetCubeInflate {uuid:CUBE.into(),inflate:0.25},
+            op(anim,bone,key,channel,interpolation),
+        ]).unwrap_err(),error);
+        assert_eq!(session.document(),&saved);
+        assert_eq!(session.summary().revision,1);
+    }
+    let mut duplicate=saved.clone();
+    duplicate.animation_assets.push(saved.animation_assets[0].clone());
+    let mut ambiguous=EditorSession::from_document(duplicate.clone()).unwrap();
+    assert_eq!(ambiguous.apply(0,&[op(ANIM,BONE,K,"rotation","step")]).unwrap_err(),
+        "ANIMATION_ID_AMBIGUOUS");
+    assert_eq!(ambiguous.document(),&duplicate);
+
+    let mut opaque=saved.clone();
+    opaque.animation_assets[0]["animators"][BONE]["keyframes"][0]["interpolation"]=json!("bezier");
+    let mut imported=EditorSession::from_document(opaque.clone()).unwrap();
+    assert_eq!(imported.apply(0,&[op(ANIM,BONE,K,"rotation","step")]).unwrap_err(),
+        "ANIMATION_INTERPOLATION_UNSUPPORTED");
+    assert_eq!(imported.document(),&opaque);
+    assert_eq!(inspect_transform_track(&opaque,ANIM,BONE,"rotation",0,8).unwrap()
+        ["recognized"],json!(false));
+    assert_eq!(session.document(),&saved);
+    assert!(!session.can_redo());
+}
+
 // Source-authored only. Blockbench loop/hold playback remains NOT_EXECUTED.
 #[test]
 fn animation_loop_modes_roundtrip_three_channel_authoring_and_retime() {
