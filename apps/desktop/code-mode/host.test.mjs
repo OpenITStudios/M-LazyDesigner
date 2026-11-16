@@ -527,6 +527,253 @@ test('a verified reference pair permits scoped Paint once, then rejects a stale 
     assert.equal(launches,3);
   }));
 
+// Source-authored Golden controls. Buffers below intentionally exercise only
+// transport/authority; they are not actual image/artist quality observations.
+test('rejected Pillager-style image review permits only reviewer-scoped correction', () =>
+  fixture(async input => {
+    const folder=dirname(input);
+    const ref=join(folder,'tier1-reference.png');
+    const capture=join(folder,'tier2-current.png');
+    const bytes=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,bytes);await writeFile(capture,bytes);
+    const digest=createHash('sha256').update(bytes).digest('hex');
+    const calls=[], approvals=[], received=[];
+    let step=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:ref,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:async selection=>{
+        received.push(selection);
+        assert.equal(selection.sourceModelSha256,HASH);
+        assert.equal(selection.viewId,'front');
+        assert.ok(Buffer.isBuffer(selection.reference.pngBytes));
+        assert.deepEqual(selection.reference.pngBytes,bytes);
+        assert.deepEqual(selection.capture.pngBytes,bytes);
+        assert.equal(selection.reference.sha256,digest);
+        return {
+          decision:'REJECTED',
+          issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+            observation:'Helmet needs reviewed material shading.'}],
+          correctionScope:{
+            textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[1,1],to:[5,5]}],
+            preserveAlpha:true,
+          },
+        };
+      },
+      authorizeMutation:request=>{
+        approvals.push(request);
+        return request.operation==='apply';
+      },
+      runner:async args=>{
+        calls.push(args[0]);
+        if(args[0]==='inspect'){
+          const newAsset=args.some(x=>String(x).endsWith('/good.bbmodel'));
+          return {status:'OK',sha256:newAsset?'b'.repeat(64):HASH,
+            summary:SUMMARY};
+        }
+        if(args[0]==='inspect-visual-pair'){
+          return {
+            status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{
+              scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED',artistic_verdict:'NOT_EVALUATED',
+            },
+          };
+        }
+        if(args[0]==='apply'){
+          return {status:'OK',source_sha256:HASH,
+            output_sha256:'b'.repeat(64),summary:{...SUMMARY,revision:1},
+            mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+        }
+        throw Error('unexpected CLI command');
+      },
+      spawnImpl:()=>{
+        step++;
+        if(step===1)return fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },response=>{
+          assert.equal(response.ok,true);
+          assert.equal(response.result.review_feedback.decision,'REJECTED');
+          assert.equal(response.result.review_feedback.issues[0].id,'helmet-flat');
+          assert.equal(response.result.review_feedback.visual_verdict,'UNVERIFIED');
+          assert.equal(response.result.evidence_binding.image_ingestion,'NOT_VERIFIED');
+          assert.equal(JSON.stringify(response.result).includes('pngBytes'),false);
+          return {reviewed:true};
+        });
+        const target=step===2?{from:[10,10],to:[12,12]}:
+          {from:[2,2],to:[4,4]};
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:step===2?'bad.bbmodel':'good.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:1,
+            x:target.from[0],y:target.from[1],rgba:[80,100,120,255]}],
+          correctionScope:{
+            textureUuid:'tier2-atlas',allowedRegions:[target],
+            preserveAlpha:true,
+          },
+        }},response=>{
+          if(step===2){
+            assert.equal(response.ok,false);
+            assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
+            return {refused:true};
+          }
+          assert.equal(response.ok,true);
+          assert.equal(response.result.project,'p1');
+          return {edited:true};
+        });
+      },
+    });
+    const first=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(first.value.reviewed,true);
+    const rejected=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(rejected.value.refused,true);
+    const permitted=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(permitted.value.edited,true);
+    assert.equal(received.length,1);
+    assert.equal(approvals.length,1);
+    assert.equal(approvals[0].correctionScope.textureUuid,'tier2-atlas');
+    assert.deepEqual(calls,['inspect','inspect-visual-pair','apply','inspect']);
+  }));
+
+test('accepted or unverified visual feedback cannot authorize another pixel correction', () =>
+  fixture(async input => {
+    const folder=dirname(input);
+    const ref=join(folder,'review-reference.png');
+    const capture=join(folder,'review-candidate.png');
+    const bytes=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,bytes);await writeFile(capture,bytes);
+    const digest=createHash('sha256').update(bytes).digest('hex');
+    for(const [decision,expected] of [
+      ['ACCEPTED','CODE_MODE_VISUAL_REVIEW_ACCEPTED_PROTECTED'],
+      ['UNVERIFIED','CODE_MODE_VISUAL_REVIEW_REQUIRED'],
+    ]){
+      let calls=0, guestStep=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:ref,capturePngPath:capture,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        reviewVisualPair:async()=>({decision,issues:[]}),
+        authorizeMutation:()=>{throw Error('unexpected approval');},
+        runner:async args=>{
+          calls++;
+          if(args[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+          if(args[0]==='inspect-visual-pair')return {
+            status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'},
+          };
+          throw Error('unexpected native mutation');
+        },
+        spawnImpl:()=>{
+          guestStep++;
+          if(guestStep===1)return fakeGuest({
+            method:'inspectSelectedVisualPair',args:{project:'p0'},
+          },response=>{
+            assert.equal(response.ok,true);
+            assert.equal(response.result.review_feedback.decision,decision);
+            return {decision};
+          });
+          return fakeGuest({method:'apply',args:{
+            project:'p0',output:'forbidden.bbmodel',
+            operations:[{op:'paint_texture_pixel',texture_index:0,
+              x:1,y:1,rgba:[1,2,3,255]}],
+            correctionScope:{textureUuid:'tier2',
+              allowedRegions:[{from:[0,0],to:[2,2]}],preserveAlpha:true},
+          }},response=>{
+            assert.equal(response.ok,false);
+            assert.equal(response.code,expected);
+            return {blocked:true};
+          });
+        },
+      });
+      const reviewed=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(reviewed.value.decision,decision);
+      const edit=await host.execute({code:'return codemode.apply({project:"p0"});'});
+      assert.equal(edit.value.blocked,true);
+      assert.equal(calls,2);
+    }
+  }));
+
+test('invalid or stale reviewer evidence fails before it can permit Paint', () =>
+  fixture(async input => {
+    const folder=dirname(input);
+    const ref=join(folder,'reference.png');
+    const capture=join(folder,'candidate.png');
+    const bytes=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,bytes);await writeFile(capture,bytes);
+    const digest=createHash('sha256').update(bytes).digest('hex');
+    for(const [reviewResult,expected] of [
+      [{decision:'REJECTED',issues:[]},'CODE_MODE_VISUAL_REVIEW_INVALID'],
+      [{decision:'REJECTED',issues:[
+        {id:'duplicate',kind:'FLAT_SHADING',observation:'Flat helmet.'},
+        {id:'duplicate',kind:'MISSING_DETAIL',observation:'Missing detail.'},
+      ],correctionScope:{textureUuid:'tier2',
+        allowedRegions:[{from:[1,1],to:[2,2]}]}},
+      'CODE_MODE_VISUAL_REVIEW_INVALID'],
+    ]){
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:ref,capturePngPath:capture,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        reviewVisualPair:()=>reviewResult,
+        runner:async args=>args[0]==='inspect'?
+          {status:'OK',sha256:HASH,summary:SUMMARY}:
+          {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'}},
+        spawnImpl:()=>fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,expected);
+          return {rejected:true};
+        }),
+      });
+      const result=await host.execute({code:'return 1;'});
+      assert.equal(result.value.rejected,true);
+    }
+    let callbackInvoked=0;
+    const stale=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:ref,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:()=>{callbackInvoked++;return {decision:'UNVERIFIED',issues:[]};},
+      runner:async args=>args[0]==='inspect'?
+        {status:'OK',sha256:HASH,summary:SUMMARY}:
+        {status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'}},
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },response=>{
+        assert.equal(response.ok,false);
+        assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_INPUT_STALE');
+        return {stale:true};
+      }),
+    });
+    await writeFile(capture,Buffer.concat([bytes,Buffer.from([1])]));
+    const report=await stale.execute({code:'return 1;'});
+    assert.equal(report.value.stale,true);
+    assert.equal(callbackInvoked,0);
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {
