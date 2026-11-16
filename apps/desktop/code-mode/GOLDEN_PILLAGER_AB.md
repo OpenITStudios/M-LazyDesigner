@@ -34,7 +34,7 @@ Baseline and candidate must use comparable model, viewer, reference and work sco
 | PILL-03 | Tier 2/3 helmet was a flat band rather than hand-painted metal | Human/visual-capable reviewer sees material hierarchy and highlights/shadows on a helmet close-up; numerical color count is insufficient |
 | PILL-04 | Unwanted side/head ornaments or removed required helmet and face trace | Approved helmet remains, prohibited side ornament absent, red face trace retained in front and side views |
 | PILL-05 | Blue/red variant shading recolored neutral iron and collapsed identity | Hardware remains neutral where requested; accents/shield red follow approved reference |
-| PILL-06 | Rear, side and undersides were overlooked | Pin each representative sample to exact Cube UUID, face, native projected UV and texture owner; inspect six saved face-alpha states, then independently inspect affected shaded rear/side/underside views. Source alpha alone does not pass quality |
+| PILL-06 | Rear, side and undersides were overlooked | Pin sample to Cube/UV/texture owner; measure six saved Cube-face alpha states **separately** from six operator-selected rendered camera pairs. Record a concrete reviewer outcome for each front/back/left/right/top/bottom view; unresolved or occluded views block broad propagation and cannot pass quality |
 | PILL-07 | Same rejected stripes/noise/gradient plan repeated | Two unsuccessful same-causal-direction corrections require a different diagnosis and evidence before continuing; repeated user instructions count as failures, not proof |
 | PILL-08 | Tier 2/3 progression unclear or generic/cluttered | Reviewer can distinguish progressive armor/detail/silhouette without altering approved Tier 1 language |
 | PILL-09 | Finished/approved claims followed receipts without visual acceptance | Never mark PASS/APPROVED on a CLI success, image hash match, or callback declaration alone |
@@ -50,6 +50,30 @@ Geometry/UV and Animation remain their respective authoring owners; do not repai
 4. Reopen/capture the saved new revision and bind an updated image pair. Never use an earlier capture or repeat a stale approved decision. Check the repaired region, corresponding protected parts and views not targeted.
 5. Record actual accepted/rejected outcomes and diagnostic direction. If the same approach is rejected twice, stop that approach and require new causal visual evidence. The existing host has no cross-session retry-memory; the operator's recorded evaluation supplies continuity.
 
+
+## Multi-view acceptance gate for source-only Rust workflow
+
+The operator may select six actual rendered view pairs with
+`preselectedVisualPair.supportingViews` and
+`requireSixDirections:true`. These images are not extracted from
+the six saved Cube alpha faces. They must have one source model
+SHA, independently pinned reference/capture SHA for each direction,
+matching view/crop/lighting supplied by the authorized reviewer,
+and a per-direction ACCEPTED/REJECTED/UNVERIFIED record.
+
+**Do not claim all-sided texture completion** from source face-alpha
+histograms, a single front screenshot or merely selecting six files.
+The independent reviewer must see every actual pair. If a direction
+is hidden/occluded or cannot be meaningfully compared, mark it
+UNVERIFIED and keep broad reviewed propagation held. One corrected
+front sample can be reviewed locally without claiming global
+completion. A whole-material ACCEPTED declaration is invalid if
+any selected direction remains REJECTED/UNVERIFIED.
+
+Subsequent revisions require entirely new SHA-bound candidate
+captures and fresh reviewer declarations; saved Cube orientation
+or texture alpha can help localize a defect, but do not prove that
+the camera screenshot represents the intended shaded face.
 ## Negative controls already represented in source
 
 - A second review attempt cannot downgrade ACCEPTED to REJECTED for the identical model/image binding.

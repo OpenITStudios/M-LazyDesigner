@@ -201,6 +201,84 @@ especially for rotated Cubes and inherited material settings.
 To declare full art coverage, the real reviewer must inspect the
 affected shaded front/back/side/underside views independently;
 this source reader alone never authorizes whole-model completion.
+### Multiple operator-selected rendered views (source-only)
+
+To review more than one camera direction without conflating actual
+rendering with saved Cube alpha faces, the trusted host adds view
+pairs to the **existing** `preselectedVisualPair` object:
+
+~~~js
+preselectedVisualPair: {
+  referencePngPath:'/operator/reference-front.png',
+  capturePngPath:'/operator/current-front.png',
+  captureModelSha256: verifiedSelectedModelSha256,
+  viewId:'front',
+  supportingViews:[
+    {viewId:'back', referencePngPath:'/operator/reference-back.png',
+      capturePngPath:'/operator/current-back.png'},
+    {viewId:'left', referencePngPath:'/operator/reference-left.png',
+      capturePngPath:'/operator/current-left.png'},
+    {viewId:'right', referencePngPath:'/operator/reference-right.png',
+      capturePngPath:'/operator/current-right.png'},
+    {viewId:'top', referencePngPath:'/operator/reference-top.png',
+      capturePngPath:'/operator/current-top.png'},
+    {viewId:'bottom', referencePngPath:'/operator/reference-bottom.png',
+      capturePngPath:'/operator/current-bottom.png'},
+  ],
+  requireSixDirections:true,
+}
+~~~
+
+These are **real operator-selected images**; the host does not
+produce, rotate, label or authenticate screenshots for the user.
+Each source and capture is independently hashed and inspected via
+the existing SHA-bound Rust PNG comparator. Duplicate/unsupported
+view identifiers or incomplete cardinal sets fail before guest
+execution. Maximum total: seven view pairs (six cardinal plus
+optional three-quarter); single-view remains the default.
+
+`reviewVisualPair` now receives its existing primary image buffers
+plus `supportingViews`, each containing actual reference/capture
+buffers and SHA IDs, with `requiredSixDirections`. For two or
+more selected views, an independent reviewer must return the
+normal overall decision **and** one `viewReviews` item per view:
+
+~~~js
+viewReviews:[
+  {viewId:'front',decision:'REJECTED',
+    observation:'The helmet highlight is still a flat band.'},
+  {viewId:'back',decision:'ACCEPTED',
+    observation:'Rear metal shading matches this selected reference.'},
+  {viewId:'left',decision:'ACCEPTED',
+    observation:'The left-side material is intentionally preserved.'},
+  {viewId:'right',decision:'ACCEPTED',
+    observation:'Right-side sampled material is visibly consistent.'},
+  {viewId:'top',decision:'ACCEPTED',
+    observation:'Top face material was actually inspected.'},
+  {viewId:'bottom',decision:'UNVERIFIED',
+    observation:'Bottom face is still occluded in the current capture.'},
+]
+~~~
+
+The above is a **contract example**, not evidence that the actual
+Pillager renders were reviewed. An overall ACCEPTED decision is
+invalid while any selected view is rejected or unknown. Rejected
+material can still receive a bounded representative patch, but
+**propagation** with a selected UNVERIFIED direction is held until
+an independently observed, source-fresh review is available.
+An ACCEPTED view is only a reviewer declaration about that
+selected image/view, not Minecraft or Blockbench material PASS.
+
+The `inspectSelectedVisualPair` receipt preserves its original primary
+`comparison` and adds `view_evidence` (per-view source/capture SHA,
+source revision and UNVERIFIED visual quality) plus `view_scope`.
+`review_feedback.viewReviews` contains validated **declarations**.
+Do not confuse `six_cardinal_source_pairs_selected` with verified
+camera calibration or finished-art acceptance. The separate
+`face_source_evidence` still describes six saved Cube faces from
+Rust, never screenshots. Replacing any selected PNG after review
+refuses Paint before approval. No new renderer, image database or
+guest-visible filesystem capability is introduced.
 ## Programmatic execution architecture
 
 ~~~text

@@ -1,5 +1,20 @@
 # LazyDesigner Next Action
 
+**Rust Code Mode six rendered-camera view continuity (2026-11-16; SOURCE_ONLY):**
+Extended the single trusted host review to optionally pin actual
+reference/capture PNG pairs for multiple directions at one selected
+.bbmodel SHA, without a new renderer or second agent. A six-cardinal
+source-set requirement refuses missing/duplicate directions. The
+independent reviewer must declare an outcome for every chosen pair;
+a false all-ACCEPTED summary with a rejected view is refused,
+and broad reviewed material propagation cannot proceed while any
+selected view is UNVERIFIED. The host rechecks ALL chosen images
+before Paint. Six saved Cube face-alpha records are still a separate
+source diagnostic, not camera images or artistic quality PASS.
+Positive/negative mocked-host regression sources AUTHORED_NOT_RUN;
+real Pillager views, reviewer capability, camera equivalence and
+actual reduction of blindspots remain UNVERIFIED.
+
 **Rust native Cube/UV-bound sample, six-face source status (2026-11-16; SOURCE_ONLY):**
 Representative material review now requires an actual Cube UUID and local
 face direction. The trusted Code Mode host confirms them through one

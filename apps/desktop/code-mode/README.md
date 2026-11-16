@@ -1,5 +1,29 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Operator-selected multi-view model review (2026-11-16; SOURCE_ONLY):**
+One existing `preselectedVisualPair` may now include up to six
+`supportingViews` (each with its own explicit `viewId`, reference PNG
+and matching current-capture PNG). The host rejects duplicates and
+unsupported views. `requireSixDirections:true` requires the real
+front/back/left/right/top/bottom camera-image set; an optional
+`three_quarter` image is supplementary. All selected reference/capture
+files are hash-pinned to the same source `.bbmodel` SHA, compared via
+the *existing* bounded Rust `inspect-visual-pair` read, and freshly
+hashed again before Paint.
+
+For more than one selected view, the independent reviewer must actually
+inspect all supplied PNG pairs and declare a `viewReviews` outcome
+for **each** view. `ACCEPTED` is refused if a selected view is
+`REJECTED` or `UNVERIFIED`, and a `REJECTED` summary must identify at
+least one rejected view. Multi-view material propagation stops if
+any selected view is `UNVERIFIED`. A reviewer-declared per-view status
+does not certify a model or image-vision engine; source file
+`face_source_evidence` remains separate from these *rendered-view*
+declarations. The guest receives bounded per-view SHA/verdict metadata
+without private image paths or PNG buffers. Single-view corrections
+remain compatible and cannot claim whole-model coverage.
+Source regressions authored NOT_EXECUTED; PC/local validation deferred.
+
 **Cube face / UV ownership and six-direction source evidence (2026-11-16; SOURCE_ONLY):**
 The representative material patch must now identify the reviewer-selected
 `cubeUuid` and Cube-local `face` (north/east/south/west/up/down). Before

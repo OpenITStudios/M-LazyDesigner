@@ -1,5 +1,23 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Operator-selected multi-view PNG review contract (SOURCE_ONLY)
+
+The canonical Rust PNG pair inspector is reused for up to seven
+operator-selected view pairs in one trusted Code Mode host, each
+bound to the same source .bbmodel SHA and an exact reference/capture
+PNG digest. The operator may require all six cardinal directions.
+Independent reviewer feedback must declare each selected view's
+ACCEPTED/REJECTED/UNVERIFIED result; a false overall ACCEPTED is
+refused if any bound view is not accepted. Broad material propagation
+stops with selected UNVERIFIED views and any chosen image changed
+since the review stops Paint. Per-view receipts carry hashes and
+declarations, not private images and not a native visual verdict.
+Six saved Cube alpha faces remain distinct source evidence.
+Source host tests authored for positive six-view routing, bad/duplicate
+view sets, incomplete/conflicting reviewer verdicts, post-review
+side PNG drift and incomplete-view propagation. NOT_EXECUTED; local
+CI/PC and native image viewing held.
+
 ## 2026-11-16 — Exact Cube-face atlas sample owner and six-face source evidence
 
 At pinned Rust source, `material_face_patch` is a read-only Cube/UV
