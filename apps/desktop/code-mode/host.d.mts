@@ -54,6 +54,7 @@ export interface CodeModeGuestAPI {
       issues:Array<CodeModeVisualReviewerFeedback["issues"][number]>;
       correctionScope?:TextureCorrectionScope | null;
       rejectedApproaches:Array<{issueId:string;approachId:string}>;
+      materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
       source:"TRUSTED_HOST_DECLARATION"|"NONE";
       visual_verdict:"UNVERIFIED";
     };
@@ -100,6 +101,22 @@ export interface CodeModeHost {
  * by the independent operator/reviewer; the guest cannot submit it.
  * Even ACCEPTED is not a native renderer PASS.
  */
+/** Reviewed atlas sample, not the normalized source-image box or a visual PASS.
+ * A propagation declaration must refer to a genuinely observed accepted
+ * sample in the current captured model revision.
+ */
+export interface CodeModeReviewedMaterialCohort {
+  phase:"sample"|"propagation";
+  issueId:string; partId:string; approachId:string;
+  sampleRegion:{from:[number,number];to:[number,number]};
+  sampleVerdict?:"ACCEPTED"|"UNVERIFIED";
+  approval_source?:"TRUSTED_REVIEWER_DECLARATION"|"NONE";
+  visual_verdict?:"UNVERIFIED";
+  source_model_sha256?:string;
+  reference_png_sha256?:string;
+  capture_png_sha256?:string;
+  view_id?:string;
+}
 export interface CodeModeVisualReviewerFeedback {
   decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
   issues:Array<{
@@ -113,6 +130,16 @@ export interface CodeModeVisualReviewerFeedback {
   correctionScope?: TextureCorrectionScope;
   /** Actual rejected strategy keys, carried by the authorized reviewer. */
   rejectedApproaches?:Array<{issueId:string;approachId:string}>;
+  /** Stage sample restricts Paint to one bounded atlas patch. Stage
+   * propagation requires reviewer-declared accepted sample from the
+   * CURRENT SHA-bound captured model; the host protects that patch.
+   */
+  materialCohort?:{
+    phase:"sample"|"propagation";
+    issueId:string; partId:string; approachId:string;
+    sampleRegion:{from:[number,number];to:[number,number]};
+    sampleVerdict?:"ACCEPTED";
+  };
 }
 export interface CodeModeHostOptions {
   rustBinary: string;

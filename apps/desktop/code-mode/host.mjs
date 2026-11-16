@@ -113,7 +113,7 @@ const MAX_REVIEW_ISSUES = 6;
 function normalizedVisualReview(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key =>
-        !['decision','issues','correctionScope','rejectedApproaches'].includes(key)) ||
+        !['decision','issues','correctionScope','rejectedApproaches','materialCohort'].includes(key)) ||
       !REVIEW_DECISIONS.has(input.decision) ||
       !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -168,6 +168,8 @@ function normalizedVisualReview(input) {
       item.issueId+':'+item.approachId)).size !== rejectedApproaches.length) {
       throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
     }
+    const materialCohort = normalizedReviewedMaterialCohort(
+      input.materialCohort,scope,issues);
     const normalized = Object.freeze({
       textureUuid:scope.texture_uuid,
       allowedRegions:Object.freeze(scope.allowed_regions.map(region=>
@@ -182,21 +184,81 @@ function normalizedVisualReview(input) {
       status:'RECORDED',decision:'REJECTED',
       issues:Object.freeze(issues),correctionScope:normalized,
       rejectedApproaches:Object.freeze(rejectedApproaches),
+      materialCohort,
       source:'TRUSTED_HOST_DECLARATION',
       visual_verdict:'UNVERIFIED',
     });
   }
   if (issues.length !== 0 || input.correctionScope !== undefined ||
-      input.rejectedApproaches !== undefined) {
+      input.rejectedApproaches !== undefined ||
+      input.materialCohort !== undefined) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
   }
   return Object.freeze({
     status:'RECORDED',decision:input.decision,
     issues:Object.freeze([]),correctionScope:null,
-    rejectedApproaches:Object.freeze([]),
+    rejectedApproaches:Object.freeze([]),materialCohort:null,
     source:'TRUSTED_HOST_DECLARATION',visual_verdict:'UNVERIFIED',
   });
 }
+// One representative surface patch is an ATLAS location, not a reference
+// image box or a claim about the rendered Cube face. Trusted review must
+// select matching UV ownership before calling the model-wide Paint endpoint.
+function normalizedReviewedMaterialCohort(value, correctionScope, issues) {
+  if (value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).some(key => ![
+        'phase','issueId','partId','approachId','sampleRegion','sampleVerdict',
+      ].includes(key)) ||
+      !['sample','propagation'].includes(value.phase) ||
+      typeof value.issueId !== 'string' ||
+      typeof value.partId !== 'string' ||
+      typeof value.approachId !== 'string' ||
+      !/^[a-z][a-z0-9_-]{0,63}$/.test(value.issueId) ||
+      !/^[a-z][a-z0-9_-]{0,63}$/.test(value.partId) ||
+      !/^[a-z][a-z0-9_-]{0,63}$/.test(value.approachId) ||
+      !issues.some(issue => issue.id === value.issueId &&
+        (!issue.partId || issue.partId === value.partId))) {
+    throw new Error('CODE_MODE_MATERIAL_COHORT_INVALID');
+  }
+  let region;
+  try {
+    const checked = normalizedCorrectionScope({
+      textureUuid:correctionScope.texture_uuid,
+      allowedRegions:[value.sampleRegion],preserveAlpha:true,
+    });
+    region = checked.allowed_regions[0];
+  } catch {
+    throw new Error('CODE_MODE_MATERIAL_COHORT_INVALID');
+  }
+  const size=(region.to[0]-region.from[0])*
+    (region.to[1]-region.from[1]);
+  if (size > 1024 ||
+      (value.phase === 'sample' && value.sampleVerdict !== undefined) ||
+      (value.phase === 'propagation' && value.sampleVerdict !== 'ACCEPTED') ||
+      (value.phase === 'sample' && !correctionScope.allowed_regions.some(r =>
+        region.from[0]>=r.from[0] && region.from[1]>=r.from[1] &&
+        region.to[0]<=r.to[0] && region.to[1]<=r.to[1]))) {
+    throw new Error('CODE_MODE_MATERIAL_COHORT_INVALID');
+  }
+  return Object.freeze({
+    phase:value.phase,issueId:value.issueId,partId:value.partId,
+    approachId:value.approachId,
+    sampleRegion:Object.freeze({
+      from:Object.freeze([...region.from]),to:Object.freeze([...region.to]),
+    }),
+    sampleVerdict:value.phase === 'propagation' ?
+      'ACCEPTED' : 'UNVERIFIED',
+    approval_source:value.phase === 'propagation' ?
+      'TRUSTED_REVIEWER_DECLARATION' : 'NONE',
+    visual_verdict:'UNVERIFIED',
+  });
+}
+function overlapsRectangle(a,b) {
+  return a.from[0] < b.to[0] && a.to[0] > b.from[0] &&
+    a.from[1] < b.to[1] && a.to[1] > b.from[1];
+}
+
 // The SDK validates the requested scope again and Rust enforces its actual
 // changed pixels. The host additionally binds it to the reviewer's allowed
 // texture and pixel region, rather than trusting a model-declared rectangle.
@@ -484,7 +546,7 @@ export async function createCodeModeHost({
       let feedback = prior ?? Object.freeze({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
-        rejectedApproaches:Object.freeze([]),
+        rejectedApproaches:Object.freeze([]),materialCohort:null,
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
       if (typeof reviewVisualPair === 'function' && prior === undefined) {
@@ -521,6 +583,18 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
         }
         feedback = normalizedVisualReview(returned);
+        if (feedback.materialCohort) {
+          feedback = Object.freeze({
+            ...feedback,
+            materialCohort:Object.freeze({
+              ...feedback.materialCohort,
+              source_model_sha256:model.expectedSha256,
+              reference_png_sha256:visualPair.reference.sha256,
+              capture_png_sha256:visualPair.capture.sha256,
+              view_id:visualPair.viewId,
+            }),
+          });
+        }
       }
       if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
       return {
@@ -614,6 +688,36 @@ export async function createCodeModeHost({
             item.issueId === materialIntent.issueId &&
             item.approachId === materialIntent.approachId)) {
           throw new Error('CODE_MODE_MATERIAL_APPROACH_PREVIOUSLY_REJECTED');
+        }
+        // Reviewer-backed material work is sample-first. An explicitly
+        // specified exact-RGBA edit outside this visual-review workflow
+        // retains the existing SDK/Rust authorization contract.
+        const cohort = feedback.materialCohort;
+        if (!cohort) throw new Error('CODE_MODE_MATERIAL_SAMPLE_REQUIRED');
+        if (cohort.issueId !== materialIntent.issueId ||
+            cohort.partId !== materialIntent.partId ||
+            cohort.approachId !== materialIntent.approachId) {
+          throw new Error('CODE_MODE_MATERIAL_COHORT_IDENTITY_MISMATCH');
+        }
+        if (cohort.phase === 'sample') {
+          if (!correctionFitsReview(requested,{
+            textureUuid:feedback.correctionScope.textureUuid,
+            allowedRegions:[cohort.sampleRegion],
+            preserveAlpha:feedback.correctionScope.preserveAlpha,
+          })) throw new Error('CODE_MODE_MATERIAL_SAMPLE_REGION_REQUIRED');
+        } else {
+          if (cohort.sampleVerdict !== 'ACCEPTED' ||
+              cohort.source_model_sha256 !== p.expectedSha256 ||
+              cohort.capture_png_sha256 !== visualPair.capture.sha256 ||
+              cohort.reference_png_sha256 !== visualPair.reference.sha256) {
+            throw new Error('CODE_MODE_MATERIAL_SAMPLE_UNVERIFIED');
+          }
+          // Avoid repainting the representative material just accepted by
+          // the reviewer while styling the remaining surfaces.
+          if (requested.allowed_regions.some(rect =>
+              overlapsRectangle(rect,cohort.sampleRegion))) {
+            throw new Error('CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
+          }
         }
       }
       if (visualPair !== null && pixelEdit) {
