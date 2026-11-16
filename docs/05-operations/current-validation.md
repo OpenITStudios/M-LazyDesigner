@@ -1,5 +1,24 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Bounded operator-selected visual PNG evidence (SOURCE_ONLY)
+
+The Rust library exposes a read-only RGB/RGBA8 PNG comparator for one
+size-matched image pair (max side 2048, 2,097,152 pixels, 8 MiB compressed
+per source). Its CLI verifies both original file hashes and the selected
+.bbmodel revision, refuses stale/malformed/unsafe snapshots, and reports
+bounded pixel differences plus alpha overlap only when foreground masks are
+actually meaningful. The trusted Code Mode host holds paths and image/view
+selection; `inspectSelectedVisualPair` returns metadata, not raw pixels
+or arbitrary file paths. A configured pair requires a current per-source
+preflight before a subsequent scoped texture edit; stale project SHA cannot
+inherit the previous capture. No new persistence/renderer/agent/control
+surface was introduced. Source regression cases authored for SHA/routing,
+scope, invalid images, opaque backgrounds and denied paint. **TEST_AUTHORED_NOT_RUN,
+LOCAL_TEST_DEFERRED**. Reference approval, camera equivalence, visual-model
+image ingestion, artistic acceptance and actual native capture provenance
+are **UNVERIFIED**.
+
+
 ## 2026-11-16 — Model-local approved master material comparison in Rust
 
 At the exact source tree, `material_pair` reads two explicit equal-size

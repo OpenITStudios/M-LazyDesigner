@@ -1,5 +1,22 @@
 # LazyDesigner Next Action
 
+**Rust reference/capture source provenance (2026-11-16; SOURCE_ONLY):**
+Read-only PNG pair inspection added to the canonical Rust CLI with strict
+reference/capture SHA and source .bbmodel SHA checks. Code Mode host can pin
+one operator-selected reference/capture pair and view label; guest can
+request measured, bounded alpha-overlap/pixel disagreement without choosing
+untrusted image paths or silently assuming same framing. While that pair
+is bound, Paint requires one current image-evidence preflight and the existing
+scoped pixel mutation guard; no external image is written into .bbmodel.
+Positive/negative Rust and Code Mode source regressions authored,
+NOT_EXECUTED; native screenshot origin, human image approval and actual
+AI multimodal ingestion are UNVERIFIED. This is the **reference provenance
+boundary**, not a visual quality solution. The remaining meaningful work
+is real paired image presentation to a visual-capable reviewer, revision-safe
+accepted/rejected Golden evaluation and measured correction convergence.
+No automatic scoring, extra renderer, CI or Local promotion.
+
+
 **Rust source-backed master-to-candidate material review (2026-11-16; SOURCE_ONLY):**
 Introduced a bounded immutable `material_pair` Rust read from one `.bbmodel`
 with a shared RGBA8 decoder and strict same-sized physical PNG crops. A

@@ -7,6 +7,44 @@ import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs'
 const BIN = '/abs/lazydesigner-authoring';
 const SHA = 'a'.repeat(64);
 
+test('Code Mode forwards only SHA-bound reference/capture paths from trusted SDK', async () => {
+  const input='/abs/model.bbmodel';
+  const source='a'.repeat(64), reference='b'.repeat(64), capture='c'.repeat(64);
+  const calls=[];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    runner:async argv=>{
+      calls.push(argv);
+      return {status:'OK',source_model_sha256:source,
+        reference_png_sha256:reference,capture_png_sha256:capture,
+        comparison:{scope:'operator_selected_saved_png_pair',
+          visual_verdict:'UNVERIFIED'}};
+    },
+  });
+  const value=await client.inspectVisualPair({
+    input,expectedSha256:source,
+    referencePng:'/abs/reference.png',capturePng:'/abs/capture.png',
+    referenceSha256:reference,captureSha256:capture,
+  });
+  assert.equal(value.comparison.visual_verdict,'UNVERIFIED');
+  assert.deepEqual(calls,[[ 'inspect-visual-pair',
+    '--input',input,'--expected-sha256',source,
+    '--reference','/abs/reference.png','--reference-sha256',reference,
+    '--capture','/abs/capture.png','--capture-sha256',capture
+  ]]);
+  await assert.rejects(client.inspectVisualPair({
+    input,expectedSha256:source,referencePng:'relative.png',
+    capturePng:'/abs/capture.png',referenceSha256:reference,
+    captureSha256:capture,
+  }));
+  await assert.rejects(client.inspectVisualPair({
+    input,expectedSha256:source,referencePng:'/abs/reference.png',
+    capturePng:'/abs/capture.png',referenceSha256:'stale',
+    captureSha256:capture,
+  }));
+  assert.equal(calls.length,1);
+});
+
 test('Code Mode routes focused read directly without model echo', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

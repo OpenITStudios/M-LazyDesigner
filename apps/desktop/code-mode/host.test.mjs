@@ -1,6 +1,8 @@
 // Regression SOURCE ONLY. Repository localtest/CI remain on hold.
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
+import { dirname } from 'node:path';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -337,6 +339,106 @@ test('missing operator-selected material master refuses comparative claims', () 
     });
     const result=await host.execute({code:'return await codemode.inspectApprovedMaterial({});'});
     assert.equal(result.value.unbound,true);
+  }));
+
+// SOURCE_AUTHORED_NOT_RUN: pinned source/image evidence and fail-closed claims.
+test('operator-bound visual pair is a read-only preflight, never visual PASS', () =>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'approved-view.png');
+    const capture=join(folder,'current-capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);
+    await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:ref,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      runner:async argv=>{
+        if(argv[0]==='inspect'){
+          return {status:'OK',sha256:HASH,summary:SUMMARY};
+        }
+        assert.equal(argv[0],'inspect-visual-pair');
+        assert.equal(argv[argv.indexOf('--reference')+1],ref);
+        assert.equal(argv[argv.indexOf('--capture')+1],capture);
+        assert.equal(argv[argv.indexOf('--reference-sha256')+1],digest);
+        assert.equal(argv[argv.indexOf('--capture-sha256')+1],digest);
+        assert.equal(argv[argv.indexOf('--expected-sha256')+1],HASH);
+        return {status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED',artistic_verdict:'NOT_EVALUATED'}};
+      },
+      spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',args:{
+        project:'p0',
+      }},response=>{
+        assert.equal(response.ok,true);
+        const report=response.result;
+        assert.equal(report.evidence_binding.view_id,'front');
+        assert.equal(report.evidence_binding.source_model_sha256,HASH);
+        assert.equal(report.evidence_binding.image_ingestion,'NOT_VERIFIED');
+        assert.equal(report.comparison.visual_verdict,'UNVERIFIED');
+        assert.equal(JSON.stringify(report).includes(folder),false);
+        return {evidence:report.evidence_binding.kind};
+      }),
+    });
+    const result=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(result.value.evidence,'operator_selected_visual_pair');
+  }));
+
+test('selected view refuses stale model, forged paths and unreviewed paint', () =>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'approved.png');
+    const cap=join(folder,'candidate.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);await writeFile(cap,png);
+    const config={
+      referencePngPath:ref,capturePngPath:cap,
+      captureModelSha256:HASH,viewId:'front'
+    };
+    await assert.rejects(createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{...config,captureModelSha256:'b'.repeat(64)},
+      runner:async()=>({status:'OK',sha256:HASH,summary:SUMMARY}),
+      spawnImpl:()=>{throw Error('must not spawn');}
+    }),/CODE_MODE_VISUAL_PAIR_BINDING_INVALID/);
+    const requests=[
+      {method:'inspectSelectedVisualPair',args:{
+        project:'p0',referencePngPath:'/forged.png',
+      },expected:'CODE_MODE_VISUAL_PAIR_ARGUMENT_UNSUPPORTED'},
+      {method:'apply',args:{
+        project:'p0',output:'new.bbmodel',
+        operations:[{op:'paint_texture_pixel',texture_index:0,
+          x:1,y:1,rgba:[1,2,3,255]}],
+        correctionScope:{textureUuid:'tier-2',
+          allowedRegions:[{from:[1,1],to:[2,2]}],preserveAlpha:true},
+      },expected:'CODE_MODE_VISUAL_PREFLIGHT_REQUIRED'},
+    ];
+    for (const request of requests){
+      const calls=[];
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:config,
+        authorizeMutation:()=>{throw Error('must not ask approval');},
+        runner:async argv=>{
+          calls.push(argv[0]);return {status:'OK',sha256:HASH,summary:SUMMARY};
+        },
+        spawnImpl:()=>fakeGuest({method:request.method,args:request.args},
+          response=>{
+            assert.equal(response.ok,false);
+            assert.equal(response.code,request.expected);
+            return {refused:response.code};
+          }),
+      });
+      const observed=await host.execute({code:'return 1;'});
+      assert.equal(observed.value.refused,request.expected);
+      assert.deepEqual(calls,['inspect']);
+    }
   }));
 
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {

@@ -457,6 +457,21 @@ export function createRustCodeModeClient({
         await rm(directory, { recursive: true, force: true });
       }
     },
+    /** SHA-bound read-only external image comparison. Paths come only from
+     * the trusted host, never from model-written JavaScript. */
+    async inspectVisualPair({
+      input, expectedSha256, referencePng, capturePng,
+      referenceSha256, captureSha256,
+    }) {
+      return call('inspect-visual-pair', {
+        input: absolute(input, 'input'),
+        'expected-sha256': hash(expectedSha256),
+        reference: absolute(referencePng, 'referencePng'),
+        'reference-sha256': hash(referenceSha256),
+        capture: absolute(capturePng, 'capturePng'),
+        'capture-sha256': hash(captureSha256),
+      });
+    },
     async importPng({ input, output, png, uuid, name, expectedSha256 }) {
       const options = {
         input: absolute(input, 'input'), output: absolute(output, 'output'),

@@ -4,7 +4,7 @@ import type {
   ApplyReceipt, CatalogPage, DocumentSummary, EditOperation,
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
   MutationRequest, OutputReceipt, TextureCorrectionScope,
-  MaterialPatchRegion, MaterialPairComparison,
+  MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -41,6 +41,20 @@ export interface CodeModeGuestAPI {
       reference_texture_uuid:string;
       source_model_sha256:string;
       visual_verdict:"UNVERIFIED";
+    };
+  }>;
+  /** Host-only reference and capture PNG paths, SHA and view ID.
+   * Image content is not streamed to the guest. No native/artistic PASS.
+   */
+  inspectSelectedVisualPair(args: { project: string }): Promise<VisualPairReceipt & {
+    evidence_binding:{
+      kind:"operator_selected_visual_pair";
+      view_id:"front"|"back"|"left"|"right"|"top"|"bottom"|"three_quarter";
+      source_model_sha256:string;
+      reference_png_sha256:string;
+      capture_png_sha256:string;
+      visual_verdict:"UNVERIFIED";
+      image_ingestion:"NOT_VERIFIED";
     };
   }>;
   inspectCubeSurfaces(args: { project: string; uuid: string }): Promise<InspectReceipt>;
@@ -87,6 +101,16 @@ export interface CodeModeHostOptions {
    * for comparisons within the same .bbmodel; not a visual approval detector.
    */
   approvedMaterialReferenceUuid?: string;
+  /** Image paths are explicitly operator-selected; model code cannot supply
+   * them. The capture must correspond to the current model SHA according to
+   * the operator; the decoder cannot authenticate a screenshot's origin.
+   */
+  preselectedVisualPair?: {
+    referencePngPath:string;
+    capturePngPath:string;
+    captureModelSha256:string;
+    viewId:"front"|"back"|"left"|"right"|"top"|"bottom"|"three_quarter";
+  };
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;

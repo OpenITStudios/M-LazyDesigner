@@ -624,6 +624,37 @@ export interface ApplyReceipt {
     visual_verdict: "UNVERIFIED";
   } | null;
 }
+/** Raw PNG comparison. No pixels enter the guest; visual PASS is not inferred. */
+export interface VisualPairReceipt {
+  status: "OK";
+  source_model_sha256: string;
+  reference_png_sha256: string;
+  capture_png_sha256: string;
+  comparison: {
+    scope: "operator_selected_saved_png_pair";
+    reference_png_sha256: string;
+    capture_png_sha256: string;
+    width: number; height: number;
+    reference_has_alpha: boolean;
+    capture_has_alpha: boolean;
+    different_rgba_pixels: number;
+    different_rgb_pixels: number;
+    silhouette: {
+      status: "alpha_overlap_measured" | "unassessed_no_alpha_channel" |
+        "unassessed_empty_foreground" | "unassessed_opaque_background";
+      reference_foreground_pixels: number;
+      capture_foreground_pixels: number;
+      intersection_pixels: number;
+      union_pixels: number;
+      alpha_iou: number | null;
+    };
+    reference_approval: "NOT_VERIFIED_BY_INSPECTOR";
+    capture_provenance: "CALLER_ASSERTED_NOT_NATIVE_VERIFIED";
+    framing_correspondence: "NOT_VERIFIED_BY_INSPECTOR";
+    visual_verdict: "UNVERIFIED";
+    artistic_verdict: "NOT_EVALUATED";
+  };
+}
 export interface OutputReceipt {
   status: "OK";
   /** Present for Bedrock animation output. Bezier baking is an approximation. */
@@ -661,6 +692,11 @@ export interface RustCodeModeClient {
   }): Promise<InspectReceipt & { track: TransformTrackInspection }>;
   audit(input: { input: string; expectedSha256?: string }): Promise<InspectReceipt & { audit: StaticModelAudit }>;
   apply(input: { input: string; output: string; expectedSha256: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope }): Promise<ApplyReceipt>;
+  inspectVisualPair(input: {
+    input: string; expectedSha256: string;
+    referencePng: string; capturePng: string;
+    referenceSha256: string; captureSha256: string;
+  }): Promise<VisualPairReceipt>;
   importPng(input: { input: string; output: string; png: string; uuid: string; name: string; expectedSha256: string }): Promise<ApplyReceipt>;
   exportPng(input: { input: string; output: string; textureUuid: string; expectedSha256: string }): Promise<OutputReceipt>;
   exportGeometry(input: { input: string; output: string; expectedSha256: string }): Promise<OutputReceipt>;

@@ -1,5 +1,20 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Operator-selected reference/capture binding (2026-11-16; SOURCE_ONLY):**
+Code Mode host now supports an optional `preselectedVisualPair` made of
+two operator-selected still PNGs, their exact SHA-256, a view label and a
+source-model SHA. `codemode.inspectSelectedVisualPair` calls one bounded
+read-only Rust inspector; no image paths or raw pixels reach model code.
+Matched-size RGB/RGBA8 captures may produce alpha-overlap and pixel-difference
+diagnostics, but a full opaque background returns silhouette unassessed.
+A configured image pair requires one successful source-SHA-matched preflight
+before any guest pixel edit and preserves the existing correctionScope.
+Neither tool call nor numeric overlap proves image ingestion, correct framing,
+human reference approval, material craft or visual PASS. When the project
+changes, rebind the capture to its new exact SHA; do not reuse stale evidence.
+Regression cases source-authored, NOT_EXECUTED.
+
+
 **Host-selected material master and measured patch comparison (2026-11-16; SOURCE_ONLY):**
 For a Pillager-style tier correction, the trusted operator may configure
 `approvedMaterialReferenceUuid` for an already-accepted texture in the

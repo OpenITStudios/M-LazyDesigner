@@ -5,7 +5,8 @@
  * SOURCE_ONLY: no native runtime or sandbox proof has been executed.
  */
 import { spawn } from 'node:child_process';
-import { lstat, realpath } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { lstat, realpath, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -30,6 +31,11 @@ const PIXEL_MUTATIONS = new Set([
 ]);
 const TIMEOUT_MS = 90000;
 const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_VISUAL_PNG_BYTES = 8 * 1024 * 1024;
+const VISUAL_VIEWS = new Set([
+  'front', 'back', 'left', 'right', 'top', 'bottom', 'three_quarter',
+]);
+const SHA256 = /^[a-f0-9]{64}$/i;
 
 function requireAbsolute(value, label) {
   if (typeof value !== 'string' || !isAbsolute(value) ||
@@ -54,6 +60,46 @@ async function regularFile(path, label) {
     throw new Error(label + '_NOT_REGULAR_FILE');
   }
   return realpath(path);
+}
+async function pinnedVisualPng(path, label) {
+  const selected = await regularFile(requireAbsolute(path, label), label);
+  if (!selected.toLowerCase().endsWith('.png')) {
+    throw new Error('CODE_MODE_VISUAL_PNG_EXTENSION_INVALID');
+  }
+  const stat = await lstat(selected);
+  if (!stat.isFile() || stat.size < 8 || stat.size > MAX_VISUAL_PNG_BYTES) {
+    throw new Error('CODE_MODE_VISUAL_PNG_SIZE_INVALID');
+  }
+  const bytes = await readFile(selected);
+  if (bytes.length !== stat.size || bytes.length > MAX_VISUAL_PNG_BYTES ||
+      !bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) {
+    throw new Error('CODE_MODE_VISUAL_PNG_INVALID');
+  }
+  return Object.freeze({
+    path:selected, sha256:createHash('sha256').update(bytes).digest('hex'),
+  });
+}
+async function pinnedVisualPair(source, options, modelSha) {
+  if (options === undefined) return null;
+  if (!options || typeof options !== 'object' || Array.isArray(options) ||
+      Object.keys(options).some(key => ![
+        'referencePngPath','capturePngPath','captureModelSha256','viewId',
+      ].includes(key)) ||
+      typeof options.captureModelSha256 !== 'string' ||
+      !SHA256.test(options.captureModelSha256) ||
+      !VISUAL_VIEWS.has(options.viewId) ||
+      source === null || modelSha !== options.captureModelSha256.toLowerCase()) {
+    throw new Error('CODE_MODE_VISUAL_PAIR_BINDING_INVALID');
+  }
+  // The selected images are operator-owned snapshots and cannot be replaced
+  // by a guest-provided path, view or source SHA during an RPC.
+  const [reference,capture] = await Promise.all([
+    pinnedVisualPng(options.referencePngPath,'visualReference'),
+    pinnedVisualPng(options.capturePngPath,'visualCapture'),
+  ]);
+  return Object.freeze({
+    reference,capture,viewId:options.viewId,modelSha,
+  });
 }
 function outputName(name, suffix) {
   if (typeof name !== 'string' || !name || name.length > 128 ||
@@ -90,7 +136,8 @@ async function checkFreshSibling(path, folder) {
  */
 export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
-  preselectedPngPath, approvedMaterialReferenceUuid, runner, spawnImpl,
+  preselectedPngPath, approvedMaterialReferenceUuid,
+  preselectedVisualPair, runner, spawnImpl,
 } = {}) {
   requireAbsolute(rustBinary, 'rustBinary');
   requireAbsolute(denoBinary, 'denoBinary');
@@ -189,6 +236,9 @@ export async function createCodeModeHost({
     await openRustCodeModeProject(client, source);
   if (initialProject) projects.set('p0', initialProject);
   let nextProject = initialProject ? 1 : 0;
+  const visualPair = await pinnedVisualPair(
+    source, preselectedVisualPair, initialProject?.expectedSha256 ?? null);
+  const reviewedVisualModels = new Set();
   const initialRef = Object.freeze(initialProject ? {
     project: 'p0', sha256: initialProject.expectedSha256,
     summary: initialProject.summary,
@@ -268,6 +318,47 @@ export async function createCodeModeHost({
         },
       };
     },
+    inspectSelectedVisualPair: async (args) => {
+      const model = selected(args);
+      if (Object.keys(args).some(key => key !== 'project')) {
+        throw new Error('CODE_MODE_VISUAL_PAIR_ARGUMENT_UNSUPPORTED');
+      }
+      if (visualPair === null) {
+        throw new Error('CODE_MODE_VISUAL_PAIR_UNBOUND');
+      }
+      if (model.expectedSha256 !== visualPair.modelSha) {
+        throw new Error('CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+      }
+      const evidence = await client.inspectVisualPair({
+        input:model.input, expectedSha256:model.expectedSha256,
+        referencePng:visualPair.reference.path,
+        capturePng:visualPair.capture.path,
+        referenceSha256:visualPair.reference.sha256,
+        captureSha256:visualPair.capture.sha256,
+      });
+      if (evidence.source_model_sha256 !== model.expectedSha256 ||
+          evidence.reference_png_sha256 !== visualPair.reference.sha256 ||
+          evidence.capture_png_sha256 !== visualPair.capture.sha256 ||
+          evidence.comparison?.scope !== 'operator_selected_saved_png_pair' ||
+          evidence.comparison?.visual_verdict !== 'UNVERIFIED' ||
+          evidence.comparison?.reference_png_sha256 !== visualPair.reference.sha256 ||
+          evidence.comparison?.capture_png_sha256 !== visualPair.capture.sha256) {
+        throw new Error('CODE_MODE_VISUAL_PAIR_RESULT_INVALID');
+      }
+      reviewedVisualModels.add(model.expectedSha256);
+      return {
+        ...evidence,
+        evidence_binding:{
+          kind:'operator_selected_visual_pair',
+          view_id:visualPair.viewId,
+          source_model_sha256:visualPair.modelSha,
+          reference_png_sha256:visualPair.reference.sha256,
+          capture_png_sha256:visualPair.capture.sha256,
+          visual_verdict:'UNVERIFIED',
+          image_ingestion:'NOT_VERIFIED',
+        },
+      };
+    },
     inspectCubeSurfaces: async (args) => selected(args).inspectCubeSurfaces(args.uuid),
     inspectCubeFaceAlpha: async (args) => selected(args).inspectCubeFaceAlpha(args.uuid),
     inspectTexture: async (args) => selected(args).inspectTexture(args.index),
@@ -293,18 +384,21 @@ export async function createCodeModeHost({
     },
     apply: async (args) => {
       const p = selected(args);
-      if (referenceMaster !== null) {
-        // Bound to a human/operator-selected master: all pixel authoring
-        // must use the exact Rust-enforced region guard. Do not let the
-        // model bypass preservation by omitting correctionScope.
-        if (Array.isArray(args.operations) &&
-            args.operations.some(op => PIXEL_MUTATIONS.has(op?.op)) &&
-            args.correctionScope === undefined) {
+      const pixelEdit = Array.isArray(args.operations) &&
+        args.operations.some(op => PIXEL_MUTATIONS.has(op?.op));
+      if (referenceMaster !== null || visualPair !== null) {
+        if (pixelEdit && args.correctionScope === undefined) {
           throw new Error('CODE_MODE_MATERIAL_CORRECTION_SCOPE_REQUIRED');
         }
-        if (args.correctionScope?.textureUuid === referenceMaster) {
+        if (referenceMaster !== null &&
+            args.correctionScope?.textureUuid === referenceMaster) {
           throw new Error('CODE_MODE_MATERIAL_MASTER_PROTECTED');
         }
+      }
+      if (visualPair !== null && pixelEdit &&
+          !reviewedVisualModels.has(p.expectedSha256)) {
+        // This is evidence-consumption, never proof of image understanding.
+        throw new Error('CODE_MODE_VISUAL_PREFLIGHT_REQUIRED');
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,

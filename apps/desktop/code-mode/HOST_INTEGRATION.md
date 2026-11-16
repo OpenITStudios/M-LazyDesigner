@@ -29,6 +29,48 @@ calls, and scoped paint cannot modify the selected master. Missing, stale,
 unsupported or unselected reference state refuses instead of guessing.
 Neither the host option nor the numeric stats confirm external reference
 images were viewed or that a human actually approved the material.
+### Operator-selected reference and current capture images (source-only)
+
+The trusted host can optionally bind one explicitly selected PNG pair at startup:
+
+~~~js
+const host = await createCodeModeHost({
+  rustBinary: verifiedRustBinary,
+  denoBinary: verifiedDenoBinary,
+  input: userSelectedBbmodel,
+  // Provided only by the local operator, never model-generated code.
+  preselectedVisualPair: {
+    referencePngPath: '/absolute/path/approved-front.png',
+    capturePngPath: '/absolute/path/current-front.png',
+    captureModelSha256: verifiedSelectedModelSha256,
+    viewId: 'front',
+  },
+  authorizeMutation: operatorOwnedApproval,
+});
+~~~
+
+The guest calls `codemode.inspectSelectedVisualPair({project:'p0'})`.
+No user image paths, bytes or raw pixels are returned to the guest.
+The host hashes and fixes both selected images and the .bbmodel revision,
+and the Rust `inspect-visual-pair` command verifies all three SHA values
+before returning bounded alpha-overlap/pixel-difference diagnostics.
+Only 8-bit RGB/RGBA still PNGs up to 2048px per side, 2,097,152 pixels
+and 8 MiB compressed are accepted, with **equal exact dimensions**.
+No scaling, image generation, camera reconstruction, segmentation,
+untrusted image loading in Deno, model mutation or extra Gateway tool.
+Output `visual_verdict: UNVERIFIED` is mandatory; an opaque background
+does not produce a meaningful silhouette IoU. Model code cannot
+claim human image approval, native capture provenance or matched framing.
+The selected capture only applies to its pinned .bbmodel SHA; after an edit,
+a new host/capture binding is required for the new project version.
+
+If a pair is bound, Code Mode pixel corrections require one successful
+same-revision `inspectSelectedVisualPair` preflight and the existing
+Rust-enforced `correctionScope`. This confirms that source evidence was
+obtained, **not** that the AI visually understood it. When the target lacks
+matched external image evidence, the review must remain UNVERIFIED and
+the existing accepted-asset contract is still open. Tests authored only.
+
 ## Programmatic execution architecture
 
 ~~~text
