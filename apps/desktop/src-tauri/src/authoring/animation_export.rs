@@ -279,16 +279,18 @@ fn compile_effects(track: &Value, compiled: &mut Map<String, Value>) -> Result<(
 /// Catmull-Rom retains a native lerp_mode. An opaque clip is refused by the
 /// exporter before the receipt is used by any publisher.
 pub fn bedrock_animation_curve_fidelity(doc: &AuthoringDocument) -> &'static str {
-    if doc.animation_assets.iter().any(|clip|
-        clip.get("animators").and_then(Value::as_object)
-            .is_some_and(|tracks| tracks.values().any(|track|
-                track.get("keyframes").and_then(Value::as_array)
+    for clip in &doc.animation_assets {
+        if let Some(tracks) = clip.get("animators").and_then(Value::as_object) {
+            for track in tracks.values() {
+                if track.get("keyframes").and_then(Value::as_array)
                     .is_some_and(|frames| frames.iter().any(|frame|
-                        frame.get("interpolation").and_then(Value::as_str) == Some("bezier"))))) {
-        "adaptive_bezier_approximation"
-    } else {
-        "native"
+                        frame.get("interpolation").and_then(Value::as_str) == Some("bezier"))) {
+                    return "adaptive_bezier_approximation";
+                }
+            }
+        }
     }
+    "native"
 }
 
 /// Export the whole admitted set in one deterministic Bedrock animation file.
@@ -363,7 +365,7 @@ pub fn export_bedrock_animations(doc: &AuthoringDocument) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::{EditOperation, EditorSession, AnimationEffectPoint};
+    use super::super::{EditOperation, EditorSession, AnimationEffectPoint, BezierKeyframeHandles};
 
     const SAMPLE: &str = include_str!("../../fixtures/bedrock-basic.bbmodel");
     const BONE: &str = "00000000-0000-4000-8000-000000000001";
