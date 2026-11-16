@@ -2,10 +2,9 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
-import { dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
 import { createCodeModeHost, createCodeModeTool } from './host.mjs';
@@ -468,7 +467,7 @@ test('a verified reference pair permits scoped Paint once, then rejects a stale 
       },
       runner:async args=>{
         if(args[0]==='inspect'){
-          const newer=args.some(value=>String(value).endsWith('/corrected.bbmodel'));
+          const newer=basename(args[args.indexOf('--input')+1])==='corrected.bbmodel';
           return {status:'OK',sha256:newer?'b'.repeat(64):HASH,summary:SUMMARY};
         }
         if(args[0]==='inspect-visual-pair'){
@@ -571,7 +570,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
       runner:async args=>{
         calls.push(args[0]);
         if(args[0]==='inspect'){
-          const newAsset=args.some(x=>String(x).endsWith('/good.bbmodel'));
+          const newAsset=basename(args[args.indexOf('--input')+1])==='good.bbmodel';
           return {status:'OK',sha256:newAsset?'b'.repeat(64):HASH,
             summary:SUMMARY};
         }
