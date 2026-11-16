@@ -1447,6 +1447,267 @@ test('spoofed face ownership or incomplete six-face source read cannot authorize
     }
   }));
 
+// Source-only six-direction review fixtures: mocked PNG headers and native
+// receipt routing. These do not render models or prove any artistic PASS.
+const CAMERA_DIRECTIONS=['front','back','left','right','top','bottom'];
+async function chooseVisualDirections(folder) {
+  const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+  const sha=createHash('sha256').update(png).digest('hex');
+  const views=[];
+  for(const viewId of CAMERA_DIRECTIONS) {
+    const referencePngPath=join(folder,'approved-'+viewId+'.png');
+    const capturePngPath=join(folder,'rendered-'+viewId+'.png');
+    await writeFile(referencePngPath,png);
+    await writeFile(capturePngPath,png);
+    views.push({viewId,referencePngPath,capturePngPath});
+  }
+  const [primary,...supportingViews]=views;
+  return {png,sha,views,options:{
+    ...primary,captureModelSha256:HASH,
+    supportingViews,requireSixDirections:true,
+  }};
+}
+function reviewedCameras(withUnknown = false) {
+  return CAMERA_DIRECTIONS.map(viewId=>({
+    viewId,
+    decision: viewId==='front'?'REJECTED':
+      withUnknown && viewId==='bottom'?'UNVERIFIED':'ACCEPTED',
+    observation: viewId==='front'?
+      'Flat helmet shading in this rendered front view.' :
+      'The currently selected shaded view was independently inspected.',
+  }));
+}
+async function mockedSixViews(argv,sha) {
+  if(argv[0]==='inspect')return {status:'OK',sha256:sha,summary:SUMMARY};
+  if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,sha);
+  assert.equal(argv[0],'inspect-visual-pair');
+  const hash=createHash('sha256').update(
+    Buffer.from('89504e470d0a1a0a00000000','hex')).digest('hex');
+  assert.equal(argv[argv.indexOf('--expected-sha256')+1],sha);
+  assert.equal(argv[argv.indexOf('--reference-sha256')+1],hash);
+  assert.equal(argv[argv.indexOf('--capture-sha256')+1],hash);
+  return {status:'OK',source_model_sha256:sha,
+    reference_png_sha256:hash,capture_png_sha256:hash,
+    comparison:{scope:'operator_selected_saved_png_pair',
+      reference_png_sha256:hash,capture_png_sha256:hash,
+      visual_verdict:'UNVERIFIED'}};
+}
+
+test('operator-selected six model camera directions are distinct from six saved Cube alpha faces', () =>
+  fixture(async input=>{
+    const chosen=await chooseVisualDirections(dirname(input));
+    let reviewerCalls=0, nativeReads=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:chosen.options,
+      reviewVisualPair:selection=>{
+        reviewerCalls++;
+        assert.equal(selection.sourceModelSha256,HASH);
+        assert.equal(selection.viewId,'front');
+        assert.equal(selection.requiredSixDirections,true);
+        assert.equal(selection.supportingViews.length,5);
+        assert.deepEqual(selection.supportingViews.map(x=>x.viewId),
+          CAMERA_DIRECTIONS.slice(1));
+        for(const chosenView of [selection,...selection.supportingViews]){
+          assert.ok(Buffer.isBuffer(chosenView.reference.pngBytes));
+          assert.ok(Buffer.isBuffer(chosenView.capture.pngBytes));
+          assert.equal(chosenView.reference.sha256,chosen.sha);
+          assert.equal(chosenView.capture.sha256,chosen.sha);
+        }
+        return {
+          decision:'REJECTED',
+          viewReviews:reviewedCameras(),
+          issues:[{id:'helmet-flat',partId:'tier2-helmet',
+            kind:'FLAT_SHADING',observation:'Helmet currently looks flat.'}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+          materialCohort:{phase:'sample',issueId:'helmet-flat',
+            cubeUuid:REVIEW_CUBE,face:'north',
+            partId:'tier2-helmet',approachId:'form-following-metal',
+            sampleRegion:{from:[1,1],to:[4,4]}},
+        };
+      },
+      runner:async argv=>{
+        nativeReads++;
+        return mockedSixViews(argv,HASH);
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },result=>{
+        assert.equal(result.ok,true);
+        const info=result.result;
+        assert.equal(info.view_scope,'six_cardinal_source_pairs_selected');
+        assert.deepEqual(info.view_evidence.map(x=>x.view_id),CAMERA_DIRECTIONS);
+        assert.equal(info.review_feedback.viewReviews.length,6);
+        assert.equal(info.review_feedback.viewReviews[0].decision,'REJECTED');
+        assert.equal(info.review_feedback.face_source_evidence.face_count,6);
+        assert.equal(info.view_evidence[5].visual_verdict,'UNVERIFIED');
+        assert.equal(info.review_feedback.visual_verdict,'UNVERIFIED');
+        assert.equal(JSON.stringify(info).includes('pngBytes'),false);
+        assert.equal(JSON.stringify(info).includes(dirname(input)),false);
+        return {viewCount:info.view_evidence.length};
+      }),
+    });
+    const result=await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    });
+    assert.equal(result.value.viewCount,6);
+    assert.equal(reviewerCalls,1);
+    assert.equal(nativeReads,8); // 1 source inspect + 6 PNG pair comparisons + 1 face read
+  }));
+
+test('missing/duplicate/unsupported camera directions cannot create a six-view host', () =>
+  fixture(async input=>{
+    const chosen=await chooseVisualDirections(dirname(input));
+    const variants=[
+      {...chosen.options,supportingViews:chosen.options.supportingViews.slice(1)},
+      {...chosen.options,supportingViews:[
+        ...chosen.options.supportingViews.slice(0,4),
+        {...chosen.options.supportingViews[0]},
+      ]},
+      {...chosen.options,supportingViews:chosen.options.supportingViews.map((v,i)=>
+        i===0?{...v,viewId:'diagonal'}:v)},
+      {...chosen.options,supportingViews:chosen.options.supportingViews.map((v,i)=>
+        i===0?{...v,untrustedPath:'/tmp/evil.png'}:v)},
+      {...chosen.options,requireSixDirections:'yes'},
+    ];
+    for(const options of variants){
+      let spawns=0,cliCalls=0;
+      await assert.rejects(createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:options,
+        runner:async args=>{cliCalls++;return {status:'OK',
+          sha256:HASH,summary:SUMMARY};},
+        spawnImpl:()=>{spawns++;throw Error('unexpected guest');},
+      }),/CODE_MODE_VISUAL_VIEW_SET_INVALID|CODE_MODE_VISUAL_PAIR_BINDING_INVALID/);
+      assert.equal(spawns,0);
+      assert.equal(cliCalls,1); // initial project SHA before trusted pair validation
+    }
+  }));
+
+test('multi-view reviewer must report each chosen view and cannot falsely accept hidden defects', () =>
+  fixture(async input=>{
+    const chosen=await chooseVisualDirections(dirname(input));
+    const expectedCases=[
+      {review:null,expected:'CODE_MODE_VISUAL_VIEW_REVIEW_INVALID'},
+      {review:reviewedCameras().slice(1),expected:'CODE_MODE_VISUAL_VIEW_REVIEW_INVALID'},
+      {review:reviewedCameras().map((v,i)=>i===5?{...v,viewId:'front'}:v),
+        expected:'CODE_MODE_VISUAL_VIEW_REVIEW_INVALID'},
+      {review:reviewedCameras(),decision:'ACCEPTED',
+        expected:'CODE_MODE_VISUAL_VIEW_REVIEW_INVALID'},
+    ];
+    for(const testCase of expectedCases){
+      let approvals=0,writes=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:chosen.options,
+        reviewVisualPair:()=>({
+          decision:testCase.decision??'REJECTED',
+          ...(testCase.review===null?{}:{viewReviews:testCase.review}),
+          ...(testCase.decision==='ACCEPTED'?{
+            issues:[],
+          }:{
+            issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+              observation:'The helmet needs better material shading.'}],
+            correctionScope:{textureUuid:'tier2-atlas',
+              allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+          }),
+        }),
+        authorizeMutation:()=>{approvals++;return true;},
+        runner:async args=>{
+          if(!['inspect','inspect-visual-pair'].includes(args[0]))writes++;
+          return mockedSixViews(args,HASH);
+        },
+        spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p0',
+        }},res=>{
+          assert.equal(res.ok,false);
+          assert.equal(res.code,testCase.expected);
+          return {rejected:true};
+        }),
+      });
+      const response=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(response.value.rejected,true);
+      assert.equal(approvals,0);
+      assert.equal(writes,0);
+    }
+  }));
+
+test('additional unverified view prevents broad Paint and changed side capture blocks sample Paint', () =>
+  fixture(async input=>{
+    const chosen=await chooseVisualDirections(dirname(input));
+    const intent={
+      issueId:'helmet-flat',approachId:'form-following-metal',
+      partId:'tier2-helmet',material:'metal',
+      cause:'Helmet currently has a flat stripe rather than shaped shadow clusters.',
+      treatment:'form_value_masses',
+      expectedChange:'Build distinct form-following contact and highlight regions.',
+    };
+    for(const phase of ['propagation','sample']){
+      const next=await chooseVisualDirections(dirname(input));
+      let i=0,approvals=0,writes=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:next.options,
+        reviewVisualPair:()=>({
+          decision:'REJECTED',
+          viewReviews:reviewedCameras(true),
+          issues:[{id:'helmet-flat',partId:'tier2-helmet',
+            kind:'FLAT_SHADING',observation:'Helmet face needs a sample.'}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+          materialCohort:{
+            phase,issueId:'helmet-flat',partId:'tier2-helmet',
+            cubeUuid:REVIEW_CUBE,face:'north',
+            approachId:'form-following-metal',
+            sampleRegion:{from:[1,1],to:[4,4]},
+            ...(phase==='propagation'?{sampleVerdict:'ACCEPTED'}:{}),
+          },
+        }),
+        authorizeMutation:()=>{approvals++;throw Error('unexpected approval');},
+        runner:async args=>{
+          if(!['inspect','inspect-visual-pair','inspect-batch'].includes(args[0]))writes++;
+          return mockedSixViews(args,HASH);
+        },
+        spawnImpl:()=>{
+          i++;
+          if(i===1)return fakeGuest({method:'inspectSelectedVisualPair',args:{
+            project:'p0',
+          }},res=>{
+            assert.equal(res.ok,true);
+            return {reviewed:true};
+          });
+          return fakeGuest({method:'apply',args:{
+            project:'p0',output:phase+'-forbidden.bbmodel',
+            operations:[{op:'paint_texture_pixel',texture_index:0,
+              x:2,y:2,rgba:[50,60,70,255]}],
+            correctionScope:{textureUuid:'tier2-atlas',
+              allowedRegions:[{from:[2,2],to:[3,3]}],preserveAlpha:true},
+            correctionIntent:intent,
+          }},res=>{
+            assert.equal(res.ok,false);
+            assert.equal(res.code,phase==='propagation'?
+              'CODE_MODE_VISUAL_VIEW_COVERAGE_UNVERIFIED':
+              'CODE_MODE_VISUAL_REVIEW_INPUT_STALE');
+            return {blocked:true};
+          });
+        },
+      });
+      const first=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(first.value.reviewed,true);
+      if(phase==='sample'){
+        const other=next.views.find(v=>v.viewId==='back');
+        await writeFile(other.capturePngPath,
+          Buffer.concat([next.png,Buffer.from([1])]));
+      }
+      const blocked=await host.execute({code:'return codemode.apply({project:"p0"});'});
+      assert.equal(blocked.value.blocked,true);
+      assert.equal(approvals,0);
+      assert.equal(writes,0);
+    }
+    assert.equal(chosen.views.length,6);
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {
