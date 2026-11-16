@@ -35,6 +35,7 @@ const MAX_VISUAL_PNG_BYTES = 8 * 1024 * 1024;
 const VISUAL_VIEWS = new Set([
   'front', 'back', 'left', 'right', 'top', 'bottom', 'three_quarter',
 ]);
+const CARDINAL_VIEWS = Object.freeze(['front','back','left','right','top','bottom']);
 const SHA256 = /^[a-f0-9]{64}$/i;
 
 function requireAbsolute(value, label) {
@@ -84,21 +85,48 @@ async function pinnedVisualPair(source, options, modelSha) {
   if (!options || typeof options !== 'object' || Array.isArray(options) ||
       Object.keys(options).some(key => ![
         'referencePngPath','capturePngPath','captureModelSha256','viewId',
+        'supportingViews','requireSixDirections',
       ].includes(key)) ||
       typeof options.captureModelSha256 !== 'string' ||
       !SHA256.test(options.captureModelSha256) ||
       !VISUAL_VIEWS.has(options.viewId) ||
+      (options.requireSixDirections !== undefined &&
+       typeof options.requireSixDirections !== 'boolean') ||
       source === null || modelSha !== options.captureModelSha256.toLowerCase()) {
     throw new Error('CODE_MODE_VISUAL_PAIR_BINDING_INVALID');
   }
-  // The selected images are operator-owned snapshots and cannot be replaced
-  // by a guest-provided path, view or source SHA during an RPC.
-  const [reference,capture] = await Promise.all([
-    pinnedVisualPng(options.referencePngPath,'visualReference'),
-    pinnedVisualPng(options.capturePngPath,'visualCapture'),
-  ]);
+  const extras = options.supportingViews ?? [];
+  if (!Array.isArray(extras) || extras.length > 6 ||
+      extras.some(entry => !entry || typeof entry !== 'object' ||
+        Array.isArray(entry) ||
+        Object.keys(entry).some(key =>
+          !['referencePngPath','capturePngPath','viewId'].includes(key)) ||
+        !VISUAL_VIEWS.has(entry.viewId))) {
+    throw new Error('CODE_MODE_VISUAL_VIEW_SET_INVALID');
+  }
+  const choices = [{viewId:options.viewId,
+    referencePngPath:options.referencePngPath,
+    capturePngPath:options.capturePngPath},...extras];
+  const names = choices.map(v => v.viewId);
+  if (new Set(names).size !== names.length ||
+      (options.requireSixDirections === true &&
+       CARDINAL_VIEWS.some(v => !names.includes(v)))) {
+    throw new Error('CODE_MODE_VISUAL_VIEW_SET_INVALID');
+  }
+  // Only the trusted operator can select the still PNGs. Every view uses
+  // this SAME source-model SHA; no guest-provided paths or camera identity.
+  const views=await Promise.all(choices.map(async selected => {
+    const [reference,capture]=await Promise.all([
+      pinnedVisualPng(selected.referencePngPath,'visualReference'),
+      pinnedVisualPng(selected.capturePngPath,'visualCapture'),
+    ]);
+    return Object.freeze({reference,capture,viewId:selected.viewId});
+  }));
+  const [primary,...additionalViews]=views;
   return Object.freeze({
-    reference,capture,viewId:options.viewId,modelSha,
+    ...primary,modelSha,
+    additionalViews:Object.freeze(additionalViews),
+    requireSixDirections:options.requireSixDirections===true,
   });
 }
 // Operator review is input from a trusted host callback, not model-written code.
@@ -110,10 +138,10 @@ const REVIEW_ISSUES = new Set([
   'ALPHA_MISMATCH','UV_SEAM','SILHOUETTE','OTHER',
 ]);
 const MAX_REVIEW_ISSUES = 6;
-function normalizedVisualReview(input) {
+function normalizedVisualReview(input, viewIds = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key =>
-        !['decision','issues','correctionScope','rejectedApproaches','materialCohort'].includes(key)) ||
+        !['decision','issues','correctionScope','rejectedApproaches','materialCohort','viewReviews'].includes(key)) ||
       !REVIEW_DECISIONS.has(input.decision) ||
       !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -140,6 +168,39 @@ function normalizedVisualReview(input) {
   if (new Set(issues.map(issue => issue.id)).size !== issues.length) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
   }
+  // For multi-view audits the reviewer must account for EVERY selected
+  // actual PNG pair. A single-view user stays backward compatible.
+  const supplied = input.viewReviews;
+  if ((viewIds.length > 1 && !Array.isArray(supplied)) ||
+      (supplied !== undefined &&
+       (!Array.isArray(supplied) || supplied.length !== viewIds.length))) {
+    throw new Error('CODE_MODE_VISUAL_VIEW_REVIEW_INVALID');
+  }
+  const viewReviews=(supplied ?? []).map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item) ||
+        Object.keys(item).some(key =>
+          !['viewId','decision','observation'].includes(key)) ||
+        !viewIds.includes(item.viewId) ||
+        !REVIEW_DECISIONS.has(item.decision) ||
+        typeof item.observation !== 'string' ||
+        item.observation.trim() !== item.observation ||
+        item.observation.length < 4 || item.observation.length > 240 ||
+        /[\x00-\x1f\x7f]/.test(item.observation)) {
+      throw new Error('CODE_MODE_VISUAL_VIEW_REVIEW_INVALID');
+    }
+    return Object.freeze({viewId:item.viewId,
+      decision:item.decision,observation:item.observation});
+  });
+  if (new Set(viewReviews.map(item=>item.viewId)).size !== viewReviews.length ||
+      viewIds.some(id=>viewReviews.length>0 &&
+        !viewReviews.some(item=>item.viewId===id)) ||
+      (viewReviews.length>0 && input.decision==='ACCEPTED' &&
+        viewReviews.some(item=>item.decision!=='ACCEPTED')) ||
+      (viewReviews.length>0 && input.decision==='REJECTED' &&
+        !viewReviews.some(item=>item.decision==='REJECTED'))) {
+    throw new Error('CODE_MODE_VISUAL_VIEW_REVIEW_INVALID');
+  }
+  const boundedViewReviews=Object.freeze(viewReviews);
   if (input.decision === 'REJECTED') {
     if (issues.length === 0 || input.correctionScope === undefined) {
       throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -186,6 +247,7 @@ function normalizedVisualReview(input) {
       rejectedApproaches:Object.freeze(rejectedApproaches),
       materialCohort,
       face_source_evidence:null,
+      viewReviews:boundedViewReviews,
       source:'TRUSTED_HOST_DECLARATION',
       visual_verdict:'UNVERIFIED',
     });
@@ -200,6 +262,7 @@ function normalizedVisualReview(input) {
     issues:Object.freeze([]),correctionScope:null,
     rejectedApproaches:Object.freeze([]),materialCohort:null,
     face_source_evidence:null,
+    viewReviews:boundedViewReviews,
     source:'TRUSTED_HOST_DECLARATION',visual_verdict:'UNVERIFIED',
   });
 }
@@ -436,6 +499,9 @@ export async function createCodeModeHost({
   let nextProject = initialProject ? 1 : 0;
   const visualPair = await pinnedVisualPair(
     source, preselectedVisualPair, initialProject?.expectedSha256 ?? null);
+  const visualViews=Object.freeze(visualPair===null?[]:[
+    visualPair,...visualPair.additionalViews,
+  ]);
   // One ephemeral review state per exact model SHA, not a second asset store.
   const visualPreflights = new Map();
   // One coherent reviewed correction per source revision. Do not create
@@ -531,22 +597,36 @@ export async function createCodeModeHost({
       if (model.expectedSha256 !== visualPair.modelSha) {
         throw new Error('CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
       }
-      const evidence = await client.inspectVisualPair({
-        input:model.input, expectedSha256:model.expectedSha256,
-        referencePng:visualPair.reference.path,
-        capturePng:visualPair.capture.path,
-        referenceSha256:visualPair.reference.sha256,
-        captureSha256:visualPair.capture.sha256,
-      });
-      if (evidence.source_model_sha256 !== model.expectedSha256 ||
-          evidence.reference_png_sha256 !== visualPair.reference.sha256 ||
-          evidence.capture_png_sha256 !== visualPair.capture.sha256 ||
-          evidence.comparison?.scope !== 'operator_selected_saved_png_pair' ||
-          evidence.comparison?.visual_verdict !== 'UNVERIFIED' ||
-          evidence.comparison?.reference_png_sha256 !== visualPair.reference.sha256 ||
-          evidence.comparison?.capture_png_sha256 !== visualPair.capture.sha256) {
-        throw new Error('CODE_MODE_VISUAL_PAIR_RESULT_INVALID');
+      const measured=await Promise.all(visualViews.map(selected=>
+        client.inspectVisualPair({
+          input:model.input,expectedSha256:model.expectedSha256,
+          referencePng:selected.reference.path,
+          capturePng:selected.capture.path,
+          referenceSha256:selected.reference.sha256,
+          captureSha256:selected.capture.sha256,
+        })
+      ));
+      for (let i=0;i<visualViews.length;i++){
+        const evidence=measured[i], selected=visualViews[i];
+        if(evidence?.source_model_sha256!==model.expectedSha256 ||
+           evidence.reference_png_sha256!==selected.reference.sha256 ||
+           evidence.capture_png_sha256!==selected.capture.sha256 ||
+           evidence.comparison?.scope!=='operator_selected_saved_png_pair' ||
+           evidence.comparison?.visual_verdict!=='UNVERIFIED' ||
+           evidence.comparison?.reference_png_sha256!==selected.reference.sha256 ||
+           evidence.comparison?.capture_png_sha256!==selected.capture.sha256) {
+          throw new Error('CODE_MODE_VISUAL_PAIR_RESULT_INVALID');
+        }
       }
+      const evidence=measured[0];
+      const view_evidence=Object.freeze(visualViews.map((view,index)=>Object.freeze({
+        view_id:view.viewId,
+        reference_png_sha256:view.reference.sha256,
+        capture_png_sha256:view.capture.sha256,
+        source_model_sha256:model.expectedSha256,
+        visual_verdict:'UNVERIFIED',
+        silhouette_status:measured[index].comparison?.silhouette?.status ?? 'UNVERIFIED',
+      })));
       // Freeze the first reviewer decision for one source SHA/view. The
       // guest must not downgrade ACCEPTED with a repeated review request.
       const prior = visualPreflights.get(model.expectedSha256);
@@ -554,7 +634,7 @@ export async function createCodeModeHost({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
         rejectedApproaches:Object.freeze([]),materialCohort:null,
-        face_source_evidence:null,
+        face_source_evidence:null,viewReviews:Object.freeze([]),
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
       if (typeof reviewVisualPair === 'function' && prior === undefined) {
@@ -562,10 +642,16 @@ export async function createCodeModeHost({
         if (!execution || execution.closed) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
         }
-        const [referenceBytes,captureBytes] = await Promise.all([
-          pinnedReviewBytes(visualPair.reference),
-          pinnedReviewBytes(visualPair.capture),
-        ]);
+        const selectedBytes=await Promise.all(visualViews.map(async selected=>{
+          const [referenceBytes,captureBytes]=await Promise.all([
+            pinnedReviewBytes(selected.reference),
+            pinnedReviewBytes(selected.capture),
+          ]);
+          return {referenceBytes,captureBytes,viewId:selected.viewId,
+            referenceSha:selected.reference.sha256,
+            captureSha:selected.capture.sha256};
+        }));
+        const primaryBytes=selectedBytes[0];
         if (execution.closed || activeExecution !== execution) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
         }
@@ -578,19 +664,29 @@ export async function createCodeModeHost({
             sourceModelSha256:model.expectedSha256,
             viewId:visualPair.viewId,
             reference:Object.freeze({
-              sha256:visualPair.reference.sha256,
-              pngBytes:Buffer.from(referenceBytes),
+              sha256:primaryBytes.referenceSha,
+              pngBytes:Buffer.from(primaryBytes.referenceBytes),
             }),
             capture:Object.freeze({
-              sha256:visualPair.capture.sha256,
-              pngBytes:Buffer.from(captureBytes),
+              sha256:primaryBytes.captureSha,
+              pngBytes:Buffer.from(primaryBytes.captureBytes),
             }),
+            supportingViews:Object.freeze(selectedBytes.slice(1).map(view=>
+              Object.freeze({
+                viewId:view.viewId,
+                reference:Object.freeze({sha256:view.referenceSha,
+                  pngBytes:Buffer.from(view.referenceBytes)}),
+                capture:Object.freeze({sha256:view.captureSha,
+                  pngBytes:Buffer.from(view.captureBytes)}),
+              }))),
+            requiredSixDirections:visualPair.requireSixDirections,
           }));
         } finally { execution.resume(); }
         if (execution.closed || activeExecution !== execution) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
         }
-        feedback = normalizedVisualReview(returned);
+        feedback = normalizedVisualReview(returned,
+          visualViews.map(view=>view.viewId));
         if (feedback.materialCohort) {
           const cohort=feedback.materialCohort;
           // Re-read the *actual* model through one pinned Rust inspection
@@ -675,6 +771,9 @@ export async function createCodeModeHost({
       if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
       return {
         ...evidence,
+        view_evidence,
+        view_scope:visualPair.requireSixDirections ?
+          'six_cardinal_source_pairs_selected' : 'selected_source_pairs_only',
         review_feedback:feedback,
         evidence_binding:{
           kind:'operator_selected_visual_pair',
@@ -791,6 +890,11 @@ export async function createCodeModeHost({
             preserveAlpha:feedback.correctionScope.preserveAlpha,
           })) throw new Error('CODE_MODE_MATERIAL_SAMPLE_REGION_REQUIRED');
         } else {
+          if (visualViews.length > 1 &&
+              (feedback.viewReviews.length !== visualViews.length ||
+               feedback.viewReviews.some(view=>view.decision==='UNVERIFIED'))) {
+            throw new Error('CODE_MODE_VISUAL_VIEW_COVERAGE_UNVERIFIED');
+          }
           if (cohort.sampleVerdict !== 'ACCEPTED' ||
               cohort.source_model_sha256 !== p.expectedSha256 ||
               cohort.capture_png_sha256 !== visualPair.capture.sha256 ||
@@ -808,10 +912,10 @@ export async function createCodeModeHost({
       if (visualPair !== null && pixelEdit) {
         // An image may change after preflight. Verify BOTH original PNGs
         // immediately before output/approval/native mutation.
-        await Promise.all([
-          pinnedReviewBytes(visualPair.reference),
-          pinnedReviewBytes(visualPair.capture),
-        ]);
+        await Promise.all(visualViews.flatMap(view=>[
+          pinnedReviewBytes(view.reference),
+          pinnedReviewBytes(view.capture),
+        ]));
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,

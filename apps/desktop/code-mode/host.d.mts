@@ -55,6 +55,11 @@ export interface CodeModeGuestAPI {
       correctionScope?:TextureCorrectionScope | null;
       rejectedApproaches:Array<{issueId:string;approachId:string}>;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
+      viewReviews:ReadonlyArray<Readonly<{
+        viewId:CodeModeVisualViewId;
+        decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
+        observation:string;
+      }>>;
       face_source_evidence:Readonly<{
         status:"six_saved_faces_inspected";
         cube_uuid:string;face_count:6;
@@ -71,6 +76,13 @@ export interface CodeModeGuestAPI {
       source:"TRUSTED_HOST_DECLARATION"|"NONE";
       visual_verdict:"UNVERIFIED";
     };
+    view_evidence:ReadonlyArray<Readonly<{
+      view_id:CodeModeVisualViewId;
+      reference_png_sha256:string;capture_png_sha256:string;
+      source_model_sha256:string;visual_verdict:"UNVERIFIED";
+      silhouette_status:string;
+    }>>;
+    view_scope:"six_cardinal_source_pairs_selected"|"selected_source_pairs_only";
     evidence_binding:{
       kind:"operator_selected_visual_pair";
       view_id:"front"|"back"|"left"|"right"|"top"|"bottom"|"three_quarter";
@@ -133,8 +145,18 @@ export interface CodeModeReviewedMaterialCohort {
   capture_png_sha256?:string;
   view_id?:string;
 }
+export type CodeModeVisualViewId="front"|"back"|"left"|"right"|
+  "top"|"bottom"|"three_quarter";
 export interface CodeModeVisualReviewerFeedback {
   decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
+  /** Each supported selected PNG view must be independently observed.
+   * When 2+ views are bound this complete list is mandatory.
+   */
+  viewReviews?:Array<{
+    viewId:CodeModeVisualViewId;
+    decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
+    observation:string;
+  }>;
   issues:Array<{
     id:string;
     kind:"FLAT_SHADING"|"MISSING_DETAIL"|"STYLE_MISMATCH"|
@@ -181,7 +203,16 @@ export interface CodeModeHostOptions {
     referencePngPath:string;
     capturePngPath:string;
     captureModelSha256:string;
-    viewId:"front"|"back"|"left"|"right"|"top"|"bottom"|"three_quarter";
+    viewId:CodeModeVisualViewId;
+    /** Optional actual operator-selected view pairs, same model SHA.
+     * The host rejects duplicates, unsupported labels and missing required
+     * cardinal directions. No paths ever reach guest code.
+     */
+    supportingViews?:Array<{
+      viewId:CodeModeVisualViewId;
+      referencePngPath:string;capturePngPath:string;
+    }>;
+    requireSixDirections?:boolean;
   };
   /** Operator-owned, independent visual review adapter. The callback receives
    * bounded original PNG bytes under trusted Node, not in the Deno guest.
@@ -190,9 +221,15 @@ export interface CodeModeHostOptions {
    */
   reviewVisualPair?: (pair:Readonly<{
     sourceModelSha256:string;
-    viewId:string;
+    viewId:CodeModeVisualViewId;
     reference:Readonly<{sha256:string;pngBytes:Buffer}>;
     capture:Readonly<{sha256:string;pngBytes:Buffer}>;
+    supportingViews:ReadonlyArray<Readonly<{
+      viewId:CodeModeVisualViewId;
+      reference:Readonly<{sha256:string;pngBytes:Buffer}>;
+      capture:Readonly<{sha256:string;pngBytes:Buffer}>;
+    }>>;
+    requiredSixDirections:boolean;
   }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>;
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
