@@ -15,6 +15,14 @@ test("one-color 8x8 fill is BASE_ONLY, not styled, even with successful bitmap c
   expect(result.visual_verdict).toBe("UNVERIFIED");
   expect(result.texture_completion_attested).toBe(false);
 });
+test("similar but distinct RGB in one quantized bucket is not mislabeled a single-color fill",()=>{
+  const rgba=grid(8,8,(x,y)=>x<4?[100,100,100,255]:[110,110,110,255]);
+  const result=inspectPaintStylingEvidence(rgba,8,8);
+  expect(result.color_bucket_count).toBe(1);
+  expect(result.exact_uniform_visible_rgb).toBe(false);
+  expect(result.review_hints).not.toContain("UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE");
+  expect(result.status).toBe("REVIEW_REQUIRED"); // weak form contrast still needs comparison
+});
 test("three big horizontal bands produce a review warning despite three strong colors",()=>{
   const rgba=grid(8,8,(_x,y)=>y<2?[55,70,90,255]:
     y<6?[120,132,145,255]:[195,205,215,255]);

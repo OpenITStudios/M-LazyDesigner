@@ -25,6 +25,7 @@ export function inspectPaintStylingEvidence(
       reason:"REGION_TOO_LARGE_FOR_STYLING_DIAGNOSTIC" as const,
       sampled_visible_pixels:null,
       color_bucket_count:null,
+      exact_uniform_visible_rgb:null,
       dominant_visible_ratio:null,
       luminance_span:null,
       review_hints:[],
@@ -39,10 +40,27 @@ export function inspectPaintStylingEvidence(
   const pixels = profile.sampling.sampled_pixels;
   const visible = Math.round(profile.alpha.visible_coverage * pixels);
   const hints: string[] = [];
+  // The color profile groups 8-bit channels into coarse buckets; two
+  // legitimate nearby shades can occupy the same bucket. Never call that
+  // exact "one-color fill". Inspect original visible RGB for that claim.
+  let firstRgb: [number,number,number] | null = null;
+  let isUniformRgb = true;
+  for (let i = 0; i < width*height; i++) {
+    const offset=i*4;
+    if (rgba[offset+3] <= 0) continue;
+    const rgb:[number,number,number]=[
+      rgba[offset],rgba[offset+1],rgba[offset+2],
+    ];
+    if (firstRgb === null) firstRgb=rgb;
+    else if (rgb.some((n,j)=>n!==firstRgb![j])) {
+      isUniformRgb = false;
+      break;
+    }
+  }
   // Samples under 16 visible pixels cannot distinguish a purposeful
   // single-color identity mark from an unfinished material surface.
   if (visible >= 16) {
-    if (profile.color_bucket_count <= 1) {
+    if (isUniformRgb && firstRgb !== null) {
       hints.push("UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE");
     } else if (profile.dominant_visible_ratio >= .92 &&
                (profile.luma?.span ?? 0) < .08) {
@@ -90,6 +108,7 @@ export function inspectPaintStylingEvidence(
       : "NOT_EVALUATED" as const,
     sampled_visible_pixels:visible,
     color_bucket_count:profile.color_bucket_count,
+    exact_uniform_visible_rgb: visible >= 16 && firstRgb !== null ? isUniformRgb : null,
     dominant_visible_ratio:profile.dominant_visible_ratio,
     luminance_span:profile.luma?.span ?? null,
     review_hints:hints,
