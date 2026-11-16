@@ -77,6 +77,16 @@ The internal composer has two strictly distinct outcomes:
   must match every selected pixel, or no correction is compiled. All
   other pixels and the existing alpha remain unchanged.
 
+Initial reference-backed compilations now require distinct
+shadow/base/highlight value roles and actual shadow/highlight clusters
+on every selected material face. The compiler also evaluates the proposed
+face-local pixel grid **after canonical signed/rotated UV projection**:
+uniform color or flat horizontal banding is rejected before the native
+transaction even if all shade role labels are present. This is a
+deterministic anti-shortcut check, not a visual-quality score or installed
+public authoring capability. Focused single-role corrections and normal
+direct base fills remain permitted. Tests AUTHORED_NOT_RUN.
+
 Both reuse the same `paintTransaction` planner and bitmap oracle,
 detect off-face writes, reject contradictory clusters and shared/overlapping
 UV owners, and pin the exact full RGBA revision. They are not visual

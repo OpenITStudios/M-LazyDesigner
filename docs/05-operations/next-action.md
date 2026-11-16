@@ -1,5 +1,16 @@
 # LazyDesigner Next Action
 
+**Active Rust-only Texturing port (2026-11-17; SOURCE_ONLY):**
+The mistakenly Local-authored Paint crop warnings, reference cluster
+shade requirements, rotated-face band refusal and regression fixtures
+have been carried to Rust's retained MCP source tree. This preserves
+work without writing to Local. The native Rust Code Mode does not
+automatically import MCP Tooling, so do not claim AI-Texturing behavior
+changed there until the canonical Rust source owner has an equivalent
+read-only evidence/finish guard and typed SDK/host integration.
+No tests/CI/localtest were run; image quality remains UNVERIFIED.
+
+
 **Rust reviewed Texturing propagation requires six camera directions (2026-11-16; SOURCE_ONLY):**
 Earlier single-image Code Mode reviews are retained for small sampled
 Paint only. Broad independently reviewed material propagation now

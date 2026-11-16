@@ -13,6 +13,7 @@ import {
   applyPaintTransactionRgba,
   type PaintTransactionOperation,
 } from "./paintTransaction";
+import { inspectPaintStylingEvidence } from "./stylingEvidence";
 import {
   computeTextureRevision,
   requireTextureRevisionMatch,
@@ -541,6 +542,49 @@ export async function compileReferencePixelClusterPaint(
   }
   if (changedPixels === 0) {
     throw new Error("CLUSTER_PAINT_NO_CHANGE");
+  }
+  // Reference-driven INITIAL authoring must not silently compile only
+  // the base fill, detail/noise or identity colors as a "styled" model.
+  // A focused correction can legitimately touch only one shade role.
+  if (input.source_mode !== "existing_painted_patch") {
+    const rgbLuma = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return (0.2126*r + 0.7152*g + 0.0722*b)/255;
+    };
+    if (!input.palette.shadow || !input.palette.highlight ||
+        rgbLuma(input.palette.base)-rgbLuma(input.palette.shadow) < .055 ||
+        rgbLuma(input.palette.highlight)-rgbLuma(input.palette.base) < .055) {
+      throw new Error("CLUSTER_VALUE_FORM_PALETTE_REQUIRED");
+    }
+    for (const face of input.faces) {
+      const key=faceId(face);
+      const roles=new Set(face.clusters.map(cluster=>cluster.role));
+      if (!roles.has("shadow") || !roles.has("highlight")) {
+        throw new Error("CLUSTER_VALUE_FORM_ROLES_REQUIRED: "+key);
+      }
+      // Inspect proposed form treatment on the face-local pixel grid.
+      // Rotated/mirrored atlas UV can turn a flat horizontal face band
+      // into a vertical column, so atlas-row heuristics alone miss it.
+      const uv=mapping.get(key)!;
+      const binding=native.get(key)!;
+      const [fw,fh]=faceLocalPixelSize(uv,binding.rotation!,key);
+      const mapped=new Uint8ClampedArray(fw*fh*4);
+      for(let y=0;y<fh;y++)for(let x=0;x<fw;x++){
+        const pixel=mapFaceLocalPixelToAtlasPixel(
+          uv,binding.rotation!,x,y,key);
+        const start=(pixel.y*width+pixel.x)*4;
+        mapped.set(proposed.pixels.subarray(start,start+4),(y*fw+x)*4);
+      }
+      const style=inspectPaintStylingEvidence(mapped,fw,fh);
+      if(style.status==="BASE_ONLY_CANDIDATE"){
+        throw new Error("CLUSTER_VALUE_FORM_FLAT_PIXELS: "+key);
+      }
+      if(style.review_hints.includes("UNIFORM_HORIZONTAL_BANDS_REVIEW")){
+        throw new Error("CLUSTER_VALUE_FORM_BANDING_REVIEW: "+key);
+      }
+    }
   }
   const changedRect = [minX, minY, maxX + 1, maxY + 1] as const;
   return {

@@ -1,5 +1,24 @@
 # LazyDesigner Current Validation
 
+## 2026-11-17 — Restore mistakenly Local-authored Texturing safeguards to Rust source
+
+**Target and write authority:** Rust only. The four Local source commits
+`4e0c9b17`, `82b8f2a7`, `f75eba1b`, `56f47659` are intentionally
+ported here in the retained Blockbench/MCP compatibility tree.
+Eight targeted implementation/test/Skill/document files now carry the
+same source content as Local HEAD `56f47659c141192070cbf832fbd0f52005fbe617`.
+These retain the existing `paint_texture_transaction` warnings and
+face-local reference composer anti-flat/anti-band guards.
+
+**Important scope distinction:** `mcp/**` on Rust is legacy
+Blockbench-compatible source. Copying those files does NOT wire
+their diagnostics into the native Rust Code Mode `apply`/CLI and does
+not prove any installed/runtime effect. Native Code Mode must use
+the same acceptance principles through its own Rust document/paint owner.
+Local branch was read only and not reverted or force-updated.
+Source-only; test fixtures authored, NOT_RUN; PC-local/CI hold retained.
+
+
 ## 2026-11-16 — Mandatory six-view gate for broad reviewed Texture propagation
 
 A local small material sample can be reviewed with one operator-selected

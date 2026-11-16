@@ -32,6 +32,15 @@ describe("texture transaction dirty-region path", () => {
     ]);
   });
 
+  test("normal atomic paint remains valid but warns on uniform affected-region styling",async()=>{
+    const src=await source("server/tools/paint/textureTransaction.ts");
+    expect(src).toContain("const stylingEvidence = inspectPaintStylingEvidence(");
+    expect(src).toContain("texture_styling_evidence: stylingEvidence");
+    expect(src).toContain("Styling warning: the edited atlas crop is uniform/base-only");
+    expect(src).toContain("visual PASS");
+    expect(src).toContain("Undo.finishEdit");
+  });
+
   test("transaction applies only the dirty canvas region but keeps full postcondition proof", async () => {
     const src = await source("server/tools/paint/textureTransaction.ts");
 

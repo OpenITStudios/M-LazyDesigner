@@ -153,6 +153,37 @@ describe("reference-declared face-local pixel cluster composer", () => {
     expect(colorAt(preview270,7,7)).toEqual([0,0,0,0]);
   });
 
+  test("initial reference cluster styling refuses flat-only palettes or missing shadow/highlight roles",async()=>{
+    const from=await fixture();
+    const paletteOnly=await fixture({palette:{
+      ...from.palette,shadow:"#745b48",highlight:"#745b48",
+    }});
+    await expect(compileReferencePixelClusterPaint(paletteOnly))
+      .rejects.toThrow("CLUSTER_VALUE_FORM_PALETTE_REQUIRED");
+    const flat=await fixture({faces:[{
+      ...facePlan(),clusters:facePlan().clusters.filter(c=>c.role==="identity"||c.role==="detail"),
+    }]});
+    await expect(compileReferencePixelClusterPaint(flat))
+      .rejects.toThrow("CLUSTER_VALUE_FORM_ROLES_REQUIRED");
+    // Focused corrections remain allowed to update one approved shadow
+    // or identity region, without repainting the whole material.
+  });
+
+  test("refuses a horizontal stripe masquerading as shading even with shadow and highlight labels", async()=>{
+    const original=facePlan();
+    const bands=[
+      {...original.clusters[0],shape:{
+        kind:"rect" as const,x:0,y:0,width:4,height:1}},
+      {...original.clusters[1],shape:{
+        kind:"rect" as const,x:0,y:3,width:4,height:1}},
+    ];
+    const input=await fixture({faces:[{
+      ...original,clusters:bands,quiet_zones:[],
+    }]});
+    await expect(compileReferencePixelClusterPaint(input))
+      .rejects.toThrow("CLUSTER_VALUE_FORM_BANDING_REVIEW");
+  });
+
   test("supports an explicitly authorized uniformly opaque template without touching other atlas regions", async () => {
     const bitmap = new Uint8ClampedArray(
       Array.from({ length: 64 }, () => [72,72,72,255]).flat());

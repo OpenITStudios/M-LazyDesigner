@@ -29,6 +29,7 @@ import {
 } from "@/lib/texture/paintTransactionPolicy";
 import { computeTextureRevision } from "@/lib/texture/revision";
 import { applyTextureComputePipeline } from "@/lib/texture/computePipeline";
+import { inspectPaintStylingEvidence } from "@/lib/texture/stylingEvidence";
 import { parseTextureComputeRequest } from "@/lib/texture/computeRequest";
 import {
   compileReferencePixelClusterPaint,
@@ -504,6 +505,12 @@ async function executePaintTextureTransaction(
           before.height,
           plannedReceipt.affected_rect
         );
+        // Use the same postcondition candidate and affected atlas region as
+        // the existing Undo/PNG writer. Diagnostic only, not a write gate:
+        // a flat BASE PASS and explicit known-pixel corrections remain valid.
+        const stylingEvidence = inspectPaintStylingEvidence(
+          dirtyRegion.pixels, dirtyRegion.width, dirtyRegion.height
+        );
         const outputBytes = output
           ? texturePngBytes(rgbaToPngDataUrl(applied.pixels, before.width, before.height))
           : null;
@@ -662,12 +669,13 @@ async function executePaintTextureTransaction(
           content: [
             {
               type: "text" as const,
-              text: `Applied ${plannedReceipt.operation_count} texture operation(s) as one Undo transaction on "${texture.name}"${outputReceipt ? `; verified PNG saved to ${outputReceipt.path}` : ""}.${affectedRegionImage ? " The attached PNG is the exact affected atlas region after mutation." : ""}`,
+              text: `Applied ${plannedReceipt.operation_count} texture operation(s) as one Undo transaction on "${texture.name}"${outputReceipt ? `; verified PNG saved to ${outputReceipt.path}` : ""}.${affectedRegionImage ? " The attached PNG is the exact affected atlas region after mutation." : ""}${stylingEvidence.status === "BASE_ONLY_CANDIDATE" ? " Styling warning: the edited atlas crop is uniform/base-only; this is NOT final material shading. Continue the reference-based VALUE/FORM pass unless this region is independently declared INTENTIONAL_FLAT." : stylingEvidence.status === "REVIEW_REQUIRED" ? " Styling review needed: inspect the affected 3D material for flat bands, weak value structure or random noise. No visual PASS is implied." : ""}`,
             },
             ...(affectedRegionImage ? [affectedRegionImage] : []),
           ],
           structuredContent: {
             ...plannedReceipt,
+            texture_styling_evidence: stylingEvidence,
             compute: computeResult
               ? {
                   operation_count:
