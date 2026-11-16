@@ -562,6 +562,9 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             allowedRegions:[{from:[1,1],to:[5,5]}],
             preserveAlpha:true,
           },
+          materialCohort:{phase:'sample',issueId:'helmet-flat',
+            partId:'tier2-helmet',approachId:'helmet-value-masses',
+            sampleRegion:{from:[1,1],to:[5,5]}},
         };
       },
       authorizeMutation:request=>{
@@ -602,6 +605,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
           assert.equal(response.result.review_feedback.decision,'REJECTED');
           assert.equal(response.result.review_feedback.issues[0].id,'helmet-flat');
           assert.equal(response.result.review_feedback.visual_verdict,'UNVERIFIED');
+          assert.equal(response.result.review_feedback.materialCohort.phase,'sample');
+          assert.equal(response.result.review_feedback.materialCohort.source_model_sha256,HASH);
           assert.equal(response.result.evidence_binding.image_ingestion,'NOT_VERIFIED');
           assert.equal(JSON.stringify(response.result).includes('pngBytes'),false);
           return {reviewed:true};
@@ -1014,6 +1019,241 @@ test('reviewed material correction blocks missing, unrelated and previously reje
     }
     assert.equal(approvals,0);
     assert.equal(nativeWrites,0);
+  }));
+
+// Header-only PNGs and mocked native CLI below exercise host admission only,
+// not real texture/image quality or native user acceptance.
+test('representative material is constrained; propagation requires fresh accepted sample and protects it', () =>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const reference=join(folder,'selected-reference.png');
+    const before=join(folder,'source-front.png');
+    const after=join(folder,'sample-front.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,png);await writeFile(before,png);
+    const afterBytes=Buffer.concat([png,Buffer.from([1])]);
+    await writeFile(after,afterBytes);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const sampleDigest=createHash('sha256').update(afterBytes).digest('hex');
+    const modifiedSha='b'.repeat(64), widenedSha='c'.repeat(64);
+    const intent={
+      issueId:'helmet-flat',partId:'tier2-helmet',
+      approachId:'form-following-metal',material:'metal',
+      cause:'Helmet detail still forms an unsupported flat horizontal stripe.',
+      treatment:'form_value_masses',
+      expectedChange:'Introduce form-following base and shadow clusters around the helmet.',
+    };
+    let firstStep=0, secondStep=0, approvals=0;
+    const sampleHost=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:reference,capturePngPath:before,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:()=>({
+        decision:'REJECTED',
+        issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+          partId:'tier2-helmet',
+          observation:'Metal helmet needs one representative sample.'}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
+        materialCohort:{phase:'sample',issueId:'helmet-flat',
+          partId:'tier2-helmet',approachId:'form-following-metal',
+          sampleRegion:{from:[1,1],to:[5,5]}},
+      }),
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        if(argv[0]==='inspect'){
+          const name=basename(argv[argv.indexOf('--input')+1]);
+          return {status:'OK',sha256:name==='representative.bbmodel'?
+            modifiedSha:HASH,summary:SUMMARY};
+        }
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'},
+        };
+        assert.equal(argv[0],'apply');
+        await writeFile(argv[argv.indexOf('--output')+1],'{}');
+        return {status:'OK',source_sha256:HASH,output_sha256:modifiedSha,
+          summary:SUMMARY,
+          mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+      },
+      spawnImpl:()=>{
+        const step=++firstStep;
+        if(step===1)return fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p0',
+        }},value=>{
+          assert.equal(value.ok,true);
+          assert.equal(value.result.review_feedback.materialCohort.phase,'sample');
+          assert.equal(value.result.review_feedback.materialCohort.sampleVerdict,'UNVERIFIED');
+          return {reviewed:true};
+        });
+        const broad=step===2;
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:broad?'too-broad.bbmodel':'representative.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,
+            x:broad?10:2,y:broad?10:2,rgba:[30,40,50,255]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:broad?[{from:[8,8],to:[12,12]}]:
+              [{from:[2,2],to:[4,4]}],preserveAlpha:true},
+          correctionIntent:intent,
+        }},value=>{
+          if(broad){
+            assert.equal(value.ok,false);
+            assert.equal(value.code,'CODE_MODE_MATERIAL_SAMPLE_REGION_REQUIRED');
+            return {blocked:true};
+          }
+          assert.equal(value.ok,true);
+          assert.equal(value.result.project,'p1');
+          return {sampleSaved:true};
+        });
+      },
+    });
+    assert.equal((await sampleHost.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.reviewed,true);
+    assert.equal((await sampleHost.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
+    assert.equal((await sampleHost.execute({code:'return codemode.apply({project:"p0"});'})).value.sampleSaved,true);
+    assert.equal(approvals,1);
+
+    // A NEW selected .bbmodel source and new model capture are required.
+    const candidate=join(folder,'representative.bbmodel');
+    const propagationHost=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input:candidate,
+      preselectedVisualPair:{
+        referencePngPath:reference,capturePngPath:after,
+        captureModelSha256:modifiedSha,viewId:'front',
+      },
+      reviewVisualPair:()=>({
+        decision:'REJECTED',
+        issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+          partId:'tier2-helmet',
+          observation:'Sample is acceptable; other metal faces still need styling.'}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
+        materialCohort:{phase:'propagation',
+          issueId:'helmet-flat',partId:'tier2-helmet',
+          approachId:'form-following-metal',
+          sampleRegion:{from:[1,1],to:[5,5]},
+          sampleVerdict:'ACCEPTED'},
+      }),
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        if(argv[0]==='inspect'){
+          const name=basename(argv[argv.indexOf('--input')+1]);
+          return {status:'OK',sha256:name==='extended.bbmodel'?
+            widenedSha:modifiedSha,summary:SUMMARY};
+        }
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:modifiedSha,
+          reference_png_sha256:digest,capture_png_sha256:sampleDigest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:sampleDigest,
+            visual_verdict:'UNVERIFIED'},
+        };
+        assert.equal(argv[0],'apply');
+        await writeFile(argv[argv.indexOf('--output')+1],'{}');
+        return {status:'OK',source_sha256:modifiedSha,output_sha256:widenedSha,
+          summary:SUMMARY,mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+      },
+      spawnImpl:()=>{
+        const step=++secondStep;
+        if(step===1)return fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p0',
+        }},value=>{
+          assert.equal(value.ok,true);
+          const cohort=value.result.review_feedback.materialCohort;
+          assert.equal(cohort.phase,'propagation');
+          assert.equal(cohort.sampleVerdict,'ACCEPTED');
+          assert.equal(cohort.source_model_sha256,modifiedSha);
+          assert.equal(cohort.capture_png_sha256,sampleDigest);
+          assert.equal(cohort.visual_verdict,'UNVERIFIED');
+          return {acceptedSampleDeclared:true};
+        });
+        const overlap=step===2;
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:overlap?'overlap.bbmodel':'extended.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,
+            x:overlap?2:9,y:overlap?2:9,rgba:[60,70,80,255]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:overlap?[{from:[2,2],to:[4,4]}]:
+              [{from:[8,8],to:[12,12]}],preserveAlpha:true},
+          correctionIntent:intent,
+        }},value=>{
+          if(overlap){
+            assert.equal(value.ok,false);
+            assert.equal(value.code,'CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
+            return {blocked:true};
+          }
+          assert.equal(value.ok,true);
+          assert.equal(value.result.project,'p1');
+          return {propagated:true};
+        });
+      },
+    });
+    assert.equal((await propagationHost.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.acceptedSampleDeclared,true);
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.propagated,true);
+    assert.equal(approvals,2);
+  }));
+
+test('invalid source-only sample review declarations fail before Paint', () =>
+  fixture(async input=>{
+    const folder=dirname(input), image=join(folder,'review.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(image,png);
+    const sha=createHash('sha256').update(png).digest('hex');
+    const invalid=[
+      {phase:'propagation',issueId:'helmet-flat',partId:'tier2-helmet',
+        approachId:'form-following-metal',sampleRegion:{from:[1,1],to:[5,5]}},
+      {phase:'sample',issueId:'helmet-flat',partId:'tier2-helmet',
+        approachId:'form-following-metal',sampleRegion:{from:[0,0],to:[40,40]}},
+      {phase:'sample',issueId:'other-issue',partId:'tier2-helmet',
+        approachId:'form-following-metal',sampleRegion:{from:[1,1],to:[5,5]}},
+      {phase:'sample',issueId:'helmet-flat',partId:'tier2-helmet',
+        approachId:'form-following-metal',sampleRegion:{from:[1,1],to:[5,5]},
+        sampleVerdict:'ACCEPTED'},
+    ];
+    for(const materialCohort of invalid){
+      let writes=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:image,capturePngPath:image,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        reviewVisualPair:()=>({
+          decision:'REJECTED',
+          issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+            observation:'Metal helmet still needs styling.',
+            partId:'tier2-helmet'}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[0,0],to:[32,32]}],preserveAlpha:true},
+          materialCohort,
+        }),
+        authorizeMutation:()=>{writes++;return true;},
+        runner:async argv=>{
+          if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+          assert.equal(argv[0],'inspect-visual-pair');
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:sha,capture_png_sha256:sha,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:sha,capture_png_sha256:sha,
+              visual_verdict:'UNVERIFIED'}};
+        },
+        spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p0',
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_MATERIAL_COHORT_INVALID');
+          return {rejected:true};
+        }),
+      });
+      const result=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(result.value.rejected,true);
+      assert.equal(writes,0);
+    }
   }));
 
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
