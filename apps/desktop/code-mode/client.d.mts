@@ -421,6 +421,10 @@ export interface AssetHandoffInspection {
       rotation_tracks?: number;
       /** Linear/step numeric Scale tracks; no controller blending is assessed. */
       scale_tracks?: number;
+      /** Numeric Bezier Bone animator cohorts bounded from per-axis cubic control values. */
+      bezier_bone_tracks?: number;
+      /** Catmull-Rom admitted only for rigid numeric Rotation; no Position/Scale spline bound. */
+      catmullrom_rotation_tracks?: number;
       /** Largest product of per-Bone max axis scale (>=1) along one hierarchy path. */
       max_scale_chain_amplification?: number;
       coverage_mode?: "translation_only" | "pivot_rotation_envelope" | "scaled_pivot_envelope";

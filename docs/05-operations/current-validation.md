@@ -1,5 +1,10 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Source-only Bezier control-hull and Catmull-Rom Rotation clearance
+
+Compared pinned Blockbench 5.2.1 saved Bezier per-axis time/value handles and Rust adaptive export with Microsoft Bedrock numeric Bone channels, plus academic cubic Bezier convex-hull properties and independent Catmull-Rom overshoot reports. Previously, `geometry.translation_clearance` rejected all nonlinear keys. It now bounds **Bezier Position per axis** using the extrema of key values and each saved left/right control value, combining independent axis bounds by Euclidean norm; Bezier Scale similarly uses absolute control maxima with existing hierarchy amplification. This avoids the incorrect assumption that differently timed Bezier axes share one 3D control parameter. Catmull-Rom and Bezier Rotation are admitted only through the existing all-angle pivot-sphere estimate; Catmull-Rom Position/Scale remain `unassessed` rather than being compared against keys alone. Existing source-status and export formats remain unchanged; optional typed Code Mode counters identify recognized nonlinear cohorts. Source-authored Rust regressions cover zero endpoints with nonzero Bezier controls, Scale handle growth, Catmull-Rom Rotation vs Position refusal and unchanged Geometry/Texture hashes/editable `.bbmodel`; **SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.** This is NOT native culling, continuous playback, collision, visual fidelity, multi-clip blending, or superiority evidence. Sources: <https://github.com/JannisX11/blockbench/tree/e2ede0809ee6bc91f374ac7e00d34cffbdf86a14>, <https://learn.microsoft.com/en-us/minecraft/creator/documents/animations/animationsoverview>, <https://people.eecs.ku.edu/~jrmiller/Courses/IntroToCurvesAndSurfaces/BezierCurveProperties.html>, <https://docs.kdenlive.org/en/tips_and_tricks/useful_info/smooth_keyframe_interpolation.html>.
+
+
 
 ## 2026-11-16 — Linear/step Scale envelope in Rust asset handoff (SOURCE_ONLY)
 

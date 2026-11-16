@@ -39,8 +39,11 @@ fn export_evidence(
 /// are conservatively combined across clips. This can substantially overstate
 /// actual clearance, never understate it under this numeric single-clip subset.
 /// This does NOT measure visual poses, native culling, simultaneous controller
-/// blends, Molang or nonlinear interpolation. Preserve the existing scope and
-/// status fields for typed Code Mode compatibility.
+/// blends or opaque/Molang data. Bezier Position/Scale uses per-axis cubic
+/// control-value bounds (time handles differ per axis), without sampling.
+/// Catmull-Rom Position/Scale is intentionally unassessed: splines overshoot.
+/// Numeric Catmull/Bezier Rotation needs only the compiled pivot radius.
+/// Preserve the original scope/status fields for typed Code Mode compatibility.
 fn translation_clearance(
     doc: &AuthoringDocument, static_bounds: &Value, saved_bounds: &Value,
     compiled_bones: &[Value],
@@ -83,6 +86,8 @@ fn translation_clearance(
     let mut position_tracks = 0usize;
     let mut rotation_tracks = 0usize;
     let mut scale_tracks = 0usize;
+    let mut bezier_bone_tracks = 0usize;
+    let mut catmullrom_rotation_tracks = 0usize;
     let mut has_animated_rotation = false;
     let mut has_animated_scale = false;
     let mut maximum_scale_growth = 1.0_f64;
@@ -105,16 +110,36 @@ fn translation_clearance(
             let mut has_position = false;
             let mut has_rotation = false;
             let mut has_scale = false;
+            let mut has_bezier = false;
+            let mut has_rotation_catmullrom = false;
+            let mut bezier_position = false;
+            // Bezier per-axis time inversion may use DIFFERENT parameters.
+            // Bound each axis independently, then take the Euclidean norm.
+            let mut position_component_bounds = [0.0_f64; 3];
             for frame in frames {
                 let Some(mode) = frame.get("interpolation").and_then(Value::as_str) else {
                     return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
                 };
-                if mode != "linear" && mode != "step" {
-                    return unassessed("NONLINEAR_OR_UNBOUNDED_CURVE");
-                }
                 let Some(channel) = frame.get("channel").and_then(Value::as_str) else {
                     return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
                 };
+                if mode == "catmullrom" {
+                    // A rotation always preserves rigid distances. Numeric
+                    // Catmull Position/Scale can overshoot their keyframes.
+                    if channel != "rotation" {
+                        return unassessed("NONLINEAR_OR_UNBOUNDED_CURVE");
+                    }
+                    has_rotation_catmullrom = true;
+                } else if mode != "linear" && mode != "step" && mode != "bezier" {
+                    return unassessed("NONLINEAR_OR_UNBOUNDED_CURVE");
+                }
+                let handles = if mode == "bezier" {
+                    has_bezier = true;
+                    match super::bezier::parse_saved_bezier_handles(frame) {
+                        Some(value) => Some(value),
+                        None => return unassessed("BEZIER_HANDLES_UNSUPPORTED"),
+                    }
+                } else { None };
                 let Some(point) = frame.get("data_points").and_then(Value::as_array)
                     .and_then(|values| values.first()) else {
                     return unassessed("OPAQUE_OR_UNSUPPORTED_FRAME");
@@ -135,8 +160,25 @@ fn translation_clearance(
                         }
                         let entry = local.entry(bone_uuid.as_str()).or_insert(0.0);
                         *entry = (*entry).max(magnitude);
+                        for axis in 0..3 {
+                            position_component_bounds[axis] =
+                                position_component_bounds[axis].max(axes[axis].abs());
+                            if let Some(handles) = &handles {
+                                // Every value on a cubic Bezier axis lies
+                                // between its four scalar control values.
+                                // Include unused handles: a safe overbound.
+                                bezier_position = true;
+                                position_component_bounds[axis] =
+                                    position_component_bounds[axis]
+                                        .max((axes[axis] + handles.left_value[axis]).abs())
+                                        .max((axes[axis] + handles.right_value[axis]).abs());
+                            }
+                        }
                     },
-                    "rotation" if axes.iter().any(|axis| *axis != 0.0) => {
+                    "rotation" if axes.iter().any(|axis| *axis != 0.0) ||
+                        handles.as_ref().is_some_and(|h|
+                            h.left_value.iter().chain(h.right_value.iter())
+                                .any(|value| *value != 0.0)) => {
                         // Rotation magnitude is irrelevant to the pivot
                         // sphere; treat even very small nonzero keys as
                         // requiring the full conservative envelope.
@@ -151,13 +193,23 @@ fn translation_clearance(
                         // linear endpoints, every axis stays in their convex
                         // range; Step holds a saved axis exactly. Use >=1
                         // to upper-bound shrink-only and absent channels.
-                        let growth = axes.into_iter().fold(1.0_f64, f64::max);
+                        let mut growth = axes.into_iter().fold(1.0_f64, f64::max);
+                        if let Some(handles) = &handles {
+                            for axis in 0..3 {
+                                growth = growth
+                                    .max((axes[axis] + handles.left_value[axis]).abs())
+                                    .max((axes[axis] + handles.right_value[axis]).abs());
+                            }
+                        }
                         if !growth.is_finite() {
                             return unassessed("SCALE_MAGNITUDE_OVERFLOW");
                         }
                         let entry = local_scale.entry(bone_uuid.as_str()).or_insert(1.0);
                         *entry = (*entry).max(growth);
-                        if axes.iter().any(|axis| *axis != 1.0) {
+                        if axes.iter().any(|axis| *axis != 1.0) ||
+                            handles.as_ref().is_some_and(|h|
+                                h.left_value.iter().chain(h.right_value.iter())
+                                    .any(|value| *value != 0.0)) {
                             has_animated_scale = true;
                             if !has_scale { has_scale = true; scale_tracks += 1; }
                         }
@@ -167,6 +219,18 @@ fn translation_clearance(
                 }
             }
             if has_position { position_tracks += 1; }
+            if bezier_position {
+                let magnitude = position_component_bounds[0]
+                    .hypot(position_component_bounds[1])
+                    .hypot(position_component_bounds[2]);
+                if !magnitude.is_finite() {
+                    return unassessed("BEZIER_POSITION_BOUND_OVERFLOW");
+                }
+                let entry = local.entry(bone_uuid.as_str()).or_insert(0.0);
+                *entry = (*entry).max(magnitude);
+            }
+            if has_bezier { bezier_bone_tracks += 1; }
+            if has_rotation_catmullrom { catmullrom_rotation_tracks += 1; }
         }
         let mut clip_reach = 0.0_f64;
         let mut clip_growth = 1.0_f64;
@@ -183,6 +247,8 @@ fn translation_clearance(
             "status":"no_numeric_translation", "numeric_clips":numeric_clips,
             "coverage_mode":"translation_only", "rotation_tracks":0,
             "scale_tracks":0, "max_scale_chain_amplification":1.0,
+            "bezier_bone_tracks":bezier_bone_tracks,
+            "catmullrom_rotation_tracks":catmullrom_rotation_tracks,
             "position_tracks":position_tracks, "max_reach_model_units":0.0,
             "native_verdict":"NOT_EXECUTED", "visual_verdict":"UNVERIFIED",
             "controller_blends":"NOT_ASSESSED",
@@ -241,6 +307,8 @@ fn translation_clearance(
         "position_tracks":position_tracks,
         "rotation_tracks":rotation_tracks,
         "scale_tracks":scale_tracks,
+        "bezier_bone_tracks":bezier_bone_tracks,
+        "catmullrom_rotation_tracks":catmullrom_rotation_tracks,
         "max_scale_chain_amplification":maximum_scale_growth,
         "coverage_mode":coverage_mode,
         "rotation_radius_model_units":rotation_radius,
@@ -1192,6 +1260,182 @@ mod tests {
             "OPAQUE_OR_UNSUPPORTED_CLIP");
         assert_eq!(unknown["animation"]["status"],"blocked");
         assert_eq!(opaque.animation_assets[0]["unknown_imported"]["safe"],true);
+    }
+
+
+    #[test]
+    fn bezier_control_hull_reports_position_reach_without_changing_three_exports() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        let baseline = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        session.apply(1, &[
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008501".into(),
+                channel:"position".into(), time:0.0, value:[0.0,0.0,0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008502".into(),
+                channel:"position".into(), time:1.0, value:[0.0,0.0,0.0],
+            },
+        ]).unwrap();
+        let handles = super::super::BezierKeyframeHandles {
+            linked:false, left_time:[-0.1;3], right_time:[0.1;3],
+            left_value:[12.0,0.0,0.0], right_value:[12.0,0.0,0.0],
+        };
+        session.apply(2, &[
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008501".into(),
+                channel:"position".into(), handles:handles.clone(),
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008502".into(),
+                channel:"position".into(), handles,
+            },
+        ]).unwrap();
+        let saved = session.export().unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(report["status"],"source_consistent");
+        assert_eq!(report["geometry"]["translation_clearance"]["status"],
+            "conservative_margin_shortfall");
+        assert_eq!(report["geometry"]["translation_clearance"]["bezier_bone_tracks"],1);
+        assert_eq!(report["geometry"]["translation_clearance"]["max_reach_model_units"],12.0);
+        assert_eq!(report["geometry"]["sha256"],baseline["geometry"]["sha256"]);
+        assert_eq!(report["texture"]["sha256"],baseline["texture"]["sha256"]);
+        assert_ne!(report["animation"]["sha256"],baseline["animation"]["sha256"]);
+        assert_eq!(session.export().unwrap(),saved);
+        assert_eq!(EditorSession::open(&saved).unwrap().document(),session.document());
+    }
+
+
+    #[test]
+    fn independent_bezier_axes_need_componentwise_bounds_not_one_control_norm() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008507".into(),
+                channel:"position".into(),time:0.0,value:[0.0,0.0,0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008508".into(),
+                channel:"position".into(),time:1.0,value:[0.0,0.0,0.0],
+            },
+        ]).unwrap();
+        session.apply(2, &[
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008507".into(),
+                channel:"position".into(),handles:super::super::BezierKeyframeHandles {
+                    linked:false,left_time:[-0.1;3],right_time:[0.1;3],
+                    left_value:[0.0;3],right_value:[9.0,0.0,0.0],
+                },
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008508".into(),
+                channel:"position".into(),handles:super::super::BezierKeyframeHandles {
+                    linked:false,left_time:[-0.1;3],right_time:[0.1;3],
+                    left_value:[0.0,12.0,0.0],right_value:[0.0;3],
+                },
+            },
+        ]).unwrap();
+        let original = session.export().unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(report["status"],"source_consistent");
+        // 9 on X and 12 on Y need sqrt(9^2 + 12^2) = 15,
+        // even though no single saved Bezier handle vector has length 15.
+        assert_eq!(report["geometry"]["translation_clearance"]["max_reach_model_units"],15.0);
+        assert_eq!(report["geometry"]["translation_clearance"]["bezier_bone_tracks"],1);
+        assert_eq!(session.export().unwrap(),original);
+    }
+
+    #[test]
+    fn bezier_scale_handles_are_bounded_above_numeric_keys() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008503".into(),
+                channel:"scale".into(), time:0.0, value:[1.0,1.0,1.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008504".into(),
+                channel:"scale".into(), time:1.0, value:[1.0,1.0,1.0],
+            },
+        ]).unwrap();
+        let handles = super::super::BezierKeyframeHandles {
+            linked:false,left_time:[-0.1;3],right_time:[0.1;3],
+            left_value:[3.0,0.0,0.0],right_value:[3.0,0.0,0.0],
+        };
+        session.apply(2, &[
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008503".into(),
+                channel:"scale".into(), handles:handles.clone(),
+            },
+            EditOperation::SetBoneTransformKeyframeBezier {
+                animation_uuid:ANIMATION.into(), bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008504".into(),
+                channel:"scale".into(), handles,
+            },
+        ]).unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(report["status"],"source_consistent");
+        assert_eq!(report["geometry"]["translation_clearance"]["coverage_mode"],
+            "scaled_pivot_envelope");
+        assert_eq!(report["geometry"]["translation_clearance"]["scale_tracks"],1);
+        assert_eq!(report["geometry"]["translation_clearance"]["bezier_bone_tracks"],1);
+        assert_eq!(report["geometry"]["translation_clearance"]["max_scale_chain_amplification"],4.0);
+        assert_eq!(report["geometry"]["translation_clearance"]["visual_verdict"],"UNVERIFIED");
+        assert_eq!(report["native_verdict"],"NOT_EXECUTED");
+    }
+
+    #[test]
+    fn catmullrom_rotation_is_pivot_bounded_but_position_remains_unassessed() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::AddBoneRotationKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008505".into(),
+                time:0.0,rotation:[0.0,30.0,0.0],
+            },
+            EditOperation::AddBoneRotationKeyframe {
+                animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+                keyframe_uuid:"00000000-0000-4000-8000-000000008506".into(),
+                time:1.0,rotation:[0.0,0.0,0.0],
+            },
+        ]).unwrap();
+        session.apply(2,&[EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:ANIMATION.into(),bone_uuid:BONE.into(),
+            keyframe_uuid:"00000000-0000-4000-8000-000000008505".into(),
+            channel:"rotation".into(),interpolation:"catmullrom".into(),
+        }]).unwrap();
+        let original = session.export().unwrap();
+        let report = inspect_bedrock_asset_handoff(session.document(),TEXTURE).unwrap();
+        assert_eq!(report["status"],"source_consistent");
+        assert_eq!(report["geometry"]["translation_clearance"]["coverage_mode"],
+            "pivot_rotation_envelope");
+        assert_eq!(report["geometry"]["translation_clearance"]["catmullrom_rotation_tracks"],1);
+        assert_eq!(session.export().unwrap(),original);
+
+        let mut opaque = session.document().clone();
+        let animators = opaque.animation_assets[0]["animators"].as_object_mut().unwrap();
+        let track = animators.get_mut(BONE).unwrap();
+        let frames = track["keyframes"].as_array_mut().unwrap();
+        frames[0]["channel"] = json!("position");
+        let rejected = inspect_bedrock_asset_handoff(&opaque,TEXTURE).unwrap();
+        assert_eq!(rejected["geometry"]["translation_clearance"]["status"],"unassessed");
+        assert_eq!(rejected["geometry"]["translation_clearance"]["reason"],
+            "NONLINEAR_OR_UNBOUNDED_CURVE");
     }
 
     #[test]
