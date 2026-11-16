@@ -415,6 +415,29 @@ export interface AssetHandoffInspection {
     status: "source_exportable" | "blocked" | "not_required";
     sha256: string | null; bytes: number | null; reason?: string;
     curve_fidelity?: "native" | "adaptive_bezier_approximation";
+    /** Advisory saved keyframe endpoints only; never visual continuity PASS. */
+    loop_seams?: {
+      scope: "authored_numeric_loop_endpoint_review";
+      status: "needs_review" | "unsupported" | "no_endpoint_candidates";
+      visual_verdict: "UNVERIFIED";
+      native_verdict: "NOT_EXECUTED";
+      looping_clips: number;
+      unsupported_looping_clips: number;
+      reviewed_channels: number;
+      constant_channels: number;
+      review_candidates: number;
+      returned_issues: number;
+      truncated: boolean;
+      issues: Array<{
+        animation_uuid: string;
+        bone_uuid: string;
+        channel: "rotation" | "position" | "scale";
+        problem: "boundary_not_explicit" | "endpoint_pose_difference";
+        missing_boundaries?: Array<"start" | "end">;
+        /** Absolute endpoint delta; rotation compared modulo 360 degrees. */
+        axis_delta?: [number, number, number];
+      }>;
+    };
   };
   blockers: string[];
 }

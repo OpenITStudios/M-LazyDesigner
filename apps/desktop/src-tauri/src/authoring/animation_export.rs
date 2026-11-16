@@ -293,6 +293,112 @@ pub fn bedrock_animation_curve_fidelity(doc: &AuthoringDocument) -> &'static str
     "native"
 }
 
+/// Read-only source evidence for the restart boundary of saved numeric looping clips.
+/// An exact endpoint comparison is neither velocity/tangent continuity nor a
+/// rendered/native playback verdict. No authored clip or resource is changed.
+/// Called only after the canonical document's whole-model validation.
+pub(super) fn inspect_animation_loop_seams_validated(doc: &AuthoringDocument) -> Result<Value> {
+    const MAX_REPORTED_ISSUES: usize = 16;
+    const ENDPOINT_EPS: f64 = 1e-6;
+    let mut looping_clips = 0usize;
+    let mut unsupported_looping_clips = 0usize;
+    let mut reviewed_channels = 0usize;
+    let mut constant_channels = 0usize;
+    let mut review_candidates = 0usize;
+    let mut issues = Vec::new();
+    for clip in &doc.animation_assets {
+        if clip.get("loop").and_then(Value::as_str) != Some("loop") { continue; }
+        looping_clips += 1;
+        if !editable_transform_clip(clip, &doc.bones) {
+            unsupported_looping_clips += 1;
+            continue;
+        }
+        let length = clip.get("length").and_then(Value::as_f64)
+            .ok_or_else(|| fail("ANIMATION_LOOP_LENGTH_INVALID"))?;
+        let tracks = clip.get("animators").and_then(Value::as_object)
+            .ok_or_else(|| fail("ANIMATION_LOOP_TRACKS_INVALID"))?;
+        for (bone_uuid, track) in tracks {
+            // Sound/particle events are timed cues, not pose continuity data.
+            if bone_uuid == "effects" { continue; }
+            let frames = track.get("keyframes").and_then(Value::as_array)
+                .ok_or_else(|| fail("ANIMATION_LOOP_TRACK_INVALID"))?;
+            for channel in ["rotation", "position", "scale"] {
+                let mut count = 0usize;
+                let mut start: Option<&Value> = None;
+                let mut end: Option<&Value> = None;
+                for frame in frames {
+                    if frame.get("channel").and_then(Value::as_str) != Some(channel) { continue; }
+                    count += 1;
+                    let time = frame.get("time").and_then(Value::as_f64)
+                        .ok_or_else(|| fail("ANIMATION_LOOP_TIME_INVALID"))?;
+                    if time == 0.0 { start = Some(frame); }
+                    if time == length { end = Some(frame); }
+                }
+                if count == 0 { continue; }
+                reviewed_channels += 1;
+                // A single numeric key is a constant authored channel; a
+                // second boundary is not required merely for this diagnostic.
+                if count == 1 { constant_channels += 1; continue; }
+                let missing_start = start.is_none();
+                let missing_end = end.is_none();
+                let mut axis_delta: Option<[f64; 3]> = None;
+                let problem = if missing_start || missing_end {
+                    "boundary_not_explicit"
+                } else {
+                    let before = raw_axes(start.unwrap())?;
+                    let after = raw_axes(end.unwrap())?;
+                    let delta: [f64; 3] = std::array::from_fn(|axis| {
+                        let difference = (after[axis] - before[axis]).abs();
+                        if channel == "rotation" {
+                            // 0 and 360 degrees are the same endpoint POSE,
+                            // but the angular velocity can still be discontinuous.
+                            let angle = difference.rem_euclid(360.0);
+                            angle.min(360.0 - angle)
+                        } else { difference }
+                    });
+                    if delta.iter().all(|value| *value <= ENDPOINT_EPS) { continue; }
+                    axis_delta = Some(delta);
+                    "endpoint_pose_difference"
+                };
+                review_candidates += 1;
+                if issues.len() < MAX_REPORTED_ISSUES {
+                    let mut issue = json!({
+                        "animation_uuid":clip["uuid"],
+                        "bone_uuid":bone_uuid,
+                        "channel":channel,
+                        "problem":problem
+                    });
+                    if let Some(delta) = axis_delta {
+                        issue["axis_delta"] = json!(delta);
+                    } else {
+                        let mut missing = Vec::new();
+                        if missing_start { missing.push("start"); }
+                        if missing_end { missing.push("end"); }
+                        issue["missing_boundaries"] = json!(missing);
+                    }
+                    issues.push(issue);
+                }
+            }
+        }
+    }
+    Ok(json!({
+        "scope":"authored_numeric_loop_endpoint_review",
+        "status":if review_candidates > 0 { "needs_review" }
+            else if unsupported_looping_clips > 0 { "unsupported" }
+            else { "no_endpoint_candidates" },
+        "visual_verdict":"UNVERIFIED",
+        "native_verdict":"NOT_EXECUTED",
+        "looping_clips":looping_clips,
+        "unsupported_looping_clips":unsupported_looping_clips,
+        "reviewed_channels":reviewed_channels,
+        "constant_channels":constant_channels,
+        "review_candidates":review_candidates,
+        "returned_issues":issues.len(),
+        "truncated":issues.len() < review_candidates,
+        "issues":issues
+    }))
+}
+
 /// Export the whole admitted set in one deterministic Bedrock animation file.
 /// Unknown imported clips are never silently omitted. Timeline markers are
 /// Blockbench editor metadata and are retained in .bbmodel, not this runtime

@@ -207,6 +207,11 @@ pub fn inspect_bedrock_asset_handoff_page(
     };
     if animation_required {
         animation["curve_fidelity"] = json!(bedrock_animation_curve_fidelity(doc));
+        // Advisory cross-domain quality evidence: neither an exporter blocker
+        // nor a claim of smooth visual playback. The same validated document
+        // and original saved keyframes are read without additional PNG work.
+        animation["loop_seams"] =
+            super::animation_export::inspect_animation_loop_seams_validated(doc)?;
     }
 
     let mut blockers = Vec::new();
@@ -578,6 +583,104 @@ mod tests {
         assert_eq!(original.animation_assets,saved.animation_assets);
         assert_eq!(session.document(),&saved);
         assert_eq!(expanded["native_verdict"],"NOT_EXECUTED");
+    }
+
+    #[test]
+    fn looping_numeric_handoff_locates_endpoint_pose_discontinuity_without_rewriting_assets() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        const START: &str = "00000000-0000-4000-8000-000000007101";
+        const END: &str = "00000000-0000-4000-8000-000000007102";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::SetAnimationLoopMode {
+                animation_uuid: ANIMATION.into(), mode: "loop".into(),
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: START.into(), channel: "position".into(),
+                time: 0.0, value: [0.0, 0.0, 0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: END.into(), channel: "position".into(),
+                time: 1.0, value: [0.0, 0.0, 0.0],
+            }
+        ]).unwrap();
+        let saved = session.export().unwrap();
+        let clear = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(clear["animation"]["loop_seams"]["looping_clips"], 1);
+        assert_eq!(clear["animation"]["loop_seams"]["reviewed_channels"], 1);
+        assert_eq!(clear["animation"]["loop_seams"]["review_candidates"], 0);
+        assert_eq!(clear["animation"]["loop_seams"]["visual_verdict"], "UNVERIFIED");
+        assert_eq!(session.export().unwrap(), saved);
+
+        session.apply(2, &[EditOperation::UpdateBoneTransformKeyframe {
+            animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: END.into(), channel: "position".into(),
+            time: 1.0, value: [3.0, 0.0, 0.0],
+        }]).unwrap();
+        let changed = session.export().unwrap();
+        let found = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(found["status"], "source_consistent");
+        assert_eq!(found["animation"]["loop_seams"]["status"], "needs_review");
+        assert_eq!(found["animation"]["loop_seams"]["review_candidates"], 1);
+        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["problem"],
+            "endpoint_pose_difference");
+        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["bone_uuid"], BONE);
+        assert_eq!(found["animation"]["loop_seams"]["issues"][0]["axis_delta"],
+            json!([3.0, 0.0, 0.0]));
+        assert_eq!(found["geometry"]["sha256"], clear["geometry"]["sha256"]);
+        assert_eq!(found["texture"]["sha256"], clear["texture"]["sha256"]);
+        assert_ne!(found["animation"]["sha256"], clear["animation"]["sha256"]);
+        assert_eq!(session.export().unwrap(), changed);
+        assert_eq!(EditorSession::open(&changed).unwrap().document(),
+            session.document());
+
+        // Missing endpoints are evidence gaps, not inferred discontinuities.
+        session.apply(3, &[EditOperation::UpdateBoneTransformKeyframe {
+            animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+            keyframe_uuid: START.into(), channel: "position".into(),
+            time: 0.25, value: [0.0, 0.0, 0.0],
+        }]).unwrap();
+        let missing = inspect_bedrock_asset_handoff(session.document(), TEXTURE).unwrap();
+        assert_eq!(missing["animation"]["loop_seams"]["issues"][0]["problem"],
+            "boundary_not_explicit");
+        assert_eq!(missing["animation"]["loop_seams"]["issues"][0]["missing_boundaries"],
+            json!(["start"]));
+        assert!(missing["animation"]["loop_seams"]["issues"][0].get("axis_delta").is_none());
+    }
+
+    #[test]
+    fn loop_seam_read_does_not_infer_errors_from_full_turn_or_opaque_clips() {
+        const BONE: &str = "00000000-0000-4000-8000-000000000001";
+        let mut session = prepared();
+        session.apply(1, &[
+            EditOperation::SetAnimationLoopMode {
+                animation_uuid: ANIMATION.into(), mode: "loop".into(),
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: "00000000-0000-4000-8000-000000007201".into(),
+                channel: "rotation".into(), time: 0.0, value: [0.0, 0.0, 0.0],
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid: ANIMATION.into(), bone_uuid: BONE.into(),
+                keyframe_uuid: "00000000-0000-4000-8000-000000007202".into(),
+                channel: "rotation".into(), time: 1.0, value: [360.0, 0.0, 0.0],
+            }
+        ]).unwrap();
+        let snapshot = session.document().clone();
+        let normal = inspect_bedrock_asset_handoff(&snapshot, TEXTURE).unwrap();
+        assert_eq!(normal["animation"]["loop_seams"]["review_candidates"], 0);
+        assert_eq!(normal["animation"]["loop_seams"]["status"], "no_endpoint_candidates");
+        let mut opaque = snapshot.clone();
+        opaque.animation_assets[0]["unsupported_metadata"] = json!({"keep":true});
+        let uncertain = inspect_bedrock_asset_handoff(&opaque, TEXTURE).unwrap();
+        assert_eq!(uncertain["animation"]["status"], "blocked");
+        assert_eq!(uncertain["animation"]["loop_seams"]["unsupported_looping_clips"], 1);
+        assert_eq!(uncertain["animation"]["loop_seams"]["status"], "unsupported");
+        assert_eq!(opaque.animation_assets[0]["unsupported_metadata"]["keep"], true);
+        assert_eq!(session.document(), &snapshot);
     }
 
     #[test]
