@@ -1,5 +1,20 @@
 # LazyDesigner Next Action
 
+**Rust Texturing representative patch admission (2026-11-16; SOURCE_ONLY):**
+The trusted Code Mode host now requires a reviewer-selected small
+atlas sample before broad reviewed Texturing. Sample scope is bounded
+to 1,024 physical pixels; Rust still checks every changed pixel,
+source model and alpha. A subsequent propagation decision requires a
+new saved model SHA and new captured view, plus the independent
+reviewer's explicit accepted sample declaration for the same
+issue, material part and approach. The accepted sample is protected.
+This stops whole-material Paint from being driven solely by an
+unaccepted sample or by numeric color diversity, but does not create
+new vision, automatic material intelligence, or actual quality PASS.
+Source host positive/negative cases authored NOT_EXECUTED. Remaining
+native Golden proof: mapped source/UV correspondence and six-direction
+shaded face checks on actual Pillager Tier 1–3 assets.
+
 **Rust reviewer-linked material correction control (2026-11-16; SOURCE_ONLY):**
 The source-owned Code Mode Paint path now requires a compact intent for
 independently reviewed Texture corrections: reviewer issue ID, stable

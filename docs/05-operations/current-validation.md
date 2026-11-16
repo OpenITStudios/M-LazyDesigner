@@ -1,5 +1,20 @@
 # LazyDesigner Current Validation
 
+## 2026-11-16 — Representative material patch gate in Rust Code Mode
+
+The independent reviewer can declare one small sample atlas rectangle
+for a REJECTED Texturing issue, bounding the first reviewed Paint.
+After saving, the host requires a new SHA-bound model and current
+view/capture with reviewer-declared accepted sample before broader
+propagation; the accepted sample cannot be overwritten by propagation.
+The correction remains restricted by existing Rust transaction, alpha
+and preservation checks. This enforces admission/provenance, not
+automatic recognition of material quality or UV-to-image matching.
+Source-authored regression cases include sample-only negative broad
+Paint, accepted-sample overlap, new SHA/capture routing, and invalid
+sample declarations. TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED;
+real Pillager artistic fidelity and six-face coverage UNVERIFIED.
+
 ## 2026-11-16 — Reviewer-linked material intent and rejected approach guard
 
 At pinned Rust Code Mode source, a visually reviewed Paint requires a

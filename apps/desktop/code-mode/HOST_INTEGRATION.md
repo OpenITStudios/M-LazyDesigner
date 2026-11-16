@@ -91,13 +91,16 @@ const host = await createCodeModeHost({
     // Example of its structured response AFTER independent visual inspection:
     return {
       decision:'REJECTED',
-      issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+      issues:[{id:'helmet-flat',kind:'FLAT_SHADING',partId:'tier3-helmet',
         observation:'Helmet shading is flat relative to the approved master.'}],
       correctionScope:{
         textureUuid:'current-tier3-atlas',
         allowedRegions:[{from:[8,8],to:[20,28]}],
         preserveAlpha:true,
       },
+      materialCohort:{phase:'sample',issueId:'helmet-flat',
+        partId:'tier3-helmet',approachId:'form-following-metal',
+        sampleRegion:{from:[8,8],to:[12,16]}},
     };
   },
 });
@@ -126,6 +129,53 @@ See [Pillager Golden A/B](GOLDEN_PILLAGER_AB.md) for the real
 baseline/candidate evidence and rejection matrix. Source regression tests
 are authored but not executed during the current CI/native hold.
 
+### Representative sample gate for reviewed material work
+
+An independently reviewed material treatment proceeds in two separate
+snapshot-bound rounds. For the **first rejected sample**, the trusted
+`reviewVisualPair` callback adds `materialCohort` to its feedback:
+
+~~~js
+return {
+  decision:'REJECTED',
+  issues:[{id:'helmet-flat',kind:'FLAT_SHADING',partId:'tier2-helmet',
+    observation:'Helmet shading is still a flat band.'}],
+  correctionScope:{textureUuid:'tier2-atlas',
+    allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
+  materialCohort:{phase:'sample',issueId:'helmet-flat',
+    partId:'tier2-helmet',approachId:'form-following-metal',
+    sampleRegion:{from:[1,1],to:[5,5]}},
+};
+~~~
+
+The guest must name the matching issue/part/approach in
+`correctionIntent` and keep its `correctionScope` inside the reviewer
+sample. The host refuses broad edits despite their earlier approved
+larger scope. Rust still checks actual changes before publishing.
+
+To expand the treatment, first save the sample into a new `.bbmodel`,
+then select a new **source SHA** and fresh matching render capture.
+The independent reviewer must inspect the actual sample on the mapped
+model and explicitly declare it accepted while leaving unfinished
+regions REJECTED:
+
+~~~js
+materialCohort:{phase:'propagation',issueId:'helmet-flat',
+  partId:'tier2-helmet',approachId:'form-following-metal',
+  sampleRegion:{from:[1,1],to:[5,5]},sampleVerdict:'ACCEPTED'}
+~~~
+
+The host pins this declaration to the current source, reference/capture
+PNG SHA and view; it refuses a missing/false sample approval, mismatched
+identity or any new Paint rectangle intersecting the accepted sample.
+The sample region is **atlas pixels**, not normalized source-picture
+coordinates. The reviewer must separately establish corresponding
+Cube faces/UV ownership; a single camera view does not satisfy
+whole-model six-direction artistic QA. The two stages use the same
+existing Code Mode tool, Rust model owner and independent write approval.
+
+Source proof: regression tests written but NOT_EXECUTED under the local
+validation hold. Reviewer callback declarations are not visual PASS.
 ## Programmatic execution architecture
 
 ~~~text

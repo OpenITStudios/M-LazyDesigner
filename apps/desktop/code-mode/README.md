@@ -1,5 +1,24 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Representative material patch before styling propagation (2026-11-16; SOURCE_ONLY):**
+For independent reference-driven styling, a REJECTED review must now
+include `materialCohort`. During `phase:'sample'`, the reviewer selects
+one atlas rectangle of at most 1,024 physical PNG pixels. The first
+reviewed Paint may affect only that patch, plus the normal authorized
+correction/alpha boundaries enforced by Rust.
+
+After the resulting model is saved, the operator selects the **new model
+SHA** and **new matching capture** in a new host. A reviewer must actually
+see the updated sample and declare `phase:'propagation'` with
+`sampleVerdict:'ACCEPTED'` for the same issue/part/approach.
+Only then may the remaining reviewed atlas region be styled; the
+accepted sample is protected from subsequent Paint. This is a reviewer
+declaration bound to exact model/reference/capture SHA and view, not
+automatic visual recognition or a universal material-quality score.
+Known exact-RGBA writes outside the independent visual-review workflow
+retain existing authorization. Tests AUTHORED_NOT_RUN.
+
+
 **Material-first correction control (2026-11-16; SOURCE_ONLY):**
 For a visually REJECTED Texture, the trusted Code Mode host now requires
 an issue-linked `correctionIntent` before Paint: stable reviewer issue ID,

@@ -954,6 +954,8 @@ test('reviewed material correction blocks missing, unrelated and previously reje
       {intent:{...baseIntent,partId:'tier1-shield'},
         expected:'CODE_MODE_MATERIAL_TARGET_MISMATCH'},
       {intent:baseIntent,expected:'CODE_MODE_MATERIAL_APPROACH_PREVIOUSLY_REJECTED'},
+      {intent:{...baseIntent,approachId:'new-form-study'},
+        expected:'CODE_MODE_MATERIAL_SAMPLE_REQUIRED'},
     ];
     const host=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
