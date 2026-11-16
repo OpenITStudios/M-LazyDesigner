@@ -441,6 +441,92 @@ test('selected view refuses stale model, forged paths and unreviewed paint', () 
     }
   }));
 
+test('a verified reference pair permits scoped Paint once, then rejects a stale new model', () =>
+  fixture(async input => {
+    const folder=dirname(input);
+    const reference=join(folder,'selected-front.png');
+    const capture=join(folder,'captured-front.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,png);
+    await writeFile(capture,png);
+    const imageSha=createHash('sha256').update(png).digest('hex');
+    let launches=0;
+    let approvals=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:reference,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      authorizeMutation: request=>{
+        approvals++;
+        assert.equal(request.operation,'apply');
+        assert.deepEqual(request.correctionScope.allowedRegions,[
+          {from:[0,0],to:[2,2]},
+        ]);
+        return true;
+      },
+      runner:async args=>{
+        if(args[0]==='inspect'){
+          const newer=args.some(value=>String(value).endsWith('/corrected.bbmodel'));
+          return {status:'OK',sha256:newer?'b'.repeat(64):HASH,summary:SUMMARY};
+        }
+        if(args[0]==='inspect-visual-pair'){
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:imageSha,capture_png_sha256:imageSha,
+            comparison:{
+              scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:imageSha,capture_png_sha256:imageSha,
+              visual_verdict:'UNVERIFIED',
+            }};
+        }
+        if(args[0]==='apply'){
+          return {status:'OK',source_sha256:HASH,output_sha256:'b'.repeat(64),
+            summary:{...SUMMARY,revision:1},mutation:{
+              revision:1,operation_count:1,changed_uuids:[],
+            }};
+        }
+        throw Error('unexpected command');
+      },
+      spawnImpl:()=>{
+        const index=++launches;
+        if(index===1)return fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },response=>{
+          assert.equal(response.ok,true);
+          return {preflight:response.result.evidence_binding.visual_verdict};
+        });
+        if(index===2)return fakeGuest({method:'apply',args:{
+          project:'p0',output:'corrected.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,x:1,y:1,
+            rgba:[80,90,100,255]}],
+          correctionScope:{textureUuid:'tier2',allowedRegions:[
+            {from:[0,0],to:[2,2]},
+          ],preserveAlpha:true},
+        }},response=>{
+          assert.equal(response.ok,true);
+          assert.equal(response.result.project,'p1');
+          return {created:response.result.project};
+        });
+        return fakeGuest({method:'inspectSelectedVisualPair',args:{
+          project:'p1',
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+          return {stale:true};
+        });
+      },
+    });
+    const inspected=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(inspected.value.preflight,'UNVERIFIED');
+    const edited=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(edited.value.created,'p1');
+    const stale=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p1"});'});
+    assert.equal(stale.value.stale,true);
+    assert.equal(approvals,1);
+    assert.equal(launches,3);
+  }));
+
 test('Code Mode can bootstrap New from an approved empty output directory', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-host-'));
   try {
