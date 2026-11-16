@@ -597,12 +597,24 @@ export interface TextureStylingFaceEvidence {
   visual_verdict:"UNVERIFIED";texture_completion_attested:false;
 }
 /** All declared correction rectangles are accounted for, including missing evidence. */
+/** Measured patches expose statistics; skipped/unsupported ones keep
+ * their index, rectangle and explicit reason without claiming image proof.
+ */
+export interface TextureStylingCorrectionRegionEvidence {
+  index:number;region:MaterialPatchRegion;source_measured:boolean;
+  status:"BASE_ONLY_CANDIDATE"|"REVIEW_REQUIRED"|"NOT_EVALUATED";
+  reason?:string;review_hints:string[];
+  scope?:TextureStylingEvidence["scope"];
+  region_pixels?:number;visible_pixels?:number;
+  unique_visible_rgb?:number;approx_luma_span?:number|null;
+  visual_verdict?:"UNVERIFIED";texture_completion_attested?:false;
+}
 export interface TextureStylingCorrectionEvidence {
   scope:"all_declared_correction_regions";
   texture_uuid:string;region_count:number;
   source_measured_regions:number;source_unavailable_regions:number;
   warning_regions:number;coverage:"all_declared_regions_measured"|"partial";
-  regions:Array<TextureStylingEvidence & {index:number;source_measured:boolean}>;
+  regions:TextureStylingCorrectionRegionEvidence[];
   visual_verdict:"UNVERIFIED";texture_completion_attested:false;
   next?:string;
 }
