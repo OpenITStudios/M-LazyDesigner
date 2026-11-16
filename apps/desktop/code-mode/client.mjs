@@ -282,6 +282,11 @@ function serializeInspectionQueries(requests) {
         if (Buffer.byteLength(output[field], 'utf8') > 128) {
           throw new TypeError('Inspection UUID is too long');
         }
+        if (kind === 'material_face_patch' &&
+            (field === 'texture_uuid' || field === 'cube_uuid') &&
+            /[\s\x00-\x1f\x7f]/.test(output[field])) {
+          throw new TypeError('MATERIAL_FACE_UUID_INVALID');
+        }
       }
     }
     for (const field of allowed) {
