@@ -555,7 +555,10 @@ fn execute() -> Result<Value> {
             let plan: EditPlan = serde_json::from_slice(&plan_bytes)
                 .map_err(|_| fail("EDIT_PLAN_INVALID"))?;
             let mut session = EditorSession::open(&bytes)?;
-            let receipt = session.apply(plan.expected_revision, &plan.operations)?;
+            let receipt = session.apply_with_correction_scope(
+                plan.expected_revision, &plan.operations,
+                plan.correction_scope.as_ref(),
+            )?;
             let out = session.export()?;
             // Another writer may have changed the source while the batch ran.
             if sha256(&read_bounded(&input, MAX_MODEL_BYTES)?) != actual_sha {
@@ -564,7 +567,11 @@ fn execute() -> Result<Value> {
             publish_new(&output, &out, MAX_MODEL_BYTES)?;
             Ok(json!({
                 "status":"OK","source_sha256":actual_sha,"output_sha256":sha256(&out),
-                "summary":session.summary(),"mutation":receipt
+                "summary":session.summary(),"mutation":receipt,
+                "correction_scope":plan.correction_scope.as_ref().map(|scope|json!({
+                    "status":"enforced","texture_uuid":scope.texture_uuid,
+                    "visual_verdict":"UNVERIFIED"
+                }))
             }))
         }
         "import-png" => {

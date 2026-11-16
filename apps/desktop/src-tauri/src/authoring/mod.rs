@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 mod bbmodel;
 mod geometry;
 mod paint;
+mod correction_scope;
+pub use correction_scope::TextureCorrectionScope;
 mod uv_sharing;
 mod texture_coverage;
 mod subtree;
@@ -287,6 +289,8 @@ pub enum EditOperation {
 pub struct EditPlan {
     pub expected_revision: u64,
     pub operations: Vec<EditOperation>,
+    #[serde(default)]
+    pub correction_scope: Option<TextureCorrectionScope>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -3116,7 +3120,17 @@ impl EditorSession {
     pub fn export(&self) -> Result<Vec<u8>> { self.doc.export_bbmodel() }
 
     pub fn apply(&mut self, expected_revision: u64, operations: &[EditOperation]) -> Result<MutationReceipt> {
+        self.apply_with_correction_scope(expected_revision, operations, None)
+    }
+    /// Ephemeral caller correction bounds; do not save them to .bbmodel.
+    pub fn apply_with_correction_scope(
+        &mut self, expected_revision: u64, operations: &[EditOperation],
+        scope: Option<&TextureCorrectionScope>,
+    ) -> Result<MutationReceipt> {
         self.check_revision(expected_revision)?;
+        let scope_index = scope.map(|item|
+            correction_scope::validate_scope(&self.doc, item)
+        ).transpose()?;
         if operations.is_empty() || operations.len() > MAX_OPERATIONS {
             return Err(fail("EDIT_BATCH_SIZE_INVALID"));
         }
@@ -3127,6 +3141,9 @@ impl EditorSession {
             if !changed.contains(&id) { changed.push(id); }
         }
         next.validate()?;
+        if let (Some(item), Some(index)) = (scope, scope_index) {
+            correction_scope::verify_after(&self.doc, &next, item, index)?;
+        }
         if next == self.doc { return Err(fail("EDIT_NO_OP")); }
         let prior = std::mem::replace(&mut self.doc, next);
         if self.undo.len() == MAX_HISTORY { self.undo.remove(0); }
