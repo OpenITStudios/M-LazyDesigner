@@ -130,8 +130,19 @@ impl Write for CanonicalDigestSink {
     fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
+// Ad-hoc documents still need validation before a fingerprint is trusted.
+// This independently checked entrypoint is retained for negative source tests.
+#[cfg(test)]
 pub(super) fn canonical_sha256(doc: &AuthoringDocument) -> Result<String> {
     doc.validate()?;
+    canonical_sha256_validated(doc)
+}
+
+// EditorSession can call this only after its document was validated at
+// Open/FromDocument and at every accepted Apply. Undo/Redo retain those
+// validated documents. No mutable model reference escapes EditorSession.
+// The complete output-byte limit and serde error behavior remain intact.
+pub(super) fn canonical_sha256_validated(doc: &AuthoringDocument) -> Result<String> {
     let wire = BorrowedBlockbenchV5::from(doc);
     let mut sink = CanonicalDigestSink::new();
     if serde_json::to_writer_pretty(&mut sink, &wire).is_err() ||
@@ -186,6 +197,8 @@ mod tests {
             let actual = encode(&doc).unwrap();
             assert_eq!(canonical_sha256(&doc).unwrap(),
                 super::super::sha256(&actual));
+            assert_eq!(canonical_sha256_validated(&doc).unwrap(),
+                canonical_sha256(&doc).unwrap());
             assert_eq!(actual, expected,
                 "borrowed wire must preserve pretty JSON bytes and final newline");
             assert_eq!(AuthoringDocument::import_bbmodel(&actual).unwrap(), doc);
@@ -203,6 +216,19 @@ mod tests {
         assert_eq!(sink.bytes, MAX_MODEL_BYTES);
         assert!(sink.write_all(b"\n").is_err());
         assert!(sink.over_limit);
+    }
+
+    #[test]
+    fn fast_fingerprint_is_restricted_to_validated_editor_sessions() {
+        let valid = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let session = super::super::EditorSession::from_document(valid.clone()).unwrap();
+        assert_eq!(session.canonical_sha256().unwrap(),
+            super::super::sha256(&session.export().unwrap()));
+        let mut invalid = valid;
+        invalid.texture_assets.push(Value::Null);
+        assert_eq!(super::super::EditorSession::from_document(invalid)
+            .err().as_deref(), Some("BBMODEL_ASSET_ENTRY_INVALID"));
     }
 
     #[test]

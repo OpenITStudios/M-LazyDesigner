@@ -3130,10 +3130,13 @@ impl EditorSession {
     pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
     pub fn summary(&self) -> DocumentSummary { self.doc.summary(self.revision) }
     pub fn export(&self) -> Result<Vec<u8>> { self.doc.export_bbmodel() }
-    /// Hash the exact canonical exported bytes without constructing a second
-    /// complete JSON output buffer. Never use this to bypass export validity.
+    /// Hash the exact canonical exported bytes without an output buffer or a
+    /// redundant second full-document validation. EditorSession owns only
+    /// validated documents: Open/FromDocument and each successful Apply have
+    /// already checked them; Undo/Redo restore those validated versions.
+    /// File export and direct document encoding retain independent validation.
     pub fn canonical_sha256(&self) -> Result<String> {
-        bbmodel::canonical_sha256(&self.doc)
+        bbmodel::canonical_sha256_validated(&self.doc)
     }
 
     pub fn apply(&mut self, expected_revision: u64, operations: &[EditOperation]) -> Result<MutationReceipt> {
