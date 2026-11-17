@@ -322,3 +322,18 @@ export function projectedRotationTimelineRows(
       })),
     }));
 }
+
+// A sparse clip can affect only a small subset of model Bones. At each
+// playback frame, update the current subset and reset the previously posed
+// subset absent from the next frame. Do not visit every unanimated Bone.
+export function poseBoneIdsToUpdate(
+  previous: ReadonlySet<string>, pose: Readonly<Record<string, BoneTransformPose>> | null,
+): string[] {
+  const ids = [...previous];
+  if (pose) {
+    for (const uuid of Object.keys(pose)) {
+      if (!previous.has(uuid)) ids.push(uuid);
+    }
+  }
+  return ids;
+}

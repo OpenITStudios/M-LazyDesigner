@@ -10,7 +10,7 @@
   import { canRefreshPaintSources, sceneRenderStructure, sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
-  import type { BoneTransformPose } from './rustAnimationPose';
+  import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
@@ -67,6 +67,8 @@
   let bonePivots = new Map<string, {
     pivot: THREE.Group; bindRotation: Vec3; bindPosition: Vec3;
   }>();
+  // Only Bone channels actually present in the previous sparse preview pose.
+  let posedBones = new Set<string>();
   let drag: {
     uuid: string; pivot: THREE.Group; mode: GizmoMode;
     start: THREE.Vector3; rotationStart: THREE.Quaternion;
@@ -232,8 +234,17 @@
   // During time scrubbing/playback update only Bone transforms; rebuilding
   // every BoxGeometry and GPU material at 60 FPS would be unnecessarily costly.
   function applyPreviewPose(pose: Record<string, BoneTransformPose> | null) {
-    for (const [uuid, { pivot, bindRotation, bindPosition }] of bonePivots) {
+    // Only currently animated Bones and previously animated Bones need
+    // adjustment. The latter must return to their bind transforms when an
+    // Animation clip stops or switches to a different Bone track.
+    const affected = poseBoneIdsToUpdate(posedBones, pose);
+    const nextPosed = new Set<string>();
+    for (const uuid of affected) {
+      const bound = bonePivots.get(uuid);
+      if (!bound) continue; // Removed/unsupported Bones have no scene node.
+      const { pivot, bindRotation, bindPosition } = bound;
       const transform = pose?.[uuid];
+      if (transform) nextPosed.add(uuid);
       // Single-clip default blend: Position adds to bind position;
       // Rotation offsets bind angles; Scale multiplies bind scale=1.
       // Blockbench v5.2.1 BoneAnimator.displayPosition/displayScale.
@@ -255,6 +266,7 @@
         scale[0] || 0.00001, scale[1] || 0.00001, scale[2] || 0.00001,
       );
     }
+    posedBones = nextPosed;
     scheduleRender();
   }
 
@@ -295,6 +307,7 @@
     paintMaterialsByTexture = new Map();
     pivots = new Map();
     bonePivots = new Map();
+    posedBones.clear();
     const cubesById = new Map(currentCubes.map((cube) => [cube.uuid, cube] as const));
     const bonesById = new Map(currentBones.map((bone) => [bone.uuid, bone] as const));
 
@@ -627,6 +640,7 @@
       renderedSelection = null;
       pivots.clear();
       bonePivots.clear();
+      posedBones.clear();
     };
   });
 </script>

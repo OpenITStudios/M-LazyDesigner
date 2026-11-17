@@ -1,7 +1,7 @@
 // Source-authored Node regression only; NOT_EXECUTED under repo test hold.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedBoneRotationPose, projectedBoneTransformPose, projectedRotationTimelineRows, projectedTransformTimelineRows } from './rustAnimationPose.ts';
+import { poseBoneIdsToUpdate, prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedBoneRotationPose, projectedBoneTransformPose, projectedRotationTimelineRows, projectedTransformTimelineRows } from './rustAnimationPose.ts';
 
 const rotation = (boneUuid, time, values) => ({
   uuid: `kf-${boneUuid}-${time}`, boneUuid, time, rotation: values,
@@ -458,4 +458,29 @@ test('unsupported transform axes and channel/time collisions refuse preview', ()
   assert.deepEqual(projectedTransformTimelineRows(mk([valid]),[
     {uuid:'unmatched',name:'Unknown'},
   ]),[]);
+});
+
+test('preview updates only active Bone tracks and restores prior tracks on clip switch', () => {
+  const sparse = Object.assign(Object.create(null), {
+    'arm': {rotation:[0,15,0],position:[0,0,0],scale:[1,1,1]},
+    'leg': {rotation:[0,0,25],position:[0,0,0],scale:[1,1,1]},
+  });
+  const previous = new Set(['head','arm']);
+  const original = JSON.stringify(sparse);
+  assert.deepEqual(poseBoneIdsToUpdate(previous,sparse),['head','arm','leg']);
+  assert.deepEqual(poseBoneIdsToUpdate(new Set(['arm','leg']),null),['arm','leg']);
+  assert.deepEqual(poseBoneIdsToUpdate(new Set(),sparse),['arm','leg']);
+  assert.deepEqual(poseBoneIdsToUpdate(new Set(),null),[]);
+  assert.equal(JSON.stringify(sparse),original);
+  assert.deepEqual([...previous],['head','arm']);
+});
+
+test('viewport reuses Bone pivots and invalidates sparse track state on rebuild', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const source = await readFile(new URL('./RustViewport.svelte',import.meta.url),'utf8');
+  assert.match(source,/poseBoneIdsToUpdate\(posedBones, pose\)/);
+  assert.match(source,/const bound = bonePivots\.get\(uuid\)/);
+  assert.match(source,/posedBones = nextPosed;/);
+  assert.match(source,/posedBones\.clear\(\)/);
+  assert.doesNotMatch(source,/for \(const \[uuid, \{ pivot, bindRotation, bindPosition \}\] of bonePivots\)/);
 });
