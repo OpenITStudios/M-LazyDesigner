@@ -1,0 +1,21 @@
+{
+  "scope": "Archive integrity only; not product/CI/native/gameplay validation",
+  "manifest_checksums": "PASS",
+  "gzip_jsonl_and_public_type_allowlist": "PASS",
+  "last_user_request_cutoff": "PASS",
+  "asset_zip_crc_and_sha256": "PASS",
+  "media_zip_crc_and_sha256": "PASS",
+  "public_counts": {
+    "UserMessage": 121,
+    "AgentMessage": 332,
+    "CommandExecution": 124,
+    "ImageView": 44,
+    "McpToolCall": 4680,
+    "Plan": 2,
+    "Extension": 20,
+    "FileChange": 1
+  },
+  "asset_files": 992,
+  "media_files": 1820,
+  "source_media_decode_failures": []
+}

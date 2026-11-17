@@ -1,0 +1,102 @@
+{
+  "schema": "ctf-pillager-public-authoring-archive-1",
+  "source_session": "01a1e413-0e2e-7882-83f3-ecb570962d98",
+  "source_cutoff_utc": "2026-11-17T09:53:19.037Z",
+  "source_prefix_bytes": 220730055,
+  "source_prefix_sha256": "6b062e65e9a9c581262b0456cc7ac98386245046d6a6c1ee39b4aa00c454a8ec",
+  "base_commit": "56f47659c141192070cbf832fbd0f52005fbe617",
+  "branch": "Local",
+  "coverage": "Available public completed events in this single chat through the archive request; provider supplement overlaps canonical events.",
+  "exclusions": [
+    "Private reasoning",
+    "System/developer messages",
+    "Compaction/context summaries",
+    "Session/account metadata",
+    "Other chats",
+    "Archive-production conversation after cutoff"
+  ],
+  "limitations": [
+    "Source-truncated output remains truncated",
+    "Missing local attachment files are listed explicitly",
+    "Asset directory is a current snapshot including retained checkpoints, not a reconstruction of every intermediate state",
+    "Historical tool claims can be incorrect; user feedback and matched evidence determine acceptance",
+    "No Minecraft gameplay validation implied"
+  ],
+  "files": [
+    {
+      "path": "analysis.md",
+      "bytes": 8014,
+      "sha256": "8eb575daa504ee179a224605e2b415615d2ec7fbb29157b2555a48b49c1b0e7c"
+    },
+    {
+      "path": "archive-verification.json",
+      "bytes": 589,
+      "sha256": "5b4802135053a0997a4007dc486a385628cebdcc28179114c537a70cb12b6c2f"
+    },
+    {
+      "path": "asset-manifest.json",
+      "bytes": 172238,
+      "sha256": "a1ef4e262245c0b2c8008561942ddb4a0c2743e2ce485c544e5187de12d07cb0"
+    },
+    {
+      "path": "asset-snapshot.zip",
+      "bytes": 21964912,
+      "sha256": "9f54dc2bef08b55e23c081bca9ded9415a33176046dceedf891d6bd2002969cb"
+    },
+    {
+      "path": "attachment-references.json",
+      "bytes": 38892,
+      "sha256": "b2d22b8757601ad497113c62eb55eb94b722d929fe1850fce40f65c32a05302a"
+    },
+    {
+      "path": "export-public-session.py",
+      "bytes": 9539,
+      "sha256": "f87eda2f2a499f89807bba8a2ce4719fecd024697ff7e804f8622203ad426bfe"
+    },
+    {
+      "path": "media-01.zip",
+      "bytes": 37421573,
+      "sha256": "57aba31c2ce5c117be569e90416d9cb01f2d14538ebcc546a66c07833759e521"
+    },
+    {
+      "path": "media-02.zip",
+      "bytes": 4717550,
+      "sha256": "3b7c4eb4a37ccb747369cfc918b2a6f2f064165d6c4392dd7371e29a6a197ce5"
+    },
+    {
+      "path": "media-index.json",
+      "bytes": 478046,
+      "sha256": "785f52b90cf059b3e39e6f0725a951a862bc271ae1e949d5196d7df481b0ba40"
+    },
+    {
+      "path": "messages.md",
+      "bytes": 213511,
+      "sha256": "93869d9eecefc6f7ceaf99d37b7c059141d4f89bdb872a688adfc1ac71bc43ab"
+    },
+    {
+      "path": "metrics.json",
+      "bytes": 835,
+      "sha256": "f0783432234bf1e3acd181ff9972993e6090ab5a239d4d8eeb90e92d966f9c50"
+    },
+    {
+      "path": "provider-tools.jsonl.gz",
+      "bytes": 1102596,
+      "sha256": "78ee74a5f8d643ec933ef2304e27343fe018a304c09d6725181feb8867d31eab"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4667,
+      "sha256": "7a186a6d3efe4401c50698c2f30a316f9a728fcaf20da129f1f6a97b82f67b8b"
+    },
+    {
+      "path": "transcript.jsonl.gz",
+      "bytes": 24517804,
+      "sha256": "7c8165d3f8deed4200544db2d8ad6da8fd56ee384808a667921e58838170f37f"
+    },
+    {
+      "path": "verify-archive.py",
+      "bytes": 2841,
+      "sha256": "126ad347c681083b3e333386686b41cfbb1614fe7b9e0d4862ab57855f7d0b9c"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "public_items": 5324,
+  "counts": {
+    "UserMessage": 121,
+    "AgentMessage": 332,
+    "CommandExecution": 124,
+    "ImageView": 44,
+    "McpToolCall": 4680,
+    "Plan": 2,
+    "Extension": 20,
+    "FileChange": 1
+  },
+  "provider_supplement_items": 1704,
+  "tool_counts": {
+    "lazydesigner/status": 31,
+    "lazydesigner/search_capabilities": 48,
+    "lazydesigner/describe_capability": 89,
+    "lazydesigner/invoke_capability": 2085,
+    "node_repl/js": 2427
+  },
+  "media_count": 1820,
+  "media_archives": [
+    "media-01.zip",
+    "media-02.zip"
+  ],
+  "local_image_references": 159,
+  "missing_local_image_references": 0,
+  "redactions": {},
+  "first_timestamp": "2026-11-16T11:16:57.905Z",
+  "last_timestamp": "2026-11-17T09:53:19.037Z",
+  "asset_files": 992,
+  "asset_bytes": 30832267
+}
