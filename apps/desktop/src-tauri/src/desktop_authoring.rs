@@ -13,13 +13,14 @@ use lazydesigner::authoring::{
     AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
 use rand::RngCore;
 use rfd::FileDialog;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use tauri::State;
@@ -245,15 +246,32 @@ fn embedded_png_preview_candidate(texture: &Value) -> Option<(&str, u32, u32)> {
     let source = texture.get("source")?.as_str()?;
     let encoded = source.strip_prefix(PREFIX)?;
     if encoded.len() < 44 || encoded.len() > MAX_BASE64 { return None; }
-    let bytes = STANDARD.decode(encoded).ok()?;
-    if bytes.len() < 33 ||
-        bytes.get(0..8)? != b"\x89PNG\r\n\x1a\n" ||
-        bytes.get(8..12)? != [0, 0, 0, 13] ||
-        bytes.get(12..16)? != b"IHDR" {
+    // Only the 33-byte PNG header is inspected by this read-only preview
+    // gate. However, the old full STANDARD.decode rejected malformed Base64
+    // anywhere in the source, including after IHDR. Keep that strict gate by
+    // consuming the ENTIRE stream through the pinned crate's DecoderReader,
+    // without allocating a second decoded PNG Vec on every editor snapshot.
+    let mut decoder = DecoderReader::new(encoded.as_bytes(), &STANDARD);
+    let mut header = [0_u8; 33];
+    decoder.read_exact(&mut header).ok()?;
+    if header.get(0..8)? != b"\x89PNG\r\n\x1a\n" ||
+        header.get(8..12)? != [0, 0, 0, 13] ||
+        header.get(12..16)? != b"IHDR" {
         return None;
     }
-    let width = u32::from_be_bytes(bytes.get(16..20)?.try_into().ok()?);
-    let height = u32::from_be_bytes(bytes.get(20..24)?.try_into().ok()?);
+    let width = u32::from_be_bytes(header.get(16..20)?.try_into().ok()?);
+    let height = u32::from_be_bytes(header.get(20..24)?.try_into().ok()?);
+    // Bounded encoded length already limits decoded work. This small
+    // scratch array validates all remaining Base64, including padding and
+    // trailing bits; WebView retains responsibility for PNG CRC/decode.
+    let mut scratch = [0_u8; 4096];
+    loop {
+        match decoder.read(&mut scratch) {
+            Ok(0) => break,
+            Ok(_) => {},
+            Err(_) => return None,
+        }
+    }
     let pixels = u64::from(width) * u64::from(height);
     if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION ||
         pixels > MAX_PIXELS_PER_IMAGE {
@@ -1433,6 +1451,35 @@ mod tests {
             writer.write_image_data(&vec![0; width as usize * height as usize * 4]).unwrap();
         }
         format!("data:image/png;base64,{}", STANDARD.encode(&bytes))
+    }
+
+    // SOURCE-AUTHORED_NOT_RUN: bounded streaming Base64 preview must retain
+    // strict whole-source syntax validation without caching decoded PNG data.
+    #[test]
+    fn streaming_png_preview_rejects_invalid_suffix_and_preserves_header_only_admission() {
+        const PREFIX: &str = "data:image/png;base64,";
+        let candidate = png_candidate(32, 32);
+        let texture = json!({"source":candidate});
+        let before = texture.clone();
+        assert_eq!(embedded_png_preview_candidate(&texture)
+            .map(|(_, width, height)| [width, height]), Some([32, 32]));
+        assert_eq!(texture, before);
+
+        // A valid IHDR followed by malformed Base64 is not an admitted
+        // preview. Checking only the first 33 decoded bytes would miss it.
+        let bad_tail = format!("{candidate}!");
+        assert!(embedded_png_preview_source(&json!({"source":bad_tail})).is_none());
+        let mut bad_middle = candidate.clone();
+        let encoded_offset = PREFIX.len() + 60;
+        bad_middle.replace_range(encoded_offset..encoded_offset + 1, "@");
+        assert!(embedded_png_preview_source(&json!({"source":bad_middle})).is_none());
+
+        // Legacy admission checked only that a complete 33-byte PNG header
+        // existed, not full PNG CRC; the browser still performs final decode.
+        let bytes = STANDARD.decode(candidate.strip_prefix(PREFIX).unwrap()).unwrap();
+        let header_only = format!("{PREFIX}{}", STANDARD.encode(&bytes[..33]));
+        assert_eq!(embedded_png_preview_candidate(&json!({"source":header_only}))
+            .map(|(_, width, height)| [width, height]), Some([32, 32]));
     }
 
     #[test]
