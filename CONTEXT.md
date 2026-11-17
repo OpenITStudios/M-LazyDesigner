@@ -1,7 +1,7 @@
 # LazyDesigner Workspace Context
 
-Last verified stable facts: 2026-09-19  
-Stability: stable design contract; implementation/proof tracked separately
+Source contract refreshed: 2026-11-18 (GitHub inspection, not native execution)  
+Stability: branch-scoped design contract; implementation/proof tracked separately
 
 This file owns **stable project facts only**.
 
@@ -16,9 +16,23 @@ Routing             → AGENTS.md
 
 ## Product
 
-**Rust-branch approved target (2026-11-14; not implemented):** develop a standalone Rust-native Bedrock Entity authoring engine with Blockbench v5.2.1 Default Dark 1:1 supported-workflow UI and bidirectional editable `.bbmodel` compatibility. This is separate from the currently implemented Blockbench-hosted product described below; design, current proof and continuation are owned by `docs/04-system/rust-native-editor-plan.md` and `docs/05-operations/`.
+**Rust branch — standalone authoring target (SOURCE_ONLY, NOT_EXECUTED):**
+one Rust-owned document, history, UV/Texture/Animation transactions and editable
+`.bbmodel` format adapter serve the Tauri/Svelte/Three.js editor and the
+first-party Code Mode host/typed SDK/Rust CLI. Geometry, Texturing and Animation
+fidelity precede UI/UX refinement. The release-critical route is Rust export
+→ editable `.bbmodel` → actual Blockbench reopen/edit/visual review; reverse
+import covers only a safe supported subset. The earlier Blockbench 1:1 UI and
+unrestricted bidirectional parity targets were explicitly superseded on Rust.
+Source files and authored regressions are not installed or native acceptance.
+For current gates use `docs/04-system/rust-native-editor-plan.md`,
+`docs/04-system/code-mode-migration.md` and `docs/05-operations/`.
 
-LazyDesigner is a local MCP workflow for AI-assisted **Minecraft Bedrock Entity** authoring in desktop Blockbench. Normal AI-client boundary is the stable Gateway; the Blockbench plugin is the execution Runtime behind it.
+**Local branch — existing Blockbench-hosted implementation:** LazyDesigner
+uses a local MCP authoring path for Minecraft Bedrock Entity assets. The
+AI-client boundary is the stable Gateway; the Blockbench plugin is the
+execution Runtime behind it. Its Control, Gateway, Runtime and 12 domain Skills
+are not replaced by the unvalidated Rust source.
 
 LazyDesigner also has a separate optional **Desktop machine control plane** under `apps/desktop/`. Desktop owns installation/runtime health presentation, Blockbench discovery/launch, compatibility projection, and explicit managed maintenance actions. It is not part of the authoring execution chain and does not own Control context, Gateway protocol behavior, Blockbench authored state, update/package semantics, or Runtime tools.
 
@@ -56,7 +70,7 @@ For authoring, Codex consumes the approved reference package rather than reconst
 
 The approved image is visual authority. Confirmed dimensions and scale constraints are numeric/world-scale authority. LazyDesigner uses one native Geometry authoring path; there is no modelling-strategy selection gate.
 
-### Shared AUTHORING surface and stage ownership
+### Shared AUTHORING surface and stage ownership (Local)
 
 ```text
 AUTHORING Runtime surface
@@ -84,7 +98,7 @@ New Bedrock projects use logical UV resolution **128 by default**, 256 opt-in.
 
 ## Persistence
 
-Persistent Asset Model state lives in `workspace/active/<asset>/`. Workspace is created before Blockbench project creation; a new authoritative `.bbmodel` checkpoint first appears after Geometry user approval or the corresponding explicitly authorized autonomous verification boundary.
+On the Blockbench-hosted Local path, persistent Asset Model state lives in `workspace/active/<asset>/`. Workspace is created before Blockbench project creation; a new authoritative `.bbmodel` checkpoint first appears after Geometry user approval or the corresponding explicitly authorized autonomous verification boundary.
 
 README owns current intake/stage/next-step/blocker state. Git history owns older revisions. Completed assets remain `active/` until the user explicitly archives them.
 
@@ -94,7 +108,7 @@ Normal authoring has no Standard/Extended choice. Runtime internal `bedrock_enti
 
 ## MCP Architecture
 
-Authoring path:
+Blockbench-hosted Local authoring path (not the Rust Code Mode route):
 
 ```text
 AI client

@@ -1,10 +1,15 @@
 # LazyDesigner End-to-End Flow
 
-Updated: 2026-10-20
+Updated: 2026-11-18 (source-contract routing; native proof unchanged)
 
 This file owns only the **product-level sequence**. It must not duplicate detailed Reference, Authoring, Control, or Operations contracts.
 
 ## Canonical Flow
+
+The following is the **Blockbench-hosted Local** production baseline. On the
+separate `Rust` branch it is not the AI authoring route: Control, Gateway,
+Runtime and the Blockbench plugin are preserved for Local, not inserted into
+the Rust Code Mode bridge.
 
 ```text
 USER
@@ -30,6 +35,29 @@ VERIFY / REVIEW / CONTINUE
 FINALIZATION
 ```
 
+### Rust authoring path (source-authored; native validation held)
+
+```text
+USER + APPROVED REFERENCE / EXPLICIT CONSTRAINTS
+→ OPERATOR-BOUND WORKSPACE / SELECTED MODEL / SOURCE SHA
+→ AUTHORIZED PC-LOCAL AGENT + DENO CODE MODE GUEST
+→ TRUSTED NODE HOST + FIRST-PARTY TYPED SDK
+→ RUST AUTHORING CLI → SINGLE RUST DOCUMENT / TRANSACTION
+→ FOCUSED SAVED-FACE, UV AND PIXEL-STATUS DIAGNOSTICS
+→ ACTUAL MATCHED VIEW CAPTURES + INDEPENDENT IMAGE REVIEW
+→ USER REVIEW / APPROVAL WHEN REQUIRED
+→ EDITABLE .bbmodel EXPORT → ACTUAL BLOCKBENCH REOPEN / EDIT CHECK
+→ ASSET FINALIZATION
+```
+
+This is a target quality-gated route, not a list of verified installed
+capabilities. Source/authored tests are NOT_EXECUTED under the current hold.
+A reviewer declaration, source face inventory or PNG hash is not evidence
+of camera visibility, model fidelity, user approval or Blockbench round-trip
+success. Read the branch-specific [Rust editor contract](../04-system/rust-native-editor-plan.md)
+and [Code Mode migration](../04-system/code-mode-migration.md).
+No change to the separate `Local` runtime or user-authorized test hold.
+
 Domain owners:
 
 ```text
@@ -41,9 +69,11 @@ Current Operations     → ../05-operations/README.md
 
 ## Two execution paths at a glance
 
-These diagrams are navigation projections, not separate routing/state authority.
-Refer to [Implementation Map](../04-system/implementation-map.md) only when
-source ownership is the question; normal Codex asset authoring stays on Control.
+The following diagram distinguishes Local Blockbench authoring from system
+development, NOT Local from Rust. It is a navigation projection, not a second
+router or state authority. For Rust authoring use the branch-specific route
+above, not Local Control. See [Implementation Map](../04-system/implementation-map.md)
+only when source ownership is the question.
 
 ```mermaid
 flowchart TD

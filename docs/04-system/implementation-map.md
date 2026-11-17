@@ -6,6 +6,8 @@ This file maps **current source ownership only**. The user-approved standalone R
 
 ## Architecture
 
+**Local — existing Blockbench-hosted authority**
+
 ```text
 ChatGPT Reference Preparation
 → Reference Package
@@ -17,7 +19,23 @@ ChatGPT Reference Preparation
 → Blockbench native APIs
 ```
 
-There is one authoring system. Supporting docs/Skills/QA may project or interpret state; they do not create alternate Runtime, routing, or authored-state systems.
+**Rust — standalone source-authored authority (NOT_EXECUTED)**
+
+```text
+Approved reference / operator-bound source SHA
+→ authorized PC-local Code Mode Deno guest
+→ trusted Node host / typed SDK / first-party Rust CLI
+→ one Rust AuthoringDocument (transactions, Undo, file publishers)
+→ saved source inspections + independently selected visual review
+→ editable .bbmodel for real Blockbench reopen/acceptance
+```
+
+There is one canonical authoring authority **per branch/implementation**:
+Blockbench on Local and Rust AuthoringDocument on Rust. These separate
+development lines do not share a running model engine or imply cutover.
+Supporting docs/Skills/QA do not create a parallel Runtime, policy router
+or authored-state store. Camera visibility, real source-image comparison
+and editable Blockbench interoperability remain NOT_EXECUTED/UNVERIFIED.
 
 ## Navigation graph: source owner to proof
 
