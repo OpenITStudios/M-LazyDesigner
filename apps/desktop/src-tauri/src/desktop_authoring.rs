@@ -427,7 +427,19 @@ fn register_preview_time<'a>(
     true
 }
 
+// Source-only UUID/name lookup shared across this immutable Tauri projection.
+// Preserve the previous first-match behavior if an unvalidated caller supplies
+// duplicate Bone UUIDs; normal Rust authoring validation rejects duplicates.
+fn indexed_bone_names(doc: &AuthoringDocument) -> HashMap<&str, &str> {
+    let mut names = HashMap::new();
+    for bone in &doc.bones {
+        names.entry(bone.uuid.as_str()).or_insert(bone.name.as_str());
+    }
+    names
+}
+
 fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
+    let bone_names = indexed_bone_names(doc);
     // Imported clips can share UUIDs. A model-visible clip must be identified
     // unambiguously; never pick the first identical UUID to edit or preview.
     let mut counts: HashMap<&str, usize> = HashMap::new();
@@ -467,13 +479,12 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
         let mut seen_times: HashMap<(&str, &str, u64), Vec<f64>> = HashMap::new();
         if let Some(animators) = animation.get("animators").and_then(Value::as_object) {
             for (bone_uuid, track) in animators {
-                let bone = doc.bones.iter().find(|bone| bone.uuid == *bone_uuid);
-                if bone.is_none() ||
+                let bone_name = bone_names.get(bone_uuid.as_str()).copied();
+                if bone_name.is_none() ||
                    !track.as_object().is_some_and(|map| map.keys().all(|key|
                         matches!(key.as_str(), "name" | "type" | "keyframes"))) ||
                    track.get("type").and_then(Value::as_str) != Some("bone") ||
-                   track.get("name").is_some_and(|label| label.as_str() !=
-                       bone.map(|bone| bone.name.as_str())) {
+                   track.get("name").is_some_and(|label| label.as_str() != bone_name) {
                     preview_supported = false;
                     continue;
                 }
@@ -2365,6 +2376,29 @@ mod tests {
         assert_eq!(ambiguous.len(), 2);
         assert!(ambiguous.iter().all(|view|
             !view.preview_supported && view.rotation_keyframes.is_empty()));
+    }
+
+    // SOURCE-AUTHORED_NOT_RUN: indexed Bone labels preserve unknown-track
+    // rejection and exact first-match behavior for imported malformed data.
+    #[test]
+    fn indexed_bone_name_projection_preserves_first_identity_and_unknowns() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let first = doc.bones.first().unwrap().clone();
+        let names = indexed_bone_names(&doc);
+        assert_eq!(names.get(first.uuid.as_str()).copied(),
+            Some(first.name.as_str()));
+        assert_eq!(names.get("unmatched-bone").copied(), None);
+        assert_eq!(names.len(), doc.bones.len());
+        let before = doc.clone();
+        let mut duplicate = first.clone();
+        duplicate.name = "conflicting-imported-label".into();
+        doc.bones.push(duplicate);
+        let ambiguous = indexed_bone_names(&doc);
+        assert_eq!(ambiguous.get(first.uuid.as_str()).copied(),
+            Some(first.name.as_str()));
+        doc.bones.pop();
+        assert_eq!(doc, before);
     }
 
     // SOURCE-AUTHORED_NOT_RUN: microsecond-bucket indexes are only candidate

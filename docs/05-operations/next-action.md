@@ -1,3 +1,6 @@
+**Indexed Rust Animation Bone labels (2026-11-17; SOURCE ONLY):**
+The per-snapshot Tauri Animation projection now builds one transient Bone UUID/name index before iterating clips, removing repeated `doc.bones.iter().find` calls per imported Bone track. Missing ID, name mismatch, unknown/opaque metadata and complete-animation refusal still share the original validator. A source regression covers original identity, unknown UUID, malformed duplicate first-match behavior and nonmutation. No Geometry, Animation, .bbmodel, Code Mode or editor history changes; `TEST_AUTHORED_NOT_RUN` and performance UNVERIFIED.
+
 **Rust numeric Animation projection keyframe indexing (2026-11-17; SOURCE ONLY):**
 The Tauri `animation_views` read previously scanned all already-projected keyframes for every new time/track, potentially making large clips quadratic per editor snapshot. A temporary per-clip Bone/channel/timestamp-bucket index now limits candidate comparisons while preserving the original absolute 1e-6 timestamp threshold, keyframe UUID uniqueness, clip-size budgets, supported channels and complete failure on unsafe/opaque imported tracks. It does not alter Rust Animation export, image processing or source ownership. New near-duplicate/cross-channel boundary regression AUTHORED_NOT_RUN; native execution and efficiency remain UNVERIFIED.
 
