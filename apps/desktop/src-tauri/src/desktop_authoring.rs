@@ -360,19 +360,29 @@ fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(&str, [u32; 2]
     }).collect()
 }
 
+// Every Cube in a Bedrock attachable can reference one texture scope. Build
+// the source-only index once per immutable editor snapshot instead of scanning
+// the entire texture array again for every Cube. Duplicate scope -> None.
+fn texture_scope_indices(doc: &AuthoringDocument) -> HashMap<u64, Option<usize>> {
+    let mut by_scope: HashMap<u64, Option<usize>> = HashMap::new();
+    for (index, texture) in doc.texture_assets.iter().enumerate() {
+        let Some(scope) = texture.get("scope").and_then(Value::as_u64)
+            .filter(|scope| *scope > 0) else { continue };
+        by_scope.entry(scope).and_modify(|entry| *entry = None)
+            .or_insert(Some(index));
+    }
+    by_scope
+}
+
 fn scoped_cube_texture_index(
-    doc: &AuthoringDocument, cube: &Cube,
+    by_scope: Option<&HashMap<u64, Option<usize>>>, cube: &Cube,
     assets: &[Option<(&str, [u32; 2])>], mode: PreviewUvMode,
 ) -> Option<usize> {
     if mode != PreviewUvMode::ScopedAttachable { return None; }
-    // Pinned bedrock_attachable get_face_texture only overrides the selected
-    // texture when element.scope is a nonzero value with a matching texture.
-    let scope = cube.extra.get("scope")?.as_u64().filter(|v| *v > 0)?;
-    let mut matching = doc.texture_assets.iter().enumerate().filter(|(_, texture)|
-        texture.get("scope").and_then(Value::as_u64) == Some(scope));
-    let (index, _) = matching.next()?;
-    // An ambiguous duplicate scope is not a faithful native preview.
-    if matching.next().is_some() { return None; }
+    // Only a unique, positive saved Cube/Texture scope admits its PNG.
+    // Missing, duplicate or unsupported preview candidates remain unbound.
+    let scope = cube.extra.get("scope")?.as_u64().filter(|scope| *scope > 0)?;
+    let index = by_scope?.get(&scope).copied().flatten()?;
     assets.get(index)?.as_ref()?;
     Some(index)
 }
@@ -581,6 +591,8 @@ fn project_with_preview_reuse(
         let preview_source_key = preview_source_key(store.epoch, &preview_assets);
         let preview_sources_reused = known_preview_source_key == Some(preview_source_key.as_str());
         let uv_mode = preview_uv_mode(doc);
+        let scope_indices = (uv_mode == PreviewUvMode::ScopedAttachable)
+            .then(|| texture_scope_indices(doc));
         EditorSnapshot {
             epoch: store.epoch,
             revision: model.session.summary().revision,
@@ -615,7 +627,8 @@ fn project_with_preview_reuse(
                 auto_uv: cube.extra.get("autouv").and_then(Value::as_f64).unwrap_or(0.0) as u8,
                 color: cube.extra.get("color").and_then(Value::as_u64).unwrap_or(0) as usize,
                 faces: cube.faces.clone(),
-                preview_texture_index: scoped_cube_texture_index(doc, cube, &preview_assets, uv_mode),
+                preview_texture_index: scoped_cube_texture_index(
+                    scope_indices.as_ref(), cube, &preview_assets, uv_mode),
             }).collect(),
             bones: doc.bones.iter().map(|bone| BoneView {
                 uuid: bone.uuid.clone(),
@@ -1432,6 +1445,60 @@ mod tests {
         assert_eq!(texture_preview_sources(&doc), vec![Some(matching)]);
     }
 
+    // SOURCE-AUTHORED_NOT_RUN: indexed texture scope resolution must retain
+    // the old ambiguity and admitted-PNG refusal semantics across many Cubes.
+    #[test]
+    fn indexed_attachable_texture_scopes_reject_duplicates_and_unavailable_png() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        doc.extensions.insert("multi_file_ruleset".into(), json!("bedrock_attachable"));
+        let png = png_candidate(16, 16);
+        doc.texture_assets = (1..=12).map(|scope| json!({
+            "uuid":format!("00000000-0000-4000-8000-{scope:012}"),
+            "scope":scope, "name":format!("scope_{scope}.png"),
+            "source":png, "uv_width":128, "uv_height":128
+        })).collect();
+        let immutable = doc.clone();
+        let assets = texture_preview_assets(&doc);
+        let indexed = texture_scope_indices(&doc);
+        assert_eq!(indexed.len(),12);
+        let mut cube = doc.cubes[0].clone();
+        for scope in 1..=12u64 {
+            cube.extra.insert("scope".into(), json!(scope));
+            assert_eq!(scoped_cube_texture_index(Some(&indexed), &cube, &assets,
+                PreviewUvMode::ScopedAttachable), Some((scope - 1) as usize));
+        }
+        assert_eq!(doc,immutable);
+        cube.extra.insert("scope".into(), json!(0));
+        assert_eq!(scoped_cube_texture_index(Some(&indexed), &cube, &assets,
+            PreviewUvMode::ScopedAttachable),None);
+        cube.extra.insert("scope".into(), json!(2));
+        assert_eq!(scoped_cube_texture_index(None, &cube, &assets,
+            PreviewUvMode::ScopedAttachable),None);
+        assert_eq!(scoped_cube_texture_index(Some(&indexed), &cube, &assets,
+            PreviewUvMode::Unsupported),None);
+
+        // Duplicate scopes refuse even when both sources look otherwise valid.
+        doc.texture_assets[0]["scope"] = json!(2);
+        let duplicate = texture_scope_indices(&doc);
+        assert_eq!(duplicate.get(&2),Some(&None));
+        assert_eq!(scoped_cube_texture_index(Some(&duplicate), &cube,
+            &texture_preview_assets(&doc), PreviewUvMode::ScopedAttachable),None);
+
+        // Unique scope is still refused when its source exceeds the bounded
+        // preview admission rule; other scopes remain unchanged.
+        doc.texture_assets[0]["scope"] = json!(1);
+        doc.texture_assets[1]["source"] = json!("data:image/png;base64,AAAA");
+        let restricted = texture_preview_assets(&doc);
+        let refreshed = texture_scope_indices(&doc);
+        assert_eq!(scoped_cube_texture_index(Some(&refreshed), &cube,
+            &restricted, PreviewUvMode::ScopedAttachable),None);
+        cube.extra.insert("scope".into(),json!(3));
+        assert_eq!(scoped_cube_texture_index(Some(&refreshed), &cube,
+            &restricted, PreviewUvMode::ScopedAttachable),Some(2));
+    }
+
     // Source-authored regression only; native WebView2/Blockbench is held.
     #[test]
     fn scoped_attachable_preview_maps_each_cube_to_its_texture_uv_grid() {
@@ -1491,19 +1558,19 @@ mod tests {
         ];
         let safe = texture_preview_assets(&doc);
         assert_eq!(safe[1].as_ref().map(|(_, uv)| *uv), Some([64, 32]));
-        assert_eq!(scoped_cube_texture_index(&doc, &doc.cubes[0], &safe,
+        assert_eq!(scoped_cube_texture_index(Some(&texture_scope_indices(&doc)), &doc.cubes[0], &safe,
             preview_uv_mode(&doc)), Some(1));
         // Duplicate texture scopes are ambiguous even when their PNGs match.
         doc.texture_assets[0]["scope"] = json!(2);
         let candidates = texture_preview_assets(&doc);
-        assert!(scoped_cube_texture_index(&doc, &doc.cubes[0], &candidates,
+        assert!(scoped_cube_texture_index(Some(&texture_scope_indices(&doc)), &doc.cubes[0], &candidates,
             preview_uv_mode(&doc)).is_none());
 
         doc.texture_assets[0]["scope"] = json!(1);
         doc.texture_assets[1]["uv_width"] = json!("64");
         let invalid = texture_preview_assets(&doc);
         assert!(invalid[1].is_none());
-        assert!(scoped_cube_texture_index(&doc, &doc.cubes[0], &invalid,
+        assert!(scoped_cube_texture_index(Some(&texture_scope_indices(&doc)), &doc.cubes[0], &invalid,
             preview_uv_mode(&doc)).is_none());
 
         doc.texture_assets[1]["uv_width"] = json!(64);
@@ -1525,7 +1592,7 @@ mod tests {
         assert!(texture_preview_assets(&doc)[1].is_none());
         doc.texture_assets[1].as_object_mut().unwrap().remove("layers");
         doc.cubes[0].extra.remove("scope");
-        assert!(scoped_cube_texture_index(&doc, &doc.cubes[0],
+        assert!(scoped_cube_texture_index(Some(&texture_scope_indices(&doc)), &doc.cubes[0],
             &texture_preview_assets(&doc), preview_uv_mode(&doc)).is_none());
         doc.cubes[0].extra.insert("scope".into(), json!(2));
 

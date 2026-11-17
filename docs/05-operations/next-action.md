@@ -1,3 +1,6 @@
+**Indexed Rust bedrock_attachable Texture preview (2026-11-17; SOURCE ONLY):**
+The existing Tauri snapshot used a `doc.texture_assets` scan for every Cube's scoped preview. It now builds a transient Texture scope membership map once per supported snapshot and resolves Cube lookups through that map. Missing, duplicate or zero scopes and PNGs that fail preview admission still refuse; unknown multi-file rulesets retain the existing fallback. The .bbmodel, UV/Texture assets and editor operations are unchanged. Expanded Rust source regression cases AUTHORED_NOT_RUN; Cargo/Windows/WebView/Blockbench and measured CPU efficiency remain NOT_EXECUTED.
+
 **Rust four-connected Fill working-memory reduction (2026-11-17; SOURCE_ONLY):**
 The native `PaintTextureFill` code previously allocated both a decoded RGBA atlas and a full-atlas boolean `visited` array. Because `desired != target` is checked before flood traversal, changing a target pixel to `desired` already prevents processing it twice. The extra `visited` allocation is removed without changing the existing iterative 4-neighbor traversal or its public error/Undo/PNG contracts. New regression source covers 64×64 disconnected regions, source RGBA, erase, no-op, save/reopen and rollback. `TEST_AUTHORED_NOT_RUN`; Cargo/Blockbench/GPU testing and measured efficiency stay on hold.
 
