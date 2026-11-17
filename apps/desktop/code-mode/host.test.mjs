@@ -1939,17 +1939,20 @@ test('spoofed face ownership or incomplete six-face source read cannot authorize
 const CAMERA_DIRECTIONS=['front','back','left','right','top','bottom'];
 async function chooseVisualDirections(folder) {
   const png=Buffer.from('89504e470d0a1a0a00000000','hex');
-  const sha=createHash('sha256').update(png).digest('hex');
   const views=[];
   for(const viewId of CAMERA_DIRECTIONS) {
     const referencePngPath=join(folder,'approved-'+viewId+'.png');
     const capturePngPath=join(folder,'rendered-'+viewId+'.png');
-    await writeFile(referencePngPath,png);
-    await writeFile(capturePngPath,png);
+    // Different camera IDs require different source bytes. A renamed copy
+    // of one view cannot be mistaken for six independent observations.
+    await writeFile(referencePngPath,Buffer.concat([
+      png,Buffer.from('reference-'+viewId,'utf8')]));
+    await writeFile(capturePngPath,Buffer.concat([
+      png,Buffer.from('capture-'+viewId,'utf8')]));
     views.push({viewId,referencePngPath,capturePngPath});
   }
   const [primary,...supportingViews]=views;
-  return {png,sha,views,options:{
+  return {png,views,options:{
     ...primary,captureModelSha256:HASH,
     supportingViews,requireSixDirections:true,
   }};
@@ -1968,15 +1971,17 @@ async function mockedSixViews(argv,sha) {
   if(argv[0]==='inspect')return {status:'OK',sha256:sha,summary:SUMMARY};
   if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,sha);
   assert.equal(argv[0],'inspect-visual-pair');
-  const hash=createHash('sha256').update(
-    Buffer.from('89504e470d0a1a0a00000000','hex')).digest('hex');
+  const digest=async file=>createHash('sha256').update(
+    await readFile(file)).digest('hex');
+  const reference=await digest(argv[argv.indexOf('--reference')+1]);
+  const capture=await digest(argv[argv.indexOf('--capture')+1]);
   assert.equal(argv[argv.indexOf('--expected-sha256')+1],sha);
-  assert.equal(argv[argv.indexOf('--reference-sha256')+1],hash);
-  assert.equal(argv[argv.indexOf('--capture-sha256')+1],hash);
+  assert.equal(argv[argv.indexOf('--reference-sha256')+1],reference);
+  assert.equal(argv[argv.indexOf('--capture-sha256')+1],capture);
   return {status:'OK',source_model_sha256:sha,
-    reference_png_sha256:hash,capture_png_sha256:hash,
+    reference_png_sha256:reference,capture_png_sha256:capture,
     comparison:{scope:'operator_selected_saved_png_pair',
-      reference_png_sha256:hash,capture_png_sha256:hash,
+      reference_png_sha256:reference,capture_png_sha256:capture,
       visual_verdict:'UNVERIFIED'}};
 }
 
@@ -1987,7 +1992,7 @@ test('operator-selected six model camera directions are distinct from six saved 
     const host=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
       preselectedVisualPair:chosen.options,
-      reviewVisualPair:selection=>{
+      reviewVisualPair:async selection=>{
         reviewerCalls++;
         assert.equal(selection.sourceModelSha256,HASH);
         assert.equal(selection.viewId,'front');
@@ -1995,12 +2000,24 @@ test('operator-selected six model camera directions are distinct from six saved 
         assert.equal(selection.supportingViews.length,5);
         assert.deepEqual(selection.supportingViews.map(x=>x.viewId),
           CAMERA_DIRECTIONS.slice(1));
+        const bound=chosen.views;
         for(const chosenView of [selection,...selection.supportingViews]){
           assert.ok(Buffer.isBuffer(chosenView.reference.pngBytes));
           assert.ok(Buffer.isBuffer(chosenView.capture.pngBytes));
-          assert.equal(chosenView.reference.sha256,chosen.sha);
-          assert.equal(chosenView.capture.sha256,chosen.sha);
+          const original=bound.find(v=>v.viewId===chosenView.viewId);
+          assert.deepEqual(chosenView.reference.pngBytes,
+            await readFile(original.referencePngPath));
+          assert.deepEqual(chosenView.capture.pngBytes,
+            await readFile(original.capturePngPath));
+          assert.equal(chosenView.reference.sha256,
+            createHash('sha256').update(chosenView.reference.pngBytes).digest('hex'));
+          assert.equal(chosenView.capture.sha256,
+            createHash('sha256').update(chosenView.capture.pngBytes).digest('hex'));
         }
+        assert.equal(new Set([selection,...selection.supportingViews]
+          .map(v=>v.reference.sha256)).size,6);
+        assert.equal(new Set([selection,...selection.supportingViews]
+          .map(v=>v.capture.sha256)).size,6);
         return {
           decision:'REJECTED',
           viewReviews:reviewedCameras(),
@@ -2147,6 +2164,31 @@ test('missing/duplicate/unsupported camera directions cannot create a six-view h
       }),/CODE_MODE_VISUAL_VIEW_SET_INVALID|CODE_MODE_VISUAL_PAIR_BINDING_INVALID/);
       assert.equal(spawns,0);
       assert.equal(cliCalls,1); // initial project SHA before trusted pair validation
+    }
+  }));
+
+test('copied PNG bytes under different camera filenames never count as distinct views',()=>
+  fixture(async input=>{
+    const dir=dirname(input);
+    for(const kind of ['reference','capture']){
+      const selected=await chooseVisualDirections(dir);
+      const source=selected.views[0][kind==='reference'?
+        'referencePngPath':'capturePngPath'];
+      const renamed=selected.views[1][kind==='reference'?
+        'referencePngPath':'capturePngPath'];
+      await writeFile(renamed,await readFile(source));
+      let called=0,spawned=0;
+      await assert.rejects(createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:selected.options,
+        runner:async args=>{called++;
+          assert.equal(args[0],'inspect');
+          return {status:'OK',sha256:HASH,summary:SUMMARY};
+        },
+        spawnImpl:()=>{spawned++;throw Error('unexpected guest');},
+      }),/CODE_MODE_VISUAL_VIEW_PIXEL_IDENTITY_REUSED/);
+      assert.equal(called,1);
+      assert.equal(spawned,0);
     }
   }));
 
@@ -2750,7 +2792,7 @@ test('Rust host imports current workspace Reference decisions into reviewer and 
         criteriaReviews:[
           {id:'fix-helmet',verdict:'VIOLATED',
             observation:'The Tier 2 helmet remains flat in the matched reference.'},
-          {id:'match-shield_marks',verdict:'MET',
+          {id:'match-front-shield_marks',verdict:'MET',
             observation:'The Tier 1 shield now matches the approved source image.'},
         ]};
       },

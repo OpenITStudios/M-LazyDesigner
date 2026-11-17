@@ -137,12 +137,18 @@ async function pinnedVisualPair(source, options, modelSha, approvedReferencePack
     ]);
     return Object.freeze({reference,capture,viewId:selected.viewId});
   }));
-  // The same PNG file cannot be relabeled as different camera directions.
-  // Different files with equal pixels are still NOT camera provenance;
-  // independent human/renderer evidence is required for that distinction.
+  // Distinct filenames alone do not establish independent camera evidence:
+  // a copied front PNG under "back.png" previously cleared path-only checks.
+  // Do not count byte-identical captures/references under different view
+  // labels as distinct observations. A one-view exact match remains valid.
   if (new Set(views.map(v=>v.reference.path)).size!==views.length ||
       new Set(views.map(v=>v.capture.path)).size!==views.length) {
     throw new Error('CODE_MODE_VISUAL_VIEW_SET_INVALID');
+  }
+  if (views.length>1 && (
+      new Set(views.map(v=>v.reference.sha256)).size!==views.length ||
+      new Set(views.map(v=>v.capture.sha256)).size!==views.length)) {
+    throw new Error('CODE_MODE_VISUAL_VIEW_PIXEL_IDENTITY_REUSED');
   }
   const packageBinding=approvedReferencePackagePath===undefined?null:
     await bindApprovedWorkspaceReference(approvedReferencePackagePath,source,

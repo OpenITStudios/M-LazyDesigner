@@ -142,7 +142,11 @@ canonical JSON SHA and selected image identity and checks package freshness
 after review and before later Paint/readiness. Explicit
 `images[].regions` SURFACE_DETAIL/DIRECT declarations for supported
 parts with meaningful `parts[].description` become MATCH_REFERENCE
-review obligations, **not** PRESERVE claims. Approval of a source image
+review obligations, **not** PRESERVE claims. Reviewer criterion IDs
+include the selected view so repeated per-image annotation IDs
+(front/back/side) remain independent; longer source labels get
+bounded deterministic reviewer IDs without changing the original
+source-region identity. Approval of a source image
 does not mean the current model part was accepted. A currently rejected
 part is handled by an explicit CORRECT decision instead. Only a
 separately established acceptance of the current authored work can
@@ -171,6 +175,16 @@ declared MET. This is one ephemeral reviewed work packet, NOT a new
 approval database, auto-import of the Local Workspace, vision model,
 or proof of artistic quality. Actual source-bound evaluations
 AUTHORED_NOT_RUN; native/user acceptance remains UNVERIFIED.
+
+**Independent multi-view image identities (2026-11-18; SOURCE ONLY):**
+The SHA-pinned visual admission rejects source PNG bytes or captured PNG
+bytes reused under different selected camera labels, even when filenames
+and paths differ. This prevents renamed front screenshots from counting
+as six independent observations and follows canonical Reference cross-view
+identity accounting. An exact single-view reference/candidate image match
+remains permitted. Different hashes are a *necessary* identity check, not
+proof of camera direction, native rendering, or independent artistic review.
+Multi-view and per-image-region-ID regressions AUTHORED_NOT_RUN.
 
 **Operator-owned image review bridge (2026-11-17; SOURCE_ONLY):**
 The existing `run.mjs` now accepts `--visual-manifest` with

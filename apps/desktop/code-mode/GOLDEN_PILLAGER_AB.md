@@ -53,6 +53,11 @@ parts produce MATCH_REFERENCE checks, not assertions that an existing
 model part was accepted. A currently rejected CORRECT part is excluded;
 true PRESERVE requires separately established approved model state.
 The approved source still cannot disclose Cube/UV atlas coordinates.
+Front/back annotations may reuse the same source-region ID; Code Mode
+issues separate reviewer criteria per selected view instead of conflating
+the two annotations. Conversely, copied PNG bytes under different camera
+filenames cannot satisfy independent multi-view image requirements.
+Neither guard attests real camera provenance or artistic correctness.
 No guessed correction region, accepted user decision or equivalent image
 camera is created automatically. Unannotated/ambiguous references
 remain an explicit blocker rather than an inferred PASS.

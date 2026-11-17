@@ -404,7 +404,11 @@ CORRECT by the operator's existing criteria. An APPROVED source PNG
 alone never proves that the working model already met that reference;
 only separately established prior model acceptance merits PRESERVE. Their normalized `box_uv` is returned
 as a source-image `sourceRegion.boxUv` to the image reviewer, and is
-**never** reused as a physical atlas/UV correction rectangle. If
+**never** reused as a physical atlas/UV correction rectangle. Region
+IDs are unique **within each source image**, not across the full package.
+Code Mode assigns a separate reviewer criterion to front/back regions
+sharing one original ID (for example, `helmet_metal`), and retains the
+original image-scoped ID in `sourceRegion`. If
 no structured region and no separately established correction criterion
 exists, the review is explicitly blocked; the program does not invent
 approved parts, source camera direction or texture ownership. The
@@ -475,8 +479,13 @@ For broad propagation and the final review, set
 image pairs, with an optional `three_quarter`. The example above is only a
 single/partial review and **cannot** clear whole-material readiness.
 The host checks the manifest, current model SHA, absolute PNG paths and
-all actual PNG image hashes. It does not authenticate camera direction,
-matching perspective or provenance based on a filename.
+all actual PNG image hashes. Multi-view admission also refuses a reference
+PNG or capture PNG whose **bytes match another selected view**, even
+when saved under different filenames. Renamed copies of one front image
+are not independent six-camera evidence. A single-view exact image match
+remains permitted. Unique hashes and view labels are not proof of camera
+direction, matching perspective, or renderer provenance; those still
+require genuine independent image inspection.
 
 ```sh
 node apps/desktop/code-mode/run.mjs \

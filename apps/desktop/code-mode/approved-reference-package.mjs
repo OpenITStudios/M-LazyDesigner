@@ -21,6 +21,20 @@ const plain=value=>value!==null && typeof value==='object' &&
   !Array.isArray(value) && Object.getPrototypeOf(value)===Object.prototype;
 const goodText=value=>typeof value==='string' && value.trim()===value &&
   value.length>=20 && value.length<=240 && !/[\x00-\x1f\x7f]/.test(value);
+// Canonical reference region IDs are scoped to their source image, not
+// globally unique. Preserve their exact source label, but issue safe, bounded
+// per-view reviewer IDs even for long valid labels.
+const sourceRegionId=value=>typeof value==='string' &&
+  value.trim()===value && value.length>0 && value.length<=96 &&
+  !/[\x00-\x1f\x7f]/.test(value);
+function reviewerRegionId(image,region){
+  // Preserve case-sensitive canonical source IDs: "trim" and "Trim"
+  // are distinct within one source image, not two names for one region.
+  const label='match-'+image.viewId+'-'+region.id;
+  return ID.test(label)?label:
+    'match-'+image.viewId+'-'+hash(Buffer.from(
+      JSON.stringify([image.id,region.id]))).slice(0,20);
+}
 const validBox=value=>Array.isArray(value) && value.length===4 &&
   value.every(n=>typeof n==='number' && Number.isFinite(n) &&
     n>=0 && n<=1) && value[0]<value[2] && value[1]<value[3];
@@ -200,7 +214,7 @@ export async function bindApprovedWorkspaceReference(
          region.visibility!=='DIRECT')continue;
       const part=parts.get(region.part_id);
       if(!part || !ID.test(region.part_id) ||
-         !validBox(region.box_uv) ||
+         !sourceRegionId(region.id) || !validBox(region.box_uv) ||
          !['SUPPORTED'].includes(part.evidence) ||
          !goodText(part.description)) {
         fail('CODE_MODE_REFERENCE_REGION_UNSUPPORTED');
@@ -212,8 +226,10 @@ export async function bindApprovedWorkspaceReference(
       const partView=JSON.stringify([region.part_id,image.viewId]);
       if(explicitPreserves.has(partView) || correctingParts.has(partView))
         continue;
-      const id='match-'+String(region.id).toLowerCase();
-      if(!ID.test(id) || existing.has(id)){
+      // Region identifiers are unique only within their source image.
+      // Two different cameras can legitimately reuse e.g. "helmet_metal".
+      const id=reviewerRegionId(image,region);
+      if(existing.has(id)){
         fail('CODE_MODE_REFERENCE_REGION_ID_COLLISION');
       }
       existing.add(id);

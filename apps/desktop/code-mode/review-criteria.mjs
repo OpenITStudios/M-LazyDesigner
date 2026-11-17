@@ -14,8 +14,11 @@ const sourceRegion=value=>value && typeof value==='object' &&
   !Array.isArray(value) &&
   Object.keys(value).length===2 &&
   Object.hasOwn(value,'id') && Object.hasOwn(value,'boxUv') &&
-  typeof value.id==='string' &&
-  /^[A-Za-z0-9_-]{1,64}$/.test(value.id) &&
+  // The canonical Reference parser permits per-image IDs up to 96 chars.
+  // Source labels are untrusted evidence (never code/atlas coordinates).
+  typeof value.id==='string' && value.id.length>0 &&
+  value.id.length<=96 && value.id.trim()===value.id &&
+  !/[\x00-\x1f\x7f]/.test(value.id) &&
   Array.isArray(value.boxUv) && value.boxUv.length===4 &&
   value.boxUv.every(n=>typeof n==='number' &&
     Number.isFinite(n) && n>=0 && n<=1) &&

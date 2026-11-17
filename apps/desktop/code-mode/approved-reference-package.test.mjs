@@ -82,6 +82,70 @@ test('source-approved texture regions become reference matches, not already-appr
     assert.equal(referencePackageLeaseValid(binding),true);
   }));
 
+test('two distinct source views may reuse one per-image region ID without losing coverage',()=>
+  fixture(async ({packagePath,model,folder,pack,views,correction})=>{
+    const backPath=join(folder,'approved-back.png');
+    const backBytes=Buffer.concat([sourceImage,Buffer.from('back-view','utf8')]);
+    await writeFile(backPath,backBytes);
+    const revised=structuredClone(pack);
+    revised.images.push({
+      id:'back',file:'approved-back.png',view:'back',
+      used_by:['TEXTURE'],status:'APPROVED',
+      // Canonical REFERENCE.json gives each image its own region ID scope.
+      regions:[{id:'shield_marks',part_id:'tier1-shield',
+        evidence_role:'SURFACE_DETAIL',visibility:'DIRECT',
+        box_uv:[0.2,0.1,0.6,0.5]}],
+    });
+    await writeFile(packagePath,JSON.stringify(revised));
+    const chosen=[...views,{viewId:'back',
+      reference:{path:backPath,sha256:digest(backBytes)}}];
+    const binding=await bindApprovedWorkspaceReference(
+      packagePath,model,chosen,correction);
+    const shields=binding.criteria.filter(x=>x.partId==='tier1-shield');
+    assert.equal(binding.automaticallyBoundReferenceCount,2);
+    assert.deepEqual(shields.map(x=>x.id),[
+      'match-front-shield_marks','match-back-shield_marks',
+    ]);
+    assert.deepEqual(shields.map(x=>x.sourceRegion.boxUv),[
+      [0.1,0.1,0.3,0.4],[0.2,0.1,0.6,0.5],
+    ]);
+    assert.ok(boundReviewCriteria(binding.criteria,chosen));
+  }));
+
+test('canonical case-sensitive region IDs remain distinct within one image',()=>
+  fixture(async ({packagePath,model,pack,views,correction})=>{
+    const revised=structuredClone(pack);
+    revised.images[0].regions.push({
+      ...revised.images[0].regions[0],
+      id:'Shield_Marks',
+      box_uv:[0.3,0.1,0.6,0.4],
+    });
+    await writeFile(packagePath,JSON.stringify(revised));
+    const binding=await bindApprovedWorkspaceReference(
+      packagePath,model,views,correction);
+    const shields=binding.criteria.filter(item=>item.partId==='tier1-shield');
+    assert.equal(shields.length,2);
+    assert.deepEqual(shields.map(item=>item.sourceRegion.id),[
+      'shield_marks','Shield_Marks',
+    ]);
+    assert.equal(new Set(shields.map(item=>item.id)).size,2);
+    assert.ok(boundReviewCriteria(binding.criteria,views));
+  }));
+
+test('long canonical per-image labels remain source evidence with safe reviewer IDs',()=>
+  fixture(async ({packagePath,model,pack,views,correction})=>{
+    const label='Metal trim detail with upper bevels and shading for reference only';
+    const revised=structuredClone(pack);
+    revised.images[0].regions[0].id=label;
+    await writeFile(packagePath,JSON.stringify(revised));
+    const binding=await bindApprovedWorkspaceReference(
+      packagePath,model,views,correction);
+    const shield=binding.criteria.find(x=>x.partId==='tier1-shield');
+    assert.equal(shield.sourceRegion.id,label);
+    assert.match(shield.id,/^match-front-[a-f0-9]{20}$/);
+    assert.ok(boundReviewCriteria(binding.criteria,views));
+  }));
+
 test('an approved blueprint creates reference-match checks, not native model acceptance',()=>
   fixture(async ({packagePath,model,views})=>{
     const binding=await bindApprovedWorkspaceReference(packagePath,model,views);
