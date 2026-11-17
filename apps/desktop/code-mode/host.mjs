@@ -212,7 +212,7 @@ function normalizedVisualReview(input, viewIds = []) {
   // Cube face identities stop a six-camera screenshot from substituting for
   // material-specific source/UV evidence. No guest can add these records.
   const suppliedFaces=input.reviewedFaces??[];
-  if (!Array.isArray(suppliedFaces) || suppliedFaces.length>32 ||
+  if (!Array.isArray(suppliedFaces) || suppliedFaces.length>256 ||
       (input.decision!=='ACCEPTED' && suppliedFaces.length>0)) {
     throw new Error('CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID');
   }
@@ -460,6 +460,86 @@ async function checkFreshSibling(path, folder) {
  * underlying SDK refuses mutations. No model-written code is accepted here
  * as a callback, filesystem path, command or sandbox configuration.
  */
+// The trusted external image reviewer needs source-owned face IDs, not
+// model-invented names. This focused read is optional for hosts whose reviewer
+// can bind faces independently, and never certifies camera correspondence.
+async function sourceFacesForImageReviewer(model) {
+  const faces=[];
+  let cursor=0, pages=0, totalCubes=null;
+  while(pages<32) {
+    const receipt=await model.inspectBatch([{
+      kind:'model_texture_coverage',offset:cursor,limit:8,attention_only:false,
+    }]);
+    const item=receipt.results?.[0]?.coverage;
+    if(receipt.sha256!==model.expectedSha256 ||
+       receipt.results?.[0]?.kind!=='model_texture_coverage' ||
+       item?.scope!=='saved_face_texture_coverage_page' ||
+       item.offset!==cursor ||
+       !Number.isSafeInteger(item.total_cubes) ||
+       (totalCubes!==null && totalCubes!==item.total_cubes) ||
+       !Number.isSafeInteger(item.reviewed_cubes) ||
+       item.reviewed_cubes!==Math.min(8,Math.max(0,item.total_cubes-cursor)) ||
+       !Array.isArray(item.cubes) ||
+       item.cubes.length!==item.reviewed_cubes) {
+      throw new Error('CODE_MODE_REVIEW_FACE_SOURCE_INVALID');
+    }
+    totalCubes=item.total_cubes;
+    for(const cube of item.cubes) {
+      if(typeof cube?.cube_uuid!=='string' ||
+         !Array.isArray(cube.faces) || cube.faces.length!==6 ||
+         new Set(cube.faces.map(f=>f.side)).size!==6) {
+        throw new Error('CODE_MODE_REVIEW_FACE_SOURCE_INVALID');
+      }
+      for(const face of cube.faces) {
+        if(!['north','east','south','west','up','down'].includes(face.side) ||
+           typeof face.status!=='string') {
+          throw new Error('CODE_MODE_REVIEW_FACE_SOURCE_INVALID');
+        }
+        if(face.status==='absent_declared')continue;
+        faces.push(Object.freeze({
+          cube_uuid:cube.cube_uuid,face:face.side,
+          texture_uuid:face.texture_uuid??null,
+          source_status:face.status,
+        }));
+      }
+    }
+    pages++;
+    if(faces.length>256) {
+      return Object.freeze({
+        scope:'trusted_saved_cube_face_inventory',
+        source_model_sha256:model.expectedSha256,
+        total_cubes:totalCubes,complete:false,
+        reason:'REVIEW_INVENTORY_FACE_LIMIT',
+        faces:Object.freeze(faces.slice(0,256)),
+      });
+    }
+    if(item.next_offset===null) {
+      if(cursor+item.reviewed_cubes!==totalCubes){
+        throw new Error('CODE_MODE_REVIEW_FACE_SOURCE_CURSOR_INVALID');
+      }
+      return Object.freeze({
+        scope:'trusted_saved_cube_face_inventory',
+        source_model_sha256:model.expectedSha256,
+        total_cubes:totalCubes,complete:true,
+        faces:Object.freeze(faces),
+      });
+    }
+    if(!Number.isSafeInteger(item.next_offset) ||
+       item.next_offset!==cursor+item.reviewed_cubes ||
+       item.next_offset>totalCubes) {
+      throw new Error('CODE_MODE_REVIEW_FACE_SOURCE_CURSOR_INVALID');
+    }
+    cursor=item.next_offset;
+  }
+  return Object.freeze({
+    scope:'trusted_saved_cube_face_inventory',
+    source_model_sha256:model.expectedSha256,
+    total_cubes:totalCubes,complete:false,
+    reason:'REVIEW_INVENTORY_PAGE_LIMIT',
+    faces:Object.freeze(faces),
+  });
+}
+
 export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
   preselectedPngPath, approvedMaterialReferenceUuid,
@@ -726,6 +806,10 @@ export async function createCodeModeHost({
         if (execution.closed || activeExecution !== execution) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
         }
+        // Reviewer-visible identifiers come from the actual Rust source,
+        // never from guest-authored JSON. Optional for existing callbacks.
+        const faceInventory=reviewVisualPair.requiresSourceFaceInventory===true ?
+          await sourceFacesForImageReviewer(model):null;
         // The host callback must present both actual buffers to its reviewer;
         // a text/SHAs-only response has no authority to claim the AI saw images.
         execution.pause();
@@ -751,6 +835,7 @@ export async function createCodeModeHost({
                   pngBytes:Buffer.from(view.captureBytes)}),
               }))),
             requiredSixDirections:visualPair.requireSixDirections,
+            sourceFaceInventory:faceInventory,
           }));
         } finally { execution.resume(); }
         if (execution.closed || activeExecution !== execution) {
@@ -906,15 +991,16 @@ export async function createCodeModeHost({
       ]));
       let cursor=0, pages=0, totalCubes=null, inspectedCubes=0;
       let sourceCandidates=0, unresolvedFaces=0;
-      // A six-direction image review cannot erase individually unresolved
-      // saved face observations. Keep each flagged Cube-local face explicit.
+      // The full native six-face inventory, not a shortlist chosen by
+      // the guest/reviewer and not just alpha warnings, defines coverage.
+      const requiredFaces=new Map();
       const attentionFaces=new Map();
       let scanError=null;
       while (pages<32) {
         let receipt;
         try {
           receipt=await p.inspectBatch([{kind:'model_texture_coverage',
-            offset:cursor,limit:8,attention_only:true}]);
+            offset:cursor,limit:8,attention_only:false}]);
         }catch{
           scanError='SOURCE_FACE_SCAN_UNAVAILABLE'; break;
         }
@@ -935,33 +1021,57 @@ export async function createCodeModeHost({
             !Array.isArray(coverage.cubes)) {
           scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
         }
-        const pageAttention=new Map();
+        if (coverage.cubes.length!==coverage.reviewed_cubes) {
+          scanError='SOURCE_FACE_SCAN_CUBE_COUNT_INVALID';break;
+        }
+        const pageRequired=new Map(),pageAttention=new Map();
         for (const cube of coverage.cubes) {
           if (typeof cube?.cube_uuid!=='string' ||
-              !Array.isArray(cube.faces)) {
+              !Array.isArray(cube.faces) || cube.faces.length!==6 ||
+              new Set(cube.faces.map(face=>face.side)).size!==6) {
             scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
           }
+          let cubeAttention=0;
           for (const face of cube.faces) {
+            const validStatus=[
+              'absent_declared','no_explicit_texture',
+              'implicit_texture_unresolved','mapping_unsupported',
+              'fully_transparent_pixels','partially_transparent_pixels',
+              'translucent_pixels','measured_nontransparent_pixels',
+            ];
             if (!['north','east','south','west','up','down'].includes(face?.side) ||
-                typeof face.status!=='string' ||
-                face.status==='measured_nontransparent_pixels' ||
-                face.status==='absent_declared') {
+                !validStatus.includes(face.status)) {
               scanError='SOURCE_FACE_SCAN_RESULT_INVALID';break;
             }
             const key=JSON.stringify([cube.cube_uuid,face.side]);
-            if (pageAttention.has(key) || attentionFaces.has(key)) {
+            if (pageRequired.has(key) || requiredFaces.has(key)) {
               scanError='SOURCE_FACE_SCAN_DUPLICATE_FACE';break;
             }
-            pageAttention.set(key,{status:face.status,
-              textureUuid:face.texture_uuid??null});
+            const entry={status:face.status,textureUuid:face.texture_uuid??null};
+            // This is an explicit no-texture face, not a missing stylistic
+            // treatment; all other face slots require review/accounting.
+            if (face.status!=='absent_declared') {
+              pageRequired.set(key,entry);
+              if (face.status!=='measured_nontransparent_pixels') {
+                pageAttention.set(key,entry);
+                cubeAttention++;
+              }
+            } else {
+              // Retain the key to detect duplicate face source identities.
+              pageRequired.set(key,null);
+            }
           }
           if (scanError)break;
+          if (cube.review_candidates!==cubeAttention) {
+            scanError='SOURCE_FACE_SCAN_COUNT_MISMATCH';break;
+          }
         }
         if (scanError)break;
         if (pageAttention.size!==coverage.review_candidates) {
           scanError='SOURCE_FACE_SCAN_COUNT_MISMATCH';break;
         }
-        for (const [key,status] of pageAttention)attentionFaces.set(key,status);
+        for (const [key,entry] of pageRequired)requiredFaces.set(key,entry);
+        for (const [key,entry] of pageAttention)attentionFaces.set(key,entry);
         totalCubes=coverage.total_cubes;
         inspectedCubes+=coverage.reviewed_cubes;
         sourceCandidates+=coverage.review_candidates;
@@ -987,22 +1097,34 @@ export async function createCodeModeHost({
       const reviewerFaces=new Map(feedback.reviewedFaces.map(item=>[
         JSON.stringify([item.cubeUuid,item.face]),item,
       ]));
-      let attentionUnreviewed=0;
-      for (const [key,source] of attentionFaces) {
+      let requiredUnreviewed=0, attentionUnreviewed=0;
+      for (const [key,source] of requiredFaces) {
+        if (source===null)continue;
         const reviewed=reviewerFaces.get(key);
-        if (!reviewed ||
-            (source.textureUuid!==null &&
-             source.textureUuid!==reviewed.textureUuid) ||
-            (source.status==='fully_transparent_pixels' &&
-             reviewed.style!=='INTENTIONAL_TRANSPARENT')) {
-          attentionUnreviewed++;
+        const acknowledged=!!reviewed &&
+          source.textureUuid!==null &&
+          source.textureUuid===reviewed.textureUuid &&
+          (source.status!=='fully_transparent_pixels' ||
+           reviewed.style==='INTENTIONAL_TRANSPARENT');
+        if (!acknowledged) {
+          requiredUnreviewed++;
+          if (attentionFaces.has(key))attentionUnreviewed++;
         }
       }
       if (sourceCandidates!==attentionFaces.size) {
         blocked.push('SOURCE_FACE_SCAN_COUNT_MISMATCH');
       }
+      if (requiredUnreviewed>0) {
+        blocked.push('REQUIRED_SOURCE_FACES_UNREVIEWED');
+      }
       if (attentionUnreviewed>0) {
         blocked.push('SOURCE_ATTENTION_FACES_UNREVIEWED');
+      }
+      if (feedback.reviewedFaces.some(item=>
+        !requiredFaces.get(JSON.stringify([item.cubeUuid,item.face])) ||
+        requiredFaces.get(JSON.stringify([item.cubeUuid,item.face]))
+          .textureUuid!==item.textureUuid)) {
+        blocked.push('REVIEWER_FACE_NOT_BOUND_TO_REQUIRED_SOURCE');
       }
       let inspectedFaces=0, flatExceptions=0, transparentExceptions=0, styleWarnings=0;
       // The reviewer selected these actual Cube face/material identities;
@@ -1065,6 +1187,9 @@ export async function createCodeModeHost({
         blockers:blocked,
         face_scan:{scanned_cubes:inspectedCubes,total_cubes:totalCubes,
           source_review_candidates:sourceCandidates,
+          required_source_faces:[...requiredFaces.values()].filter(Boolean).length,
+          required_source_faces_reviewed:[...requiredFaces.values()].filter(Boolean).length-requiredUnreviewed,
+          required_source_faces_unreviewed:requiredUnreviewed,
           source_attention_faces_reviewed:attentionFaces.size-attentionUnreviewed,
           source_attention_faces_unreviewed:attentionUnreviewed,
           unresolved_source_faces:unresolvedFaces,

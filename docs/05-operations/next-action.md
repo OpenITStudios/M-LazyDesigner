@@ -1,3 +1,13 @@
+**Rust image review and opaque-face completeness source slice (2026-11-17; SOURCE_ONLY):**
+The operator CLI now has opt-in SHA-bound PNG+native-face reviewer process
+transport, without a default vision model or autonomous image capture.
+The Texturing readiness gate also checks every active saved face,
+including opaque faces omitted by the prior alpha-attention scan.
+Source tests and protocol documentation are authored but NOT_EXECUTED.
+The separate authorized PC-local phase is still held. Do not portray
+source code or external reviewer echo hashes as actual art quality PASS.
+No release/merge/branch movement beyond Rust was authorized.
+
 # LazyDesigner Next Action
 
 **Rust Texturing blindspot source reconciliation (2026-11-17; SOURCE_ONLY):**

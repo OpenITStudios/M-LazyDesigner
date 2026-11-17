@@ -11,10 +11,12 @@ import { readFile, lstat } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { randomBytes } from 'node:crypto';
 import { createCodeModeHost } from './host.mjs';
+import {readOperatorVisualManifest, createTrustedProgramReviewer} from './trusted-visual-reviewer.mjs';
 
 function parseArgs(argv) {
   const accepted = new Set([
-    '--rust', '--deno', '--input', '--output-dir', '--code', '--png', '--approve-interactive',
+    '--rust', '--deno', '--input', '--output-dir', '--code', '--png',
+    '--visual-manifest', '--reviewer-exe', '--approve-interactive',
   ]);
   const out = Object.create(null);
   for (let i = 0; i < argv.length; i++) {
@@ -40,6 +42,14 @@ function parseArgs(argv) {
   if ((out['--input'] === undefined) ===
       (out['--output-dir'] === undefined)) {
     throw new Error('CODE_MODE_CLI_REQUIRE_EXACTLY_ONE_SOURCE_OR_OUTPUT_DIR');
+  }
+  if (out['--reviewer-exe']!==undefined &&
+      out['--visual-manifest']===undefined) {
+    throw new Error('CODE_MODE_REVIEWER_REQUIRES_VISUAL_MANIFEST');
+  }
+  if (out['--visual-manifest']!==undefined &&
+      out['--input']===undefined) {
+    throw new Error('CODE_MODE_VISUAL_REVIEW_REQUIRES_EXISTING_MODEL');
   }
   return out;
 }
@@ -77,8 +87,17 @@ async function main() {
       );
       return answer.trim() === 'APPROVE ' + challenge;
     } : undefined;
+    // Operator owns both the selected views and the explicitly installed
+    // reviewer executable. The model-written Deno guest never chooses either.
+    // No configured executable means source-only inspection, not visual PASS.
+    const preselectedVisualPair=args['--visual-manifest']===undefined ?
+      undefined:await readOperatorVisualManifest(args['--visual-manifest']);
+    const reviewVisualPair=args['--reviewer-exe']===undefined ?
+      undefined:await createTrustedProgramReviewer(args['--reviewer-exe']);
     const host = await createCodeModeHost({
       rustBinary: args['--rust'], denoBinary: args['--deno'],
+      ...(preselectedVisualPair?{preselectedVisualPair}:{}),
+      ...(reviewVisualPair?{reviewVisualPair}:{}),
       ...(args['--input'] ? { input: args['--input'] }
         : { outputDirectory: args['--output-dir'] }),
       authorizeMutation,

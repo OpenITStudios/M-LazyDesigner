@@ -207,7 +207,8 @@ export interface CodeModeVisualReviewerFeedback {
     observation:string;
   }>;
   /** Required by a texturingReadiness decision; arbitrary six-view labels
-   * do not prove the selected material faces were examined. Max 32.
+   * do not prove the selected material faces were examined. Max 256,
+   * with incomplete whole-model acceptance if required faces exceed budget.
    */
   reviewedFaces?:CodeModeReviewedTextureFace[];
   issues:Array<{
@@ -280,7 +281,7 @@ export interface CodeModeHostOptions {
    * It must not claim a review unless the selected images were actually seen.
    * If absent, results are numeric source evidence only.
    */
-  reviewVisualPair?: (pair:Readonly<{
+  reviewVisualPair?: ((pair:Readonly<{
     sourceModelSha256:string;
     viewId:CodeModeVisualViewId;
     reference:Readonly<{sha256:string;pngBytes:Buffer}>;
@@ -291,7 +292,8 @@ export interface CodeModeHostOptions {
       capture:Readonly<{sha256:string;pngBytes:Buffer}>;
     }>>;
     requiredSixDirections:boolean;
-  }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>;
+  }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>) &
+    {requiresSourceFaceInventory?:true};
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;

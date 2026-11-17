@@ -89,6 +89,26 @@ the camera screenshot represents the intended shaded face.
 
 The authored Node cases use synthetic header-only PNGs to exercise host authority with a mocked CLI; they do not constitute an actual decoded PNG, image-rendering or artistic-quality test. Real Rust decoder and native interface tests remain on hold.
 
+## Source-authored P0 reviewer transport and opaque-face negative case
+
+At the operator boundary, the standard Code Mode CLI can now accept a
+separately configured trusted image reviewer executable plus SHA-bound
+actual rendered image pairs. Native Rust source face IDs are delivered
+alongside actual PNG bytes via the external process's bounded stdin;
+model-written JavaScript never receives private PNG bytes or filesystem
+paths. This is a source-wired **capability**, not a shipped vision model,
+successful image ingestion or live visual acceptance.
+
+A positive source-only transport fixture must verify real image buffers
+and exact per-view SHA return bindings. Negative fixtures must reject
+stale image hashes, mismatched reviewer replies, absent source inventory,
+and missing opaque-but-required Cube faces even when six directions were
+declared ACCEPTED. For PILL-06, intentional absent faces may be excluded;
+valid opaque faces must not be silently excluded from reviewer accountability.
+A material with more than the bounded 256 reviewed faces remains
+UNVERIFIED until an authorized broader process exists. Existing PILL-01
+through PILL-10 acceptance and test holds remain unchanged.
+
 ## Evidence and stop criteria
 
 Record only actual observations: case ID, source SHA, camera/view, approved reference PNG SHA, candidate PNG SHA, reviewer/host/version, issue ID, observed defect, correction approach, permitted atlas rectangle, protected regions, final user decision, reason for rejection and native proof. When any observation is missing, write NOT_EXECUTED, UNVERIFIED or BLOCKED with the specific gap.

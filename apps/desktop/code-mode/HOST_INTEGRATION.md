@@ -1,5 +1,149 @@
 # Rust Code Mode — first-party local host integration
 
+## Trusted image reviewer CLI wiring (SOURCE_ONLY, NOT EXECUTED)
+
+The standard operator CLI now accepts optional `--visual-manifest` and
+`--reviewer-exe` options. This **wires the existing reviewVisualPair host
+callback to an operator-owned external image-capable process** without giving
+the sandboxed Deno model code a filesystem, process or network capability.
+It does **not** install a vision model, select a provider, generate native
+captures, automatically send images to a service or establish that the
+reviewer really interpreted the pixels.
+
+Use only in an independently authorized PC-local phase after releasing the
+current hold. Select an existing `.bbmodel`, an approved reference image and
+fresh current-revision render(s); bind source SHA and per-view camera labels.
+The operator-provided manifest is a regular JSON file with exactly:
+
+```json
+{
+  "captureModelSha256": "<64 lowercase hex characters of the exact model>",
+  "viewId": "front",
+  "referencePngPath": "/absolute/operator-selected/front-reference.png",
+  "capturePngPath": "/absolute/operator-selected/front-current.png",
+  "supportingViews": [
+    {
+      "viewId": "back",
+      "referencePngPath": "/absolute/operator-selected/back-reference.png",
+      "capturePngPath": "/absolute/operator-selected/back-current.png"
+    }
+  ],
+  "requireSixDirections": false
+}
+```
+
+For broad propagation and the final review, set
+`requireSixDirections:true` and provide actual front/back/left/right/top/bottom
+image pairs, with an optional `three_quarter`. The example above is only a
+single/partial review and **cannot** clear whole-material readiness.
+The host checks the manifest, current model SHA, absolute PNG paths and
+all actual PNG image hashes. It does not authenticate camera direction,
+matching perspective or provenance based on a filename.
+
+```sh
+node apps/desktop/code-mode/run.mjs \
+  --rust /absolute/path/to/lazydesigner-authoring \
+  --deno /absolute/path/to/deno \
+  --input /absolute/path/to/current.bbmodel \
+  --code /absolute/path/to/authoring-code.js \
+  --visual-manifest /absolute/path/to/operator-views.json \
+  --reviewer-exe /absolute/path/to/trusted-image-reviewer
+```
+
+For any actual mutation, the existing `--approve-interactive` is still
+required; selecting a reviewer never grants write permission. Supplying
+only `--visual-manifest` supports a read-only source/view pairing with
+`NOT_RECORDED` reviewer status. Supplying a reviewer executable without
+a manifest is rejected.
+
+### External reviewer subprocess contract
+
+`trusted-visual-reviewer.mjs` launches the exact operator-selected executable
+with `shell:false`, no model-supplied args and a deliberately minimal
+environment. It sends a bounded UTF-8 JSON request on stdin:
+
+```text
+schema_version: 1
+source_model_sha256
+required_six_directions
+source_face_inventory:
+  scope: trusted_saved_cube_face_inventory
+  source_model_sha256
+  complete
+  total_cubes
+  faces: [{cube_uuid, face, texture_uuid, source_status}, ...]
+views: [{view_id, reference_sha256, capture_sha256,
+         reference_png_base64, capture_png_base64}, ...]
+```
+
+The inventory is gathered by the trusted host from the pinned Rust
+`model_texture_coverage` inspector. It lets an image reviewer use real
+Cube/texture identities instead of inventing UUIDs from image appearance.
+It remains a *source face inventory*, **not proof a source face corresponds
+to a particular camera pixel**. The bounded inventory reports
+`complete:false` if more than 256 source faces or 256 Cubes cannot be
+represented; missing/occluded faces must remain UNVERIFIED.
+
+The reviewer must actually inspect the decoded reference and current PNG
+bytes through its own visual-capable implementation. It writes one compact
+JSON object to stdout (no logs or Markdown):
+
+```json
+{
+  "schema_version": 1,
+  "source_model_sha256": "<same SHA as request>",
+  "view_bindings": [
+    {
+      "view_id": "front",
+      "reference_sha256": "<exact SHA from request>",
+      "capture_sha256": "<exact SHA from request>"
+    }
+  ],
+  "review": {
+    "decision": "UNVERIFIED",
+    "issues": []
+  }
+}
+```
+
+Every selected view must have exactly one binding. The `review` object
+uses `CodeModeVisualReviewerFeedback` from `host.d.mts`, including
+per-direction findings, bounded `reviewedFaces`, or a diagnosis with
+correction scope for a rejected material. Missing, mismatched, duplicate,
+oversized, timeout and nonzero-process results fail closed. No stdout,
+stderr, sensitive raw image or executable path is forwarded to the
+untrusted guest. Echoed hashes are identity checks **not evidence of pixel
+understanding**; host reviewer outcomes remain declarations pending
+native/operator or user visual acceptance.
+
+**Security and privacy:** an operator-selected executable runs under
+the operator's operating-system permissions; it is not sandboxed by the
+model's Deno restrictions. Only explicitly authorized, verified programs
+may be used. The bridge itself does not send data over a network, but
+an arbitrary reviewer executable may; do not select one that exports
+confidential project images without independent authorization. The default
+CLI makes no such selection, so its reviewer remains unconnected.
+
+### Mandatory all-face completion gate
+
+The reviewed Texturing checkpoint now requests the **full saved six-face
+inventory** rather than only alpha-attention candidates. Every explicitly
+active face, including fully opaque faces with no alpha warning, must match
+an independently reviewed exact `cubeUuid + face + textureUuid` entry.
+Declared absent faces are not styled; ambiguous/unmapped/unsupported faces
+are blocked, and intentional transparency requires an observed exception.
+Missing fully opaque faces are blocked as
+`REQUIRED_SOURCE_FACES_UNREVIEWED`. There is no implicit PASS for
+`measured_nontransparent_pixels`. The selected review array is capped at
+256 faces and the scan at 256 Cubes: exceeding a bound stays BLOCKED,
+never falsely complete. Full six-direction files alone do not prove each
+hidden face was visually seen.
+
+Source fixtures have been authored for both successful transport and
+fail-closed negative cases; no tests, native captures or actual visual
+reviewer have been run in ChatGPT/GitHub.
+
+
 ## Rust Texturing professional-quality read/finish checkpoint (2026-11-17; SOURCE_ONLY)
 
 The guest can inspect real saved material pixels in correct Cube-local

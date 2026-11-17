@@ -40,6 +40,20 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Material source-image evidence (conditional):** `decision_packet.texture_surface_regions` offers up to six approved, hash-bound **source image** annotations; `box_uv` is normalized in the reference picture, **not** the Blockbench UV atlas or a paint coordinate. Treat `omitted_count > 0` as incomplete discovery, not permission to ignore other surfaces. At a material/identity decision, use the relevant active-stage image IDs with `status(reference_package_path=..., include_reference_images=true, reference_image_ids=...)` **only if the actual approved images are not already in the active review context**. The source metadata alone does not provide material RGB, mapping or visual PASS. Pair the real images with current `get_texture`, mapped `capture_model_views`, and exact Cube-face UV only when the region-to-face identity needs resolution. See the conditional `references/fidelity-styling-verification.md`, not an always-loaded reference corpus.
 
+**Rust Texturing review admission (source-authored; NOT_EXECUTED):**
+At a material-scale correction, do not infer that the installed Code Mode
+CLI contains visual understanding. Only operator-selected SHA-bound matched
+reference/current images and a genuinely image-capable, trusted
+`reviewVisualPair` adapter can issue reviewer findings. The optional
+`--visual-manifest` + `--reviewer-exe` CLI route is source-authored,
+never enabled by model-written code. Material completion must reconcile
+the actual saved full Cube-face inventory including **opaque** surfaces,
+not merely alpha-attention candidates or six camera labels. A face not
+actually seen in relevant views/close-ups remains UNVERIFIED, even if
+its source pixels are present. Read the returned source face identities
+from Rust, never fabricate one. A reviewer declaration is still not
+native artistic/user approval. No per-brush-stroke screenshot ritual.
+
 **Rust Code Mode professional pixel-art discipline (source target; NOT_EXECUTED):**
 At every material-scale treatment, apply the *current approved reference*
 and latest correction: readable value masses before decoration, material-

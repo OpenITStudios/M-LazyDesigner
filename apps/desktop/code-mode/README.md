@@ -1,5 +1,26 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Operator-owned image review bridge (2026-11-17; SOURCE_ONLY):**
+The existing `run.mjs` now accepts `--visual-manifest` with
+`--reviewer-exe` for one explicitly configured, trusted, image-capable
+external reviewer process. Pinned reference/current PNG bytes and native
+Cube/face source identity enter the reviewer through bounded no-shell stdin
+IPC; generated Deno code can neither select this executable nor read raw
+PNG images. Image receipt hashes do not prove semantic inspection; a real
+reviewer implementation and current captured images remain dependencies.
+Without configuration, the standard CLI still has NO visual reviewer.
+See `HOST_INTEGRATION.md` for the manifest, input/output protocol, privacy
+and local-test hold.
+
+**Full source-face review (2026-11-17; SOURCE_ONLY):**
+The terminal readiness now checks all Rust-saved explicitly active
+Cube faces, including fully opaque faces with no alpha attention warning,
+against the selected reviewer-facing source identities. An unreviewed
+required face blocks completion. Reviewer face entries are bounded at
+256; bigger models remain UNVERIFIED, not silently approved. Six camera
+images alone do not prove the appearance of hidden surfaces.
+
+
 **Attention-face closure (2026-11-17; SOURCE_ONLY):**
 A six-view material review now also reconciles all paged saved-face
 `review_candidates`, including partial/translucent/transparent
@@ -32,7 +53,7 @@ reviewer-selected Cube-local faces, each marked `STYLED`, `INTENTIONAL_FLAT`, or
 face declared STYLED cannot clear this gate. Even a cleared gate returns
 `REVIEWER_DECLARED_READY_FOR_USER_DECISION`, never visual PASS or
 user acceptance. Without the actual independent reviewer callback
-(including the default `run.mjs` entrypoint), it remains BLOCKED.
+(including `run.mjs` without an explicitly configured reviewer executable), it remains BLOCKED.
 No native render/camera provenance is invented; matched-view observation
 is still the final artistic authority. Test sources authored NOT_EXECUTED.
 

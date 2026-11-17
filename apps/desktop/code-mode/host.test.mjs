@@ -2067,7 +2067,7 @@ test('Texturing readiness reads all saved Cube coverage only after independently
       chosen.push({viewId,referencePngPath,capturePngPath});
     }
     let step=0, inspectedPages=0, reviewerCalls=0, forceFlatWarning=false;
-    let extraAttention=false;
+    let extraAttention=false, extraOpaque=false;
     const host=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
       preselectedVisualPair:{
@@ -2113,7 +2113,7 @@ test('Texturing readiness reads all saved Cube coverage only after independently
           }]};
         }
         assert.deepEqual(plan.requests,[{
-          kind:'model_texture_coverage',offset:0,limit:8,attention_only:true,
+          kind:'model_texture_coverage',offset:0,limit:8,attention_only:false,
         }]);
         inspectedPages++;
         return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
@@ -2121,10 +2121,17 @@ test('Texturing readiness reads all saved Cube coverage only after independently
             scope:'saved_face_texture_coverage_page',offset:0,total_cubes:1,
             reviewed_cubes:1,review_candidates:extraAttention?1:0,
             unresolved_reference_or_mapping_faces:0,next_offset:null,
-            cubes:extraAttention?[{cube_uuid:'unreviewed-cube',faces:[{
-              side:'down',texture_uuid:'tier2-atlas',
-              status:'fully_transparent_pixels',
-            }]}]:[],
+            cubes:[{cube_uuid:REVIEW_CUBE,review_candidates:extraAttention?1:0,
+              faces:ALL_FACE_SIDES.map(side=>({
+                side,texture_uuid:(side==='north' ||
+                    (extraAttention && side==='down') ||
+                    (extraOpaque && side==='south'))?'tier2-atlas':null,
+                status:side==='north'?'measured_nontransparent_pixels':
+                  extraAttention && side==='down'?'fully_transparent_pixels':
+                  extraOpaque && side==='south'?'measured_nontransparent_pixels':
+                  'absent_declared',
+              })),
+            }],
           },
         }]};
       },
@@ -2142,14 +2149,20 @@ test('Texturing readiness reads all saved Cube coverage only after independently
           if(blocked.includes('UNIFORM_FACE_CANNOT_CLAIM_STYLED')){
             return {sourceOnlyReady:false,flatRejected:true};
           }
-          assert.ok(blocked.includes('SOURCE_ATTENTION_FACES_UNREVIEWED'));
-          assert.equal(response.result.face_scan.source_attention_faces_unreviewed,1);
-          return {sourceOnlyReady:false,reason:'SOURCE_ATTENTION_FACES_UNREVIEWED'};
+          if(blocked.includes('SOURCE_ATTENTION_FACES_UNREVIEWED')){
+            assert.equal(response.result.face_scan.source_attention_faces_unreviewed,1);
+            return {sourceOnlyReady:false,reason:'SOURCE_ATTENTION_FACES_UNREVIEWED'};
+          }
+          assert.ok(blocked.includes('REQUIRED_SOURCE_FACES_UNREVIEWED'));
+          assert.equal(response.result.face_scan.required_source_faces_unreviewed,1);
+          return {sourceOnlyReady:false,reason:'REQUIRED_SOURCE_FACES_UNREVIEWED'};
         }
         assert.equal(response.result.status,'REVIEWER_DECLARED_READY_FOR_USER_DECISION');
         assert.equal(response.result.texture_completion_attested,false);
         assert.equal(response.result.visual_verdict,'UNVERIFIED');
         assert.equal(response.result.face_scan.complete,true);
+        assert.equal(response.result.face_scan.required_source_faces,1);
+        assert.equal(response.result.face_scan.required_source_faces_unreviewed,0);
         assert.equal(response.result.material_faces.expected,1);
         assert.equal(response.result.material_faces.inspected,1);
         return {sourceOnlyReady:true};
@@ -2168,6 +2181,87 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     assert.equal(missing.value.sourceOnlyReady,false);
     assert.ok(missing.value.flatRejected===undefined);
     assert.equal(missing.value.reason,'SOURCE_ATTENTION_FACES_UNREVIEWED');
+    extraAttention=false;
+    extraOpaque=true;
+    const opaque=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
+    assert.equal(opaque.value.reason,'REQUIRED_SOURCE_FACES_UNREVIEWED');
     assert.equal(reviewerCalls,1);
-    assert.equal(inspectedPages,3);
+    assert.equal(inspectedPages,4);
+  }));
+
+test('operator-owned visual adapter receives Rust face inventory with exact PNG bytes', ()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'reference-front.png');
+    const current=join(folder,'current-front.png');
+    const reference=Buffer.from('89504e470d0a1a0a726566','hex');
+    const capture=Buffer.from('89504e470d0a1a0a6d6f64656c','hex');
+    await writeFile(ref,reference);
+    await writeFile(current,capture);
+    const digest=b=>createHash('sha256').update(b).digest('hex');
+    let reviewerCalls=0,inventoryCalls=0;
+    const reviewVisualPair=async pair=>{
+      reviewerCalls++;
+      assert.equal(pair.sourceModelSha256,HASH);
+      assert.equal(digest(pair.reference.pngBytes),digest(reference));
+      assert.equal(digest(pair.capture.pngBytes),digest(capture));
+      assert.equal(pair.sourceFaceInventory.complete,true);
+      assert.equal(pair.sourceFaceInventory.faces.length,1);
+      assert.deepEqual(pair.sourceFaceInventory.faces[0],{
+        cube_uuid:REVIEW_CUBE,face:'north',
+        texture_uuid:'tier2-atlas',
+        source_status:'measured_nontransparent_pixels',
+      });
+      return {decision:'UNVERIFIED',issues:[]};
+    };
+    reviewVisualPair.requiresSourceFaceInventory=true;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        viewId:'front',referencePngPath:ref,capturePngPath:current,
+        captureModelSha256:HASH,
+      },
+      reviewVisualPair,
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest(reference),
+          capture_png_sha256:digest(capture),
+          comparison:{
+            scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest(reference),
+            capture_png_sha256:digest(capture),
+            visual_verdict:'UNVERIFIED',
+          },
+        };
+        assert.equal(argv[0],'inspect-batch');
+        const plan=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+        assert.deepEqual(plan.requests,[{
+          kind:'model_texture_coverage',offset:0,limit:8,attention_only:false,
+        }]);
+        inventoryCalls++;
+        return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
+          kind:'model_texture_coverage',
+          coverage:{scope:'saved_face_texture_coverage_page',
+            total_cubes:1,offset:0,reviewed_cubes:1,next_offset:null,
+            cubes:[{cube_uuid:REVIEW_CUBE,faces:ALL_FACE_SIDES.map(side=>({
+              side,texture_uuid:side==='north'?'tier2-atlas':null,
+              status:side==='north'?'measured_nontransparent_pixels':'absent_declared',
+            }))}],
+          },
+        }]};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.review_feedback.decision,'UNVERIFIED');
+        return {reviewed:true};
+      }),
+    });
+    const result=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(result.value.reviewed,true);
+    assert.equal(reviewerCalls,1);
+    assert.equal(inventoryCalls,1);
   }));

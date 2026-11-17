@@ -1,3 +1,24 @@
+## 2026-11-17 — Trusted CLI image reviewer and full-face source gate (SOURCE_ONLY)
+
+The Rust Code Mode operator CLI now has an explicit operator-owned image
+review adapter: `--visual-manifest` selects SHA-bound actual PNG view pairs,
+and `--reviewer-exe` launches an explicitly trusted external executable
+without model-authorized process/file/network capabilities. The trusted
+host sends original PNG bytes plus bounded Rust saved-face identities;
+reviewer output is checked for exact selected source/model/view bindings
+before the existing visual feedback schema admits it. No first-party
+vision model is installed or image understanding observed. Default CLI
+still has no review callback until operator configuration exists.
+All reviewer executable trust, private image data and source holds remain
+unchanged.
+
+Texturing readiness now scans all native source faces (not only alpha
+attention), requiring reviewer-selected exact bindings for opaque and
+alpha-dependent active faces. Missing or unsupported faces stay BLOCKED;
+limits are explicit. Source-only Node negative/positive regression
+fixtures authored and NOT_EXECUTED. No localtest, CI, actual model
+comparison, visual PASS or user acceptance.
+
 # LazyDesigner Current Validation
 
 ## 2026-11-17 — Source attention-face reconciliation (SOURCE_ONLY)
