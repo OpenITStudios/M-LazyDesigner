@@ -404,6 +404,29 @@ fn static_animation_axis(value: Option<&Value>) -> Option<f64> {
     number.is_finite().then_some(number)
 }
 
+// The pinned Tauri numeric preview refuses keyframes at the same Bone/
+// channel whose timestamps are within 1e-6 seconds. Group finite times
+// into adjacent microsecond buckets, then compare original floating values
+// exactly as before. A temporary per-clip index avoids scanning all prior
+// frame projections for each new source keyframe.
+fn register_preview_time<'a>(
+    seen: &mut HashMap<(&'a str, &'a str, u64), Vec<f64>>,
+    bone_uuid: &'a str, channel: &'a str, time: f64,
+) -> bool {
+    let bucket = (time * 1_000_000.0).floor() as u64;
+    // Include one adjacent quantization bucket on either side and a spare
+    // for floating-point boundary rounding; exact comparison remains the
+    // authoritative rejection rule, not the bucket index.
+    for nearby in bucket.saturating_sub(2)..=bucket.saturating_add(2) {
+        if seen.get(&(bone_uuid, channel, nearby)).is_some_and(|times|
+            times.iter().any(|previous| (previous - time).abs() <= 1e-6)) {
+            return false;
+        }
+    }
+    seen.entry((bone_uuid, channel, bucket)).or_default().push(time);
+    true
+}
+
 fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
     // Imported clips can share UUIDs. A model-visible clip must be identified
     // unambiguously; never pick the first identical UUID to edit or preview.
@@ -441,6 +464,7 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
         let mut rotation_keyframes = Vec::new();
         let mut transform_keyframes: Vec<TransformKeyframeView> = Vec::new();
         let mut keyframe_ids = HashSet::new();
+        let mut seen_times: HashMap<(&str, &str, u64), Vec<f64>> = HashMap::new();
         if let Some(animators) = animation.get("animators").and_then(Value::as_object) {
             for (bone_uuid, track) in animators {
                 let bone = doc.bones.iter().find(|bone| bone.uuid == *bone_uuid);
@@ -523,11 +547,9 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
                            *axis < 0.0 || *axis > 100.0)) {
                         preview_supported = false; continue;
                     }
-                    if transform_keyframes.iter().any(|existing|
-                        existing.bone_uuid == *bone_uuid &&
-                        existing.channel == channel &&
-                        (existing.time - time).abs() <= 1e-6) ||
-                       transform_keyframes.len() >= 2048 {
+                    if transform_keyframes.len() >= 2048 ||
+                       !register_preview_time(&mut seen_times,
+                           bone_uuid.as_str(), channel, time) {
                         preview_supported = false; continue;
                     }
                     transform_keyframes.push(TransformKeyframeView {
@@ -2343,6 +2365,25 @@ mod tests {
         assert_eq!(ambiguous.len(), 2);
         assert!(ambiguous.iter().all(|view|
             !view.preview_supported && view.rotation_keyframes.is_empty()));
+    }
+
+    // SOURCE-AUTHORED_NOT_RUN: microsecond-bucket indexes are only candidate
+    // filters; the exact 1e-6 threshold and Bone/channel identity still win.
+    #[test]
+    fn indexed_animation_preview_time_refuses_near_duplicates_only_per_track() {
+        let mut seen: HashMap<(&str, &str, u64), Vec<f64>> = HashMap::new();
+        assert!(register_preview_time(&mut seen, "root", "rotation", 1.0));
+        assert!(!register_preview_time(&mut seen, "root", "rotation",
+            1.0 + 0.5e-6));
+        assert!(!register_preview_time(&mut seen, "root", "rotation",
+            1.0 - 0.5e-6));
+        assert!(register_preview_time(&mut seen, "root", "rotation",
+            1.0 + 2.1e-6));
+        assert!(register_preview_time(&mut seen, "root", "position", 1.0));
+        assert!(register_preview_time(&mut seen, "other", "rotation", 1.0));
+        assert!(register_preview_time(&mut seen, "root", "rotation", 0.0));
+        assert!(register_preview_time(&mut seen, "root", "rotation", 3600.0));
+        assert!(!register_preview_time(&mut seen, "root", "rotation", 3600.0));
     }
 
     #[test]
