@@ -4100,6 +4100,61 @@ fn paint_rectangle_batch_preserves_order_noop_and_bbmodel_roundtrip() {
     assert_eq!(new_session.document(), &original);
 }
 
+// SOURCE-AUTHORED_NOT_RUN: reverse final-writer traversal must match
+// the original ordered bitmap semantics without a complete RGBA clone.
+#[test]
+fn overlapping_rectangle_final_writes_preserve_original_pixels_and_undo() {
+    let mut source = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Last writer", "last_writer").unwrap()).unwrap();
+    source.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 8, height: 8 },
+        EditOperation::CreatePaintTexture {
+            uuid: "00000000-0000-4000-8000-000000009813".into(),
+            name: "atlas.png".into(),
+        },
+    ]).unwrap();
+    let original = source.document().clone();
+    let original_source = original.texture_assets[0]["source"].clone();
+    let red = [175, 30, 25, 255];
+    let blue = [10, 50, 205, 255];
+    let steps = vec![
+        PaintRectangleStep { from:[0,0], to:[5,5], rgba:red, erase:false },
+        PaintRectangleStep { from:[1,1], to:[4,4], rgba:blue, erase:false },
+        PaintRectangleStep { from:[2,2], to:[3,3], rgba:red, erase:true },
+        PaintRectangleStep { from:[5,5], to:[0,0], rgba:blue, erase:true },
+        PaintRectangleStep { from:[0,0], to:[0,0], rgba:blue, erase:false },
+    ];
+    let receipt = source.apply(1, &[EditOperation::PaintTextureRectangles {
+        texture_index:0, rectangles:steps,
+    }]).unwrap();
+    assert_eq!(receipt.operation_count, 1);
+    let saved = source.document().clone();
+    let rgba = paint::decode_for_uv_inspection(&saved.texture_assets[0], 8, 8).unwrap();
+    let pixel = |x:usize,y:usize| {
+        let offset = (y * 8 + x) * 4;
+        [rgba[offset],rgba[offset+1],rgba[offset+2],rgba[offset+3]]
+    };
+    assert_eq!(pixel(0,0), blue);
+    assert_eq!(pixel(1,1), [0,0,0,0]);
+    assert_eq!(pixel(7,7), [0,0,0,0]);
+    assert_ne!(saved.texture_assets[0]["source"], original_source);
+    source.undo(2).unwrap();
+    assert_eq!(source.document(), &original);
+    source.redo(3).unwrap();
+    assert_eq!(source.document(), &saved);
+
+    let mut empty = EditorSession::from_document(original.clone()).unwrap();
+    let reversible = vec![
+        PaintRectangleStep { from:[1,1], to:[6,6], rgba:red, erase:false },
+        PaintRectangleStep { from:[1,1], to:[6,6], rgba:red, erase:true },
+    ];
+    assert_eq!(empty.apply(0, &[EditOperation::PaintTextureRectangles {
+        texture_index:0, rectangles:reversible,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(empty.document(), &original);
+    assert!(!empty.can_undo());
+}
+
 #[test]
 fn paint_rectangle_batch_refuses_malformed_plans_and_imported_opaque_assets() {
     let mut session = EditorSession::from_document(

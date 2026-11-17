@@ -509,9 +509,14 @@ pub(super) fn rectangles(
         return Err("PAINT_COORDINATE_INVALID".into());
     }
     let mut pixels = decode(texture, width, height)?;
-    let before = pixels.clone();
     let w = width as usize;
-    for step in steps {
+    // The final rectangle touching each pixel wins. Traverse in reverse so
+    // its original RGBA is still available for exact no-op detection without
+    // cloning the whole 4-byte-per-pixel atlas. A one-byte visited mask is
+    // bounded by the existing 256² PNG admission limit.
+    let mut decided = vec![false; w * height as usize];
+    let mut changed = false;
+    for step in steps.iter().rev() {
         let desired = if step.erase { [0, 0, 0, 0] } else { step.rgba };
         let x0 = step.from[0].min(step.to[0]) as usize;
         let x1 = step.from[0].max(step.to[0]) as usize;
@@ -519,13 +524,20 @@ pub(super) fn rectangles(
         let y1 = step.from[1].max(step.to[1]) as usize;
         for y in y0..=y1 {
             for x in x0..=x1 {
-                let offset = (y * w + x) * 4;
-                pixels[offset..offset + 4].copy_from_slice(&desired);
+                let pixel = y * w + x;
+                if decided[pixel] { continue; }
+                decided[pixel] = true;
+                let offset = pixel * 4;
+                if pixels[offset..offset + 4] != desired {
+                    pixels[offset..offset + 4].copy_from_slice(&desired);
+                    changed = true;
+                }
             }
         }
     }
-    // Even a series of painted-and-reverted rectangles is a genuine no-op.
-    if pixels == before { return Ok(()); }
+    // Reverted overlap/no-change batches do not re-encode, advance revision,
+    // or create Undo history. The model authority remains EditorSession.
+    if !changed { return Ok(()); }
     let source = encode(width, height, &pixels)?;
     texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
         .insert("source".into(), Value::String(source));

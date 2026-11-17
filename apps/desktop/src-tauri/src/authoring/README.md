@@ -1,5 +1,7 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Memory-bounded Rust Rectangle Paint (2026-11-17; SOURCE ONLY):** The existing 64-rectangle RGBA8 writer now resolves final overlapping rectangles in reverse order, marking visited pixels once. This replaces the extra complete decoded-RGBA clone used for true no-op detection with one visited byte per admitted pixel, while preserving last-write-wins colors, erase semantics, PNG source identity when unchanged, revision guard, one Undo step and existing UV/face/correction-scope checks. Source regressions authored for mixed overlaps, final writer precedence, genuine paint-and-erase no-ops, Save/Open and Undo/Redo. No Cargo, Windows/Blockbench, performance or visual tests executed; real latency and peak-RAM savings are UNVERIFIED.
+
 **Rust guarded Face Paint batch efficiency (2026-11-17; SOURCE ONLY):** Adjacent `paint_cube_face_regions_guarded` operations on one atlas now share the existing 64-rectangle PNG decode/edit/encode when their complete ordered plans fit the bound. Every Cube face, actual atlas patch and alias still goes through the canonical UV checker BEFORE the bitmap changes. Interleaved non-Paint operations, another atlas or over-budget regions retain sequential execution, and parent `EditorSession` still enforces atomic rollback, correction scopes, revision checks, Undo and `.bbmodel` preservation. Rust positive/negative regression source AUTHORED_NOT_RUN; actual speed/artistic quality UNVERIFIED.
 
 **Saved face-local cluster footprint (2026-11-17; SOURCE ONLY):**
