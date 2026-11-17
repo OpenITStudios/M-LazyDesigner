@@ -683,6 +683,8 @@ export interface AuthoringTargetOrientation {
   };
   /** Advisory labels only, subject to actual Rust admission and host approval. */
   candidate_operations:string[];
+  /** Source-backed reasons that direct operation candidates were withheld. */
+  source_blockers:string[];
   write_authority:"NOT_GRANTED";
   visual_verdict:"UNVERIFIED";
   next:string;

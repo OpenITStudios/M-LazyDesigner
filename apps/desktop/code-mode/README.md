@@ -721,9 +721,15 @@ native read also includes the existing six-face/UV inspector; for Geometry
 it includes focused transforms, and for Texture/Animation assets it returns
 bounded metadata. No raw atlas, extra index or mutable state is created.
 
-`candidate_operations` is an advisory subset of existing Rust edit
-operations, **not** permission, an automatic planner, a guarantee of
-format support or proof of artistic fidelity. Read the returned source
+`candidate_operations` is filtered using source-owned UV mode, explicit
+saved texture-link presence and Rust Paint editability where applicable.
+For example, Box UV surfaces do not suggest `set_face_uv`, and a Cube
+without an explicit saved texture link does not suggest guarded face Paint.
+`source_blockers` explains why no direct candidate was offered. An
+imported texture not yet enabled for Rust Paint likewise receives no
+pixel-edit suggestion. These are advisory source checks, **not**
+permission, an automatic planner, a guarantee of compatibility or
+proof of artistic fidelity. Read the returned source
 first; when an exact target and the user's requested change are clear,
 compose one relevant `codemode.apply` operation batch under existing host
 approval and Rust validation. Never rewrite an approved asset from a

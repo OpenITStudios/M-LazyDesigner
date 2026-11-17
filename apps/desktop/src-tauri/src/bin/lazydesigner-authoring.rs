@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -350,12 +350,55 @@ fn inspect_authoring_target(
         else if exact_count > 1 { "AMBIGUOUS_NAME" }
         else if exact_count == 1 { "IDENTITY_MISSING" }
         else { "NO_EXACT_MATCH" };
+    // Candidate operations must reflect real source constraints, not just
+    // a name/category match. The canonical Rust mutation still rechecks all
+    // affected permissions, UV, texture and transaction invariants.
+    let mut suggested_operations: Vec<&str> =
+        if status == "EXACT_MATCH" { possible_ops.to_vec() } else { Vec::new() };
+    let mut source_blockers: Vec<&str> = Vec::new();
+    if let Some(target) = selected.as_ref() {
+        if category == "cubes" && (domain == "uv" || domain == "texturing") {
+            let surfaces = &target["source"]["surfaces"];
+            let uv = &surfaces["uv"];
+            if uv["per_texture_rules"] != Value::Bool(false) {
+                suggested_operations.clear();
+                source_blockers.push("PER_TEXTURE_UV_RULES_UNSUPPORTED");
+            } else if domain == "uv" {
+                if uv["box_uv"] == Value::Bool(true) {
+                    suggested_operations = vec!["set_box_uv_offset"];
+                    let linked = surfaces["faces"].as_array().is_some_and(|faces|
+                        faces.iter().any(|face| face["reference_kind"] == "uuid" ||
+                            face["reference_kind"] == "index"));
+                    if linked { suggested_operations.push("isolate_cube_box_uv"); }
+                } else if uv["auto_uv"].as_u64() == Some(0) {
+                    suggested_operations = vec!["set_face_uv"];
+                } else {
+                    suggested_operations.clear();
+                    source_blockers.push("MANUAL_UV_EDIT_UNSUPPORTED_FOR_AUTO_MODE");
+                }
+            } else {
+                let linked = surfaces["faces"].as_array().is_some_and(|faces|
+                    faces.iter().any(|face| face["reference_kind"] == "uuid" ||
+                        face["reference_kind"] == "index"));
+                if !linked {
+                    suggested_operations.clear();
+                    source_blockers.push("EXPLICIT_SAVED_FACE_TEXTURE_REQUIRED");
+                }
+            }
+        } else if category == "textures" && domain == "texturing" {
+            let index = target["identity"]["index"].as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| fail("AUTHORING_TARGET_IDENTITY_INVALID"))?;
+            let texture = doc.texture_assets.get(index)
+                .ok_or_else(|| fail("AUTHORING_TARGET_IDENTITY_INVALID"))?;
+            if !paint_texture_editable(texture) {
+                suggested_operations.clear();
+                source_blockers.push("TEXTURE_NOT_ENABLED_FOR_RUST_PAINT");
+            }
+        }
+    }
     let matched_count = if exact_count > 0 { exact_count } else { suggestion_count };
     let candidates = if exact_count > 0 { exact } else { suggestions };
-    // These operation labels are advisory, not proof of admission or
-    // permission; unsupported UV and material cases still fail in Rust.
-    let suggested_operations: &[&str] =
-        if status == "EXACT_MATCH" { possible_ops } else { &[] };
     Ok(json!({
         "scope":"saved_model_named_target_orientation",
         "domain":domain, "category":category, "requested_name":name,
@@ -363,6 +406,7 @@ fn inspect_authoring_target(
         "candidates_truncated":matched_count > candidates.len(),
         "candidates":candidates, "selected":selected,
         "candidate_operations":suggested_operations,
+        "source_blockers":source_blockers,
         "write_authority":"NOT_GRANTED", "visual_verdict":"UNVERIFIED",
         "next":if status == "EXACT_MATCH" {
             "Use the selected source identity and the relevant operation contract; apply one bounded Rust transaction only after authorization."
@@ -1132,8 +1176,9 @@ mod tests {
         assert_eq!(evidence["selected"]["identity"]["uuid"], doc.cubes[0].uuid);
         assert_eq!(evidence["selected"]["source"]["surfaces"]["faces"]
             .as_array().unwrap().len(), 6);
-        assert_eq!(evidence["candidate_operations"][0],
-            "paint_cube_face_regions_guarded");
+        assert_eq!(evidence["candidate_operations"], json!([]));
+        assert_eq!(evidence["source_blockers"][0],
+            "EXPLICIT_SAVED_FACE_TEXTURE_REQUIRED");
         assert_eq!(evidence["write_authority"], "NOT_GRANTED");
         assert_eq!(evidence["visual_verdict"], "UNVERIFIED");
 
@@ -1146,6 +1191,36 @@ mod tests {
         assert_eq!(hint["candidate_count"], 1);
         assert!(hint["selected"].is_null());
         assert_eq!(hint["candidate_operations"], json!([]));
+
+        // Once a real explicit face/atlas link exists, Texturing guidance
+        // may name guarded face Paint candidates, still without approval.
+        let mut textured = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")
+        ).unwrap();
+        textured.cubes[0].name = Some("Helmet".into());
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"texturing",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
+        let ready = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
+        assert_eq!(ready["status"], "EXACT_MATCH");
+        assert_eq!(ready["candidate_operations"][0],
+            "paint_cube_face_regions_guarded");
+        assert_eq!(ready["source_blockers"], json!([]));
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"uv",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
+        let manual = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
+        assert_eq!(manual["candidate_operations"], json!(["set_face_uv"]));
+        textured.cubes[0].extra.insert("box_uv".into(), json!(true));
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"uv",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
+        let boxed = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
+        assert_eq!(boxed["candidate_operations"][0], "set_box_uv_offset");
+        assert_eq!(boxed["candidate_operations"][1], "isolate_cube_box_uv");
 
         let mut second = doc.cubes[0].clone();
         second.uuid = "00000000-0000-4000-8000-000000000599".into();
