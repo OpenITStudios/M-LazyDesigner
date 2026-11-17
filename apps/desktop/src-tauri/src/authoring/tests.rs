@@ -8,6 +8,46 @@ const TEXTURED: &str = include_str!("../../fixtures/bedrock-texture-interchange.
 const BONE: &str = "00000000-0000-4000-8000-000000000001";
 const CUBE: &str = "00000000-0000-4000-8000-000000000002";
 
+// SOURCE-AUTHORED_NOT_RUN: an immutable admitted session has identical
+// inspector outputs; malformed direct documents still refuse at public API.
+#[test]
+fn validated_inspection_matches_standalone_public_source_contract() {
+    let session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let doc = session.document();
+    let before = doc.clone();
+    let view = session.inspections();
+    let cube = &doc.cubes[0].uuid;
+    let texture = doc.texture_assets[0]["uuid"].as_str().unwrap();
+
+    assert_eq!(view.cube_surfaces(cube).unwrap(),
+        inspect_cube_surfaces(doc, cube).unwrap());
+    assert_eq!(view.cube_face_alpha(cube).unwrap(),
+        inspect_cube_uv_alpha(doc, cube).unwrap());
+    assert_eq!(view.texture_alpha(texture).unwrap(),
+        inspect_paint_alpha(doc, texture).unwrap());
+    assert_eq!(view.model_texture_coverage(0, 1, true).unwrap(),
+        inspect_model_texture_coverage_filtered(doc, 0, 1, true).unwrap());
+    assert_eq!(view.model_texture_coverage(0, 0, true).unwrap_err(),
+        inspect_model_texture_coverage_filtered(doc, 0, 0, true).unwrap_err());
+    assert_eq!(view.cube_surfaces("unknown-cube").unwrap_err(),
+        inspect_cube_surfaces(doc, "unknown-cube").unwrap_err());
+    assert_eq!(doc, &before);
+
+    let mut invalid = before.clone();
+    invalid.meta.format_version = "4.0".into();
+    assert_eq!(EditorSession::from_document(invalid.clone())
+        .err().as_deref(), Some("BBMODEL_VERSION_OR_FORMAT_UNSUPPORTED"));
+    for refusal in [
+        inspect_cube_surfaces(&invalid, cube).unwrap_err(),
+        inspect_cube_uv_alpha(&invalid, cube).unwrap_err(),
+        inspect_paint_alpha(&invalid, texture).unwrap_err(),
+        inspect_model_texture_coverage_filtered(&invalid, 0, 1, true)
+            .unwrap_err(),
+    ] {
+        assert_eq!(refusal, "BBMODEL_VERSION_OR_FORMAT_UNSUPPORTED");
+    }
+}
+
 fn sample_cube(uuid: &str) -> Cube {
     let mut value: Value = serde_json::from_str(SAMPLE).unwrap();
     value["elements"][0]["uuid"] = json!(uuid);

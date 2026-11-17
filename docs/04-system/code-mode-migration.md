@@ -67,6 +67,25 @@ and real visual/artist acceptance remain held. This is an adaptation of
 PTC and tool-use-example principles, **not** an installation of Anthropic's
 native `input_examples` feature or Cloudflare's Worker sandbox.
 
+## Validated-session source read hot path — 2026-11-18 (SOURCE ONLY)
+
+The SHA-bound Rust CLI imports a validated `EditorSession` once per
+`inspect-batch`. Its new read-only `ValidatedInspection` view has no public
+constructor for arbitrary documents and serves the frequently used
+`authoring_target`, Cube surfaces, face alpha, Texture alpha and paged
+model texture coverage selectors. `EditorSession::open` no longer repeats
+the import decoder's document validation. Public source inspectors and
+`from_document` still perform complete validation on arbitrary Rust
+documents. The same source SHA, UV/PNG admission, page and byte limits,
+authoritative Rust transactions, original model and independent approval
+rules remain intact.
+
+Source regression cases compare exact ordered JSON against standalone
+inspection and preserve malformed-source/UUID/page refusals. Tests are
+AUTHORED_NOT_RUN: CPU gains and installed behavior remain UNVERIFIED.
+More specialized inspection families still keep their public validations;
+do not treat this as a universal cache or permission bypass.
+
 ## Programmatic read batching — 2026-11-15 (SOURCE_ONLY)
 
 **Write launch integrity:** A host-approved transaction is rechecked by a

@@ -1155,6 +1155,14 @@ fn editable_rotation_track(track: &Value) -> bool {
 /// references; do not pretend a declared texture ID is the rendered material.
 pub fn inspect_cube_surfaces(doc: &AuthoringDocument, cube_uuid: &str) -> Result<Value> {
     doc.validate()?;
+    inspect_cube_surfaces_validated_uuid(doc, cube_uuid)
+}
+
+/// Internal fast path for an already-validated EditorSession. Standalone
+/// callers must go through inspect_cube_surfaces() and its full validation.
+fn inspect_cube_surfaces_validated_uuid(
+    doc: &AuthoringDocument, cube_uuid: &str,
+) -> Result<Value> {
     let cube = doc.cubes.iter().find(|cube| cube.uuid == cube_uuid)
         .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
     let texture_indices = indexed_texture_uuids(doc);
@@ -1507,6 +1515,14 @@ pub fn export_paint_png(doc: &AuthoringDocument, texture_uuid: &str) -> Result<V
 /// interpreted or rewritten. Alpha statistics cannot prove face coverage.
 pub fn inspect_paint_alpha(doc: &AuthoringDocument, texture_uuid: &str) -> Result<Value> {
     doc.validate()?;
+    inspect_paint_alpha_validated(doc, texture_uuid)
+}
+
+/// Internal immutable read from a document admitted by EditorSession. The
+/// PNG decoder and unsupported-format decisions are intentionally unchanged.
+fn inspect_paint_alpha_validated(
+    doc: &AuthoringDocument, texture_uuid: &str,
+) -> Result<Value> {
     let index = doc.texture_assets.iter().position(|texture|
         texture.get("uuid").and_then(Value::as_str) == Some(texture_uuid))
         .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
@@ -3108,6 +3124,40 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
     }
 }
 
+/// Read capability tied to one validated EditorSession lifetime. Private
+/// fields prevent callers from constructing this for unvalidated documents.
+pub struct ValidatedInspection<'a> {
+    doc: &'a AuthoringDocument,
+}
+
+impl ValidatedInspection<'_> {
+    pub fn cube_surfaces(&self, uuid: &str) -> Result<Value> {
+        inspect_cube_surfaces_validated_uuid(self.doc, uuid)
+    }
+
+    pub fn cube_face_alpha(&self, uuid: &str) -> Result<Value> {
+        let cube = self.doc.cubes.iter().find(|cube| cube.uuid == uuid)
+            .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+        let texture_indices = indexed_texture_uuids(self.doc);
+        let mut decoded = Vec::new();
+        inspect_cube_uv_alpha_validated(
+            self.doc, cube, &mut decoded, &texture_indices,
+        )
+    }
+
+    pub fn texture_alpha(&self, uuid: &str) -> Result<Value> {
+        inspect_paint_alpha_validated(self.doc, uuid)
+    }
+
+    pub fn model_texture_coverage(
+        &self, offset: usize, limit: usize, attention_only: bool,
+    ) -> Result<Value> {
+        texture_coverage::inspect_model_texture_coverage_filtered_validated(
+            self.doc, offset, limit, attention_only,
+        )
+    }
+}
+
 /// The only mutable authoring state. Each GUI/CLI caller must supply the
 /// expected in-process revision; CLI also checks exact source SHA-256.
 pub struct EditorSession {
@@ -3119,13 +3169,19 @@ pub struct EditorSession {
 
 impl EditorSession {
     pub fn open(bytes: &[u8]) -> Result<Self> {
-        Self::from_document(AuthoringDocument::import_bbmodel(bytes)?)
+        // bbmodel::decode already validates all imported model data.
+        let doc = AuthoringDocument::import_bbmodel(bytes)?;
+        Ok(Self { doc, revision: 0, undo: Vec::new(), redo: Vec::new() })
     }
     pub fn from_document(doc: AuthoringDocument) -> Result<Self> {
+        // Direct constructors still admit caller-owned, potentially invalid state.
         doc.validate()?;
         Ok(Self { doc, revision: 0, undo: Vec::new(), redo: Vec::new() })
     }
     pub fn document(&self) -> &AuthoringDocument { &self.doc }
+    pub fn inspections(&self) -> ValidatedInspection<'_> {
+        ValidatedInspection { doc: &self.doc }
+    }
     pub fn can_undo(&self) -> bool { !self.undo.is_empty() }
     pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
     pub fn summary(&self) -> DocumentSummary { self.doc.summary(self.revision) }

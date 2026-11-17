@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession, ValidatedInspection,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -265,6 +265,13 @@ fn inspect_model_audit(doc: &AuthoringDocument) -> Value {
 fn inspect_authoring_target(
     doc: &AuthoringDocument, domain: &str, category: &str, name: &str,
 ) -> Result<Value> {
+    inspect_authoring_target_with_view(doc, None, domain, category, name)
+}
+
+fn inspect_authoring_target_with_view(
+    doc: &AuthoringDocument, validated: Option<&ValidatedInspection<'_>>,
+    domain: &str, category: &str, name: &str,
+) -> Result<Value> {
     if name.is_empty() || name.trim() != name || name.chars().count() > 128 ||
        name.chars().any(char::is_control) {
         return Err(fail("AUTHORING_TARGET_NAME_INVALID"));
@@ -333,7 +340,10 @@ fn inspect_authoring_target(
                 "cubes" => {
                     let element = focused_element(doc, uuid)?;
                     let surfaces = if domain == "uv" || domain == "texturing" {
-                        Some(inspect_cube_surfaces(doc, uuid)?)
+                        Some(match validated {
+                            Some(view) => view.cube_surfaces(uuid)?,
+                            None => inspect_cube_surfaces(doc, uuid)?,
+                        })
                     } else { None };
                     json!({"element":element, "surfaces":surfaces})
                 },
@@ -493,6 +503,21 @@ fn batch_id(value: &str) -> Result<&str> {
 }
 
 fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> Result<Vec<Value>> {
+    // Arbitrary-document fixture and inspection paths retain their gates.
+    inspect_batch_with_view(doc, None, requests)
+}
+
+fn inspect_batch_session(
+    session: &EditorSession, requests: Vec<InspectBatchQuery>,
+) -> Result<Vec<Value>> {
+    let validated = session.inspections();
+    inspect_batch_with_view(session.document(), Some(&validated), requests)
+}
+
+fn inspect_batch_with_view(
+    doc: &AuthoringDocument, validated: Option<&ValidatedInspection<'_>>,
+    requests: Vec<InspectBatchQuery>,
+) -> Result<Vec<Value>> {
     if requests.is_empty() || requests.len() > MAX_INSPECT_BATCH_QUERIES {
         return Err(fail("INSPECT_BATCH_SIZE_INVALID"));
     }
@@ -500,7 +525,9 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
     for query in requests {
         let entry = match query {
             InspectBatchQuery::AuthoringTarget { domain, category, name } => {
-                let target = inspect_authoring_target(doc, &domain, &category, &name)?;
+                let target = inspect_authoring_target_with_view(
+                    doc, validated, &domain, &category, &name,
+                )?;
                 json!({"kind":"authoring_target", "target":target})
             },
             InspectBatchQuery::Cube { uuid } => {
@@ -508,11 +535,19 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 json!({"kind":"cube","element":element})
             },
             InspectBatchQuery::CubeSurfaces { uuid } => {
-                let surfaces = inspect_cube_surfaces(doc, batch_id(&uuid)?)?;
+                let uuid = batch_id(&uuid)?;
+                let surfaces = match validated {
+                    Some(view) => view.cube_surfaces(uuid)?,
+                    None => inspect_cube_surfaces(doc, uuid)?,
+                };
                 json!({"kind":"cube_surfaces","surfaces":surfaces})
             },
             InspectBatchQuery::CubeFaceAlpha { uuid } => {
-                let face_alpha = inspect_cube_uv_alpha(doc, batch_id(&uuid)?)?;
+                let uuid = batch_id(&uuid)?;
+                let face_alpha = match validated {
+                    Some(view) => view.cube_face_alpha(uuid)?,
+                    None => inspect_cube_uv_alpha(doc, uuid)?,
+                };
                 json!({"kind":"cube_face_alpha","face_alpha":face_alpha})
             },
             InspectBatchQuery::CubeUvSharing { uuid, texture_uuid } => {
@@ -527,9 +562,14 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 json!({"kind":"asset_handoff","handoff":handoff})
             },
             InspectBatchQuery::ModelTextureCoverage { offset, limit, attention_only } => {
-                let coverage = inspect_model_texture_coverage_filtered(doc,
+                let (offset, limit, only) = (
                     offset.unwrap_or(0), limit.unwrap_or(4),
-                    attention_only.unwrap_or(false))?;
+                    attention_only.unwrap_or(false),
+                );
+                let coverage = match validated {
+                    Some(view) => view.model_texture_coverage(offset, limit, only)?,
+                    None => inspect_model_texture_coverage_filtered(doc, offset, limit, only)?,
+                };
                 json!({"kind":"model_texture_coverage","coverage":coverage})
             },
             InspectBatchQuery::MaterialPair {reference_uuid,candidate_uuid,
@@ -576,7 +616,11 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 json!({"kind":"texture","asset":asset})
             },
             InspectBatchQuery::TextureAlpha { uuid } => {
-                let alpha = inspect_paint_alpha(doc, batch_id(&uuid)?)?;
+                let uuid = batch_id(&uuid)?;
+                let alpha = match validated {
+                    Some(view) => view.texture_alpha(uuid)?,
+                    None => inspect_paint_alpha(doc, uuid)?,
+                };
                 json!({"kind":"texture_alpha","alpha":alpha})
             },
             InspectBatchQuery::Animation { uuid } => {
@@ -743,7 +787,7 @@ fn execute() -> Result<Value> {
             )?;
             let queries: InspectBatchInput = serde_json::from_slice(&query_bytes)
                 .map_err(|_| fail("INSPECT_BATCH_INVALID"))?;
-            let results = inspect_batch(session.document(), queries.requests)?;
+            let results = inspect_batch_session(&session, queries.requests)?;
             let response = json!({
                 "status":"OK","sha256":actual_sha,
                 "summary":session.summary(),"results":results
@@ -1304,6 +1348,37 @@ mod tests {
         assert_eq!(prior.cubes[0].name.as_deref(), Some("Helmet"));
         assert_eq!(prior, AuthoringDocument::import_bbmodel(
             &prior.export_bbmodel().unwrap()).unwrap());
+    }
+
+    // SOURCE-AUTHORED_NOT_RUN: exact JSON parity of the validated one-source
+    // batch and standalone public inspectors, with no model mutation.
+    #[test]
+    fn code_mode_validated_session_batch_matches_standalone_reads() {
+        let session = EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-texture-interchange.bbmodel")
+        ).unwrap();
+        let cube = session.document().cubes[0].uuid.clone();
+        let texture = session.document().texture_assets[0]["uuid"]
+            .as_str().unwrap().to_owned();
+        let payload = json!({"requests":[
+            {"kind":"authoring_target","domain":"texturing",
+             "category":"cubes","name":"textured_cube"},
+            {"kind":"cube_surfaces","uuid":cube},
+            {"kind":"cube_face_alpha","uuid":cube},
+            {"kind":"model_texture_coverage","offset":0,"limit":1,
+             "attention_only":true},
+            {"kind":"texture_alpha","uuid":texture}
+        ]});
+        let direct: InspectBatchInput =
+            serde_json::from_value(payload.clone()).unwrap();
+        let trusted: InspectBatchInput =
+            serde_json::from_value(payload).unwrap();
+        let before = session.document().clone();
+        assert_eq!(
+            inspect_batch_session(&session, trusted.requests).unwrap(),
+            inspect_batch(session.document(), direct.requests).unwrap()
+        );
+        assert_eq!(session.document(), &before);
     }
 
     #[test]

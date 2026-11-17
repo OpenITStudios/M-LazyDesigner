@@ -25,10 +25,21 @@ pub fn inspect_model_texture_coverage_filtered(
     if offset > 65_536 || limit == 0 || limit > MAX_PAGE {
         return Err("TEXTURE_COVERAGE_PAGE_INVALID".into());
     }
-    // Validate the ENTIRE document exactly once even for empty pages.
-    // Per-Cube processing borrows only Cubes from that validated document;
-    // revalidating all model assets eight times per page would be redundant.
+    // Arbitrary standalone document callers preserve the complete gate.
     doc.validate()?;
+    inspect_model_texture_coverage_filtered_validated(
+        doc, offset, limit, attention_only,
+    )
+}
+
+/// Session-only projection: borrowed from a validated immutable document.
+/// This is not a public unvalidated-document inspection entrypoint.
+pub(super) fn inspect_model_texture_coverage_filtered_validated(
+    doc: &AuthoringDocument, offset: usize, limit: usize, attention_only: bool,
+) -> Result<Value> {
+    if offset > 65_536 || limit == 0 || limit > MAX_PAGE {
+        return Err("TEXTURE_COVERAGE_PAGE_INVALID".into());
+    }
     let texture_indices = super::indexed_texture_uuids(doc);
     let total = doc.cubes.len();
     let mut cubes = Vec::new();
