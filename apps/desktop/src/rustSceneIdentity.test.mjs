@@ -37,6 +37,9 @@ test('material-only refresh keeps native structure and falls back on any other c
   const text = await readFile(new URL('./RustViewport.svelte',import.meta.url),'utf8');
   assert.match(text,/if \(refreshPaintSources\(identity\)\) return;/);
   assert.match(text,/material\.userData\.previewTextureIndex/);
+  assert.match(text,/paintMaterialsByTexture\.get\(index\)/);
+  assert.match(text,/paintMaterialsByTexture = new Map\(\)/);
+  assert.match(text,/paintMaterialsByTexture\.clear\(\)/);
   assert.match(text,/reconcileTextures\(\);/);
   assert.match(text,/material\.needsUpdate = true;/);
   assert.match(text,/material\.side = previewRenderSide\(texture \? texturePreviewSides\[index\] : null\)/);

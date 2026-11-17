@@ -50,6 +50,14 @@
   // meshes; raycast still uses the original complete list.
   let meshesByCube = new Map<string, THREE.Mesh>();
   let renderedSelection: string | null = null;
+  // One derived index per rebuilt scene: Paint touches only material faces
+  // using the changed atlas instead of scanning every Cube in the scene.
+  type IndexedPaintMaterial = {
+    material: THREE.MeshLambertMaterial;
+    cubeUuid: string;
+    fallbackColor: number;
+  };
+  let paintMaterialsByTexture = new Map<number, IndexedPaintMaterial[]>();
   const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
   const failedTextureSources = new Set<string>();
   let projectedScene: SceneInputs | null = null;
@@ -177,29 +185,20 @@
     for (let index = 0; index < identity.sources.length; index++) {
       if (projectedScene!.sources[index] !== identity.sources[index]) changed.add(index);
     }
-    for (const mesh of pickMeshes) {
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const material of materials) {
-        if (!(material instanceof THREE.MeshLambertMaterial)) continue;
-        const index: unknown = material.userData.previewTextureIndex;
-        if (typeof index !== 'number' || !changed.has(index)) continue;
-        const texture = embeddedTexture(index);
-        // Both old and new sources are nonempty admitted PNG candidates.
-        // If a browser decoder later refuses one, its existing active-load
-        // callback invalidates the derived scene and forces full fallback.
+    for (const index of changed) {
+      const targets = paintMaterialsByTexture.get(index);
+      if (!targets?.length) continue;
+      const texture = embeddedTexture(index);
+      // The browser decoder may reject a newly admitted PNG later. Its
+      // active-request callback already invalidates this scene and rebuilds
+      // the safe untextured fallback without changing Rust-owned pixels.
+      for (const { material, cubeUuid, fallbackColor } of targets) {
         material.map = texture;
-        const base: unknown = mesh.userData.fallbackColor;
-        if (texture) material.color.setHex(0xffffff);
-        else if (typeof base === 'number') {
-          const uuid: unknown = mesh.userData.cubeUuid;
-          const color = cubeSelectionColors(typeof uuid === 'string' ? uuid : '', selectedId, base);
-          material.color.setHex(color.untextured);
-        }
+        const colors = cubeSelectionColors(cubeUuid, selectedId, fallbackColor);
+        material.color.setHex(texture ? 0xffffff : colors.untextured);
         material.transparent = Boolean(texture);
         material.alphaTest = texture ? BEDROCK_PREVIEW_ALPHA_TEST : 0;
         material.opacity = texture ? 1 : 0.94;
-        // A failed prior image may have used the default double-sided
-        // fallback; an accepted replacement must restore its saved side.
         material.side = previewRenderSide(texture ? texturePreviewSides[index] : null) === 'front'
           ? THREE.FrontSide : THREE.DoubleSide;
         material.needsUpdate = true;
@@ -292,6 +291,7 @@
     pickMeshes = [];
     meshesByCube = new Map();
     renderedSelection = null;
+    paintMaterialsByTexture = new Map();
     pivots = new Map();
     bonePivots = new Map();
     const cubesById = new Map(currentCubes.map((cube) => [cube.uuid, cube] as const));
@@ -360,6 +360,16 @@
           }
           uvAttribute.needsUpdate = true;
           const mesh = new THREE.Mesh(geometry, materials);
+          for (const material of materials) {
+            const textureIndex: unknown = material.userData.previewTextureIndex;
+            if (typeof textureIndex !== 'number') continue;
+            const entries = paintMaterialsByTexture.get(textureIndex) ?? [];
+            entries.push({
+              material, cubeUuid: cube.uuid,
+              fallbackColor: COLORS[cube.color % COLORS.length],
+            });
+            paintMaterialsByTexture.set(textureIndex, entries);
+          }
           // Match pinned Blockbench Cube.preview_controller.updateRenderOrder.
           mesh.renderOrder = cube.renderOrder;
           mesh.position.set(
@@ -612,6 +622,7 @@
       modelRoot = null;
       pickMeshes = [];
       meshesByCube.clear();
+      paintMaterialsByTexture.clear();
       renderedSelection = null;
       pivots.clear();
       bonePivots.clear();
