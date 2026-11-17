@@ -403,7 +403,7 @@ function serializeInspectionQueries(requests) {
   if (Buffer.byteLength(encoded, 'utf8') > PLAN_LIMIT) {
     throw new TypeError('INSPECT_BATCH_SIZE_INVALID');
   }
-  return encoded;
+  return { payload: encoded, normalized: selected };
 }
 
 /**
@@ -498,12 +498,11 @@ export function createRustCodeModeClient({
     async inspectBatch({ input, expectedSha256, requests }) {
       const source = absolute(input, 'input');
       const digest = hash(expectedSha256);
-      const payload = serializeInspectionQueries(requests);
+      const { payload, normalized } = serializeInspectionQueries(requests);
       // A SHA-bound Rust inspect-batch is one immutable model read. Repeated
       // byte-identical normalized selectors within THAT batch need only one
       // calculation. Never cache across calls: native Rust must verify the
       // current disk/source SHA for every new inspection.
-      const normalized = JSON.parse(payload).requests;
       const positions = [];
       const unique = [];
       const seen = new Map();
