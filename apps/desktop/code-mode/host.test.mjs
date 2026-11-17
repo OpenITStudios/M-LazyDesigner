@@ -2660,6 +2660,7 @@ test('accepted material face cannot invent saved Cube/texture ownership',()=>
           status:'OK',source_model_sha256:HASH,
           reference_png_sha256:digest,capture_png_sha256:digest,
           comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
             visual_verdict:'UNVERIFIED'},
         };
         assert.equal(argv[0],'inspect-batch');
