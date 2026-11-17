@@ -17,6 +17,8 @@ import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
   paintOperationsFingerprint} from './material-work-packet.mjs';
 import {boundReviewCriteria,checkedCriterionReview,criterionPermitsPaint}
   from './review-criteria.mjs';
+import {bindApprovedWorkspaceReference,assertApprovedWorkspaceReferenceFresh,
+  referencePackageLeaseValid} from './approved-reference-package.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -92,7 +94,7 @@ async function pinnedVisualPng(path, label) {
     path:selected, sha256:createHash('sha256').update(bytes).digest('hex'),
   });
 }
-async function pinnedVisualPair(source, options, modelSha) {
+async function pinnedVisualPair(source, options, modelSha, approvedReferencePackagePath) {
   if (options === undefined) return null;
   if (!options || typeof options !== 'object' || Array.isArray(options) ||
       Object.keys(options).some(key => ![
@@ -141,12 +143,17 @@ async function pinnedVisualPair(source, options, modelSha) {
       new Set(views.map(v=>v.capture.path)).size!==views.length) {
     throw new Error('CODE_MODE_VISUAL_VIEW_SET_INVALID');
   }
+  const packageBinding=approvedReferencePackagePath===undefined?null:
+    await bindApprovedWorkspaceReference(approvedReferencePackagePath,source,
+      views,options.reviewCriteria);
   const [primary,...additionalViews]=views;
   return Object.freeze({
     ...primary,modelSha,
     additionalViews:Object.freeze(additionalViews),
     requireSixDirections:options.requireSixDirections===true,
-    reviewCriteria:boundReviewCriteria(options.reviewCriteria,views),
+    referencePackageBinding:packageBinding,
+    reviewCriteria:boundReviewCriteria(
+      packageBinding?.criteria??options.reviewCriteria,views),
   });
 }
 // Operator review is input from a trusted host callback, not model-written code.
@@ -730,7 +737,8 @@ async function bindApprovedReference(project,uuid){
 export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
   preselectedPngPath, approvedMaterialReferenceUuid,
-  preselectedVisualPair, reviewVisualPair, runner, spawnImpl,
+  preselectedVisualPair, approvedReferencePackagePath,
+  reviewVisualPair, runner, spawnImpl,
 } = {}) {
   requireAbsolute(rustBinary, 'rustBinary');
   requireAbsolute(denoBinary, 'denoBinary');
@@ -755,6 +763,10 @@ export async function createCodeModeHost({
       (typeof reviewVisualPair !== 'function' ||
        preselectedVisualPair === undefined)) {
     throw new TypeError('CODE_MODE_VISUAL_REVIEW_HOST_INVALID');
+  }
+  if (approvedReferencePackagePath!==undefined &&
+      (preselectedVisualPair===undefined || input===undefined)) {
+    throw new Error('CODE_MODE_REFERENCE_REQUIRES_VISUAL_INPUT_MODEL');
   }
   const source = input === undefined ? null :
     await regularFile(input, 'CODE_MODE_SOURCE');
@@ -811,7 +823,15 @@ export async function createCodeModeHost({
       execution.pause();
       let approved;
       try {
-        approved = await authorizeMutation(Object.freeze({ ...request }));
+        approved = await authorizeMutation(Object.freeze({
+          ...request,
+          ...(visualPair?.referencePackageBinding?{
+            approvedReferencePackageSha256:
+              visualPair.referencePackageBinding.fingerprintSha256,
+            approvedReferenceCriterionCount:
+              visualPair.reviewCriteria?.length??0,
+          }:{}),
+        }));
       } finally {
         execution.resume();
       }
@@ -826,7 +846,9 @@ export async function createCodeModeHost({
     permitWriteLaunch: (request) => {
       const owner = approvedGuest.get(request);
       approvedGuest.delete(request);
-      return owner !== undefined && owner === activeExecution && !owner.closed;
+      return owner !== undefined && owner === activeExecution && !owner.closed &&
+        (!visualPair?.referencePackageBinding ||
+          referencePackageLeaseValid(visualPair.referencePackageBinding));
     },
   });
   const projects = new Map();
@@ -838,7 +860,8 @@ export async function createCodeModeHost({
   if (initialProject) projects.set('p0', initialProject);
   let nextProject = initialProject ? 1 : 0;
   const visualPair = await pinnedVisualPair(
-    source, preselectedVisualPair, initialProject?.expectedSha256 ?? null);
+    source, preselectedVisualPair, initialProject?.expectedSha256 ?? null,
+    approvedReferencePackagePath);
   const visualViews=Object.freeze(visualPair===null?[]:[
     visualPair,...visualPair.additionalViews,
   ]);
@@ -948,6 +971,10 @@ export async function createCodeModeHost({
       }
       if (model.expectedSha256 !== visualPair.modelSha) {
         throw new Error('CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+      }
+      if(visualPair.referencePackageBinding){
+        await assertApprovedWorkspaceReferenceFresh(
+          visualPair.referencePackageBinding);
       }
       if (visualViews.length > 1 && verifiedMultiViewRead !== null) {
         // The first read already completed numeric comparisons and
@@ -1074,6 +1101,17 @@ export async function createCodeModeHost({
         feedback=Object.freeze({...feedback,
           review_criteria:visualPair.reviewCriteria??Object.freeze([]),
           criteria_review:criteriaReview,
+          reference_package_evidence:visualPair.referencePackageBinding?
+            Object.freeze({
+              source:'EXISTING_WORKSPACE_REFERENCE_JSON_DECLARATION',
+              fingerprint_sha256:
+                visualPair.referencePackageBinding.fingerprintSha256,
+              matched_images:
+                visualPair.referencePackageBinding.matchedImageCount,
+              automatically_bound_preserve:
+                visualPair.referencePackageBinding.automaticallyBoundPreserveCount,
+              visual_verdict:'UNVERIFIED',
+            }):null,
         });
         if (feedback.reviewedFaces.length>0) {
           // A camera declaration cannot create actual Cube/UV ownership.
@@ -1180,6 +1218,10 @@ export async function createCodeModeHost({
             }),
           });
         }
+        if(visualPair.referencePackageBinding){
+          await assertApprovedWorkspaceReferenceFresh(
+            visualPair.referencePackageBinding);
+        }
         // The independent reviewer may take minutes. Source or PNGs can
         // change while it is inspecting images, even when all preflight
         // hashes were correct. Never cache a verdict against stale bytes.
@@ -1229,6 +1271,10 @@ export async function createCodeModeHost({
       const p=selected(args);
       if (Object.keys(args).some(key=>key!=='project')) {
         throw new Error('CODE_MODE_TEXTURING_READINESS_ARGUMENT_INVALID');
+      }
+      if(visualPair?.referencePackageBinding){
+        await assertApprovedWorkspaceReferenceFresh(
+          visualPair.referencePackageBinding);
       }
       const blocked=[];
       if (visualPair===null || p.expectedSha256!==visualPair.modelSha) {
@@ -1567,6 +1613,10 @@ export async function createCodeModeHost({
       }
       const pixelEdit = Array.isArray(activeOperations) &&
         activeOperations.some(op => PIXEL_MUTATIONS.has(op?.op));
+      if(pixelEdit && visualPair?.referencePackageBinding){
+        await assertApprovedWorkspaceReferenceFresh(
+          visualPair.referencePackageBinding);
+      }
       // Domain-separated operation identity allows a real reviewer to
       // reject an exact replay despite renamed approach or treatment labels.
       // It is never itself a material/artistic verdict or permission.

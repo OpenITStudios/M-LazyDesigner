@@ -130,6 +130,26 @@ unreviewed known exact-RGBA edits retain their direct path.
 Tests AUTHORED_NOT_RUN. See HOST_INTEGRATION.md.
 
 
+**Canonical Workspace Reference auto-binding (2026-11-18; SOURCE ONLY):**
+With a selected existing `--input` and `--visual-manifest`,
+the trusted Code Mode CLI now looks ONLY in that model's directory for
+`reference/REFERENCE.json`, `references/REFERENCE.json`, or `REFERENCE.json`. An operator may instead
+supply one exact `--reference-package` file. When present, the host
+requires the package to belong to the same saved model workspace, with
+`approval.visual_authority:APPROVED` and matching APPROVED, TEXTURE
+source PNGs with explicitly declared camera views. The host pins the
+canonical JSON SHA and selected image identity and checks package freshness
+after review and before later Paint/readiness. Explicit
+`images[].regions` SURFACE_DETAIL/DIRECT declarations for supported
+parts with meaningful `parts[].description` become PRESERVE review
+obligations; the current rejected part, identified by a CORRECT decision,
+is excluded from auto-preservation. Native atlas coordinates are NEVER
+inferred from reference image boxes. Correction scopes remain explicitly
+reviewer/UV-owned. Missing, partial, stale or contradictory source evidence
+fails closed; unannotated packages do not invent decisions. No independent
+user-approval authentication or visual renderer/agent behavioral proof.
+Node regressions AUTHORED_NOT_RUN.
+
 **Approved-reference decision accountability (2026-11-17; SOURCE_ONLY):**
 The operator-selected `--visual-manifest` may now carry a bounded
 `reviewCriteria` projection of current approved Reference/Workspace

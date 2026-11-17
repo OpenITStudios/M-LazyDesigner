@@ -10,6 +10,16 @@ const SHA=/^[a-f0-9]{64}$/;
 const UUID=/^[a-zA-Z0-9_-]{1,128}$/;
 const VIEWS=new Set(['front','back','left','right','top','bottom','three_quarter']);
 const VERDICTS=new Set(['MET','VIOLATED','UNVERIFIED']);
+const sourceRegion=value=>value && typeof value==='object' &&
+  !Array.isArray(value) &&
+  Object.keys(value).length===2 &&
+  Object.hasOwn(value,'id') && Object.hasOwn(value,'boxUv') &&
+  typeof value.id==='string' &&
+  /^[A-Za-z0-9_-]{1,64}$/.test(value.id) &&
+  Array.isArray(value.boxUv) && value.boxUv.length===4 &&
+  value.boxUv.every(n=>typeof n==='number' &&
+    Number.isFinite(n) && n>=0 && n<=1) &&
+  value.boxUv[0]<value.boxUv[2] && value.boxUv[1]<value.boxUv[3];
 
 function invalid(code){throw new Error(code);}
 function object(value,keys,code){
@@ -47,18 +57,24 @@ export function boundReviewCriteria(raw,selectedViews){
   const seen=new Set();let corrective=0;
   const items=raw.map(item=>{
     object(item,['id','partId','kind','requirement','viewId',
-      'referencePngSha256','textureUuid','allowedRegions','protectedRegions'],
+      'referencePngSha256','textureUuid','allowedRegions','protectedRegions',
+      'sourceRegion'],
       'CODE_MODE_REVIEW_CRITERIA_INVALID');
     if(!ID.test(item.id??'') || !ID.test(item.partId??'') ||
        !['PRESERVE','CORRECT'].includes(item.kind) ||
        !statement(item.requirement) || !VIEWS.has(item.viewId) ||
        !SHA.test(item.referencePngSha256??'') ||
        selected.get(item.viewId)!==item.referencePngSha256 ||
+       (item.sourceRegion!==undefined && !sourceRegion(item.sourceRegion)) ||
        seen.has(item.id)) invalid('CODE_MODE_REVIEW_CRITERIA_INVALID');
     seen.add(item.id);
     const common={id:item.id,partId:item.partId,kind:item.kind,
       requirement:item.requirement,viewId:item.viewId,
-      referencePngSha256:item.referencePngSha256};
+      referencePngSha256:item.referencePngSha256,
+      ...(item.sourceRegion?{sourceRegion:Object.freeze({
+        id:item.sourceRegion.id,
+        boxUv:Object.freeze([...item.sourceRegion.boxUv]),
+      })}:{})};
     if(item.kind==='CORRECT'){
       corrective++;
       // Visual issue IDs in the existing Rust reviewer contract are capped
@@ -77,7 +93,10 @@ export function boundReviewCriteria(raw,selectedViews){
       protectedRegions:Object.freeze(rectangles(item.textureUuid,item.protectedRegions)),
     }:{})});
   });
-  if(corrective<1 || corrective>6)invalid('CODE_MODE_REVIEW_CRITERIA_INVALID');
+  if(corrective>6)invalid('CODE_MODE_REVIEW_CRITERIA_INVALID');
+  // A source-only PRESERVE review is valid and can establish whether the
+  // approved reference still matches; it cannot authorize Paint without an
+  // explicit CORRECT criterion and native atlas scope.
   // A declared correction may not overlap an approved/protected identity
   // on the same physical texture, even if the reviewer overlooks it.
   for(const edit of items.filter(x=>x.kind==='CORRECT')){

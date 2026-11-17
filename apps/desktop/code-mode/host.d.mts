@@ -94,6 +94,13 @@ export interface CodeModeGuestAPI {
         source:"OPERATOR_SELECTED_REFERENCE_AND_INDEPENDENT_REVIEW_DECLARATION";
         visual_verdict:"UNVERIFIED";
       }> | null;
+      reference_package_evidence?:Readonly<{
+        source:"EXISTING_WORKSPACE_REFERENCE_JSON_DECLARATION";
+        fingerprint_sha256:string;
+        matched_images:number;
+        automatically_bound_preserve:number;
+        visual_verdict:"UNVERIFIED";
+      }> | null;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
       /** Specific model Cube faces actually reviewed; separate from camera views. */
       reviewedFaces:ReadonlyArray<Readonly<CodeModeReviewedTextureFace>>;
@@ -225,6 +232,8 @@ export interface CodeModeReviewCriterion {
   requirement:string;
   viewId:CodeModeVisualViewId;
   referencePngSha256:string;
+  /** Source-image normalized box, never a Rust atlas/UV paint region. */
+  sourceRegion?:{id:string;boxUv:[number,number,number,number]};
   textureUuid?:string;
   allowedRegions?:Array<{from:[number,number];to:[number,number]}>;
   protectedRegions?:Array<{from:[number,number];to:[number,number]}>;
@@ -321,6 +330,12 @@ export interface CodeModeHostOptions {
    * for comparisons within the same .bbmodel; not a visual approval detector.
    */
   approvedMaterialReferenceUuid?: string;
+  /** Optional canonical REFERENCE.json in the same asset workspace as the
+   * input .bbmodel. Trusted host binds selected approved source PNGs, imports
+   * explicit SURFACE_DETAIL obligations and rechecks the package fingerprint.
+   * It does NOT infer user approval, atlas coordinates or authoring permission.
+   */
+  approvedReferencePackagePath?:string;
   /** Image paths are explicitly operator-selected; model code cannot supply
    * them. The capture must correspond to the current model SHA according to
    * the operator; the decoder cannot authenticate a screenshot's origin.

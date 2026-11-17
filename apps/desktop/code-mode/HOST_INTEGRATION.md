@@ -380,6 +380,40 @@ The operator-provided manifest is a regular JSON file with exactly:
 }
 ```
 
+**Use the existing Workspace's canonical REFERENCE.json:** If
+`--input` and `--visual-manifest` are supplied, `run.mjs` checks
+only the input model directory's `reference/REFERENCE.json`,
+`references/REFERENCE.json` and `REFERENCE.json` (multiple matches refuse). Use
+`--reference-package /absolute/workspace/reference/REFERENCE.json`
+to specify an exact file instead. No global search or automatic
+cross-project adoption. A selected package must be in the same
+saved .bbmodel workspace and declare
+`approval.visual_authority:APPROVED`; for every manifest source image
+it must contain exactly one APPROVED, TEXTURE-relevant PNG with the
+same realpath and declared view. If the source reference is a composite
+or its view is unknown, stop the bound review rather than guessing its
+camera. These are source declarations, NOT independent proof the user
+approved the image. The host rechecks the REFERENCE.json fingerprint
+after reviewer inspection and before subsequent Paint/readiness.
+
+Eligible explicit `images[].regions` with
+`evidence_role:SURFACE_DETAIL` and `visibility:DIRECT` are bound to
+existing `parts[].id` and `parts[].description` as automatic
+PRESERVE obligations, except parts currently marked CORRECT by the
+operator's existing criteria. Their normalized `box_uv` is returned
+as a source-image `sourceRegion.boxUv` to the image reviewer, and is
+**never** reused as a physical atlas/UV correction rectangle. If
+no structured region and no separately established correction criterion
+exists, the review is explicitly blocked; the program does not invent
+approved parts, source camera direction or texture ownership. The
+existing Workspace README may describe accepted/current stages but is
+not parsed as art rules or a second approval database. Manual
+`reviewCriteria` remain necessary for a correction's native atlas
+scope when the canonical reference does not provide that information.
+Legacy direct Code Mode calls without a selected/available
+REFERENCE.json remain compatible but still cannot claim globally
+completed professional Texturing without approved criteria.
+
 **Freeze approved decisions in the existing visual manifest.** The operator
 can project the current authoritative Reference/Workspace decisions into
 `reviewCriteria` (1–12 entries, maximum six editable corrections). Example

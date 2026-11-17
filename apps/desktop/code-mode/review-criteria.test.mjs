@@ -51,8 +51,13 @@ test('no new reference image, silent missing correction or overlapping identity 
     assert.throws(()=>boundReviewCriteria([decisions[0],...mutation],selected),
       /CODE_MODE_REVIEW_CRITERIA_/);
   }
-  assert.throws(()=>boundReviewCriteria([{...decisions[0]}],selected),
-    /CODE_MODE_REVIEW_CRITERIA_INVALID/);
+  // A preservation-only review may acknowledge already-approved artwork;
+  // without a CORRECT criterion it cannot authorize a Paint operation.
+  const preserveOnly=boundReviewCriteria([{...decisions[0]}],selected);
+  assert.equal(preserveOnly.length,1);
+  assert.equal(criterionPermitsPaint(preserveOnly,{
+    issueId:'fix-helmet',partId:'tier2-helmet',
+  },{texture_uuid:'pillar-atlas',allowed_regions:[crop]}),false);
   assert.throws(()=>boundReviewCriteria([decisions[0],{
     ...decisions[1],id:'keep-shield',
   }],selected),/CODE_MODE_REVIEW_CRITERIA_INVALID/);
@@ -72,6 +77,18 @@ test('reviewer may not invent acceptance, omit a criterion or violate locked ide
   assert.throws(()=>checkedCriterionReview(criteria,claims,'REJECTED',issue,{
     ...scope,allowedRegions:[{from:[1,1],to:[5,5]}],
   }),/CODE_MODE_REVIEW_CRITERIA_CORRECTION_UNBOUND/);
+});
+test('approved source-image regions are review observations, never atlas positions',()=>{
+  const sourceEvidence={id:'shield_details',boxUv:[0.1,0.1,0.45,0.8]};
+  const typed=boundReviewCriteria([{
+    ...decisions[0],sourceRegion:sourceEvidence,
+  },decisions[1]],selected);
+  assert.deepEqual(typed[0].sourceRegion,sourceEvidence);
+  assert.equal(typed[0].textureUuid,'pillar-atlas');
+  assert.throws(()=>boundReviewCriteria([{
+    ...decisions[0],sourceRegion:{id:'shield_details',
+      boxUv:[1,0,0,0.8]},
+  },decisions[1]],selected),/CODE_MODE_REVIEW_CRITERIA_INVALID/);
 });
 test('all criteria must be acknowledged to declare review ready; unresolved is not accepted',()=>{
   const criteria=boundReviewCriteria(decisions,selected);

@@ -42,6 +42,20 @@ Baseline and candidate must use comparable model, viewer, reference and work sco
 
 Geometry/UV and Animation remain their respective authoring owners; do not repair a geometry cause by repainting arbitrary atlas pixels.
 
+## Reference Package automatic handoff: missing evidence remains explicit
+
+When the selected Pillager `.bbmodel` and canonical `REFERENCE.json`
+are in one active Workspace, the Code Mode operator CLI can locate
+`reference/REFERENCE.json` or `references/REFERENCE.json` without transcribing each explicitly
+annotated visible approved surface detail. Only declared
+`SURFACE_DETAIL` source regions and corresponding supported semantic
+parts produce source-image PRESERVE obligations; a currently rejected
+CORRECT part is excluded so its bad current appearance is not frozen.
+The approved source still cannot disclose Cube/UV atlas coordinates.
+No guessed correction region, accepted user decision or equivalent image
+camera is created automatically. Unannotated/ambiguous references
+remain an explicit blocker rather than an inferred PASS.
+
 ## User-decision convergence cases
 
 The approved user/Workspace reference, not the agent's latest prose,

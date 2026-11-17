@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
@@ -2615,6 +2615,103 @@ test('trusted reference criteria bind approved art and allowed corrections befor
     assert.equal(bounded.value.refused,'CODE_MODE_MATERIAL_SAMPLE_REQUIRED');
     assert.equal(calls,3); // Startup inspect + visual-pair + post-review inspect.
     assert.equal(approvals,0);
+  }));
+
+test('Rust host imports current workspace Reference decisions into reviewer and rejects stale source',()=>
+  fixture(async input=>{
+    const folder=dirname(input), refs=join(folder,'reference');
+    await mkdir(refs);
+    const file=join(refs,'REFERENCE.json');
+    const referencePngPath=join(refs,'front.png');
+    const capturePngPath=join(folder,'current.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(referencePngPath,png);
+    await writeFile(capturePngPath,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const pkg={
+      schema:'lazydesigner-reference-v1',
+      asset:{name:'Pillager',kind:'MODEL'},
+      approval:{visual_authority:'APPROVED'},
+      parts:[
+        {id:'tier1-shield',evidence:'SUPPORTED',
+          description:'Maintain the approved silver shield marks and inner red glass.'},
+        {id:'tier2-helmet',evidence:'SUPPORTED',
+          description:'The helmet should use deliberate metal form and shadow masses.'},
+      ],
+      images:[{id:'front',file:'front.png',view:'front',
+        status:'APPROVED',used_by:['TEXTURE'],regions:[
+          {id:'shield_marks',part_id:'tier1-shield',
+            evidence_role:'SURFACE_DETAIL',visibility:'DIRECT',
+            box_uv:[0.1,0.1,0.3,0.4]},
+          {id:'helmet_face',part_id:'tier2-helmet',
+            evidence_role:'SURFACE_DETAIL',visibility:'DIRECT',
+            box_uv:[0.4,0.1,0.7,0.5]},
+        ]}],
+    };
+    await writeFile(file,JSON.stringify(pkg));
+    let steps=0,reviewed=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      approvedReferencePackagePath:file,
+      preselectedVisualPair:{
+        referencePngPath,capturePngPath,viewId:'front',
+        captureModelSha256:HASH,
+        reviewCriteria:[{
+          id:'fix-helmet',partId:'tier2-helmet',kind:'CORRECT',
+          requirement:'Fix the rejected flat metal bar across the Tier 2 helmet.',
+          textureUuid:'tier-atlas',allowedRegions:[{from:[4,4],to:[8,8]}],
+          viewId:'front',referencePngSha256:digest,
+        }],
+      },
+      reviewVisualPair:async pair=>{
+        reviewed++;
+        assert.equal(pair.reviewCriteria.length,2);
+        const shield=pair.reviewCriteria.find(x=>x.partId==='tier1-shield');
+        assert.equal(shield.sourceRegion.id,'shield_marks');
+        assert.equal(shield.textureUuid,undefined);
+        return {decision:'REJECTED',issues:[{
+          id:'fix-helmet',partId:'tier2-helmet',kind:'MISSING_DETAIL',
+          observation:'The Tier 2 helmet still lacks form-following metal detail.',
+        }],correctionScope:{textureUuid:'tier-atlas',
+          allowedRegions:[{from:[4,4],to:[8,8]}],preserveAlpha:true},
+        criteriaReviews:[
+          {id:'fix-helmet',verdict:'VIOLATED',
+            observation:'The Tier 2 helmet remains flat in the matched reference.'},
+          {id:'preserve-shield_marks',verdict:'MET',
+            observation:'The approved Tier 1 shield artwork is unchanged.'},
+        ]};
+      },
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'inspect-visual-pair');
+        return {status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'}};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },response=>{
+        if(steps++===0){
+          assert.equal(response.ok,true);
+          assert.equal(response.result.review_feedback.criteria_review.status,
+            'CORRECTIONS_REQUIRED');
+          assert.equal(response.result.review_feedback.reference_package_evidence
+            .automatically_bound_preserve,1);
+          return {bound:true};
+        }
+        assert.equal(response.ok,false);
+        assert.equal(response.code,'CODE_MODE_REFERENCE_PACKAGE_CHANGED');
+        return {sourceChanged:true};
+      }),
+    });
+    const accepted=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(accepted.value.bound,true);
+    await writeFile(file,JSON.stringify({...pkg,asset:{name:'Different Project',kind:'MODEL'}}));
+    const stale=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(stale.value.sourceChanged,true);
+    assert.equal(reviewed,1);
   }));
 
 test('Texturing readiness reads all saved Cube coverage only after independently reviewed six PNG pairs',()=>

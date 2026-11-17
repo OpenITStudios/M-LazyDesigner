@@ -12,12 +12,15 @@ import { createInterface } from 'node:readline/promises';
 import { randomBytes } from 'node:crypto';
 import { createCodeModeHost } from './host.mjs';
 import {readOperatorVisualManifest, createTrustedProgramReviewer} from './trusted-visual-reviewer.mjs';
+import {discoverWorkspaceReferencePackage}
+  from './approved-reference-package.mjs';
 
 function parseArgs(argv) {
   const accepted = new Set([
     '--rust', '--deno', '--input', '--output-dir', '--code', '--png',
     '--visual-manifest', '--reviewer-exe',
-    '--approved-material-reference-uuid', '--approve-interactive',
+    '--approved-material-reference-uuid', '--reference-package',
+    '--approve-interactive',
   ]);
   const out = Object.create(null);
   for (let i = 0; i < argv.length; i++) {
@@ -56,6 +59,10 @@ function parseArgs(argv) {
       out['--input']===undefined) {
     throw new Error('CODE_MODE_MATERIAL_REFERENCE_REQUIRES_EXISTING_MODEL');
   }
+  if(out['--reference-package']!==undefined &&
+     (out['--input']===undefined || out['--visual-manifest']===undefined)){
+    throw new Error('CODE_MODE_REFERENCE_REQUIRES_VISUAL_INPUT_MODEL');
+  }
   return out;
 }
 async function main() {
@@ -86,6 +93,10 @@ async function main() {
         material_work_packet_sha256: request.materialWorkPacketSha256 ?? null,
         approved_material_reference_uuid:
           args['--approved-material-reference-uuid'] ?? null,
+        approved_reference_package_sha256:
+          request.approvedReferencePackageSha256 ?? null,
+        approved_reference_criteria_count:
+          request.approvedReferenceCriterionCount ?? null,
         material_work_packet:request.materialWorkPacket?{
           cohort:request.materialWorkPacket.partId,
           issue:request.materialWorkPacket.issueId,
@@ -115,11 +126,17 @@ async function main() {
     // No configured executable means source-only inspection, not visual PASS.
     const preselectedVisualPair=args['--visual-manifest']===undefined ?
       undefined:await readOperatorVisualManifest(args['--visual-manifest']);
+    // Only the active input model's canonical workspace is discovered;
+    // never search or switch to another project's reference implicitly.
+    const approvedReferencePackagePath=preselectedVisualPair===undefined?
+      undefined:(args['--reference-package'] ??
+        await discoverWorkspaceReferencePackage(args['--input']) ?? undefined);
     const reviewVisualPair=args['--reviewer-exe']===undefined ?
       undefined:await createTrustedProgramReviewer(args['--reviewer-exe']);
     const host = await createCodeModeHost({
       rustBinary: args['--rust'], denoBinary: args['--deno'],
       ...(preselectedVisualPair?{preselectedVisualPair}:{}),
+      ...(approvedReferencePackagePath?{approvedReferencePackagePath}:{}),
       ...(reviewVisualPair?{reviewVisualPair}:{}),
       ...(args['--approved-material-reference-uuid']?{
         approvedMaterialReferenceUuid:args['--approved-material-reference-uuid'],
