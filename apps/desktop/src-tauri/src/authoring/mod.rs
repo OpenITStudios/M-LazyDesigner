@@ -3126,6 +3126,11 @@ impl EditorSession {
     pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
     pub fn summary(&self) -> DocumentSummary { self.doc.summary(self.revision) }
     pub fn export(&self) -> Result<Vec<u8>> { self.doc.export_bbmodel() }
+    /// Hash the exact canonical exported bytes without constructing a second
+    /// complete JSON output buffer. Never use this to bypass export validity.
+    pub fn canonical_sha256(&self) -> Result<String> {
+        bbmodel::canonical_sha256(&self.doc)
+    }
 
     pub fn apply(&mut self, expected_revision: u64, operations: &[EditOperation]) -> Result<MutationReceipt> {
         self.apply_with_correction_scope(expected_revision, operations, None)

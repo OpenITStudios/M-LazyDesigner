@@ -192,8 +192,8 @@ fn check_epoch(store: &EditorStore, expected: u64) -> Result<(), DesktopError> {
 /// without creating an alternate scene or changing the raw source SHA guard.
 fn refresh_dirty(active: &mut ActiveModel) {
     active.dirty = match active.saved_canonical_sha.as_ref() {
-        Some(saved) => active.session.export()
-            .map_or(true, |current| sha256(&current) != *saved),
+        Some(saved) => active.session.canonical_sha256()
+            .map_or(true, |current| current != *saved),
         // New projects, or models that cannot safely serialize, must
         // remain unsaved. Never report a failed export as 'clean' after
         // an already-committed Rust Edit/Undo/Redo transaction.
@@ -1351,6 +1351,7 @@ mod tests {
             include_bytes!("../fixtures/bedrock-basic.bbmodel");
         let session = EditorSession::open(BASIC).unwrap();
         let saved = sha256(&session.export().unwrap());
+        assert_eq!(session.canonical_sha256().unwrap(), saved);
         let raw_sha = sha256(BASIC);
         let cube_uuid = session.document().cubes[0].uuid.clone();
         let mut active = ActiveModel {

@@ -6,6 +6,8 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
+use std::io::{self, Write};
 type Result<T> = std::result::Result<T, String>;
 
 #[derive(Serialize, Deserialize)]
@@ -97,6 +99,52 @@ pub(super) fn encode(doc: &AuthoringDocument) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+// Streaming canonical fingerprint for the editor's Dirty indicator. The
+// SHA-256 input is the same pretty-printed .bbmodel byte stream, including
+// its final newline, as encode(). A bounded Write sink avoids materializing
+// an extra multi-megabyte JSON buffer on every Apply/Undo/Redo.
+struct CanonicalDigestSink {
+    digest: Sha256,
+    bytes: usize,
+    over_limit: bool,
+}
+
+impl CanonicalDigestSink {
+    fn new() -> Self {
+        Self { digest: Sha256::new(), bytes: 0, over_limit: false }
+    }
+}
+
+impl Write for CanonicalDigestSink {
+    fn write(&mut self, chunk: &[u8]) -> io::Result<usize> {
+        let next = self.bytes.checked_add(chunk.len());
+        if next.is_none_or(|len| len > MAX_MODEL_BYTES) {
+            self.over_limit = true;
+            return Err(io::Error::other("BBMODEL_OUTPUT_TOO_LARGE"));
+        }
+        self.digest.update(chunk);
+        self.bytes = next.unwrap();
+        Ok(chunk.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> { Ok(()) }
+}
+
+pub(super) fn canonical_sha256(doc: &AuthoringDocument) -> Result<String> {
+    doc.validate()?;
+    let wire = BorrowedBlockbenchV5::from(doc);
+    let mut sink = CanonicalDigestSink::new();
+    if serde_json::to_writer_pretty(&mut sink, &wire).is_err() ||
+       sink.write_all(b"\n").is_err() {
+        return Err(if sink.over_limit {
+            "BBMODEL_OUTPUT_TOO_LARGE".into()
+        } else {
+            "BBMODEL_SERIALIZE_FAILED".into()
+        });
+    }
+    Ok(format!("{:x}", sink.digest.finalize()))
+}
+
 // SOURCE-AUTHORED_NOT_RUN: executable Rust/Windows and native Blockbench
 // checks remain on hold. The old owned serializer is the byte-level oracle.
 #[cfg(test)]
@@ -136,11 +184,25 @@ mod tests {
             let untouched = doc.clone();
             let expected = previous_owned_encode(&doc);
             let actual = encode(&doc).unwrap();
+            assert_eq!(canonical_sha256(&doc).unwrap(),
+                super::super::sha256(&actual));
             assert_eq!(actual, expected,
                 "borrowed wire must preserve pretty JSON bytes and final newline");
             assert_eq!(AuthoringDocument::import_bbmodel(&actual).unwrap(), doc);
             assert_eq!(doc, untouched, "export must not mutate canonical state");
         }
+    }
+
+    #[test]
+    fn streaming_digest_enforces_the_same_output_byte_budget() {
+        let mut sink = CanonicalDigestSink::new();
+        let chunk = [0_u8; 1024];
+        for _ in 0..(MAX_MODEL_BYTES / chunk.len()) {
+            sink.write_all(&chunk).unwrap();
+        }
+        assert_eq!(sink.bytes, MAX_MODEL_BYTES);
+        assert!(sink.write_all(b"\n").is_err());
+        assert!(sink.over_limit);
     }
 
     #[test]
@@ -150,5 +212,7 @@ mod tests {
         ).unwrap();
         doc.texture_assets.push(Value::Null);
         assert_eq!(encode(&doc).unwrap_err(), "BBMODEL_ASSET_ENTRY_INVALID");
+        assert_eq!(canonical_sha256(&doc).unwrap_err(),
+            "BBMODEL_ASSET_ENTRY_INVALID");
     }
 }
