@@ -510,6 +510,79 @@ test('operator-bound visual pair is a read-only preflight, never visual PASS', (
     assert.equal(result.value.evidence,'operator_selected_visual_pair');
   }));
 
+test('image replacement while operator approves refuses Rust launch for either selected PNG',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    const digest=createHash('sha256').update(png).digest('hex');
+    for(const changed of ['reference','capture']){
+      const reference=join(folder,'lease-'+changed+'-reference.png');
+      const capture=join(folder,'lease-'+changed+'-candidate.png');
+      await writeFile(reference,png);
+      await writeFile(capture,png);
+      let approvals=0,step=0;
+      const commands=[];
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:reference,capturePngPath:capture,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        authorizeMutation:async()=>{
+          approvals++;
+          // Simulate an actual replacement during an operator-owned
+          // approval pause, AFTER the host's async image preflight.
+          const target=changed==='reference'?reference:capture;
+          await writeFile(target,Buffer.concat([png,Buffer.from('replaced')]));
+          return true;
+        },
+        runner:async argv=>{
+          commands.push(argv[0]);
+          if(argv[0]==='inspect')return {
+            status:'OK',sha256:HASH,summary:SUMMARY,
+          };
+          if(argv[0]==='inspect-visual-pair')return {
+            status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'},
+          };
+          throw new Error('Rust write must not launch with stale reviewed image');
+        },
+        spawnImpl:()=>{
+          const index=step++;
+          if(index===0)return fakeGuest({
+            method:'inspectSelectedVisualPair',args:{project:'p0'},
+          },response=>{
+            assert.equal(response.ok,true);
+            return {preflight:true};
+          });
+          return fakeGuest({method:'apply',args:{
+            project:'p0',output:'would-write-'+changed+'.bbmodel',
+            operations:[{op:'paint_texture_pixel',texture_index:0,
+              x:1,y:1,rgba:[1,2,3,255]}],
+            correctionScope:{textureUuid:'tier-atlas',
+              allowedRegions:[{from:[0,0],to:[2,2]}],
+              preserveAlpha:true},
+          }},response=>{
+            assert.equal(response.ok,false);
+            assert.equal(response.code,'CODE_MODE_MUTATION_SESSION_STALE');
+            return {refused:true};
+          });
+        },
+      });
+      assert.equal((await host.execute({
+        code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+      })).value.preflight,true);
+      assert.equal((await host.execute({
+        code:'return codemode.apply({project:"p0"});',
+      })).value.refused,true);
+      assert.equal(approvals,1);
+      assert.deepEqual(commands,['inspect','inspect-visual-pair']);
+    }
+  }));
+
 test('selected view refuses stale model, forged paths and unreviewed paint', () =>
   fixture(async input=>{
     const folder=dirname(input);

@@ -489,7 +489,14 @@ node apps/desktop/code-mode/run.mjs \
 ```
 
 For any actual mutation, the existing `--approve-interactive` is still
-required; selecting a reviewer never grants write permission. Supplying
+required; selecting a reviewer never grants write permission.
+**A successful preflight is not a write-time file lease.** Once the
+operator approves, the synchronous Rust-launch guard rehashes *all*
+selected reference/current PNG bytes and checks any bound
+`REFERENCE.json` fingerprint immediately before spawning the Rust
+write process. Replacement during a long approval prompt fails closed;
+no repaint proceeds on outdated image evidence. This cannot eliminate
+all possible OS-level file races or attest to actual visual fidelity. Supplying
 only `--visual-manifest` supports a read-only source/view pairing with
 `NOT_RECORDED` reviewer status. Supplying a reviewer executable without
 a manifest is rejected.

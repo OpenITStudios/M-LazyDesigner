@@ -7,6 +7,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, realpath, readFile } from 'node:fs/promises';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -570,6 +571,20 @@ async function pinnedReviewBytes(selected) {
   }
   return bytes;
 }
+// The operator may keep a write-approval prompt open while selected
+// PNGs change. A synchronous final Rust launch lease must rehash both
+// images for every bound view AFTER approval, immediately before spawn.
+function pinnedReviewImageLeaseValid(selected) {
+  try {
+    const stat=lstatSync(selected.path);
+    if(!stat.isFile() || stat.isSymbolicLink() ||
+       stat.size<8 || stat.size>MAX_VISUAL_PNG_BYTES ||
+       realpathSync(selected.path)!==selected.path) return false;
+    const bytes=readFileSync(selected.path);
+    return bytes.length===stat.size &&
+      createHash('sha256').update(bytes).digest('hex')===selected.sha256;
+  } catch { return false; }
+}
 
 function outputName(name, suffix) {
   if (typeof name !== 'string' || !name || name.length > 128 ||
@@ -848,7 +863,10 @@ export async function createCodeModeHost({
       approvedGuest.delete(request);
       return owner !== undefined && owner === activeExecution && !owner.closed &&
         (!visualPair?.referencePackageBinding ||
-          referencePackageLeaseValid(visualPair.referencePackageBinding));
+          referencePackageLeaseValid(visualPair.referencePackageBinding)) &&
+        (visualPair===null || visualViews.every(view=>
+          pinnedReviewImageLeaseValid(view.reference) &&
+          pinnedReviewImageLeaseValid(view.capture)));
     },
   });
   const projects = new Map();

@@ -184,6 +184,17 @@ Without configuration, the standard CLI still has NO visual reviewer.
 See `HOST_INTEGRATION.md` for the manifest, input/output protocol, privacy
 and local-test hold.
 
+**Final approval-to-Rust image lease (2026-11-18; SOURCE ONLY):**
+Even after a successful image review, the operator can leave an
+interactive write-approval prompt open while either source PNG changes.
+The synchronous Rust launch lease now rechecks exact contents and
+realpaths for every selected reference/capture pair, as well as any
+bound Reference Package fingerprint. A changed image prevents launching
+the write even when it changed **after** earlier preflight. This is
+source-level freshness only; it does not prove a camera angle, saved
+model appearance or actual image reviewer evaluation. Negative cases
+for replacing either image during approval AUTHORED_NOT_RUN.
+
 **Post-review source/image freshness (2026-11-17; SOURCE ONLY):**
 A reviewer callback is now followed by a fresh SHA-bound Rust model
 inspection and a rehash of every selected reference/capture PNG
