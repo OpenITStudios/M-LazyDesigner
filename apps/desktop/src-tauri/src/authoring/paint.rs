@@ -510,11 +510,18 @@ pub(super) fn rectangles(
     }
     let mut pixels = decode(texture, width, height)?;
     let w = width as usize;
+    // A short face-local correction should not allocate a visited bitmap
+    // for every pixel of a much larger atlas. Inclusive corner min/max
+    // follows the original reversed-rectangle contract.
+    let min_x = steps.iter().map(|s| s.from[0].min(s.to[0]) as usize).min().unwrap();
+    let max_x = steps.iter().map(|s| s.from[0].max(s.to[0]) as usize).max().unwrap();
+    let min_y = steps.iter().map(|s| s.from[1].min(s.to[1]) as usize).min().unwrap();
+    let max_y = steps.iter().map(|s| s.from[1].max(s.to[1]) as usize).max().unwrap();
+    let mask_width = max_x - min_x + 1;
     // The final rectangle touching each pixel wins. Traverse in reverse so
-    // its original RGBA is still available for exact no-op detection without
-    // cloning the whole 4-byte-per-pixel atlas. A one-byte visited mask is
-    // bounded by the existing 256² PNG admission limit.
-    let mut decided = vec![false; w * height as usize];
+    // original RGBA is still available for exact no-op detection without
+    // cloning the 4-byte-per-pixel atlas. One byte per bounding-box pixel.
+    let mut decided = vec![false; mask_width * (max_y - min_y + 1)];
     let mut changed = false;
     for step in steps.iter().rev() {
         let desired = if step.erase { [0, 0, 0, 0] } else { step.rgba };
@@ -524,10 +531,10 @@ pub(super) fn rectangles(
         let y1 = step.from[1].max(step.to[1]) as usize;
         for y in y0..=y1 {
             for x in x0..=x1 {
-                let pixel = y * w + x;
-                if decided[pixel] { continue; }
-                decided[pixel] = true;
-                let offset = pixel * 4;
+                let mask_index = (y - min_y) * mask_width + (x - min_x);
+                if decided[mask_index] { continue; }
+                decided[mask_index] = true;
+                let offset = (y * w + x) * 4;
                 if pixels[offset..offset + 4] != desired {
                     pixels[offset..offset + 4].copy_from_slice(&desired);
                     changed = true;

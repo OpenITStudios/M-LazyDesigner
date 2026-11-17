@@ -4155,6 +4155,55 @@ fn overlapping_rectangle_final_writes_preserve_original_pixels_and_undo() {
     assert!(!empty.can_undo());
 }
 
+// SOURCE-AUTHORED_NOT_RUN: a tiny offset Paint region in a much larger PNG
+// must not confuse bounding-box mask coordinates with atlas pixel offsets.
+#[test]
+fn rectangle_mask_bbox_preserves_offset_pixels_and_exact_noop() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Offset paint", "offset_paint").unwrap()).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 128, height: 128 },
+        EditOperation::CreatePaintTexture {
+            uuid:"00000000-0000-4000-8000-000000009814".into(),
+            name:"atlas.png".into(),
+        },
+    ]).unwrap();
+    let source = session.document().clone();
+    let main = [45,120,180,255];
+    let shadow = [10,40,75,255];
+    session.apply(1, &[EditOperation::PaintTextureRectangles {
+        texture_index:0,
+        rectangles:vec![
+            PaintRectangleStep {from:[107,120],to:[105,118],rgba:main,erase:false},
+            PaintRectangleStep {from:[106,119],to:[107,120],rgba:shadow,erase:false},
+        ],
+    }]).unwrap();
+    let saved = session.document().clone();
+    let pixels = paint::decode_for_uv_inspection(&saved.texture_assets[0],128,128).unwrap();
+    let read = |x:usize,y:usize| {
+        let pos=(y*128+x)*4;
+        [pixels[pos],pixels[pos+1],pixels[pos+2],pixels[pos+3]]
+    };
+    assert_eq!(read(105,118),main);
+    assert_eq!(read(106,119),shadow);
+    assert_eq!(read(107,120),shadow);
+    assert_eq!(read(104,118),[0,0,0,0]);
+    assert_eq!(read(0,0),[0,0,0,0]);
+    session.undo(2).unwrap();
+    assert_eq!(session.document(),&source);
+    session.redo(3).unwrap();
+    assert_eq!(session.document(),&saved);
+    let mut no_op = EditorSession::from_document(source.clone()).unwrap();
+    assert_eq!(no_op.apply(0,&[EditOperation::PaintTextureRectangles {
+        texture_index:0,
+        rectangles:vec![
+            PaintRectangleStep {from:[106,120],to:[107,120],rgba:shadow,erase:false},
+            PaintRectangleStep {from:[106,120],to:[107,120],rgba:shadow,erase:true},
+        ],
+    }]).unwrap_err(),"EDIT_NO_OP");
+    assert_eq!(no_op.document(),&source);
+}
+
 #[test]
 fn paint_rectangle_batch_refuses_malformed_plans_and_imported_opaque_assets() {
     let mut session = EditorSession::from_document(
