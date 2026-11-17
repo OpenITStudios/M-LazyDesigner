@@ -1222,6 +1222,29 @@ mod tests {
         assert_eq!(boxed["candidate_operations"][0], "set_box_uv_offset");
         assert_eq!(boxed["candidate_operations"][1], "isolate_cube_box_uv");
 
+        // A manual-face edit on Auto UV must not be recommended.
+        textured.cubes[0].extra.insert("box_uv".into(), json!(false));
+        textured.cubes[0].extra.insert("autouv".into(), json!(1));
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"uv",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
+        let automated = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
+        assert_eq!(automated["candidate_operations"], json!([]));
+        assert_eq!(automated["source_blockers"][0],
+            "MANUAL_UV_EDIT_UNSUPPORTED_FOR_AUTO_MODE");
+
+        // Imported but unadopted atlases are not editable Rust Paint assets.
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"texturing",
+             "category":"textures","name":"atlas.png"}
+        ]})).unwrap();
+        let imported = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
+        assert_eq!(imported["status"], "EXACT_MATCH");
+        assert_eq!(imported["candidate_operations"], json!([]));
+        assert_eq!(imported["source_blockers"][0],
+            "TEXTURE_NOT_ENABLED_FOR_RUST_PAINT");
+
         let mut second = doc.cubes[0].clone();
         second.uuid = "00000000-0000-4000-8000-000000000599".into();
         doc.cubes.push(second.clone());

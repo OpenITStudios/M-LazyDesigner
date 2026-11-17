@@ -219,6 +219,7 @@ test('named target orientation uses one SHA-bound read and refuses wrong domains
         scope:'saved_model_named_target_orientation',status:'EXACT_MATCH',
         selected:{identity:{uuid:'cube-helmet',name:'Helmet',index:0}},
         candidate_operations:['paint_cube_face_regions_guarded'],
+        source_blockers:[],
         write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
       },
     }]};

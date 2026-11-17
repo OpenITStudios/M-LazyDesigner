@@ -736,6 +736,40 @@ approval and Rust validation. Never rewrite an approved asset from a
 name hint. For known UUIDs, use an existing focused read rather than
 incurring a redundant named-target lookup.
 
+For a **deterministic Geometry edit explicitly specified by the user**, the
+same generated JavaScript program can resolve the target and apply one
+approved transaction without returning an intermediate catalog to the model:
+
+```js
+const project = codemode.initial.project;
+const found = await codemode.inspectBatch({project, requests:[{
+  kind:'authoring_target', domain:'geometry',
+  category:'cubes', name:'Helmet', // The exact name supplied for this task.
+}]});
+const target = found.results[0].target;
+if (target.status !== 'EXACT_MATCH' ||
+    !target.candidate_operations.includes('translate_cube')) {
+  return {status:'TARGET_NOT_READY', candidates:target.candidates,
+    blockers:target.source_blockers};
+}
+// The 1-unit Y offset below is illustrative; use it ONLY when the user
+// explicitly requested that exact change. The host still approves the write.
+const saved = await codemode.apply({
+  project, output:'helmet-raised.bbmodel',
+  operations:[{op:'translate_cube', uuid:target.selected.identity.uuid,
+    delta:[0,1,0]}],
+});
+return {status:'SOURCE_SAVED_NOT_VISUALLY_APPROVED',
+  project:saved.project, sha256:saved.sha256};
+```
+
+This composes **one source lookup and one approved mutation inside one
+model-visible Code Mode invocation**. It does not remove either Rust call or
+the host approval/reopened-output checks. Do not use the pattern for art
+decisions that need a fresh visual review, for ambiguous targets, or when
+the required operation/data are not supported. Source-authored regressions
+remain NOT_EXECUTED; measured token/call/latency savings are UNVERIFIED.
+
 ### Batch inspection: one model load for several focused reads
 
 For Code Mode reasoning across a catalog, Cube UVs, Paint data and audit,
@@ -755,8 +789,10 @@ console.log(report.results.map(({ kind }) => kind));
 
 `approvedCubeUuid` must come from an actual user-authorized asset selection,
 not an invented ID. The real agent host still owns process sandboxing.
-Supported kinds: `cube`, `cube_surfaces`, `cube_face_alpha`, `catalog`,
-`texture`, `texture_alpha`, `animation`, `animation_track`, `audit`.
+Selected kinds include `authoring_target`, `cube`, `cube_surfaces`,
+`cube_face_alpha`, `catalog`, `texture`, `texture_alpha`,
+`animation`, `animation_track`, `audit`; the full typed selector union
+is owned by `client.d.mts`, not repeated here.
 
 - Bounds: 1–8 typed selectors, 64 KiB private request JSON, 96 KiB result.
 - Safety: refuse stale SHA, unknown fields, over-limit pages and invalid assets.
