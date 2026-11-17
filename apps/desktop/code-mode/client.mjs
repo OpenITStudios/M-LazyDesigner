@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
+import {normalizedMaterialWorkPacket,materialWorkPacketDigest} from './material-work-packet.mjs';
 
 const execFileAsync = promisify(execFile);
 const PLAN_LIMIT = 64 * 1024;
@@ -476,7 +477,7 @@ export function createRustCodeModeClient({
         ...(expectedSha256 === undefined ? {} : { 'expected-sha256': hash(expectedSha256) }),
       });
     },
-    async apply({ input, output, expectedSha256, operations, correctionScope, correctionIntent }) {
+    async apply({ input, output, expectedSha256, operations, correctionScope, correctionIntent, materialWorkPacket }) {
       const options = {
         input: absolute(input, 'input'),
         output: absolute(output, 'output'),
@@ -485,6 +486,11 @@ export function createRustCodeModeClient({
       const payload = serializePlan(operations, correctionScope);
       const scope = normalizedCorrectionScope(correctionScope);
       const intent = normalizedMaterialCorrectionIntent(correctionIntent);
+      const workPacket=normalizedMaterialWorkPacket(materialWorkPacket);
+      if(workPacket && (workPacket.sourceModelSha256!==options['expected-sha256'] ||
+          workPacket.textureUuid!==scope?.texture_uuid)) {
+        throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_SOURCE_MISMATCH');
+      }
       const approval = await requestWrite('apply', {
         input: options.input, output: options.output,
         expectedSha256: options['expected-sha256'],
@@ -503,6 +509,10 @@ export function createRustCodeModeClient({
           materialIntentSha256:createHash('sha256')
             .update(JSON.stringify(intent)).digest('hex'),
         } : {}),
+        ...(workPacket?{
+          materialWorkPacket:workPacket,
+          materialWorkPacketSha256:materialWorkPacketDigest(workPacket),
+        }:{}),
         planSha256: createHash('sha256').update(payload).digest('hex'),
       });
       const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-code-mode-'));
@@ -617,8 +627,8 @@ export async function openRustCodeModeProject(client, input) {
       client.inspectAnimationTransformTrack({
         input: path, animationUuid, boneUuid, channel, offset, limit, expectedSha256,
       }),
-    apply: ({ output, operations, correctionScope, correctionIntent }) =>
-      client.apply({ input: path, output, expectedSha256, operations, correctionScope, correctionIntent }),
+    apply: ({ output, operations, correctionScope, correctionIntent, materialWorkPacket }) =>
+      client.apply({ input: path, output, expectedSha256, operations, correctionScope, correctionIntent, materialWorkPacket }),
     exportPng: ({ output, textureUuid }) =>
       client.exportPng({ input: path, output, textureUuid, expectedSha256 }),
     exportGeometry: ({ output }) =>

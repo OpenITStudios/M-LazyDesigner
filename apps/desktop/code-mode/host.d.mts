@@ -1,5 +1,6 @@
 /** First-party Rust Code Mode host and guest tool types.
  * SOURCE_ONLY: installed host/Deno/Rust execution NOT_EXECUTED. */
+import type {MaterialWorkPacket} from './material-work-packet.mjs';
 import type {
   ApplyReceipt, CatalogPage, DocumentSummary, EditOperation,
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
@@ -143,11 +144,17 @@ export interface CodeModeGuestAPI {
   audit(args: { project: string }): Promise<InspectReceipt>;
   newModel(args: { output: string; name: string; modelIdentifier: string }):
     Promise<CodeModeProjectReference & { receipt: OutputReceipt }>;
-  apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent }):
+  apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent; materialWorkPacket?: MaterialWorkPacket }):
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt;
       texturing_workflow?:{
         status:"PAINT_SAVED_NOT_VISUALLY_ACCEPTED";source_model_sha256:string;
         style_evidence:ApplyReceipt["texture_styling_evidence"];
+        material_work_packet?:{
+          status:"SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED";
+          sha256:string;planned_faces:number;
+          source_model_sha256:string;reference_png_sha256:string;
+          visual_verdict:"UNVERIFIED";
+        };
         next:string;texture_completion_attested:false;
       };
     }>;

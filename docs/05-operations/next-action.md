@@ -1,3 +1,15 @@
+**Rust reviewed material planning (2026-11-17; SOURCE ONLY):**
+The Code Mode reviewer-backed propagation path now requires a bounded
+MaterialWorkPacket (current source/reviewer SHA, issue and part,
+form/light rationale, controlled palette, actual Cube-face cluster
+targets). Trusted host verifies every planned face through native Rust
+material_face_patch before authorized guarded Paint, rejects stray
+RGB/base-only form-shading and does not modify native/legacy exact-pixel
+paths or accepted samples. Tests authored NOT_EXECUTED; actual
+professional pixel-art quality, image interpretation, and PC-native
+acceptance remain UNVERIFIED under the hold. Next source-only work is
+limited to defects discovered by review or a separately requested scope.
+
 **Rust image review and opaque-face completeness source slice (2026-11-17; SOURCE_ONLY):**
 The operator CLI now has opt-in SHA-bound PNG+native-face reviewer process
 transport, without a default vision model or autonomous image capture.

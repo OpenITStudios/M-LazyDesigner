@@ -1,5 +1,26 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+
+**MaterialWorkPacket — planned professional Rust Texturing (2026-11-17; SOURCE ONLY):**
+Reviewed `materialCohort.phase:'propagation'` now requires the guest to
+supply a bounded `materialWorkPacket` alongside `correctionIntent` and
+`correctionScope`. A strict, source-only schema records current model and
+operator-selected reference image SHA, reviewed issue/approach/part, material,
+styling intent, light/form rationale, deliberate shade palette roles and
+per-Cube face-local cluster placement. Before mutation, the host matches the
+packet to the independent reviewer's actual issue, selected reference/current
+revision, every declared correction rectangle, actual guarded Cube-face Paint
+operations and one pinned native `material_face_patch` inspection per planned
+face (max eight). A base-only paint cannot be called FORM_SHADING propagation.
+Only colors declared in the palette can enter the planned face-local Paint.
+This does not create procedural texture algorithms, certify that shading
+follows geometry, or replace the existing accepted representative sample.
+The trusted operator sees a compact style/target summary and exact packet SHA
+at the mutation approval boundary. Model-written packets cannot grant
+permissions. Sample editing and unreviewed known exact-RGBA corrections retain
+their prior path. All tests AUTHORED_NOT_RUN. See HOST_INTEGRATION.md.
+
+
 **Operator-owned image review bridge (2026-11-17; SOURCE_ONLY):**
 The existing `run.mjs` now accepts `--visual-manifest` with
 `--reviewer-exe` for one explicitly configured, trusted, image-capable

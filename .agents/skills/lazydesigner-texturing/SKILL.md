@@ -41,6 +41,26 @@ If a decision-critical item is missing, request only that exact context through 
 **Material source-image evidence (conditional):** `decision_packet.texture_surface_regions` offers up to six approved, hash-bound **source image** annotations; `box_uv` is normalized in the reference picture, **not** the Blockbench UV atlas or a paint coordinate. Treat `omitted_count > 0` as incomplete discovery, not permission to ignore other surfaces. At a material/identity decision, use the relevant active-stage image IDs with `status(reference_package_path=..., include_reference_images=true, reference_image_ids=...)` **only if the actual approved images are not already in the active review context**. The source metadata alone does not provide material RGB, mapping or visual PASS. Pair the real images with current `get_texture`, mapped `capture_model_views`, and exact Cube-face UV only when the region-to-face identity needs resolution. See the conditional `references/fidelity-styling-verification.md`, not an always-loaded reference corpus.
 
 **Rust Texturing review admission (source-authored; NOT_EXECUTED):**
+
+**Rust reviewed material propagation plan (source-only):**
+Before *broad reviewed* Texture propagation, the AI must submit one
+bounded `materialWorkPacket` with approved/current SHA binding, latest
+reviewed visual defect, actual part/material, intended light direction
+and rationale, material-specific shadow/base/highlight palette when
+form shading is necessary, and named Cube-local faces with deliberate
+cluster placement and atlas crop. The host/Rust verify source ownership,
+authorized correction scope and actual guarded face Paint. A flat base
+fill or a generic noise/stripe recipe cannot substitute for an explained
+material composition; merely listing different palette colors is not
+quality proof. Propagation cannot skip the source-bound sample/visual
+review, use unknown target UVs or repaint an accepted sample. Exact
+single-pixel identity edits and intentionally flat/transparent surfaces
+remain legitimate and are not forced into a three-color shading ritual.
+Artist observations, not numeric atlas color histograms, determine
+material craft. This extends the existing Texturing owner; no new
+agent, second editor, automatic reviewer or persistent source store.
+
+
 At a material-scale correction, do not infer that the installed Code Mode
 CLI contains visual understanding. Only operator-selected SHA-bound matched
 reference/current images and a genuinely image-capable, trusted

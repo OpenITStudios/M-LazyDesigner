@@ -1,3 +1,19 @@
+## 2026-11-17 — Rust material work packet source slice (SOURCE ONLY)
+
+Reviewed propagation now requires a Code Mode guest-proposed bounded
+`materialWorkPacket` that binds source/reviewer image SHA and issue,
+form/light/material intent, explicit palette roles and Cube-face cluster
+targets. The trusted host checks every declared paint rectangle against
+the current correction scope, requires canonical Rust guarded face-local
+operations, rejects base-only form-shading and extraneous RGB, and resolves
+each target through the SHA-bound native `material_face_patch` inspector.
+The SDK includes the packet and SHA in the host operator's write
+admission, not in the Rust edit plan or a second persistent DB.
+Success can mean only SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED.
+The source contains authored Node regression cases; tests and native
+artistic QA NOT_EXECUTED under current hold. Previous source-only
+reviewer, coverage, security and legacy exact-RGBA paths remain.
+
 ## 2026-11-17 — Trusted CLI image reviewer and full-face source gate (SOURCE_ONLY)
 
 The Rust Code Mode operator CLI now has an explicit operator-owned image

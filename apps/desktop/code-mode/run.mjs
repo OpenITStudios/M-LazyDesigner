@@ -78,6 +78,18 @@ async function main() {
         output: request.output, png: request.png ?? null,
         source_sha256: request.expectedSha256 ?? null,
         plan_sha256: request.planSha256 ?? null,
+        material_work_packet_sha256: request.materialWorkPacketSha256 ?? null,
+        material_work_packet:request.materialWorkPacket?{
+          cohort:request.materialWorkPacket.partId,
+          issue:request.materialWorkPacket.issueId,
+          shading_intent:request.materialWorkPacket.shadingIntent,
+          style_intent:request.materialWorkPacket.styleIntent,
+          light_direction:request.materialWorkPacket.lightDirection,
+          planned_cube_faces:request.materialWorkPacket.facePlans.map(face=>({
+            cube_uuid:face.cubeUuid,face:face.face,
+            atlas_region:face.atlasRegion,
+          })),
+        }:null,
         operation_kinds: request.operationKinds ?? null,
         operation_count: request.operationCount ?? null,
       }, null, 2) + '\n');

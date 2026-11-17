@@ -1,5 +1,91 @@
 # Rust Code Mode — first-party local host integration
 
+
+## MaterialWorkPacket: reviewer-bound material composition (SOURCE ONLY)
+
+For **broad, independently reviewed material propagation only**, the guest
+supplies `materialWorkPacket` to `codemode.apply` together with the existing
+`correctionIntent`, `correctionScope`, and Rust-owned
+`paint_cube_face_regions_guarded` operations. This is a bounded,
+non-persisted artist *proposal*, not an alternative Paint engine, second
+Reference authority, independent review or native material quality score.
+
+The packet binds exactly:
+- `sourceModelSha256` — the same immutable current Rust input snapshot.
+- `referencePngSha256` — the operator-selected approved/reference image
+  SHA bound by the trusted visual host (not guest-supplied artwork proof).
+- `issueId`, `approachId`, `partId`, `material`,
+  `reviewedIssueObservation` — identical to current independent reviewer
+  issue/cohort and the existing material correction intent.
+- `textureUuid`, `shadingIntent`, `styleIntent`, `lightDirection`,
+  `lightRationale` — explicit material and lighting hypotheses.
+- `palette` — up to eight role/RGB/purpose declarations; FORM_SHADING
+  requires different shadow/base/highlight roles, without assuming three
+  colors alone make professional art.
+- `facePlans` — one to eight exact `cubeUuid + face + atlasRegion`
+  targets with `formCue`, `shadowPlacement`,
+  `highlightPlacement`, `clusterPlan` descriptions.
+  FORM_SHADING requires both placement descriptions.
+
+The `atlasRegion` is a bounded *physical atlas* half-open rectangle.
+The Paint operation's `regions` are **face-local coordinates**.
+Never exchange these coordinate spaces. The host checks that packet
+atlas regions equal the exact authorized correction rectangles; its
+pinned Rust `material_face_patch` read proves each rectangle belongs
+to the named Cube face with no detected UV alias. The Rust guarded face
+Paint and correction scope still enforce actual bitmap writes, Undo,
+alpha/saved-source integrity and no changes outside the approved region.
+
+The host refuses:
+- a missing, forged/stale, unsupported or extra-field packet;
+- a source SHA, reference SHA, part/issue/approach, material or reviewer
+  observation that conflicts with the trusted reviewer and Rust model;
+- face plans missing shadow/highlight placement for FORM_SHADING, duplicate
+  faces/regions, malformed shade palette or unaccounted correction patches;
+- raw atlas Paint or a Cube/face missing from the packet during broad
+  reviewed propagation (sample and unreviewed exact-RGBA edits are unchanged);
+- arbitrary RGB not in the named palette, base-only FORM_SHADING paint,
+  unsupported/shared/reused UV source and edits to the accepted sample.
+
+A valid source plan is **SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED**.
+Its hash and planned-face count appear in the provisional Paint receipt.
+The one trusted operator approval callback sees the plan SHA and a compact
+summary; the image reviewer still has to inspect real fresh mapped
+views, and only authorized native/user visual acceptance may declare
+professional Texturing complete. In particular, a physically valid
+face-local patch is not proof the light source or cluster outline is right.
+
+The schema lives in `material-work-packet.mjs`, its type in
+`material-work-packet.d.mts`. No packet is written to the editable
+`.bbmodel`, automatically persisted as a second state store or supplied
+by a privileged reviewer callback. Existing external Workspace and
+reviewer findings carry continuing user corrections. The operator and
+model client do not gain a new process/network/asset mutation capability.
+
+### Sequence for a real artist-directed correction
+
+```text
+Fresh approved reference + current model snapshot
+ → independent visual issue (part, source SHA, actual visual mismatch)
+ → bounded reviewed representative face sample
+ → new model SHA + actual image comparison of improved sample
+ → reviewer authorizes broad, compatible material propagation
+ → agent proposes MaterialWorkPacket (form/light/palette/clusters/targets)
+ → host binds issue, sample, source and exact Cube/UV face patches
+ → Rust guarded face-local Paint under existing operator approval
+ → fresh mapped-view and all-face visual review
+ → revised source packet only if evidence supports another correction
+```
+
+For intentional small identity pixels or approved flat surfaces, do not
+fabricate a multi-color shade ramp. Preserve the existing exact-RGBA
+path unless material-scale propagation is actually requested. This
+packet currently structures and constrains authoring decisions; it
+**does not autonomously compose the clusters** or execute an AI pixel
+artist model. Those properties require independent material reference
+review and future native visual evidence.
+
+
 ## Trusted image reviewer CLI wiring (SOURCE_ONLY, NOT EXECUTED)
 
 The standard operator CLI now accepts optional `--visual-manifest` and

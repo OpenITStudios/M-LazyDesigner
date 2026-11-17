@@ -109,6 +109,28 @@ A material with more than the bounded 256 reviewed faces remains
 UNVERIFIED until an authorized broader process exists. Existing PILL-01
 through PILL-10 acceptance and test holds remain unchanged.
 
+## Golden PILL-03/PILL-07 MaterialWorkPacket source contract
+
+A reviewed propagation sample may not become a cohort-wide Paint unless
+Code Mode supplies the current source/reviewer-bound `materialWorkPacket`.
+For PILL-03, the packet must describe helmet form, light direction,
+material-appropriate palette roles and deliberate shadow/highlight
+clusters tied to actual Rust Cube-local faces. The host verifies
+source/UV ownership and only authorized face-local Paint touches those
+specified atlas regions. A base-only FORM_SHADING operation is refused;
+one intentionally flat identity or detail pixel remains valid in its
+own scope. A distinct ramp and a well-written plan are never a visual
+PASS—only fresh native/reference matched views can support artistic
+acceptance.
+
+Negative cases must include missing packet; conflicting issue,
+approved reference SHA or model SHA; mismatched atlas rectangles;
+unbound/missing face; direct unplanned pixel Paint; an arbitrary new RGB;
+and fake flat form-shading propagation. Verify the accepted representative
+sample cannot be repainted. Source-only Node fixtures have been authored,
+**NOT_EXECUTED** while localtest/CI are on hold; no actual Pillager art
+improvement is measured.
+
 ## Evidence and stop criteria
 
 Record only actual observations: case ID, source SHA, camera/view, approved reference PNG SHA, candidate PNG SHA, reviewer/host/version, issue ID, observed defect, correction approach, permitted atlas rectangle, protected regions, final user decision, reason for rejection and native proof. When any observation is missing, write NOT_EXECUTED, UNVERIFIED or BLOCKED with the specific gap.

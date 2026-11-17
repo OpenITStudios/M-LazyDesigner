@@ -1101,7 +1101,34 @@ test('representative material is constrained; propagation requires fresh accepte
       treatment:'form_value_masses',
       expectedChange:'Introduce form-following base and shadow clusters around the helmet.',
     };
+    const workPacket={
+      sourceModelSha256:modifiedSha,referencePngSha256:digest,
+      issueId:intent.issueId,approachId:intent.approachId,
+      partId:intent.partId,textureUuid:'tier2-atlas',
+      material:'metal',shadingIntent:'FORM_SHADING',
+      reviewedIssueObservation:'Sample is acceptable; other metal faces still need styling.',
+      styleIntent:'Preserve the approved angular metal style and distinguish its material planes.',
+      lightDirection:'Upper-facing bevels use the approved upper-left light direction.',
+      lightRationale:'The top light is used for coherent hard edge transitions on metal armor.',
+      palette:[
+        {role:'shadow',rgb:[60,70,80],
+          purpose:'Deepen metal contact and side-plane recesses.'},
+        {role:'base',rgb:[80,100,120],
+          purpose:'Retain the accepted midtone family on armor.'},
+        {role:'highlight',rgb:[130,150,170],
+          purpose:'Accent selected armor edges facing the light.'},
+      ],
+      facePlans:[{
+        cubeUuid:REVIEW_CUBE,face:'east',
+        atlasRegion:{from:[8,8],to:[12,12]},
+        formCue:'Side helmet face forms a plane against the raised helmet rim.',
+        shadowPlacement:'Place the darker cluster toward the recessed joining edge.',
+        highlightPlacement:'Keep a small high-value cluster on the light-facing metal bevel.',
+        clusterPlan:'Use connected stepped pixels and a quiet resting field without stripes.',
+      }],
+    };
     let firstStep=0, secondStep=0, approvals=0;
+    const actualApprovals=[];
     const sampleHost=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
       preselectedVisualPair:{
@@ -1212,7 +1239,11 @@ test('representative material is constrained; propagation requires fresh accepte
           sampleRegion:{from:[1,1],to:[5,5]},
           sampleVerdict:'ACCEPTED'},
       }),
-      authorizeMutation:()=>{approvals++;return true;},
+      authorizeMutation:request=>{
+        approvals++;
+        actualApprovals.push(request);
+        return true;
+      },
       runner:async argv=>{
         if(argv[0]==='inspect'){
           const name=basename(argv[argv.indexOf('--input')+1]);
@@ -1226,7 +1257,31 @@ test('representative material is constrained; propagation requires fresh accepte
             reference_png_sha256:digest,capture_png_sha256:sampleDigest,
             visual_verdict:'UNVERIFIED'},
         };
-        if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,modifiedSha);
+        if(argv[0]==='inspect-batch'){
+          const queries=JSON.parse(await readFile(
+            argv[argv.indexOf('--queries')+1],'utf8'));
+          if(queries.requests.length===1 &&
+             queries.requests[0].kind==='material_face_patch'){
+            const q=queries.requests[0];
+            assert.equal(q.cube_uuid,REVIEW_CUBE);
+            assert.equal(q.face,'east');
+            assert.deepEqual(q.region,{from:[8,8],to:[12,12]});
+            return {status:'OK',sha256:modifiedSha,summary:SUMMARY,
+              results:[{kind:'material_face_patch',binding:{
+                scope:'source_explicit_cube_face_patch',
+                status:'bound_source_only',
+                texture_uuid:q.texture_uuid,cube_uuid:q.cube_uuid,
+                face:q.face,sample_region:q.region,
+                texture_reference:'explicit_saved_link',
+                pixel_alias:secondStep===6?
+                  'overlap_detected':'no_detected_overlap_for_sample',
+                visual_verdict:'UNVERIFIED',
+                face_coverage_verdict:'UNVERIFIED',
+                view_correspondence:'NOT_VERIFIED',
+              }}]};
+          }
+          return mockedNativeFaceBinding(argv,modifiedSha);
+        }
         assert.equal(argv[0],'apply');
         await writeFile(argv[argv.indexOf('--output')+1],'{}');
         return {status:'OK',source_sha256:modifiedSha,output_sha256:widenedSha,
@@ -1247,30 +1302,64 @@ test('representative material is constrained; propagation requires fresh accepte
           return {acceptedSampleDeclared:true};
         });
         const overlap=step===2;
+        const missingPacket=step===3;
+        const wrongReference=step===4;
+        const baseOnly=step===5;
+        const invalidSource=step===6;
         return fakeGuest({method:'apply',args:{
-          project:'p0',output:overlap?'overlap.bbmodel':'extended.bbmodel',
-          operations:[{op:'paint_texture_pixel',texture_index:0,
-            x:overlap?2:9,y:overlap?2:9,rgba:[60,70,80,255]}],
+          project:'p0',output:overlap?'overlap.bbmodel':
+            missingPacket?'missing-packet.bbmodel':
+            wrongReference?'wrong-reference.bbmodel':
+            baseOnly?'base-only.bbmodel':
+            invalidSource?'invalid-face.bbmodel':'extended.bbmodel',
+          operations:overlap?[{op:'paint_texture_pixel',texture_index:0,
+            x:2,y:2,rgba:[60,70,80,255]}]:[{
+            op:'paint_cube_face_regions_guarded',
+            cube_uuid:REVIEW_CUBE,texture_uuid:'tier2-atlas',
+            regions:[{face:'east',from:[0,0],to:[1,1],
+              rgba:baseOnly?[80,100,120,255]:[60,70,80,255],
+              erase:false}],
+          }],
           correctionScope:{textureUuid:'tier2-atlas',
             allowedRegions:overlap?[{from:[2,2],to:[4,4]}]:
               [{from:[8,8],to:[12,12]}],preserveAlpha:true},
           correctionIntent:intent,
+          ...(!overlap&&!missingPacket?{materialWorkPacket:wrongReference?
+            {...workPacket,referencePngSha256:'d'.repeat(64)}:workPacket}:{}),
         }},value=>{
           if(overlap){
             assert.equal(value.ok,false);
             assert.equal(value.code,'CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
             return {blocked:true};
           }
+          if(missingPacket || wrongReference || baseOnly || invalidSource){
+            assert.equal(value.ok,false);
+            assert.equal(value.code,missingPacket?
+              'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED':
+              wrongReference?
+              'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH':
+              baseOnly?'CODE_MODE_MATERIAL_WORK_PACKET_BASE_ONLY':
+              'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
+            return {negative:value.code};
+          }
           assert.equal(value.ok,true);
           assert.equal(value.result.project,'p1');
+          assert.equal(value.result.texturing_workflow.material_work_packet.planned_faces,1);
+          assert.equal(value.result.texturing_workflow.material_work_packet.visual_verdict,'UNVERIFIED');
           return {propagated:true};
         });
       },
     });
     assert.equal((await propagationHost.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.acceptedSampleDeclared,true);
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH');
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_BASE_ONLY');
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.propagated,true);
     assert.equal(approvals,2);
+    assert.match(actualApprovals[0].materialWorkPacketSha256,/^[0-9a-f]{64}$/);
+    assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].face,'east');
   }));
 
 test('invalid source-only sample review declarations fail before Paint', () =>

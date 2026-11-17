@@ -12,6 +12,8 @@ import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
+import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
+  materialWorkPacketDigest} from './material-work-packet.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -1229,6 +1231,12 @@ export async function createCodeModeHost({
     },
     apply: async (args) => {
       const p = selected(args);
+      // The guest may propose a bounded artistic plan, but a work packet
+      // outside a trusted material-review session is not approval evidence.
+      if(args.materialWorkPacket!==undefined && (visualPair===null ||
+          typeof reviewVisualPair!=='function')) {
+        throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_REVIEW_REQUIRED');
+      }
       const reviewedTextureSession = visualPair !== null &&
         typeof reviewVisualPair === 'function';
       // When an operator binds a reviewed texture correction, an unrelated
@@ -1254,7 +1262,7 @@ export async function createCodeModeHost({
         // The numeric image preflight alone does not certify art quality.
         throw new Error('CODE_MODE_VISUAL_PREFLIGHT_REQUIRED');
       }
-      let materialIntent;
+      let materialIntent,workPacket;
       if (visualPair !== null && pixelEdit &&
           typeof reviewVisualPair === 'function') {
         if (completedReviewedCorrections.has(p.expectedSha256)) {
@@ -1309,6 +1317,9 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_MATERIAL_COHORT_IDENTITY_MISMATCH');
         }
         if (cohort.phase === 'sample') {
+          if(args.materialWorkPacket!==undefined){
+            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_PROPAGATION_ONLY');
+          }
           if (!correctionFitsReview(requested,{
             textureUuid:feedback.correctionScope.textureUuid,
             allowedRegions:[cohort.sampleRegion],
@@ -1338,6 +1349,58 @@ export async function createCodeModeHost({
               overlapsRectangle(rect,cohort.sampleRegion))) {
             throw new Error('CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
           }
+          try {
+            workPacket=normalizedMaterialWorkPacket(args.materialWorkPacket);
+          } catch {
+            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_INVALID');
+          }
+          if(!workPacket){
+            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
+          }
+          if(workPacket.sourceModelSha256!==p.expectedSha256 ||
+             workPacket.referencePngSha256!==visualPair.reference.sha256 ||
+             workPacket.textureUuid!==requested.texture_uuid ||
+             workPacket.issueId!==materialIntent.issueId ||
+             workPacket.approachId!==materialIntent.approachId ||
+             workPacket.partId!==materialIntent.partId ||
+             workPacket.material!==materialIntent.material ||
+             workPacket.reviewedIssueObservation!==issue.observation) {
+            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH');
+          }
+          validateMaterialWorkPacketOperations(
+            workPacket,requested,args.operations);
+          // The Rust source inspector (same pinned model and actual UV
+          // owner as guarded Paint) validates EVERY planned atlas patch.
+          // Text cannot certify a 3D form or prove cluster artistic quality.
+          const bounded=await p.inspectBatch(workPacket.facePlans.map(face=>({
+            kind:'material_face_patch',
+            texture_uuid:workPacket.textureUuid,
+            cube_uuid:face.cubeUuid,
+            face:face.face,region:face.atlasRegion,
+          })));
+          if(bounded.sha256!==p.expectedSha256 ||
+             bounded.results?.length!==workPacket.facePlans.length ||
+             workPacket.facePlans.some((face,i)=>{
+               const actual=bounded.results[i];
+               const binding=actual?.binding;
+               const exact=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&
+                 a.length===2&&b.length===2&&a.every((n,j)=>n===b[j]);
+               return actual?.kind!=='material_face_patch' ||
+                 binding?.scope!=='source_explicit_cube_face_patch' ||
+                 binding?.status!=='bound_source_only' ||
+                 binding?.texture_uuid!==workPacket.textureUuid ||
+                 binding?.cube_uuid!==face.cubeUuid ||
+                 binding?.face!==face.face ||
+                 binding?.texture_reference!=='explicit_saved_link' ||
+                 binding?.pixel_alias!=='no_detected_overlap_for_sample' ||
+                 binding?.visual_verdict!=='UNVERIFIED' ||
+                 binding?.face_coverage_verdict!=='UNVERIFIED' ||
+                 binding?.view_correspondence!=='NOT_VERIFIED' ||
+                 !exact(binding?.sample_region?.from,face.atlasRegion.from) ||
+                 !exact(binding?.sample_region?.to,face.atlasRegion.to);
+             })) {
+            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
+          }
         }
       }
       if (visualPair !== null && pixelEdit) {
@@ -1351,7 +1414,8 @@ export async function createCodeModeHost({
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: args.operations,
         correctionScope: args.correctionScope,
-        ...(materialIntent ? {correctionIntent:materialIntent} : {}) });
+        ...(materialIntent ? {correctionIntent:materialIntent} : {}),
+        ...(workPacket ? {materialWorkPacket:workPacket} : {}) });
       if (visualPair !== null && typeof reviewVisualPair === 'function' && pixelEdit) {
         // The CLI committed its no-overwrite result. Even if registering
         // its next handle fails, retrying the same snapshot is unsafe.
@@ -1363,6 +1427,14 @@ export async function createCodeModeHost({
           status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED',
           source_model_sha256:next.sha256,
           style_evidence:receipt.texture_styling_evidence??null,
+          ...(workPacket?{material_work_packet:{
+            status:'SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED',
+            sha256:materialWorkPacketDigest(workPacket),
+            planned_faces:workPacket.facePlans.length,
+            source_model_sha256:workPacket.sourceModelSha256,
+            reference_png_sha256:workPacket.referencePngSha256,
+            visual_verdict:'UNVERIFIED',
+          }}:{}),
           next:'Inspect face-local material styling and review fresh mapped views before declaring STYLED.',
           texture_completion_attested:false,
         }}:{})};
