@@ -328,6 +328,12 @@ test('trusted host binds a selected master to the real Rust material read', () =
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
       approvedMaterialReferenceUuid:'tier-1-master',
       runner:async argv=>{
+        if(argv[0]==='inspect' && argv.includes('--list')) {
+          return {status:'OK',sha256:HASH,
+            catalog:{kind:'textures',offset:0,total:1,next_offset:null,
+              entries:[{uuid:'tier-1-master',name:'Tier 1',
+                kind:'texture',index:0}]}};
+        }
         if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
         assert.equal(argv[0],'inspect-batch');
         const args=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
@@ -364,6 +370,35 @@ test('trusted host binds a selected master to the real Rust material read', () =
     }]);
   }));
 
+test('operator material reference must resolve exactly once against the pinned source', () =>
+  fixture(async input=>{
+    const cases=[
+      {entries:[{uuid:'unrelated',name:'Other',kind:'texture',index:0}],
+        error:'CODE_MODE_MATERIAL_REFERENCE_NOT_FOUND'},
+      {entries:[{uuid:'tier-1-master',name:'Tier 1',kind:'texture',index:0}],
+        sha:'b'.repeat(64),
+        error:'CODE_MODE_MATERIAL_REFERENCE_SOURCE_UNVERIFIED'},
+      {entries:[
+        {uuid:'tier-1-master',name:'First',kind:'texture',index:0},
+        {uuid:'tier-1-master',name:'Duplicated',kind:'texture',index:1},
+      ],error:'CODE_MODE_MATERIAL_REFERENCE_AMBIGUOUS'},
+    ];
+    for(const item of cases){
+      await assert.rejects(createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        approvedMaterialReferenceUuid:'tier-1-master',
+        runner:async argv=>{
+          if(argv.includes('--list')) return {status:'OK',
+            sha256:item.sha??HASH,
+            catalog:{kind:'textures',offset:0,total:item.entries.length,
+              next_offset:null,entries:item.entries}};
+          return {status:'OK',sha256:HASH,summary:SUMMARY};
+        },
+        spawnImpl:()=>{throw new Error('GUEST_MUST_NOT_RUN');},
+      }),new RegExp(item.error));
+    }
+  }));
+
 test('material reference cannot be spoofed by guest generic read or altered during scoped paint', () =>
   fixture(async input => {
     for(const request of [
@@ -389,6 +424,10 @@ test('material reference cannot be spoofed by guest generic read or altered duri
         approvedMaterialReferenceUuid:'tier-1-master',
         runner:async argv=>{
           called.push(argv[0]);
+          if(argv.includes('--list'))return {status:'OK',sha256:HASH,
+            catalog:{kind:'textures',offset:0,total:1,next_offset:null,
+              entries:[{uuid:'tier-1-master',name:'Tier 1',
+                kind:'texture',index:0}]}};
           return {status:'OK',sha256:HASH,summary:SUMMARY};
         },
         spawnImpl:()=>fakeGuest(request,response=>{
@@ -399,7 +438,7 @@ test('material reference cannot be spoofed by guest generic read or altered duri
       });
       const result=await host.execute({code:'return await codemode.inspectBatch({});'});
       assert.equal(result.value.refused,true);
-      assert.deepEqual(called,['inspect']);
+      assert.deepEqual(called,['inspect','inspect']);
     }
   }));
 

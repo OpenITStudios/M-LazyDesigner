@@ -964,8 +964,9 @@ model-authored JavaScript. `inspectApprovedMaterial` uses that one
 reference UUID against the current SHA-bound model, while scoped Paint
 cannot target the selected master and other Paint still requires a
 correction scope. The operator must verify that the UUID belongs to
-the actual approved texture; merely typing a string does not prove
-reference presence or user acceptance. The flag is invalid with
+the actual approved texture; the host now verifies exact occurrence in
+the SHA-bound saved Rust texture catalog before guest execution. This
+source-identity check does not prove user acceptance or artistic style. The flag is invalid with
 `--output-dir`. It does not protect unrelated Geometry operations,
 prove artistic match or grant write authorization. CLI argument
 regression is authored, not executed; existing host reference guards

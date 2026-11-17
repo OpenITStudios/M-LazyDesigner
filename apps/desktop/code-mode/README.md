@@ -206,7 +206,10 @@ The first-party `code-mode/run.mjs` now accepts
 model. It forwards the operator's selected approved Texture UUID into
 the existing trusted host for SHA-bound material comparisons and scoped
 Paint refusal when that exact master is targeted. The guest cannot
-choose the reference UUID. No new permission or native editor binding
+choose the reference UUID. Host startup now verifies the UUID appears exactly
+once in the current SHA-bound Rust texture catalog (bounded paged read);
+missing, duplicate, stale or incomplete source evidence refuses the host
+before any guest execution. No new permission or native editor binding
 is introduced; this is not proof the UUID exists or the visual style
 matches the approved image. CLI regression authored, NOT_EXECUTED.
 
