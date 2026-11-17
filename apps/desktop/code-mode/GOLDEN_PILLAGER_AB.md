@@ -183,6 +183,22 @@ sample cannot be repainted. Source-only Node fixtures have been authored,
 **NOT_EXECUTED** while localtest/CI are on hold; no actual Pillager art
 improvement is measured.
 
+## PILL-09 native receipt cannot masquerade as artist acceptance
+
+A source-corrected Pillager candidate is not an accepted
+texture merely because `apply` returned `OK`. Before creating
+the next Code Mode project handle, require a matching native
+scoped Paint receipt (source SHA, original pixel-guard counts,
+operation count, revision and candidate output SHA) and reopen
+that candidate to compare its actual SHA. If the receipt is
+missing or contradicts the source scope, return an explicit
+uncertain/failed result, preserve the possibly published sibling
+for operator reconciliation, and do not issue automatic retry
+under another filename. A reviewer-bound source lease is spent
+on ambiguous published success. The image reviewer must still
+inspect the fresh candidate with actual, matched mapped views.
+Source regression fixtures AUTHORED_NOT_RUN.
+
 ## Evidence and stop criteria
 
 Record only actual observations: case ID, source SHA, camera/view, approved reference PNG SHA, candidate PNG SHA, reviewer/host/version, issue ID, observed defect, correction approach, permitted atlas rectangle, protected regions, final user decision, reason for rejection and native proof. When any observation is missing, write NOT_EXECUTED, UNVERIFIED or BLOCKED with the specific gap.

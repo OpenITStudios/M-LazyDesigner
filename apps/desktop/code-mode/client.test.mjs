@@ -1383,8 +1383,13 @@ test('Code Mode forwards inner protected pixels and exact-before preconditions t
         protected_regions:[{from:[2,2],to:[4,4]}],
         expected_before_pixels:[{at:[4,4],rgba:[60,70,80,255]}],
       });
-      return {status:'OK',mutation:{revision:1,operation_count:1,
-        changed_uuids:[]}};
+      return {status:'OK',source_sha256:SHA,
+        output_sha256:'b'.repeat(64),summary:{revision:1},
+        mutation:{revision:1,operation_count:1,changed_uuids:[]},
+        correction_scope:{status:'enforced',
+          texture_uuid:'00000000-0000-4000-8000-000000007101',
+          protected_regions:1,expected_before_pixels:1,
+          editable_before_rgba:0,visual_verdict:'UNVERIFIED'}};
     },
   });
   const correctionScope={
@@ -1448,8 +1453,13 @@ test('reviewed source-color allowlist is sent as exact RGBA preimage guard',asyn
       assert.deepEqual(native.correction_scope.editable_before_rgba,[
         [80,90,100,255],
       ]);
-      return {status:'OK',mutation:{revision:1,
-        operation_count:1,changed_uuids:[]}};
+      return {status:'OK',source_sha256:SHA,
+        output_sha256:'b'.repeat(64),summary:{revision:1},
+        mutation:{revision:1,operation_count:1,changed_uuids:[]},
+        correction_scope:{status:'enforced',
+          texture_uuid:'00000000-0000-4000-8000-000000007101',
+          protected_regions:0,expected_before_pixels:0,
+          editable_before_rgba:1,visual_verdict:'UNVERIFIED'}};
     },
   });
   const base={
@@ -1481,4 +1491,44 @@ test('reviewed source-color allowlist is sent as exact RGBA preimage guard',asyn
   }
   assert.equal(invocations,1);
   assert.equal(approvals,1);
+});
+
+test('scoped Rust Paint never reports success from missing or mismatched native guard receipts',async()=>{
+  const scope={textureUuid:'00000000-0000-4000-8000-000000007101',
+    allowedRegions:[{from:[1,1],to:[3,3]}],preserveAlpha:true,
+    editableBeforeRgba:[[80,90,100,255]]};
+  const valid={status:'OK',source_sha256:SHA,
+    output_sha256:'b'.repeat(64),summary:{revision:1},
+    correction_scope:{status:'enforced',texture_uuid:scope.textureUuid,
+      protected_regions:0,expected_before_pixels:0,
+      editable_before_rgba:1,visual_verdict:'UNVERIFIED'},
+    mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+  const bad=[
+    {...valid,correction_scope:undefined},
+    {...valid,correction_scope:{...valid.correction_scope,editable_before_rgba:0}},
+    {...valid,correction_scope:{...valid.correction_scope,texture_uuid:'other'}},
+    {...valid,correction_scope:{...valid.correction_scope,visual_verdict:'ACCEPTED'}},
+    {...valid,source_sha256:'c'.repeat(64)},
+    {...valid,output_sha256:'bad'},
+    {...valid,mutation:{...valid.mutation,operation_count:0}},
+    {...valid,summary:{revision:0}},
+  ];
+  for(const response of bad){
+    let calls=0;
+    const client=createRustCodeModeClient({binary:BIN,
+      authorizeMutation:()=>true,
+      runner:async argv=>{
+        calls++;
+        assert.equal(argv[0],'apply');
+        return response;
+      },
+    });
+    await assert.rejects(client.apply({
+      input:'/abs/model.bbmodel',output:'/abs/unverified.bbmodel',
+      expectedSha256:SHA,correctionScope:scope,
+      operations:[{op:'paint_texture_pixel',texture_index:0,
+        x:1,y:1,rgba:[100,110,120,255]}],
+    }),/CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED/);
+    assert.equal(calls,1); // no automatic retry after possible publication
+  }
 });

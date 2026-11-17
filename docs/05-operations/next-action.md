@@ -1,3 +1,14 @@
+**Rust scoped Paint receipt trust closure (2026-11-17; SOURCE ONLY):**
+The Rust `apply` receipt now reports the enforced original RGBA
+preimage guard count alongside existing protected regions and
+expected source pixels. First-party SDK refuses missing or contradictory
+scoped success, and Host verifies the reopened output SHA before
+registering a new project. Reviewed uncertain outcomes freeze the
+current source lease to avoid unsafe renamed retries; saved sibling
+reconciliation remains an operator task. Source fixture coverage
+AUTHORED_NOT_RUN under the CI/localtest hold; real texture
+quality, native behavior and performance remain UNVERIFIED.
+
 **Rust P0 multi-view numeric preflight reuse (2026-11-17; SOURCE ONLY):**
 Repeat `inspectSelectedVisualPair` requests for the one pinned
 multi-view model now reuse the completed numeric image comparison

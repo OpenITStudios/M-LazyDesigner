@@ -240,6 +240,32 @@ function serializePlan(operations, normalizedScope) {
   return payload;
 }
 
+// Require a native *matched* correction receipt before any scoped Paint
+// call can be reported as successful to Code Mode. Rust may already have
+// published its no-overwrite sibling when a malformed success is observed:
+// do NOT auto-retry, remove that file or pretend its provenance is known.
+function checkedScopedApplyReceipt(receipt,scope,expectedSourceSha,operationCount) {
+  if (!scope) return receipt;
+  const verified=receipt?.correction_scope;
+  const count=(field,values)=>verified?.[field] === (values?.length??0);
+  if (receipt?.source_sha256!==expectedSourceSha.toLowerCase() ||
+      receipt?.mutation?.operation_count!==operationCount ||
+      !Number.isSafeInteger(receipt?.mutation?.revision) ||
+      receipt.mutation.revision<1 ||
+      receipt?.summary?.revision!==receipt.mutation.revision ||
+      typeof receipt?.output_sha256!=='string' ||
+      !SHA256.test(receipt.output_sha256) ||
+      verified?.status!=='enforced' ||
+      verified.texture_uuid!==scope.texture_uuid ||
+      verified.visual_verdict!=='UNVERIFIED' ||
+      !count('protected_regions',scope.protected_regions) ||
+      !count('expected_before_pixels',scope.expected_before_pixels) ||
+      !count('editable_before_rgba',scope.editable_before_rgba)) {
+    throw new Error('CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED');
+  }
+  return receipt;
+}
+
 // Multiple focused read selectors, using one Rust document load. The program
 // host still owns filesystem permissions; this is not an OS sandbox.
 const INSPECTION_QUERY_FIELDS = Object.freeze({
@@ -591,7 +617,9 @@ export function createRustCodeModeClient({
       const file = join(directory, 'edit.plan.json');
       try {
         await writeFile(file, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-        return await call('apply', { ...options, plan: file }, approval);
+        const receipt=await call('apply', { ...options, plan: file }, approval);
+        return checkedScopedApplyReceipt(
+          receipt,scope,options['expected-sha256'],operations.length);
       } finally {
         await rm(directory, { recursive: true, force: true });
       }

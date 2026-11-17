@@ -1,5 +1,47 @@
 # Rust Code Mode — first-party local host integration
 
+## Native scoped Paint receipt reconciliation (SOURCE ONLY)
+
+A Rust `apply` result is not a trustworthy Code Mode success merely
+because the runner reports `status:'OK'`. For **every scoped Paint**,
+the first-party SDK now requires all of the following before returning
+a successful mutation: matching input model SHA; actual mutation
+operation count and matching document revision; a valid output SHA;
+and a Rust `correction_scope` receipt with `status:'enforced'`,
+the exact selected texture UUID, `visual_verdict:'UNVERIFIED'`,
+and exact counts for `protected_regions`,
+`expected_before_pixels`, and `editable_before_rgba`.
+The Rust CLI emits all three guard counts from the canonical scope
+used by the editor. A missing, truncated, contradictory or stale
+receipt fails with `CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED`.
+Unscoped legacy edits retain their existing separate contract.
+
+For scoped writes, after receiving a valid native receipt, the trusted
+Host **reopens the published sibling model** through its normal Rust
+inspection and checks the actual SHA against the publisher's
+`output_sha256` before registering a project handle. A mismatch
+raises `CODE_MODE_RUST_PUBLISHED_OUTPUT_SHA_MISMATCH`.
+Neither mismatch is an artistic verdict or evidence that all pixels
+were reviewed. Both mean **no successful Code Mode completion**.
+
+Crucially, the native CLI may already have created its new sibling
+file when a malformed success response is detected. Do **not**
+automatically retry, overwrite, delete, or claim rollback. The
+operator should reconcile that saved sibling with the original
+model and Rust receipt explicitly. For reviewer-bound corrections,
+the host consumes the model's reviewed source lease on an
+unverified native correction receipt to prevent a renamed retry
+from laundering an unknown publication outcome. Independent
+write permission, SHA-pinned review inputs, protected sample,
+face/UV checks and fresh rendered-image review remain mandatory.
+
+Source-authored regression cases include missing/incorrect guard
+counts, wrong scope or model source, invalid output SHA or operation
+count, saved-output SHA disagreement, and disallowing a second
+reviewed Paint after an uncertain native result. These tests are
+NOT_EXECUTED under the existing CI/local-PC hold.
+
+
 ## Source-color overwrite guards for reviewed material propagation (SOURCE ONLY)
 
 The existing Rust correction scope can now carry

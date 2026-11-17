@@ -22,10 +22,13 @@ test('approved correction scope is bound to the serialized Rust plan and approva
       }
       assert.equal(args[0],'apply');
       written = JSON.parse(await readFile(args[args.indexOf('--plan')+1],'utf8'));
-      return {status:'OK',mutation:{revision:1,operation_count:1,
-        changed_uuids:['approved-tier-2']},correction_scope:{
-        status:'enforced',texture_uuid:'approved-tier-2',
-        visual_verdict:'UNVERIFIED'}};
+      return {status:'OK',source_sha256:SHA,
+        output_sha256:'b'.repeat(64),summary:{revision:1},
+        mutation:{revision:1,operation_count:1,
+          changed_uuids:['approved-tier-2']},
+        correction_scope:{status:'enforced',texture_uuid:'approved-tier-2',
+          protected_regions:0,expected_before_pixels:0,
+          editable_before_rgba:0,visual_verdict:'UNVERIFIED'}};
     },
   });
   const model = await openRustCodeModeProject(client,'/abs/pillager.bbmodel');

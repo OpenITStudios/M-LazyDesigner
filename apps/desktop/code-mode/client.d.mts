@@ -748,7 +748,11 @@ export interface ApplyReceipt {
   mutation: MutationReceipt;
   /** All declared rectangles, but never an artistic completion receipt. */
   texture_styling_evidence?:TextureStylingCorrectionEvidence|TextureStylingEvidence|null;
-  /** Returned by Rust only when a declared pixel scope was enforced. */
+  /** Required at runtime for ANY scoped Paint; unscoped edits omit it.
+   * SDK raises CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED on missing,
+   * inconsistent or stale native success evidence. Rust publication
+   * may already have occurred; no automatic retry or rollback is implied.
+   */
   correction_scope?: {
     status: "enforced";
     texture_uuid: string;

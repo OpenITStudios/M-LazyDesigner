@@ -11,6 +11,17 @@ import { createCodeModeHost, createCodeModeTool } from './host.mjs';
 
 const HASH = 'a'.repeat(64);
 const SUMMARY = { revision: 0, cubes: 1, bones: 1, textures: 0, animations: 0 };
+// Mock exactly the canonical Rust correction receipt; source-only fixture,
+// never evidence that Cargo or a native .bbmodel transaction actually ran.
+function scopedNativeReceipt(textureUuid,{
+  protectedRegions=0,expectedBeforePixels=0,editableBeforeRgba=0,
+}={}) {
+  return {status:'enforced',texture_uuid:textureUuid,
+    protected_regions:protectedRegions,
+    expected_before_pixels:expectedBeforePixels,
+    editable_before_rgba:editableBeforeRgba,
+    visual_verdict:'UNVERIFIED'};
+}
 
 const REVIEW_CUBE='00000000-0000-4000-8000-000000000002';
 const ALL_FACE_SIDES=Object.freeze(['north','east','south','west','up','down']);
@@ -254,9 +265,12 @@ test('host forwards correction scope through guest RPC and bound Rust plan', () 
           ).correction_scope;
           return {status:'OK',source_sha256:HASH,output_sha256:'b'.repeat(64),
             summary:{...SUMMARY,revision:1},
-            mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+            mutation:{revision:1,operation_count:1,changed_uuids:[]},
+            correction_scope:scopedNativeReceipt('approved-tier-2')};
         }
-        return {status:'OK',sha256:HASH,summary:SUMMARY};
+        return {status:'OK',sha256:
+          basename(argv[argv.indexOf('--input')+1])==='candidate.bbmodel'?
+          'b'.repeat(64):HASH,summary:SUMMARY};
       },
       spawnImpl:()=>fakeGuest({method:'apply',args:{
         project:'p0',output:'candidate.bbmodel',
@@ -265,7 +279,10 @@ test('host forwards correction scope through guest RPC and bound Rust plan', () 
         correctionScope:declared,
       }}, response=>{
         assert.equal(response.ok,true);
-        assert.equal(response.result.receipt.correction_scope,undefined);
+        assert.deepEqual(response.result.receipt.correction_scope,
+          scopedNativeReceipt('approved-tier-2'));
+        assert.equal(response.result.texturing_workflow.source_pixel_guards
+          .verified_by_rust_receipt,true);
         return {approved:response.ok};
       }),
     });
@@ -525,7 +542,7 @@ test('a verified reference pair permits scoped Paint once, then rejects a stale 
           return {status:'OK',source_sha256:HASH,output_sha256:'b'.repeat(64),
             summary:{...SUMMARY,revision:1},mutation:{
               revision:1,operation_count:1,changed_uuids:[],
-            }};
+            },correction_scope:scopedNativeReceipt('tier2')};
         }
         throw Error('unexpected command');
       },
@@ -1232,8 +1249,9 @@ test('representative material is constrained; propagation requires fresh accepte
         assert.equal(argv[0],'apply');
         await writeFile(argv[argv.indexOf('--output')+1],'{}');
         return {status:'OK',source_sha256:HASH,output_sha256:modifiedSha,
-          summary:SUMMARY,
-          mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+          summary:{...SUMMARY,revision:1},
+          mutation:{revision:1,operation_count:1,changed_uuids:[]},
+          correction_scope:scopedNativeReceipt('tier2-atlas')};
       },
       spawnImpl:()=>{
         const step=++firstStep;
@@ -1365,7 +1383,11 @@ test('representative material is constrained; propagation requires fresh accepte
         });
         await writeFile(argv[argv.indexOf('--output')+1],'{}');
         return {status:'OK',source_sha256:modifiedSha,output_sha256:widenedSha,
-          summary:SUMMARY,mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+          summary:{...SUMMARY,revision:1},
+          mutation:{revision:1,operation_count:1,changed_uuids:[]},
+          correction_scope:scopedNativeReceipt('tier2-atlas',{
+            editableBeforeRgba:1,
+          })};
       },
       spawnImpl:()=>{
         const step=++secondStep;
@@ -1424,6 +1446,8 @@ test('representative material is constrained; propagation requires fresh accepte
           assert.equal(value.ok,true);
           assert.equal(value.result.project,'p1');
           assert.equal(value.result.texturing_workflow.material_work_packet.planned_faces,1);
+          assert.equal(value.result.texturing_workflow.source_pixel_guards
+            .verified_by_rust_receipt,true);
           assert.equal(value.result.texturing_workflow.material_work_packet.visual_verdict,'UNVERIFIED');
           return {propagated:true};
         });
@@ -2613,4 +2637,142 @@ test('reviewed broad propagation cannot infer original overwrite colors from gue
     assert.equal((await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.reviewed,true);
     assert.equal((await host.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
     assert.equal(changes,0);
+  }));
+
+test('scoped Paint refuses unverified Rust correction receipts and saved-output SHA mismatch',()=>
+  fixture(async input=>{
+    for(const caseId of ['missing-source-guard','mismatched-saved-sha']){
+      let approvals=0,mutations=0,sourceChecks=0,registerReads=0;
+      const claimed='b'.repeat(64);
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        authorizeMutation:()=>{approvals++;return true;},
+        runner:async argv=>{
+          if(argv[0]==='inspect'){
+            sourceChecks++;
+            const output=basename(argv[argv.indexOf('--input')+1])==='candidate.bbmodel';
+            if(output)registerReads++;
+            return {status:'OK',sha256:output?'c'.repeat(64):HASH,
+              summary:SUMMARY};
+          }
+          assert.equal(argv[0],'apply');
+          mutations++;
+          const plan=JSON.parse(await readFile(
+            argv[argv.indexOf('--plan')+1],'utf8'));
+          assert.equal(plan.correction_scope.texture_uuid,'tier2-atlas');
+          return {status:'OK',source_sha256:HASH,output_sha256:claimed,
+            summary:{...SUMMARY,revision:1},
+            mutation:{revision:1,operation_count:1,changed_uuids:[]},
+            ...(caseId==='missing-source-guard'?{
+              correction_scope:scopedNativeReceipt('tier2-atlas',{
+                editableBeforeRgba:0,
+              }),
+            }:{
+              correction_scope:scopedNativeReceipt('tier2-atlas',{
+                editableBeforeRgba:1,
+              }),
+            })};
+        },
+        spawnImpl:()=>fakeGuest({method:'apply',args:{
+          project:'p0',output:'candidate.bbmodel',
+          operations:[{op:'paint_texture_pixel',
+            texture_index:0,x:1,y:1,rgba:[120,130,145,255]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[1,1],to:[2,2]}],preserveAlpha:true,
+            editableBeforeRgba:[[80,100,120,255]]},
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,caseId==='missing-source-guard'?
+            'CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED':
+            'CODE_MODE_RUST_PUBLISHED_OUTPUT_SHA_MISMATCH');
+          return {blocked:true};
+        }),
+      });
+      const result=await host.execute({code:'return codemode.apply({project:"p0"});'});
+      assert.equal(result.value.blocked,true);
+      assert.equal(mutations,1); // possible saved sibling: never auto-retry
+      assert.equal(approvals,1);
+      assert.equal(registerReads,caseId==='missing-source-guard'?0:1);
+      assert.equal(sourceChecks,caseId==='missing-source-guard'?1:2);
+    }
+  }));
+
+test('reviewed sample freezes its source after a potentially published but unverified Rust receipt',()=>
+  fixture(async input=>{
+    const folder=dirname(input),reference=join(folder,'approved.png');
+    const capture=join(folder,'current.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,png);await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    let phase=0,approvals=0,applies=0;
+    const intent={issueId:'helmet-flat',approachId:'connected-bevel',
+      partId:'tier2-helmet',material:'metal',treatment:'form_value_masses',
+      cause:'The helmet highlights do not follow the actual stepped bevel.',
+      expectedChange:'Use one connected light-facing bevel mass on the helmet.'};
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        referencePngPath:reference,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front',
+      },
+      reviewVisualPair:()=>({
+        decision:'REJECTED',issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
+          partId:'tier2-helmet',observation:'The helmet has one flat band.'}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
+        materialCohort:{phase:'sample',issueId:'helmet-flat',
+          partId:'tier2-helmet',approachId:'connected-bevel',
+          cubeUuid:REVIEW_CUBE,face:'north',
+          sampleRegion:{from:[1,1],to:[4,4]}},
+      }),
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'},
+        };
+        if(argv[0]==='inspect-batch')return mockedNativeFaceBinding(argv,HASH);
+        assert.equal(argv[0],'apply');
+        applies++;
+        return {status:'OK',source_sha256:HASH,output_sha256:'b'.repeat(64),
+          summary:{...SUMMARY,revision:1},
+          mutation:{revision:1,operation_count:1,changed_uuids:[]},
+          // The native publication could have happened; counts are false.
+          correction_scope:scopedNativeReceipt('tier2-atlas',{
+            editableBeforeRgba:1,
+          })};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:phase++===0?'inspectSelectedVisualPair':'apply',
+        args:phase===1?{project:'p0'}:{
+          project:'p0',output:phase===2?'candidate.bbmodel':'retry.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,
+            x:2,y:2,rgba:[80,100,120,255]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[2,2],to:[4,4]}],preserveAlpha:true},
+          correctionIntent:intent,
+        },
+      },response=>{
+        if(response.ok)return {reviewed:true};
+        assert.equal(response.code,phase===2?
+          'CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED':
+          'CODE_MODE_VISUAL_REVIEW_FRESH_CAPTURE_REQUIRED');
+        return {blocked:true};
+      }),
+    });
+    assert.equal((await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    })).value.reviewed,true);
+    assert.equal((await host.execute({
+      code:'return codemode.apply({project:"p0"});',
+    })).value.blocked,true);
+    assert.equal((await host.execute({
+      code:'return codemode.apply({project:"p0"});',
+    })).value.blocked,true);
+    assert.equal(applies,1);
+    assert.equal(approvals,1);
   }));

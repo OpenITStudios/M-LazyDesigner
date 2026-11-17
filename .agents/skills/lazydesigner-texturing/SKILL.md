@@ -42,6 +42,17 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Rust Texturing review admission (source-authored; NOT_EXECUTED):**
 
+**Rust correction receipts are proof-bounded (source-only):**
+For a reviewer-bound or exact scoped Paint, do not report saved
+source success from `status:'OK'` alone. The SDK must reconcile
+the native correction receipt against the selected texture, source
+SHA, guard counts, operation count and revision; the trusted host
+reopens the candidate to verify its output SHA before new-handle
+registration. A missing/mismatched result may leave a new sibling
+file: preserve the unresolved outcome for operator reconciliation,
+never auto-retry or claim artistic PASS/rollback. Fresh rendered
+mapped views remain required for any professional Texturing claim.
+
 **Reviewed source-color preconditions (Rust source-only):**
 For broad material shading propagation on an already painted atlas,
 inspect the actual saved crop's `texture_source_colors` palette and

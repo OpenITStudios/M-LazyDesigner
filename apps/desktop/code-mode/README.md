@@ -1,5 +1,19 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Fail-closed native scoped Paint receipts (2026-11-17; SOURCE ONLY):**
+A scoped Rust Paint now requires a complete, matching native receipt
+(model SHA, operation count, revision, output SHA, source texture and
+three pixel-guard counters). The native CLI previously omitted
+`editable_before_rgba` from the receipt despite enforcing the
+guard; that source defect is corrected. SDK refuses malformed/missing
+receipts before reporting success; Host reopens the published sibling
+and matches its SHA before creating the next project handle.
+Potentially persisted outputs with uncertain receipts must be
+reconciled explicitly rather than auto-retried. Tests authored but
+NOT_EXECUTED; no real runtime or visual PASS is claimed.
+See HOST_INTEGRATION.md.
+
+
 **P0 multi-view preflight reuse (2026-11-17; SOURCE ONLY):**
 For the same selected model SHA and multi-camera PNG set, repeated
 `inspectSelectedVisualPair` reads reuse the already validated numeric

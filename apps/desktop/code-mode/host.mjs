@@ -764,11 +764,18 @@ export async function createCodeModeHost({
     await checkFreshSibling(path, folder);
     return path;
   }
-  async function register(path) {
+  async function register(path,expectedOutputSha) {
     if (projects.size >= MAX_PROJECTS) {
       throw new Error('CODE_MODE_PROJECT_LIMIT_REACHED');
     }
     const project = await openRustCodeModeProject(client, path);
+    // Reopen the actual saved sibling before accepting the Rust publisher
+    // receipt. A claimed output hash and a mismatching saved model must not
+    // acquire a successful Code Mode handle, even with a valid PNG guard.
+    if (expectedOutputSha!==undefined &&
+        project.expectedSha256!==expectedOutputSha) {
+      throw new Error('CODE_MODE_RUST_PUBLISHED_OUTPUT_SHA_MISMATCH');
+    }
     const handle = 'p' + nextProject++;
     projects.set(handle, project);
     return { project: handle, sha256: project.expectedSha256,
@@ -1546,16 +1553,29 @@ export async function createCodeModeHost({
         ]));
       }
       const output = await outputPath(args.output, '.bbmodel');
-      const receipt = await p.apply({ output, operations: activeOperations,
-        correctionScope: effectiveCorrectionScope,
-        ...(materialIntent ? {correctionIntent:materialIntent} : {}),
-        ...(workPacket ? {materialWorkPacket:workPacket} : {}) });
+      let receipt;
+      try {
+        receipt = await p.apply({ output, operations: activeOperations,
+          correctionScope: effectiveCorrectionScope,
+          ...(materialIntent ? {correctionIntent:materialIntent} : {}),
+          ...(workPacket ? {materialWorkPacket:workPacket} : {}) });
+      } catch (error) {
+        if (reviewedTextureSession && pixelEdit &&
+            error?.message==='CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED') {
+          // Rust may have published a sibling despite malformed output.
+          // Freeze this reviewed source revision: a renamed retry would
+          // conceal the unresolved native result from the operator.
+          completedReviewedCorrections.add(p.expectedSha256);
+        }
+        throw error;
+      }
       if (visualPair !== null && typeof reviewVisualPair === 'function' && pixelEdit) {
         // The CLI committed its no-overwrite result. Even if registering
         // its next handle fails, retrying the same snapshot is unsafe.
         completedReviewedCorrections.add(p.expectedSha256);
       }
-      const next=await register(output);
+      const next=await register(output,
+        effectiveCorrectionScope===undefined?undefined:receipt.output_sha256);
       return { receipt, ...next,
         ...(pixelEdit?{texturing_workflow:{
           status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED',

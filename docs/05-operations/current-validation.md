@@ -1,3 +1,20 @@
+## 2026-11-17 — Rust scoped Paint receipt reconciliation (SOURCE ONLY)
+
+Current Rust source audit found an actual CLI/Host contract defect:
+the CLI enforced but did not report the `editable_before_rgba`
+counter, so `source_pixel_guards.verified_by_rust_receipt` could
+stay false while Code Mode reported an edit succeeded. The CLI now
+publishes all three guard counts, the SDK refuses scoped success
+without matching source SHA, operation count, revision, output SHA,
+texture and guard counts, and the host checks reopened candidate
+SHA before project registration. Reviewer-bound correction is
+frozen after an uncertain published receipt rather than blindly
+retried. Node regression cases added for mismatching native receipts,
+published hash divergence and no second reviewed retry; dependent
+mocked scoped receipts updated to canonical shape.
+SOURCE_REVIEWED; TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.
+No real Rust/Node execution, model image review or visual PASS.
+
 ## 2026-11-17 — Repeated multi-view preflight consolidation (SOURCE ONLY)
 
 At pinned `Rust` source, the reviewed Texturing preflight previously

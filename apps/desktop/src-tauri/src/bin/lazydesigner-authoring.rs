@@ -674,6 +674,7 @@ fn execute() -> Result<Value> {
                     "status":"enforced","texture_uuid":scope.texture_uuid,
                     "protected_regions":scope.protected_regions.len(),
                     "expected_before_pixels":scope.expected_before_pixels.len(),
+                    "editable_before_rgba":scope.editable_before_rgba.len(),
                     "visual_verdict":"UNVERIFIED"
                 }))
             }))
