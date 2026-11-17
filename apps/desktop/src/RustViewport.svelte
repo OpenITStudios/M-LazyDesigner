@@ -6,6 +6,7 @@
   import { planCubeLocalTranslation, planCubeLocalRotation, planCubeLocalScale } from './rustMoveGizmo';
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
+  import { cubeSelectionColors } from './rustViewportSelection';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import type { BoneTransformPose } from './rustAnimationPose';
@@ -107,7 +108,7 @@
         textureCache.delete(index);
         failedTextureSources.add(source);
         entry.texture?.dispose();
-        rebuild(cubes, bones, hierarchy, selectedId);
+        rebuild(cubes, bones, hierarchy);
       },
     );
     entry.texture = texture;
@@ -130,6 +131,29 @@
         textureCache.delete(index);
       }
     }
+  }
+
+  // Selection is a view-only operation. Never rebuild the scene or dispose
+  // geometry/PNG resources merely because a Cube highlight changed.
+  function updateSelection(currentSelection: string | null) {
+    for (const mesh of pickMeshes) {
+      const uuid: unknown = mesh.userData.cubeUuid;
+      const fallback: unknown = mesh.userData.fallbackColor;
+      if (typeof uuid !== 'string' || typeof fallback !== 'number') continue;
+      const colors = cubeSelectionColors(uuid, currentSelection, fallback);
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        if (material instanceof THREE.MeshLambertMaterial && !material.map) {
+          material.color.setHex(colors.untextured);
+        }
+      }
+      for (const child of mesh.children) {
+        if (child instanceof THREE.LineSegments && child.material instanceof THREE.LineBasicMaterial) {
+          child.material.color.setHex(colors.outline);
+        }
+      }
+    }
+    scheduleRender();
   }
 
   function deg(value: number) { return THREE.MathUtils.degToRad(value); }
@@ -183,7 +207,7 @@
 
   function rebuild(
     currentCubes: CubeView[], currentBones: BoneView[],
-    currentHierarchy: HierarchyNode[], currentSelection: string | null,
+    currentHierarchy: HierarchyNode[],
     _sources: (string | null)[] = texturePreviewSources,
     _sides: ('front' | 'double' | null)[] = texturePreviewSides,
     _resolutions: ([number, number] | null)[] = texturePreviewResolutions,
@@ -220,7 +244,6 @@
           // has unsupported inverted/zero inflated or stretched dimensions.
           if (!bounds) continue;
           const geometry = new THREE.BoxGeometry(...bounds.size);
-          const active = currentSelection === cube.uuid;
           const uvAttribute = geometry.getAttribute('uv') as THREE.BufferAttribute;
           const materials: THREE.MeshLambertMaterial[] = [];
           geometry.clearGroups();
@@ -250,7 +273,7 @@
             }
             materials.push(new THREE.MeshLambertMaterial({
               map: texture,
-              color: texture ? 0xffffff : active ? 0x80b8ef : COLORS[cube.color % COLORS.length],
+              color: texture ? 0xffffff : COLORS[cube.color % COLORS.length],
               transparent: Boolean(texture),
               // Blockbench 5.2.1 discards sampled alpha < 0.01. In the
               // Rust preview this also prevents invisible texels from
@@ -273,11 +296,12 @@
             bounds.center[2] - cube.origin[2],
           );
           mesh.userData.cubeUuid = cube.uuid;
+          mesh.userData.fallbackColor = COLORS[cube.color % COLORS.length];
           pivot.add(mesh);
           pickMeshes.push(mesh);
           const edges = new THREE.LineSegments(
             new THREE.EdgesGeometry(geometry),
-            new THREE.LineBasicMaterial({ color: active ? 0xf8fafc : 0x46535f }),
+            new THREE.LineBasicMaterial({ color: 0x46535f }),
           );
           mesh.add(edges);
         } else {
@@ -300,6 +324,7 @@
 
     visit(currentHierarchy, modelRoot, [0, 0, 0]);
     applyPreviewPose(previewBoneTransforms);
+    updateSelection(selectedId);
     syncGizmo(canTransform, transformMode);
     scheduleRender();
   }
@@ -373,7 +398,7 @@
           );
     if (!edit || gesture.uuid !== selectedId || !canTransform ||
         gesture.mode !== transformMode) {
-      rebuild(cubes, bones, hierarchy, selectedId);
+      rebuild(cubes, bones, hierarchy);
       return;
     }
     mutationPending = true;
@@ -388,7 +413,7 @@
         // No speculative retry or model mutation in the viewport.
       } finally {
         mutationPending = false;
-        rebuild(cubes, bones, hierarchy, selectedId);
+        rebuild(cubes, bones, hierarchy);
       }
     })();
   }
@@ -404,7 +429,7 @@
       gizmo?.reset();
       drag = null;
       if (controls) controls.enabled = true;
-      rebuild(cubes, bones, hierarchy, selectedId);
+      rebuild(cubes, bones, hierarchy);
     }
   }
 
@@ -430,11 +455,14 @@
     onSelect(hits.length ? String(hits[0].object.userData.cubeUuid) : null);
   }
 
-  $: if (ready) rebuild(cubes, bones, hierarchy, selectedId,
+  $: if (ready) rebuild(cubes, bones, hierarchy,
     texturePreviewSources, texturePreviewSides, texturePreviewResolutions,
     scopedTexturePreview, textureResolution, previewTextureIndex);
   $: if (ready) applyPreviewPose(previewBoneTransforms);
-  $: if (ready) syncGizmo(canTransform, transformMode);
+  $: if (ready) {
+    updateSelection(selectedId);
+    syncGizmo(canTransform, transformMode);
+  }
 
   onMount(() => {
     let observer: ResizeObserver | null = null;
