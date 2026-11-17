@@ -317,6 +317,46 @@ test('Code Mode duplicate inspection refuses stale, missing, mismatched or overs
   assert.equal(staleCalls,1);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: unique selectors must not bypass the same native
+// SHA, result-order and byte-budget checks enforced for duplicate batches.
+test('Code Mode validates Rust receipts for unique inspection selectors', async () => {
+  const request = {
+    input:'/abs/model.bbmodel',expectedSha256:SHA,
+    requests:[{kind:'audit'},{kind:'catalog',category:'cubes',limit:1}],
+  };
+  const audit={kind:'audit',audit:{visual_verdict:'UNVERIFIED'}};
+  const catalog={kind:'catalog',catalog:{entries:[],total:0,next_offset:null}};
+  for (const invalid of [
+    {status:'OK',results:[audit,catalog]},
+    {status:'OK',sha256:'b'.repeat(64),results:[audit,catalog]},
+    {status:'OK',sha256:SHA,results:[audit]},
+    {status:'OK',sha256:SHA,results:[audit,catalog,audit]},
+    {status:'OK',sha256:SHA,results:[catalog,audit]},
+    {status:'OK',sha256:SHA,results:[audit,null]},
+  ]) {
+    let calls=0;
+    const client=createRustCodeModeClient({
+      binary:BIN,runner:async argv=>{
+        calls++;
+        assert.equal(argv[0],'inspect-batch');
+        return invalid;
+      },
+    });
+    await assert.rejects(client.inspectBatch(request),
+      /CODE_MODE_INSPECT_BATCH_RECEIPT_INVALID/);
+    assert.equal(calls,1);
+  }
+  const oversized=createRustCodeModeClient({
+    binary:BIN,runner:async ()=>({
+      status:'OK',sha256:SHA,
+      results:[{kind:'audit',audit:{data:'x'.repeat(97*1024)}}],
+    }),
+  });
+  await assert.rejects(oversized.inspectBatch({
+    ...request,requests:[{kind:'audit'}],
+  }),/CODE_MODE_INSPECT_BATCH_RESULT_TOO_LARGE/);
+});
+
 test('Code Mode rejects unknown or excessive read batches before starting the CLI', async () => {
   let calls = 0;
   const client = createRustCodeModeClient({
