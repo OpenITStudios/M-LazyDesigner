@@ -18,12 +18,18 @@ For independently reviewed **broad propagation**, the host requires
 that the trusted reviewer, not the Deno guest, supplies a nonempty
 `correctionScope.editableBeforeRgba`. The guest may omit the field
 (the reviewer guard is inherited) or narrow the list; any extra
-guest-listed colors are discarded by intersection. A disjoint guest
-list is rejected before write authorization. A guest-supplied list
+guest-listed colors are **rejected** before write authorization rather
+than silently truncated. A guest-supplied list
 without a reviewer-supplied source color set cannot authorize broad
 propagation. The existing small representative correction and direct
 known-safe exact-RGBA workflows remain backward compatible; the
 pre-image allowlist is optional outside reviewed propagation.
+The Code Mode SDK and Rust both reject an **explicit empty list**:
+only omitting the optional field retains legacy unrestricted behavior.
+The SDK validates the scope once, then forwards those exact normalized
+fields through the approval descriptor and Rust EditPlan. The trusted
+host rechecks the merged reviewer/guest scope at its separate trust boundary;
+this is intentional, not duplicate model-side artistic scoring.
 This does not transform a pixel into an accepted reference or certify
 correct shading.
 

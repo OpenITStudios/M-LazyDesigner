@@ -99,7 +99,7 @@ export function normalizedCorrectionScope(scope) {
   if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
       Object.keys(scope).some(key =>
         !['textureUuid', 'allowedRegions', 'preserveAlpha',
-          'protectedRegions','expectedBeforePixels'].includes(key))) {
+          'protectedRegions','expectedBeforePixels','editableBeforeRgba'].includes(key))) {
     throw new TypeError('CORRECTION_SCOPE_INVALID');
   }
   const textureUuid = nonempty(scope.textureUuid, 'textureUuid');
@@ -158,10 +158,30 @@ export function normalizedCorrectionScope(scope) {
       return {at,rgba:[...entry.rgba]};
     });
   }
+  let editableBeforeRgba;
+  if(scope.editableBeforeRgba!==undefined){
+    if(!Array.isArray(scope.editableBeforeRgba) ||
+       scope.editableBeforeRgba.length<1 ||
+       scope.editableBeforeRgba.length>16){
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    const seen=new Set();
+    editableBeforeRgba=scope.editableBeforeRgba.map(rgba=>{
+      if(!Array.isArray(rgba)||rgba.length!==4 ||
+         !rgba.every(v=>Number.isInteger(v)&&v>=0&&v<=255)){
+        throw new TypeError('CORRECTION_SCOPE_INVALID');
+      }
+      const key=rgba.join(',');
+      if(seen.has(key))throw new TypeError('CORRECTION_SCOPE_INVALID');
+      seen.add(key);
+      return [...rgba];
+    });
+  }
   return {texture_uuid:textureUuid, allowed_regions:rectangles,
     preserve_alpha:scope.preserveAlpha ?? false,
     ...(protectedRegions===undefined?{}:{protected_regions:protectedRegions}),
-    ...(expectedBeforePixels===undefined?{}:{expected_before_pixels:expectedBeforePixels})};
+    ...(expectedBeforePixels===undefined?{}:{expected_before_pixels:expectedBeforePixels}),
+    ...(editableBeforeRgba===undefined?{}:{editable_before_rgba:editableBeforeRgba})};
 }
 // Descriptive diagnosis only. No self-certifying visual quality claim.
 const CORRECTION_MATERIALS = new Set([
@@ -200,13 +220,14 @@ export function normalizedMaterialCorrectionIntent(value) {
   });
 }
 
-function serializePlan(operations, correctionScope) {
+function serializePlan(operations, normalizedScope) {
   if (!Array.isArray(operations) || operations.length < 1 || operations.length > 128) {
     throw new TypeError('operations must contain 1 through 128 typed Rust operations');
   }
-  const scope = normalizedCorrectionScope(correctionScope);
+  // The SDK caller already normalized the scope once; serialize exactly
+  // those admitted bytes. Rust independently validates the edit plan.
   const payload = JSON.stringify({ expected_revision: 0, operations,
-    ...(scope ? {correction_scope:scope} : {}),
+    ...(normalizedScope ? {correction_scope:normalizedScope} : {}),
   }, (_key, value) => {
     if (typeof value === 'number' && !Number.isFinite(value)) {
       throw new TypeError('Nonfinite operation value');
@@ -520,8 +541,8 @@ export function createRustCodeModeClient({
         output: absolute(output, 'output'),
         'expected-sha256': hash(expectedSha256),
       };
-      const payload = serializePlan(operations, correctionScope);
       const scope = normalizedCorrectionScope(correctionScope);
+      const payload = serializePlan(operations, scope);
       const intent = normalizedMaterialCorrectionIntent(correctionIntent);
       const workPacket=normalizedMaterialWorkPacket(materialWorkPacket);
       if(workPacket && (workPacket.sourceModelSha256!==options['expected-sha256'] ||
@@ -549,6 +570,10 @@ export function createRustCodeModeClient({
             expectedBeforePixels:Object.freeze(scope.expected_before_pixels.map(pixel=>
               Object.freeze({at:Object.freeze([...pixel.at]),
                 rgba:Object.freeze([...pixel.rgba])}))),
+          }:{}),
+          ...(scope.editable_before_rgba?{
+            editableBeforeRgba:Object.freeze(scope.editable_before_rgba.map(rgba=>
+              Object.freeze([...rgba]))),
           }:{}),
         }) } : {}),
         ...(intent ? {

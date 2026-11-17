@@ -26,6 +26,11 @@ export interface TextureCorrectionScope {
   protectedRegions?: Array<{ from: Vec2; to: Vec2 }>;
   /** Bounded exact pixel preconditions on the ORIGINAL input .bbmodel. */
   expectedBeforePixels?: TextureExpectedBeforePixel[];
+  /** Exact original RGBA values that MAY be overwritten. A present empty
+   * list is invalid; omission preserves legacy unrestricted preimage edits.
+   * Reviewer-authorized propagation requires an independently selected list.
+   */
+  editableBeforeRgba?:Array<[number,number,number,number]>;
 }
 /** Trusted-host reuse of the same correction admission used by the SDK.
  * This is not an additional model-facing guest capability.
@@ -36,6 +41,7 @@ export declare function normalizedCorrectionScope(scope?: TextureCorrectionScope
   preserve_alpha:boolean;
   protected_regions?:Array<{from:Vec2;to:Vec2}>;
   expected_before_pixels?:Array<{at:Vec2;rgba:[number,number,number,number]}>;
+  editable_before_rgba?:Array<[number,number,number,number]>;
 } | undefined;
 /** Structured guest-proposed diagnosis. The reviewer must still assess art. */
 export interface MaterialCorrectionIntent {
@@ -748,6 +754,7 @@ export interface ApplyReceipt {
     texture_uuid: string;
     protected_regions:number;
     expected_before_pixels:number;
+    editable_before_rgba:number;
     visual_verdict: "UNVERIFIED";
   } | null;
 }
@@ -854,6 +861,7 @@ export interface MutationRequest {
     expectedBeforePixels?:ReadonlyArray<Readonly<{
       at:readonly [number,number];rgba:readonly [number,number,number,number]
     }>>;
+    editableBeforeRgba?:ReadonlyArray<readonly [number,number,number,number]>;
   }>;
   /** Operator-visible declared material diagnosis, separate from Rust plan. */
   materialCorrectionIntent?:Readonly<MaterialCorrectionIntent>;

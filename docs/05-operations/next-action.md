@@ -1,3 +1,17 @@
+**Rust P0 reviewed Texturing contract reconciliation (2026-11-17; SOURCE ONLY):**
+After the earlier guarded-paint source commits, the SDK normalizer
+was discovered to reject `editableBeforeRgba` even though Host and
+Rust required it for reviewed propagation. The SDK/type/approval
+contract is now aligned. Explicit empty source-color sets are rejected
+at SDK and Rust plan-deserialization boundaries; absent optional
+guards preserve legacy exact edits. The SDK no longer normalizes the
+same scope twice during serialization. Host permission checks remain
+independent and reject an unauthorized extra color rather than
+silently truncating it. Source fixtures authored NOT_EXECUTED;
+the held native visual reviewer and PC-local test proof remain
+UNVERIFIED. Do not add a second texture engine, status router or
+per-pixel validation loop.
+
 **Rust source-color preimage safety (2026-11-17; SOURCE ONLY):**
 Reviewed Texturing propagation now requires reviewer-selected original
 RGBA overwrite colors. Rust checks every changed atlas pixel against

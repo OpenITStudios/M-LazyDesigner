@@ -1,3 +1,20 @@
+## 2026-11-17 — Texturing P0 contract reconciliation (SOURCE_ONLY)
+
+Pinned Rust branch source audit found a real SDK–host–Rust mismatch:
+Host and Rust used `editableBeforeRgba` but the SDK normalizer
+and types did not yet accept it. The canonical SDK contract now
+admits bounded original RGBA choices, serializes them to the exact
+Rust EditPlan and includes them in the trusted operator approval
+descriptor. Rust deserialization rejects explicitly present
+`editable_before_rgba:[]` instead of silently treating it as an
+unrestricted legacy guard; omission still supports old exact edits.
+The SDK removes repeated correction-scope normalization inside the
+same call, while the host retains independent reviewer/source-bound
+validation. Mixed authorized + unauthorized guest colors are refused
+rather than silently discarded. Regression tests authored but
+NOT_EXECUTED; no native/CI execution, live model verification or
+artistic quality claims follow from this source-only correction.
+
 ## 2026-11-17 — Original atlas color guarding in reviewed Texturing (SOURCE ONLY)
 
 The existing Rust atomic correction owner now compares every actually

@@ -21,6 +21,20 @@ pub struct ExpectedBeforePixel {
     pub rgba: [u8; 4],
 }
 
+// Absence is the deliberate legacy compatibility route. A present empty
+// array must NOT silently disable the original-color guard.
+fn declared_editable_source_colors<'de, D>(deserializer: D)
+    -> std::result::Result<Vec<[u8; 4]>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let colors = Vec::<[u8; 4]>::deserialize(deserializer)?;
+    if colors.is_empty() {
+        return Err(serde::de::Error::custom("CORRECTION_SCOPE_EMPTY_SOURCE_COLORS"));
+    }
+    Ok(colors)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TextureCorrectionScope {
@@ -40,9 +54,10 @@ pub struct TextureCorrectionScope {
     pub expected_before_pixels: Vec<ExpectedBeforePixel>,
     /// For every ACTUALLY changed pixel, the original saved RGBA must
     /// belong to this exact source-color set. Protects identity/details
-    /// not captured by a handful of landmark rectangles. Empty means
-    /// legacy unrestricted-before-color editing, not artistic approval.
-    #[serde(default)]
+    /// not captured by a handful of landmark rectangles. Only an OMITTED
+    /// field means legacy unrestricted-before-color editing. A present
+    /// empty array is invalid and never becomes an unguarded write.
+    #[serde(default, deserialize_with = "declared_editable_source_colors")]
     pub editable_before_rgba: Vec<[u8; 4]>,
 }
 
@@ -421,6 +436,16 @@ mod tests {
         let guarded_scope=guarded_plan.correction_scope.unwrap();
         assert_eq!(guarded_scope.expected_before_pixels.len(),1);
         assert_eq!(guarded_scope.editable_before_rgba,vec![[0,0,0,0]]);
+        let mut empty_source=guarded.clone();
+        empty_source["correction_scope"]["editable_before_rgba"] =
+            serde_json::json!([]);
+        assert!(serde_json::from_value::<crate::authoring::EditPlan>(
+            empty_source).is_err());
+        let mut null_source=guarded.clone();
+        null_source["correction_scope"]["editable_before_rgba"] =
+            serde_json::Value::Null;
+        assert!(serde_json::from_value::<crate::authoring::EditPlan>(
+            null_source).is_err());
         let mut bad = guarded;
         bad["correction_scope"]["unrecognized"] = serde_json::json!(true);
         assert!(serde_json::from_value::<crate::authoring::EditPlan>(bad).is_err());

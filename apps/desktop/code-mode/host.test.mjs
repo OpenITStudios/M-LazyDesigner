@@ -687,7 +687,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             step===3?'weakened-alpha.bbmodel':
             step===4?'conflicting-before.bbmodel':
             step===5?'conflicting-color.bbmodel':
-            step===6?'good.bbmodel':'repeat.bbmodel',
+            step===6?'extra-source-color.bbmodel':
+            step===7?'good.bbmodel':'repeat.bbmodel',
           operations:[{op:'paint_texture_pixel',texture_index:1,
             x:target.from[0],y:target.from[1],rgba:[80,100,120,255]}],
           correctionScope:{
@@ -697,6 +698,9 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
               at:[2,2],rgba:[20,25,30,255],
             }]}:{}),
             ...(step===5?{editableBeforeRgba:[[170,25,25,255]]}:{}),
+            ...(step===6?{editableBeforeRgba:[
+              [70,90,100,255],[170,25,25,255],
+            ]}:{}),
           },
           correctionIntent:{"issueId":"helmet-flat","approachId":"helmet-value-masses","partId":"tier2-helmet","material":"metal","cause":"Helmet shadows and highlights form one generic horizontal band.","treatment":"form_value_masses","expectedChange":"Separate the base, shadow and highlights following the helmet curvature."},
         }},response=>{
@@ -710,12 +714,12 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             assert.equal(response.code,'CODE_MODE_REVIEWED_BEFORE_PIXEL_CONFLICT');
             return {sourceConflictBlocked:true};
           }
-          if(step===5){
+          if(step===5 || step===6){
             assert.equal(response.ok,false);
             assert.equal(response.code,'CODE_MODE_REVIEWED_SOURCE_COLOR_CONFLICT');
             return {sourceColorConflict:true};
           }
-          if(step===7){
+          if(step===8){
             assert.equal(response.ok,false);
             assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_FRESH_CAPTURE_REQUIRED');
             return {freshCaptureRequired:true};
@@ -738,6 +742,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(conflict.value.sourceConflictBlocked,true);
     const colors=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(colors.value.sourceColorConflict,true);
+    const mixed=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(mixed.value.sourceColorConflict,true);
     const permitted=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(permitted.value.edited,true);
     const repeated=await host.execute({code:'return codemode.apply({project:"p0"});'});

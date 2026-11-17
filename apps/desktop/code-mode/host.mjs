@@ -469,9 +469,14 @@ function mergeReviewedPixelGuards(requested,reviewed) {
   let editableBeforeRgba;
   if(reviewerColors?.length){
     const reviewerSet=new Set(reviewerColors.map(rgb=>rgb.join(',')));
-    editableBeforeRgba=(guestColors===undefined?reviewerColors:
-      guestColors.filter(rgb=>reviewerSet.has(rgb.join(','))))
-      .map(rgb=>[...rgb]);
+    // Never silently discard an unapproved color from a guest request:
+    // doing so hides a material-plan error and makes correction analysis
+    // harder. An explicitly narrower subset is allowed.
+    if(guestColors!==undefined &&
+       guestColors.some(rgb=>!reviewerSet.has(rgb.join(',')))){
+      throw new Error('CODE_MODE_REVIEWED_SOURCE_COLOR_CONFLICT');
+    }
+    editableBeforeRgba=(guestColors??reviewerColors).map(rgb=>[...rgb]);
     if(editableBeforeRgba.length===0){
       throw new Error('CODE_MODE_REVIEWED_SOURCE_COLOR_CONFLICT');
     }
@@ -1321,18 +1326,18 @@ export async function createCodeModeHost({
       // packet may be compiled into the existing Rust guarded face paint.
       // Guest-supplied operations are not authoritative for this path.
       let activeOperations=args.operations;
+      let proposedPacket;
       if(args.materialWorkPacket!==undefined) {
-        let proposed;
         try {
-          proposed=normalizedMaterialWorkPacket(args.materialWorkPacket);
+          proposedPacket=normalizedMaterialWorkPacket(args.materialWorkPacket);
         } catch {
           throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_INVALID');
         }
-        if(proposed?.shadingIntent==='FORM_SHADING') {
+        if(proposedPacket?.shadingIntent==='FORM_SHADING') {
           if(args.operations!==undefined) {
             throw new Error('CODE_MODE_MATERIAL_CLUSTER_HOST_OWNED');
           }
-          activeOperations=compileMaterialClusterPaint(proposed);
+          activeOperations=compileMaterialClusterPaint(proposedPacket);
         }
       }
       // When an operator binds a reviewed texture correction, an unrelated
@@ -1448,11 +1453,9 @@ export async function createCodeModeHost({
               overlapsRectangle(rect,cohort.sampleRegion))) {
             throw new Error('CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
           }
-          try {
-            workPacket=normalizedMaterialWorkPacket(args.materialWorkPacket);
-          } catch {
-            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_INVALID');
-          }
+          // This is exactly the packet already normalized at host admission.
+          // Preserve the validated identity through preflight and approval.
+          workPacket=proposedPacket;
           if(!workPacket){
             throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
           }

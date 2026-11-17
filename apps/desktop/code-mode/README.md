@@ -1,5 +1,18 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**P0 Texturing contract reconciliation (2026-11-17; SOURCE_ONLY):**
+The Code Mode SDK now accepts `editableBeforeRgba` consistently with the
+trusted reviewer host and Rust's canonical correction scope, carries the
+actual source-color preconditions into the operator approval and saved
+EditPlan, and rejects explicit empty lists. Rust distinguishes an
+omitted legacy guard from an explicitly empty, unsafe request. The
+SDK normalizes each scope once instead of duplicating the same
+pre-serialization check; the host retains separate reviewer-bound
+validation. Guest requests that add any unapproved source color are
+refused rather than silently shortened. Regression sources authored
+but **NOT_EXECUTED** under the current test/CI hold; no mapped visual
+acceptance or performance gain has been measured.
+
 **Source-color-aware safe cluster propagation (2026-11-17; SOURCE ONLY):**
 A reviewed broad material Paint now requires an independent reviewer
 to select allowed **original** atlas RGBA colors; the guest cannot
