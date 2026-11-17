@@ -233,7 +233,7 @@ fn texture_preview_side(texture: &Value) -> Option<&'static str> {
 // Never resolve project-relative paths or arbitrary URLs inside the WebView.
 // Embedded PNG candidates remain subject to the browser's image decoder.
 // A bounded WebView preview candidate. This never changes Rust-owned assets.
-fn embedded_png_preview_candidate(texture: &Value) -> Option<(String, u32, u32)> {
+fn embedded_png_preview_candidate(texture: &Value) -> Option<(&str, u32, u32)> {
     const PREFIX: &str = "data:image/png;base64,";
     const MAX_BASE64: usize = 2 * 1024 * 1024;
     const MAX_DIMENSION: u32 = 2048;
@@ -260,11 +260,11 @@ fn embedded_png_preview_candidate(texture: &Value) -> Option<(String, u32, u32)>
         return None;
     }
     // The browser still checks full PNG integrity and rejects invalid decode.
-    Some((source.to_owned(), width, height))
+    Some((source, width, height))
 }
 
 fn embedded_png_preview_source(texture: &Value) -> Option<String> {
-    embedded_png_preview_candidate(texture).map(|(source, _, _)| source)
+    embedded_png_preview_candidate(texture).map(|(source, _, _)| source.to_owned())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,7 +303,7 @@ fn preview_uv_axis(texture: &Value, name: &str, project_default: u32) -> Option<
 
 /// Each admitted source carries its actual UV grid separately from PNG pixel
 /// dimensions. The latter only controls decoding and GPU memory budgets.
-fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(String, [u32; 2])>> {
+fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(&str, [u32; 2])>> {
     const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
     let mode = preview_uv_mode(doc);
     let mut remaining_source_bytes = 4 * 1024 * 1024;
@@ -362,7 +362,7 @@ fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(String, [u32; 
 
 fn scoped_cube_texture_index(
     doc: &AuthoringDocument, cube: &Cube,
-    assets: &[Option<(String, [u32; 2])>], mode: PreviewUvMode,
+    assets: &[Option<(&str, [u32; 2])>], mode: PreviewUvMode,
 ) -> Option<usize> {
     if mode != PreviewUvMode::ScopedAttachable { return None; }
     // Pinned bedrock_attachable get_face_texture only overrides the selected
@@ -380,7 +380,7 @@ fn scoped_cube_texture_index(
 #[cfg(test)]
 fn texture_preview_sources(doc: &AuthoringDocument) -> Vec<Option<String>> {
     texture_preview_assets(doc).into_iter()
-        .map(|entry| entry.map(|(source, _)| source)).collect()
+        .map(|entry| entry.map(|(source, _)| source.to_owned())).collect()
 }
 
 // Parse only numeric or simple finite Molang constants. Imported expression
@@ -552,7 +552,7 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
     }).collect()
 }
 
-fn preview_source_key(epoch: u64, assets: &[Option<(String, [u32; 2])>]) -> String {
+fn preview_source_key(epoch: u64, assets: &[Option<(&str, [u32; 2])>]) -> String {
     let mut digest = Sha256::new();
     digest.update(epoch.to_le_bytes());
     digest.update((assets.len() as u64).to_le_bytes());
@@ -633,7 +633,7 @@ fn project_with_preview_reuse(
             ).collect(),
             texture_preview_sources: if preview_sources_reused { Vec::new() } else {
                 preview_assets.iter().map(|asset|
-                    asset.as_ref().map(|(source, _)| source.clone())).collect()
+                    asset.as_ref().map(|(source, _)| (*source).to_owned())).collect()
             },
             preview_source_key,
             preview_sources_reused,
@@ -1233,6 +1233,44 @@ pub async fn rust_editor_save_copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Source-authored Rust/Tauri projection regression; native tests held.
+    #[test]
+    fn editor_png_transport_reuse_requires_exact_epoch_and_source_content() {
+        const TEX: &str = "00000000-0000-4000-8000-000000009989";
+        let mut session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Preview", "preview").unwrap()).unwrap();
+        session.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid:TEX.into(), name:"test.png".into(),
+        }]).unwrap();
+        let mut store=EditorStore { epoch:7, active:Some(ActiveModel {
+            session, source_path:None, source_sha:None,
+            saved_canonical_sha:None, dirty:true,
+        }) };
+        let full=project(&store).unwrap();
+        assert!(!full.preview_sources_reused);
+        assert_eq!(full.texture_preview_sources.len(),1);
+        assert!(full.texture_preview_sources[0].is_some());
+        let reused=project_with_preview_reuse(&store,Some(&full.preview_source_key)).unwrap();
+        assert!(reused.preview_sources_reused);
+        assert!(reused.texture_preview_sources.is_empty());
+        assert_eq!(reused.revision,full.revision);
+        let unknown=project_with_preview_reuse(&store,Some("bad-digest")).unwrap();
+        assert!(!unknown.preview_sources_reused);
+        assert_eq!(unknown.texture_preview_sources,full.texture_preview_sources);
+        store.active.as_mut().unwrap().session.apply(1,&[EditOperation::PaintTexturePixel {
+            texture_index:0, x:0, y:0, rgba:[20,30,40,255],
+        }]).unwrap();
+        let painted=project_with_preview_reuse(&store,Some(&full.preview_source_key)).unwrap();
+        assert!(!painted.preview_sources_reused);
+        assert_ne!(painted.preview_source_key,full.preview_source_key);
+        assert_ne!(painted.texture_preview_sources,full.texture_preview_sources);
+        store.epoch+=1;
+        let reopened=project_with_preview_reuse(&store,Some(&painted.preview_source_key)).unwrap();
+        assert!(!reopened.preview_sources_reused);
+        assert_ne!(reopened.preview_source_key,painted.preview_source_key);
+    }
+
 
     // SOURCE ONLY: Tauri app/file-dialog and localtest are held.
     #[test]
