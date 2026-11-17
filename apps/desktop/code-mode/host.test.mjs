@@ -842,7 +842,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(approvals[0].materialCorrectionIntent.issueId,'helmet-flat');
     assert.equal(approvals[0].materialCorrectionIntent.approachId,'helmet-value-masses');
     assert.match(approvals[0].materialIntentSha256,/^[a-f0-9]{64}$/);
-    assert.deepEqual(calls,['inspect','inspect-visual-pair','inspect-batch','apply','inspect']);
+    assert.deepEqual(calls,['inspect','inspect-visual-pair','inspect-batch','inspect','apply','inspect']);
   }));
 
 test('accepted or unverified visual feedback cannot authorize another pixel correction', () =>
@@ -904,7 +904,7 @@ test('accepted or unverified visual feedback cannot authorize another pixel corr
       assert.equal(reviewed.value.decision,decision);
       const edit=await host.execute({code:'return codemode.apply({project:"p0"});'});
       assert.equal(edit.value.blocked,true);
-      assert.equal(calls,2);
+      assert.equal(calls,3); // Startup inspect, PNG preflight, post-review inspect.
     }
   }));
 
@@ -1967,13 +1967,13 @@ test('operator-selected six model camera directions are distinct from six saved 
     });
     assert.equal(result.value.viewCount,6);
     assert.equal(reviewerCalls,1);
-    assert.equal(nativeReads,8); // 1 source inspect + 6 PNG comparisons + 1 face batch
+    assert.equal(nativeReads,9); // 1 startup inspect + 6 PNG + 1 face batch + 1 fresh inspect
     const repeated=await host.execute({
       code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
     });
     assert.equal(repeated.value.viewCount,6);
     assert.equal(reviewerCalls,1); // original reviewer finding remains authoritative
-    assert.equal(nativeReads,9); // second read needs only one pinned Rust model check
+    assert.equal(nativeReads,10); // cached reread adds one pinned Rust model check
   }));
 
 // Repeated multi-view preflight reuses only source-bound numeric receipts.
