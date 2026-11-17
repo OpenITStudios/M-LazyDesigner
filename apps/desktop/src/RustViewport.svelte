@@ -7,7 +7,7 @@
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { cubeSelectionColors, selectionTargetIds } from './rustViewportSelection';
-  import { sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
+  import { canRefreshPaintSources, sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import type { BoneTransformPose } from './rustAnimationPose';
@@ -167,6 +167,45 @@
     scheduleRender();
   }
 
+  // Changing only admitted embedded PNG bytes cannot affect saved Cube UV,
+  // hierarchy or rig. Rebind derived Three.js materials without discarding
+  // geometry, raycast targets, Bone pivots or selection/gizmo state.
+  function refreshPaintSources(identity: SceneInputs): boolean {
+    if (!canRefreshPaintSources(projectedScene, identity)) return false;
+    reconcileTextures();
+    const changed = new Set<number>();
+    for (let index = 0; index < identity.sources.length; index++) {
+      if (projectedScene!.sources[index] !== identity.sources[index]) changed.add(index);
+    }
+    for (const mesh of pickMeshes) {
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        if (!(material instanceof THREE.MeshLambertMaterial)) continue;
+        const index: unknown = material.userData.previewTextureIndex;
+        if (typeof index !== 'number' || !changed.has(index)) continue;
+        const texture = embeddedTexture(index);
+        // Both old and new sources are nonempty admitted PNG candidates.
+        // If a browser decoder later refuses one, its existing active-load
+        // callback invalidates the derived scene and forces full fallback.
+        material.map = texture;
+        const base: unknown = mesh.userData.fallbackColor;
+        if (texture) material.color.setHex(0xffffff);
+        else if (typeof base === 'number') {
+          const uuid: unknown = mesh.userData.cubeUuid;
+          const color = cubeSelectionColors(typeof uuid === 'string' ? uuid : '', selectedId, base);
+          material.color.setHex(color.untextured);
+        }
+        material.transparent = Boolean(texture);
+        material.alphaTest = texture ? BEDROCK_PREVIEW_ALPHA_TEST : 0;
+        material.opacity = texture ? 1 : 0.94;
+        material.needsUpdate = true;
+      }
+    }
+    projectedScene = { structure: identity.structure, sources: [...identity.sources] };
+    scheduleRender();
+    return true;
+  }
+
   function deg(value: number) { return THREE.MathUtils.degToRad(value); }
   function vector(v: Vec3) { return new THREE.Vector3(v[0], v[1], v[2]); }
 
@@ -239,6 +278,7 @@
       sources: _sources,
     };
     if (sameSceneInputs(projectedScene, identity)) return;
+    if (refreshPaintSources(identity)) return;
     gizmo?.detach();
     reconcileTextures();
     for (const child of [...modelRoot.children]) {
@@ -295,7 +335,7 @@
                   rectangle[vertex * 2], rectangle[vertex * 2 + 1]);
               }
             }
-            materials.push(new THREE.MeshLambertMaterial({
+            const material = new THREE.MeshLambertMaterial({
               map: texture,
               color: texture ? 0xffffff : COLORS[cube.color % COLORS.length],
               transparent: Boolean(texture),
@@ -308,7 +348,11 @@
               // with explicit per-texture front-side overrides.
               side: previewRenderSide(texture ? texturePreviewSides[textureIndex!] : null) === 'front'
                 ? THREE.FrontSide : THREE.DoubleSide,
-            }));
+            });
+            // Read-only UV/material identity for source-only texture refreshes.
+            material.userData.previewTextureIndex =
+              rectangle && textureIndex !== null ? textureIndex : null;
+            materials.push(material);
           }
           uvAttribute.needsUpdate = true;
           const mesh = new THREE.Mesh(geometry, materials);
