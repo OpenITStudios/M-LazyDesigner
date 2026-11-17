@@ -1,5 +1,7 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Rust guarded Face Paint batch efficiency (2026-11-17; SOURCE ONLY):** Adjacent `paint_cube_face_regions_guarded` operations on one atlas now share the existing 64-rectangle PNG decode/edit/encode when their complete ordered plans fit the bound. Every Cube face, actual atlas patch and alias still goes through the canonical UV checker BEFORE the bitmap changes. Interleaved non-Paint operations, another atlas or over-budget regions retain sequential execution, and parent `EditorSession` still enforces atomic rollback, correction scopes, revision checks, Undo and `.bbmodel` preservation. Rust positive/negative regression source AUTHORED_NOT_RUN; actual speed/artistic quality UNVERIFIED.
+
 **Saved face-local cluster footprint (2026-11-17; SOURCE ONLY):**
 The existing headless `inspect-batch` `material_face_patch` selector
 now accepts optional, bounded `face_spans` rows. Canonical Rust

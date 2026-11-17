@@ -1,3 +1,10 @@
+## 2026-11-17 — Rust editor efficiency source integration (NOT_EXECUTED)
+
+Pinned original source HEAD: `7b50668d58657ff95bd0ce02c55864cab9e4bd95`.
+The exact GitHub Rust commit chain through `b9105e5da79b760254b1c52ab1ec42fa20c608c5` adds:
+Rust 1.100.0 source toolchain pin; standalone selection/material update and scene-input identity for Three.js; guarded same-atlas Face Paint cohort writes; Tauri epoch+content-bound omitted-preview transfer for apply/undo/redo and strict Svelte rehydration; borrowing bounded preview source strings until actually serialized.
+Authored Node source regression cases exercise selection color mapping, unchanged/changed scene identity, and missing/stale/mismatching preview cache rejection. Authored Rust cases compare same-atlas cohort output/Undo to sequential operations, reject malformed partial cohorts atomically, and reject stale PNG digest/epoch reuse. No Cargo, node:test, TypeScript, build, native Windows/Blockbench, browser QA or measured performance was executed. `SOURCE_COMMITTED / TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED`. This record is a source receipt only; `LIVE_TARGET_VERIFIED`, FPS/RAM/token deltas and Pillager visual acceptance are UNVERIFIED.
+
 ## 2026-11-17 — Rust scoped Paint receipt reconciliation (SOURCE ONLY)
 
 Current Rust source audit found an actual CLI/Host contract defect:
