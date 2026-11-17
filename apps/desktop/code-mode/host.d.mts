@@ -152,6 +152,13 @@ export interface CodeModeGuestAPI {
       texturing_workflow?:{
         status:"PAINT_SAVED_NOT_VISUALLY_ACCEPTED";source_model_sha256:string;
         style_evidence:ApplyReceipt["texture_styling_evidence"];
+        source_pixel_guards:{
+          protected_regions:number;
+          expected_before_pixels:number;
+          /** Only matching Rust receipt counts attest enforcement; no
+           * artistic/reference correctness is inferred. */
+          verified_by_rust_receipt:boolean;
+        };
         material_work_packet?:{
           status:"SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED";
           sha256:string;planned_faces:number;

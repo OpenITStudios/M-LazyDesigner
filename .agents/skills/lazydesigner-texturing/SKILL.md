@@ -42,6 +42,23 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Rust Texturing review admission (source-authored; NOT_EXECUTED):**
 
+**Preserve approved pixel landmarks during Rust corrections (source-only):**
+When a material correction overlaps already-approved identity details,
+have the independent reviewer identify exact original atlas areas as
+`correctionScope.protectedRegions` and any consequential original
+RGBA checks as `correctionScope.expectedBeforePixels`. A valid
+`allowedRegions` declaration **does not** permit repainting its
+protected subregions. The host retains reviewer restrictions even when
+a model-written guest sends a weaker scope. Rust compares original and
+modified PNG pixels atomically; an incorrect expected-before color or
+a protected landmark change rejects the entire EditPlan with no
+published mutation. Do not invent approved RGBs, face marks or source
+observations. Exact unreviewed pixel edits remain available under their
+existing source/permission rules; no extra per-brush approval loop.
+A successful preservation gate is NOT mapped visual style PASS.
+
+
+
 **Rust cluster-to-pixel execution (source-only; NOT_EXECUTED):**
 When the reviewer confirms a representative form-shading sample,
 declare small connected shadow/highlight *face-local row-span clusters*

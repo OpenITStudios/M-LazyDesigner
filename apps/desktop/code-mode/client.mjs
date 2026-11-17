@@ -98,7 +98,8 @@ export function normalizedCorrectionScope(scope) {
   if (scope === undefined) return undefined;
   if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
       Object.keys(scope).some(key =>
-        !['textureUuid', 'allowedRegions', 'preserveAlpha'].includes(key))) {
+        !['textureUuid', 'allowedRegions', 'preserveAlpha',
+          'protectedRegions','expectedBeforePixels'].includes(key))) {
     throw new TypeError('CORRECTION_SCOPE_INVALID');
   }
   const textureUuid = nonempty(scope.textureUuid, 'textureUuid');
@@ -108,25 +109,59 @@ export function normalizedCorrectionScope(scope) {
       (scope.preserveAlpha !== undefined && typeof scope.preserveAlpha !== 'boolean')) {
     throw new TypeError('CORRECTION_SCOPE_INVALID');
   }
-  const rectangles = scope.allowedRegions.map(rect => {
-    if (!rect || typeof rect !== 'object' || Array.isArray(rect) ||
-        Object.keys(rect).some(key => !['from', 'to'].includes(key))) {
+  const point = (value,max) => {
+    if (!Array.isArray(value) || value.length !== 2) {
       throw new TypeError('CORRECTION_SCOPE_INVALID');
     }
-    const point = value => {
-      if (!Array.isArray(value) || value.length !== 2) {
+    return value.map(n => Number(wholeNumber(n, 'coordinate', 0, max)));
+  };
+  const rectangle = rect => {
+    if (!rect || typeof rect !== 'object' || Array.isArray(rect) ||
+        Object.keys(rect).some(key => !['from','to'].includes(key))) {
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    const from = point(rect.from,256),to = point(rect.to,256);
+    if(from[0]>=to[0]||from[1]>=to[1]){
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    return {from,to};
+  };
+  const rectangles=scope.allowedRegions.map(rectangle);
+  let protectedRegions;
+  if(scope.protectedRegions!==undefined){
+    if(!Array.isArray(scope.protectedRegions) ||
+       scope.protectedRegions.length>16){
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    protectedRegions=scope.protectedRegions.map(rectangle);
+  }
+  let expectedBeforePixels;
+  if(scope.expectedBeforePixels!==undefined){
+    if(!Array.isArray(scope.expectedBeforePixels) ||
+       scope.expectedBeforePixels.length>64){
+      throw new TypeError('CORRECTION_SCOPE_INVALID');
+    }
+    const seen=new Set();
+    expectedBeforePixels=scope.expectedBeforePixels.map(entry=>{
+      if(!entry || typeof entry!=='object' || Array.isArray(entry) ||
+         Object.keys(entry).some(key=>!['at','rgba'].includes(key)) ||
+         !Array.isArray(entry.rgba) || entry.rgba.length!==4){
         throw new TypeError('CORRECTION_SCOPE_INVALID');
       }
-      return value.map(n => Number(wholeNumber(n, 'coordinate', 0, 256)));
-    };
-    const from = point(rect.from), to = point(rect.to);
-    if (from[0] >= to[0] || from[1] >= to[1]) {
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    return {from, to};
-  });
+      const at=point(entry.at,255);
+      if(!entry.rgba.every(n=>Number.isInteger(n)&&n>=0&&n<=255)){
+        throw new TypeError('CORRECTION_SCOPE_INVALID');
+      }
+      const key=at.join(',');
+      if(seen.has(key))throw new TypeError('CORRECTION_SCOPE_INVALID');
+      seen.add(key);
+      return {at,rgba:[...entry.rgba]};
+    });
+  }
   return {texture_uuid:textureUuid, allowed_regions:rectangles,
-    preserve_alpha:scope.preserveAlpha ?? false};
+    preserve_alpha:scope.preserveAlpha ?? false,
+    ...(protectedRegions===undefined?{}:{protected_regions:protectedRegions}),
+    ...(expectedBeforePixels===undefined?{}:{expected_before_pixels:expectedBeforePixels})};
 }
 // Descriptive diagnosis only. No self-certifying visual quality claim.
 const CORRECTION_MATERIALS = new Set([
@@ -503,6 +538,16 @@ export function createRustCodeModeClient({
           }))),
           regionCount:scope.allowed_regions.length,
           preserveAlpha:scope.preserve_alpha,
+          ...(scope.protected_regions?{
+            protectedRegions:Object.freeze(scope.protected_regions.map(rect=>
+              Object.freeze({from:Object.freeze([...rect.from]),
+                to:Object.freeze([...rect.to])}))),
+          }:{}),
+          ...(scope.expected_before_pixels?{
+            expectedBeforePixels:Object.freeze(scope.expected_before_pixels.map(pixel=>
+              Object.freeze({at:Object.freeze([...pixel.at]),
+                rgba:Object.freeze([...pixel.rgba])}))),
+          }:{}),
         }) } : {}),
         ...(intent ? {
           materialCorrectionIntent:intent,

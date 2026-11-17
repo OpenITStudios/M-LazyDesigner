@@ -1,3 +1,18 @@
+## 2026-11-17 — Rust source-only inner-region identity protection
+
+Extended the canonical Rust correction scope with optional
+`protected_regions` and `expected_before_pixels` guards. Rust
+independently checks the actual ORIGINAL RGBA before transaction
+commit, forbids any RGBA change to protected pixels including within
+the allowed correction area, and retains atomic rollback/Undo safety.
+The connected Code Mode SDK serializes strict bounded guards and the
+reviewer-bound host merges trusted restrictions rather than allowing
+guest omission or conflicting before-colors. CLI/SDK/host receipts
+expose bounded enforced-guard counts without claiming artistic PASS.
+Positive/negative Rust and Node regression sources AUTHORED_NOT_RUN.
+Current branch is source-only; localtest, CI and native visual review
+remain held and UNVERIFIED.
+
 ## 2026-11-17 — Connected Rust Texturing cluster compilation (SOURCE ONLY)
 
 The reviewer-bound FORM_SHADING MaterialWorkPacket now requires

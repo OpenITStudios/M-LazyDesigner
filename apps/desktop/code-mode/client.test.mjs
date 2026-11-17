@@ -1366,3 +1366,66 @@ test('authored visible_box uses one host-approved SHA-pinned Rust edit', async (
     expectedSha256:SHA,operations:[operation],
   }),/CODE_MODE_MUTATION_AUTHORITY_REQUIRED/);
 });
+
+test('Code Mode forwards inner protected pixels and exact-before preconditions to Rust',async()=>{
+  const approval=[],launches=[];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:request=>{approval.push(request);return true;},
+    runner:async argv=>{
+      launches.push(argv[0]);
+      assert.equal(argv[0],'apply');
+      const plan=JSON.parse(await readFile(argv[argv.indexOf('--plan')+1],'utf8'));
+      assert.deepEqual(plan.correction_scope,{
+        texture_uuid:'00000000-0000-4000-8000-000000007101',
+        allowed_regions:[{from:[1,1],to:[6,6]}],
+        preserve_alpha:true,
+        protected_regions:[{from:[2,2],to:[4,4]}],
+        expected_before_pixels:[{at:[4,4],rgba:[60,70,80,255]}],
+      });
+      return {status:'OK',mutation:{revision:1,operation_count:1,
+        changed_uuids:[]}};
+    },
+  });
+  const correctionScope={
+    textureUuid:'00000000-0000-4000-8000-000000007101',
+    allowedRegions:[{from:[1,1],to:[6,6]}],
+    preserveAlpha:true,
+    protectedRegions:[{from:[2,2],to:[4,4]}],
+    expectedBeforePixels:[{at:[4,4],rgba:[60,70,80,255]}],
+  };
+  await client.apply({
+    input:'/abs/model.bbmodel',output:'/abs/model-edited.bbmodel',
+    expectedSha256:SHA,correctionScope,
+    operations:[{op:'paint_texture_pixel',texture_index:0,x:4,y:4,
+      rgba:[80,90,100,255]}],
+  });
+  assert.equal(launches.length,1);
+  assert.deepEqual(approval[0].correctionScope.protectedRegions,[
+    {from:[2,2],to:[4,4]},
+  ]);
+  assert.deepEqual(approval[0].correctionScope.expectedBeforePixels,[
+    {at:[4,4],rgba:[60,70,80,255]},
+  ]);
+  for(const invalid of [
+    {...correctionScope,protectedRegions:[{from:[2,2],to:[2,3]}]},
+    {...correctionScope,expectedBeforePixels:[
+      {at:[4,4],rgba:[60,70,80,255]},
+      {at:[4,4],rgba:[60,70,80,255]},
+    ]},
+    {...correctionScope,expectedBeforePixels:[{at:[256,1],
+      rgba:[60,70,80,255]}]},
+    {...correctionScope,expectedBeforePixels:[{at:[4,4],
+      rgba:[60,70,800,255]}]},
+    {...correctionScope,protectedRegions:[{from:[-1,0],to:[1,1]}]},
+  ]) {
+    await assert.rejects(client.apply({
+      input:'/abs/model.bbmodel',output:'/abs/model-invalid.bbmodel',
+      expectedSha256:SHA,correctionScope:invalid,
+      operations:[{op:'paint_texture_pixel',texture_index:0,x:4,y:4,
+        rgba:[80,90,100,255]}],
+    }),/CORRECTION_SCOPE_INVALID|coordinate/);
+  }
+  assert.equal(launches.length,1);
+  assert.equal(approval.length,1);
+});

@@ -1,6 +1,7 @@
 //! Exact-pixel safety for a correction of an existing approved texture.
 //! No external reference comparison or artistic approval is inferred.
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use super::{paint, AuthoringDocument, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,6 +15,14 @@ pub struct CorrectionRectangle {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ExpectedBeforePixel {
+    /// Physical atlas coordinate; exact RGBA8 on the source snapshot.
+    pub at: [u32; 2],
+    pub rgba: [u8; 4],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TextureCorrectionScope {
     pub texture_uuid: String,
     /// Every model field and all other atlas pixels are protected.
@@ -21,6 +30,14 @@ pub struct TextureCorrectionScope {
     /// True when the requested correction may change RGB but not alpha.
     #[serde(default)]
     pub preserve_alpha: bool,
+    /// Reviewer/operator-preserved identity details, even INSIDE an
+    /// allowed correction rectangle. Empty is legacy behavior.
+    #[serde(default)]
+    pub protected_regions: Vec<CorrectionRectangle>,
+    /// Check exactly these ORIGINAL saved RGBA pixels before any mutation
+    /// can be committed. This is a precondition, not reference approval.
+    #[serde(default)]
+    pub expected_before_pixels: Vec<ExpectedBeforePixel>,
 }
 
 pub(super) fn validate_scope(
@@ -32,11 +49,24 @@ pub(super) fn validate_scope(
     }
     let width = doc.resolution.width;
     let height = doc.resolution.height;
-    if scope.allowed_regions.iter().any(|rect|
-        rect.from[0] >= rect.to[0] || rect.from[1] >= rect.to[1] ||
-        rect.to[0] > width || rect.to[1] > height
-    ) {
+    if scope.protected_regions.len() > 16 ||
+        scope.expected_before_pixels.len() > 64 {
         return Err("CORRECTION_SCOPE_INVALID".into());
+    }
+    let valid_rect = |rect: &CorrectionRectangle| {
+        rect.from[0] < rect.to[0] && rect.from[1] < rect.to[1] &&
+        rect.to[0] <= width && rect.to[1] <= height
+    };
+    if scope.allowed_regions.iter().any(|rect| !valid_rect(rect)) ||
+       scope.protected_regions.iter().any(|rect| !valid_rect(rect)) {
+        return Err("CORRECTION_SCOPE_INVALID".into());
+    }
+    let mut expected_coordinates = HashSet::new();
+    for expected in &scope.expected_before_pixels {
+        if expected.at[0] >= width || expected.at[1] >= height ||
+            !expected_coordinates.insert(expected.at) {
+            return Err("CORRECTION_SCOPE_INVALID".into());
+        }
     }
     let mut matching = doc.texture_assets.iter().enumerate().filter(|(_, tex)|
         tex.get("uuid").and_then(serde_json::Value::as_str) ==
@@ -93,6 +123,16 @@ pub(super) fn verify_after(
     if original.len() != candidate.len() {
         return Err("CORRECTION_TEXTURE_UNSUPPORTED".into());
     }
+    // Validate explicitly declared source-color preconditions on the
+    // IMMUTABLE original snapshot; do not trust the guest's claim about
+    // what was already saved, nor reinterpret an approved RGB as a palette.
+    for expected in &scope.expected_before_pixels {
+        let at = ((expected.at[1] as usize) * (width as usize) +
+            expected.at[0] as usize) * 4;
+        if original.get(at..at + 4) != Some(&expected.rgba[..]) {
+            return Err("CORRECTION_EXPECTED_BEFORE_MISMATCH".into());
+        }
+    }
     let mut changed = 0usize;
     for (index, (old, new)) in original.chunks_exact(4)
         .zip(candidate.chunks_exact(4)).enumerate() {
@@ -104,6 +144,15 @@ pub(super) fn verify_after(
             y >= rect.from[1] && y < rect.to[1]
         ) {
             return Err("CORRECTION_PIXEL_OUTSIDE_ALLOWED".into());
+        }
+        // A protected landmark in an otherwise editable region remains
+        // byte-for-byte unchanged, including alpha, within this same
+        // Rust transaction/Undo boundary.
+        if scope.protected_regions.iter().any(|rect|
+            x >= rect.from[0] && x < rect.to[0] &&
+            y >= rect.from[1] && y < rect.to[1]
+        ) {
+            return Err("CORRECTION_PROTECTED_PIXEL_CHANGED".into());
         }
         if scope.preserve_alpha && old[3] != new[3] {
             return Err("CORRECTION_ALPHA_CHANGED".into());
@@ -136,6 +185,8 @@ mod tests {
                 from: [1, 1], to: [3, 3],
             }],
             preserve_alpha,
+            protected_regions: Vec::new(),
+            expected_before_pixels: Vec::new(),
         }
     }
     fn pixel(x: u32, y: u32, rgba: [u8; 4]) -> EditOperation {
@@ -205,6 +256,69 @@ mod tests {
     }
 
     #[test]
+    fn protected_identity_inside_allowed_region_is_atomic_and_undoable() {
+        let mut s = session();
+        s.apply(1, &[
+            pixel(1,1,[145,25,25,255]),  // approved red identity trace
+            pixel(2,1,[80,90,100,255]),  // editable metal body
+        ]).unwrap();
+        let before = s.export().unwrap();
+        let mut guard = scope(true);
+        guard.protected_regions.push(CorrectionRectangle {
+            from:[1,1],to:[2,2],
+        });
+        guard.expected_before_pixels.push(ExpectedBeforePixel {
+            at:[2,1],rgba:[80,90,100,255],
+        });
+        assert_eq!(s.apply_with_correction_scope(2, &[
+            // A legitimate shadow correction happens first, but the
+            // protected identity change later invalidates the WHOLE batch.
+            pixel(2,1,[90,105,120,255]),
+            pixel(1,1,[20,30,40,255]),
+        ],Some(&guard)).unwrap_err(),"CORRECTION_PROTECTED_PIXEL_CHANGED");
+        assert_eq!(s.summary().revision,2);
+        assert_eq!(s.export().unwrap(),before);
+
+        // A reviewer-supplied stale before-value rejects the entire edit,
+        // even when the painted pixel itself is outside the protected mark.
+        let mut stale=guard.clone();
+        stale.expected_before_pixels[0].rgba=[70,90,100,255];
+        assert_eq!(s.apply_with_correction_scope(2, &[
+            pixel(2,1,[90,105,120,255]),
+        ],Some(&stale)).unwrap_err(),"CORRECTION_EXPECTED_BEFORE_MISMATCH");
+        assert_eq!(s.export().unwrap(),before);
+
+        s.apply_with_correction_scope(2, &[
+            pixel(2,1,[90,105,120,255]),
+        ],Some(&guard)).unwrap();
+        assert_eq!(s.summary().revision,3);
+        assert_ne!(s.export().unwrap(),before);
+        s.undo(3).unwrap();
+        assert_eq!(s.export().unwrap(),before);
+    }
+
+    #[test]
+    fn expected_before_and_protection_reject_invalid_or_duplicate_bounds() {
+        let mut s=session();
+        let original=s.export().unwrap();
+        let mut guard=scope(true);
+        guard.protected_regions.push(CorrectionRectangle{
+            from:[1,1],to:[1,2],
+        });
+        assert_eq!(s.apply_with_correction_scope(1,&[
+            pixel(1,1,[30,40,50,255]),
+        ],Some(&guard)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
+
+        let mut duplicate=scope(true);
+        let check=ExpectedBeforePixel{at:[1,1],rgba:[0,0,0,0]};
+        duplicate.expected_before_pixels=[check.clone(),check].to_vec();
+        assert_eq!(s.apply_with_correction_scope(1,&[
+            pixel(1,1,[30,40,50,255]),
+        ],Some(&duplicate)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
+        assert_eq!(s.export().unwrap(),original);
+    }
+
+    #[test]
     fn strict_plan_parses_scope_without_changing_legacy_edits() {
         let guarded = serde_json::json!({
             "expected_revision":0,
@@ -215,7 +329,24 @@ mod tests {
                 "preserve_alpha":true}
         });
         let p: crate::authoring::EditPlan = serde_json::from_value(guarded.clone()).unwrap();
-        assert!(p.correction_scope.unwrap().preserve_alpha);
+        let parsed=p.correction_scope.unwrap();
+        assert!(parsed.preserve_alpha);
+        assert!(parsed.protected_regions.is_empty());
+        assert!(parsed.expected_before_pixels.is_empty());
+        let guarded_extra=serde_json::json!({
+            "expected_revision":0,
+            "operations":[{"op":"paint_texture_pixel","texture_index":0,
+                "x":1,"y":1,"rgba":[2,3,4,255]}],
+            "correction_scope":{
+                "texture_uuid":TEX,
+                "allowed_regions":[{"from":[1,1],"to":[2,2]}],
+                "protected_regions":[{"from":[1,1],"to":[2,2]}],
+                "expected_before_pixels":[{"at":[1,1],"rgba":[0,0,0,0]}]
+            }
+        });
+        let guarded_plan:crate::authoring::EditPlan =
+            serde_json::from_value(guarded_extra).unwrap();
+        assert_eq!(guarded_plan.correction_scope.unwrap().expected_before_pixels.len(),1);
         let mut bad = guarded;
         bad["correction_scope"]["unrecognized"] = serde_json::json!(true);
         assert!(serde_json::from_value::<crate::authoring::EditPlan>(bad).is_err());

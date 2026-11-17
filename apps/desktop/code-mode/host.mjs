@@ -308,6 +308,20 @@ function normalizedVisualReview(input, viewIds = []) {
         })
       )),
       preserveAlpha:scope.preserve_alpha,
+      ...(scope.protected_regions?{
+        protectedRegions:Object.freeze(scope.protected_regions.map(region=>
+          Object.freeze({
+            from:Object.freeze([...region.from]),
+            to:Object.freeze([...region.to]),
+          }))),
+      }:{}),
+      ...(scope.expected_before_pixels?{
+        expectedBeforePixels:Object.freeze(scope.expected_before_pixels.map(pixel=>
+          Object.freeze({
+            at:Object.freeze([...pixel.at]),
+            rgba:Object.freeze([...pixel.rgba]),
+          }))),
+      }:{}),
     });
     return Object.freeze({
       status:'RECORDED',decision:'REJECTED',
@@ -415,6 +429,48 @@ function correctionFitsReview(requested, reviewed) {
       region.to[1]<=allowed.to[1]
     )
   );
+}
+// The independent reviewer may impose protected landmarks/old-RGBA
+// conditions INSIDE the selected allowed region. A model-authored scope can
+// add stricter guards but cannot subtract or replace those reviewer facts.
+// All constraints are passed to the same canonical Rust correction scope,
+// which checks the actual source bitmap and changed pixels atomically.
+function mergeReviewedPixelGuards(requested,reviewed) {
+  const rectangles=new Map();
+  for(const r of [
+    ...(reviewed.protectedRegions??[]),
+    ...(requested.protected_regions??[]),
+  ]){
+    rectangles.set(JSON.stringify([r.from,r.to]),{
+      from:[...r.from],to:[...r.to],
+    });
+  }
+  const beforePixels=new Map();
+  for(const entry of [
+    ...(reviewed.expectedBeforePixels??[]),
+    ...(requested.expected_before_pixels??[]),
+  ]){
+    const key=entry.at.join(',');
+    const prior=beforePixels.get(key);
+    if(prior && prior.rgba.some((v,i)=>v!==entry.rgba[i])){
+      throw new Error('CODE_MODE_REVIEWED_BEFORE_PIXEL_CONFLICT');
+    }
+    beforePixels.set(key,{at:[...entry.at],rgba:[...entry.rgba]});
+  }
+  // Re-run the shared strict admission before invoking any write or sending
+  // an approval request. Unknown/overbudget guard combinations fail closed.
+  const combined={
+    textureUuid:requested.texture_uuid,
+    allowedRegions:requested.allowed_regions.map(r=>({
+      from:[...r.from],to:[...r.to],
+    })),
+    preserveAlpha:requested.preserve_alpha,
+    ...(rectangles.size?{protectedRegions:[...rectangles.values()]}:{}),
+    ...(beforePixels.size?{expectedBeforePixels:[...beforePixels.values()]}:{}),
+  };
+  try{normalizedCorrectionScope(combined);}
+  catch{throw new Error('CODE_MODE_REVIEWED_PIXEL_GUARD_INVALID');}
+  return combined;
 }
 // Reopen and SHA-check at the review boundary: startup metadata is insufficient
 // if an image was replaced while the guest was doing other work.
@@ -1281,6 +1337,7 @@ export async function createCodeModeHost({
         throw new Error('CODE_MODE_VISUAL_PREFLIGHT_REQUIRED');
       }
       let materialIntent,workPacket;
+      let effectiveCorrectionScope=args.correctionScope;
       if (visualPair !== null && pixelEdit &&
           typeof reviewVisualPair === 'function') {
         if (completedReviewedCorrections.has(p.expectedSha256)) {
@@ -1300,6 +1357,8 @@ export async function createCodeModeHost({
             !correctionFitsReview(requested,feedback.correctionScope)) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
         }
+        effectiveCorrectionScope=mergeReviewedPixelGuards(
+          requested,feedback.correctionScope);
         try {
           materialIntent = normalizedMaterialCorrectionIntent(args.correctionIntent);
         } catch {
@@ -1431,7 +1490,7 @@ export async function createCodeModeHost({
       }
       const output = await outputPath(args.output, '.bbmodel');
       const receipt = await p.apply({ output, operations: activeOperations,
-        correctionScope: args.correctionScope,
+        correctionScope: effectiveCorrectionScope,
         ...(materialIntent ? {correctionIntent:materialIntent} : {}),
         ...(workPacket ? {materialWorkPacket:workPacket} : {}) });
       if (visualPair !== null && typeof reviewVisualPair === 'function' && pixelEdit) {
@@ -1445,6 +1504,15 @@ export async function createCodeModeHost({
           status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED',
           source_model_sha256:next.sha256,
           style_evidence:receipt.texture_styling_evidence??null,
+          source_pixel_guards:{
+            protected_regions:effectiveCorrectionScope?.protectedRegions?.length??0,
+            expected_before_pixels:effectiveCorrectionScope?.expectedBeforePixels?.length??0,
+            verified_by_rust_receipt:receipt.correction_scope?.status==='enforced' &&
+              receipt.correction_scope.protected_regions===
+                (effectiveCorrectionScope?.protectedRegions?.length??0) &&
+              receipt.correction_scope.expected_before_pixels===
+                (effectiveCorrectionScope?.expectedBeforePixels?.length??0),
+          },
           ...(workPacket?{material_work_packet:{
             status:'SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED',
             sha256:materialWorkPacketDigest(workPacket),

@@ -8,10 +8,24 @@ export type Vec2 = [number, number];
  * All other .bbmodel data and all pixels outside the half-open rectangles
  * must remain unchanged. This does not judge the visual style.
  */
+/** Exact source RGBA precondition at one physical atlas pixel.
+ * A guest-declared old color is NOT approved reference evidence; Rust
+ * independently compares it with the actual saved bitmap before Paint.
+ */
+export interface TextureExpectedBeforePixel {
+  at: Vec2;
+  rgba: [number,number,number,number];
+}
 export interface TextureCorrectionScope {
   textureUuid: string;
   allowedRegions: Array<{ from: Vec2; to: Vec2 }>;
   preserveAlpha?: boolean;
+  /** Guard approved detail even WITHIN allowedRegions.
+   * The trusted reviewer may impose stricter guards than the guest.
+   */
+  protectedRegions?: Array<{ from: Vec2; to: Vec2 }>;
+  /** Bounded exact pixel preconditions on the ORIGINAL input .bbmodel. */
+  expectedBeforePixels?: TextureExpectedBeforePixel[];
 }
 /** Trusted-host reuse of the same correction admission used by the SDK.
  * This is not an additional model-facing guest capability.
@@ -20,6 +34,8 @@ export declare function normalizedCorrectionScope(scope?: TextureCorrectionScope
   texture_uuid:string;
   allowed_regions:Array<{from:Vec2;to:Vec2}>;
   preserve_alpha:boolean;
+  protected_regions?:Array<{from:Vec2;to:Vec2}>;
+  expected_before_pixels?:Array<{at:Vec2;rgba:[number,number,number,number]}>;
 } | undefined;
 /** Structured guest-proposed diagnosis. The reviewer must still assess art. */
 export interface MaterialCorrectionIntent {
@@ -715,6 +731,8 @@ export interface ApplyReceipt {
   correction_scope?: {
     status: "enforced";
     texture_uuid: string;
+    protected_regions:number;
+    expected_before_pixels:number;
     visual_verdict: "UNVERIFIED";
   } | null;
 }
@@ -809,7 +827,19 @@ export interface MutationRequest {
   textureUuid?: string;
   operationCount?: number;
   operationKinds?: readonly string[];
-  correctionScope?: Readonly<{ textureUuid: string; allowedRegions: ReadonlyArray<Readonly<{ from: readonly [number, number]; to: readonly [number, number] }>>; regionCount: number; preserveAlpha: boolean }>;
+  correctionScope?: Readonly<{
+    textureUuid:string;
+    allowedRegions:ReadonlyArray<Readonly<{
+      from:readonly [number,number];to:readonly [number,number]
+    }>>;
+    regionCount:number;preserveAlpha:boolean;
+    protectedRegions?:ReadonlyArray<Readonly<{
+      from:readonly [number,number];to:readonly [number,number]
+    }>>;
+    expectedBeforePixels?:ReadonlyArray<Readonly<{
+      at:readonly [number,number];rgba:readonly [number,number,number,number]
+    }>>;
+  }>;
   /** Operator-visible declared material diagnosis, separate from Rust plan. */
   materialCorrectionIntent?:Readonly<MaterialCorrectionIntent>;
   materialIntentSha256?:string;

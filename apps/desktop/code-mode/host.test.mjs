@@ -603,6 +603,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             textureUuid:'tier2-atlas',
             allowedRegions:[{from:[1,1],to:[5,5]}],
             preserveAlpha:true,
+            protectedRegions:[{from:[1,1],to:[2,2]}],
+            expectedBeforePixels:[{at:[2,2],rgba:[70,90,100,255]}],
           },
           materialCohort:{phase:'sample',issueId:'helmet-flat',
             cubeUuid:REVIEW_CUBE,face:'north',
@@ -634,9 +636,22 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
         }
         if(args[0]==='inspect-batch')return mockedNativeFaceBinding(args,HASH);
         if(args[0]==='apply'){
+          const plan=JSON.parse(await readFile(
+            args[args.indexOf('--plan')+1],'utf8'));
+          assert.deepEqual(plan.correction_scope.protected_regions,[
+            {from:[1,1],to:[2,2]},
+          ]);
+          assert.deepEqual(plan.correction_scope.expected_before_pixels,[
+            {at:[2,2],rgba:[70,90,100,255]},
+          ]);
           return {status:'OK',source_sha256:HASH,
             output_sha256:'b'.repeat(64),summary:{...SUMMARY,revision:1},
-            mutation:{revision:1,operation_count:1,changed_uuids:[]}};
+            mutation:{revision:1,operation_count:1,changed_uuids:[]},
+            correction_scope:{
+              status:'enforced',texture_uuid:'tier2-atlas',
+              protected_regions:1,expected_before_pixels:1,
+              visual_verdict:'UNVERIFIED',
+            }};
         }
         throw Error('unexpected CLI command');
       },
@@ -663,12 +678,16 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
         return fakeGuest({method:'apply',args:{
           project:'p0',output:step===2?'bad.bbmodel':
             step===3?'weakened-alpha.bbmodel':
-            step===4?'good.bbmodel':'repeat.bbmodel',
+            step===4?'conflicting-before.bbmodel':
+            step===5?'good.bbmodel':'repeat.bbmodel',
           operations:[{op:'paint_texture_pixel',texture_index:1,
             x:target.from[0],y:target.from[1],rgba:[80,100,120,255]}],
           correctionScope:{
             textureUuid:'tier2-atlas',allowedRegions:[target],
             preserveAlpha:step!==3,
+            ...(step===4?{expectedBeforePixels:[{
+              at:[2,2],rgba:[20,25,30,255],
+            }]}:{}),
           },
           correctionIntent:{"issueId":"helmet-flat","approachId":"helmet-value-masses","partId":"tier2-helmet","material":"metal","cause":"Helmet shadows and highlights form one generic horizontal band.","treatment":"form_value_masses","expectedChange":"Separate the base, shadow and highlights following the helmet curvature."},
         }},response=>{
@@ -677,13 +696,20 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_SCOPE_MISMATCH');
             return {refused:true};
           }
-          if(step===5){
+          if(step===4){
+            assert.equal(response.ok,false);
+            assert.equal(response.code,'CODE_MODE_REVIEWED_BEFORE_PIXEL_CONFLICT');
+            return {sourceConflictBlocked:true};
+          }
+          if(step===6){
             assert.equal(response.ok,false);
             assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_FRESH_CAPTURE_REQUIRED');
             return {freshCaptureRequired:true};
           }
           assert.equal(response.ok,true);
           assert.equal(response.result.project,'p1');
+          assert.equal(response.result.texturing_workflow.source_pixel_guards
+            .verified_by_rust_receipt,true);
           return {edited:true};
         });
       },
@@ -694,6 +720,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(rejected.value.refused,true);
     const alphaWeakened=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(alphaWeakened.value.refused,true);
+    const conflict=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(conflict.value.sourceConflictBlocked,true);
     const permitted=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(permitted.value.edited,true);
     const repeated=await host.execute({code:'return codemode.apply({project:"p0"});'});
@@ -701,6 +729,12 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(received.length,1);
     assert.equal(approvals.length,1);
     assert.equal(approvals[0].correctionScope.textureUuid,'tier2-atlas');
+    assert.deepEqual(approvals[0].correctionScope.protectedRegions,[
+      {from:[1,1],to:[2,2]},
+    ]);
+    assert.deepEqual(approvals[0].correctionScope.expectedBeforePixels,[
+      {at:[2,2],rgba:[70,90,100,255]},
+    ]);
     assert.equal(approvals[0].materialCorrectionIntent.issueId,'helmet-flat');
     assert.equal(approvals[0].materialCorrectionIntent.approachId,'helmet-value-masses');
     assert.match(approvals[0].materialIntentSha256,/^[a-f0-9]{64}$/);

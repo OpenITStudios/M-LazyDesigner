@@ -383,6 +383,24 @@ Examples include `wood_grain`, `painted_metal`, `stone_cluster`, `cloth_weave`, 
 
 ## Reference-Bound Pixel Clusters (source-side, opt-in)
 
+## Rust Code Mode inner-scope landmark preservation (source-only)
+
+The standalone Rust `correction_scope` now accepts optional
+`protected_regions` (exact, unchanged original RGBA8 inside OR outside
+a declared allowed rectangle) and `expected_before_pixels` (bounded
+exact original atlas RGBA assertions). The canonical Rust
+`apply_with_correction_scope` checks the immutable saved bitmap and
+after-image as one atomic EditPlan before Undo/publish. The trusted
+Code Mode host must retain these optional restrictions when declared
+by an independent reviewer; model-proposed plans may only add them,
+not delete or contradict them. Out-of-scope pixel edits remain refused.
+Use only explicitly approved identity details or verified current
+source pixels, never guessed original RGB or unobserved reference
+landmarks. Optional strict guards do not force new approval gates for
+known-safe exact edits or certify artistic rendering.
+
+
+
 When an approved image actually specifies the distribution of colored
 masses, an exact face-local *cluster recipe* may express a base fill plus
 connected rectangular/row-span shapes for shadow, highlight, accent, identity

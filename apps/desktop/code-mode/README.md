@@ -1,6 +1,21 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
 
+**Reviewed landmark protection inside correction scope (SOURCE ONLY):**
+Rust now accepts optional `protectedRegions` (preserve the ORIGINAL
+RGBA unchanged even inside an allowed atlas rectangle) and
+`expectedBeforePixels` (reject a stale/wrong source RGBA before
+publishing any edited texture). When an independent reviewer declares
+those guards, the trusted host merges them into the guest's correction
+scope, even when the guest omits them; conflicting old-pixel claims
+are blocked before operator approval. The Rust transaction checks
+the actual before/after saved PNG and remains the single Undo owner.
+Old exact-RGBA edits without these optional guards are unchanged.
+Receipt counters expose enforcement, never artistic quality evidence.
+Node/Rust tests AUTHORED_NOT_RUN. See HOST_INTEGRATION.md.
+
+
+
 **Connected cluster paint composition (2026-11-17; SOURCE ONLY):**
 For reviewer-authorized `FORM_SHADING` propagation, the guest now supplies
 `facePlans[].clusters`: connected, 4-neighbour face-local row spans with

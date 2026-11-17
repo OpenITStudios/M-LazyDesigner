@@ -111,6 +111,23 @@ through PILL-10 acceptance and test holds remain unchanged.
 
 ## PILL-03 cluster geometry and execution coherence — source only
 
+## PILL-01/PILL-04 — protected identity pixels within correction scope
+
+A Tier 2/3 helmet correction may legitimately change the surrounding
+metal atlas while preserving an already-approved emblem, helmet trace,
+neutral hardware or shield identity **inside that same broad region**.
+Reviewers can now bind exact `protectedRegions` and
+`expectedBeforePixels` into the existing Rust correction scope.
+Negative cases must attempt to modify a protected identity pixel, send
+a stale/wrong original pixel, and omit or replace a reviewer-declared
+guard. They must be refused before any final mutation. A valid change
+elsewhere in the same allowed atlas area must retain Undo/redo
+compatibility and original approved marks. Source tests authored,
+NOT_EXECUTED. Only actual approved image/model comparison can identify
+which pixels deserve that protection.
+
+
+
 After a real reviewer accepts the representative helmet sample, a
 `FORM_SHADING` propagation packet must supply distinct connected
 Cube face-local shadow/highlight masks, not a textual claim that

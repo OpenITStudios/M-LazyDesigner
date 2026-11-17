@@ -1,3 +1,13 @@
+**Rust protected identity inside correction scope (2026-11-17; SOURCE ONLY):**
+A reviewed Texturing correction may now preserve approved atlas marks
+within its allowed region by declaring trusted protected rectangles and
+bounded expected original RGBA pixels. The host merges reviewer guards
+into each write, while Rust checks the before/after saved bitmap
+atomically and rejects protected or stale-source modifications.
+Existing unreviewed exact-pixel operations and Rust transaction ownership
+remain unchanged. Tests AUTHORED_NOT_RUN and real visual quality
+UNVERIFIED under current CI/localtest hold. No release or Local edits.
+
 **Rust connected face-local cluster execution (2026-11-17; SOURCE ONLY):**
 The Texturing FORM_SHADING path now compiles guest-proposed connected
 shadow/highlight row spans into existing Rust guarded Cube-face Paint,

@@ -666,6 +666,8 @@ fn execute() -> Result<Value> {
                 "texture_styling_evidence":styling_evidence,
                 "correction_scope":plan.correction_scope.as_ref().map(|scope|json!({
                     "status":"enforced","texture_uuid":scope.texture_uuid,
+                    "protected_regions":scope.protected_regions.len(),
+                    "expected_before_pixels":scope.expected_before_pixels.len(),
                     "visual_verdict":"UNVERIFIED"
                 }))
             }))

@@ -1,6 +1,62 @@
 # Rust Code Mode — first-party local host integration
 
 
+## Reviewer-owned inner-scope landmark preservation (SOURCE ONLY)
+
+The existing `correctionScope` supports two bounded **optional** pixel
+guards without introducing a second editor or policy database:
+
+```json
+{
+  "textureUuid": "00000000-0000-4000-8000-000000000101",
+  "allowedRegions": [{"from":[1,1],"to":[10,10]}],
+  "preserveAlpha": true,
+  "protectedRegions": [{"from":[2,2],"to":[4,4]}],
+  "expectedBeforePixels": [{"at":[5,5],"rgba":[80,90,100,255]}]
+}
+```
+
+Coordinates are **physical atlas** pixels with half-open rectangles.
+`protectedRegions` (up to 16) prohibit *any* RGBA change, including
+inside `allowedRegions`; use them for already-approved emblem, trim,
+face trace or another exact identity mark. `expectedBeforePixels` (up to
+64 unique positions) assert the actual RGBA8 of the **original saved
+bitmap** before Rust may commit the transaction. These are safeguards,
+not instructions to recolor a pixel and not proof that the declared
+old color was taken from a genuine approved reference. A missing,
+stale, conflicting or out-of-bounds guard fails closed.
+
+In a reviewer-bound correction, the independent host reviewer can
+declare those two optional fields in its existing `correctionScope`.
+The host merges them with any extra restrictions supplied by the
+model-written guest; the guest cannot omit or overwrite the reviewer's
+protected region or expected original color. A disagreement at one
+coordinate is rejected before write authorization. The one canonical
+Rust `apply_with_correction_scope` operation checks the actual source
+pixels, checks every changed pixel, and rejects any protected-region
+edit atomically before updating `.bbmodel` or Undo history. Outside
+the review loop, existing exact-pixel edits can opt in to the same
+strict guard without creating a new mandatory approval step.
+
+The SHA-bound Rust `apply` receipt now reports
+`correction_scope.protected_regions` and
+`correction_scope.expected_before_pixels` as **counts** alongside
+`status:'enforced'`. The Code Mode workflow receipt compares the
+counts to the host's actual submitted scope. This demonstrates
+only structural guard admission at the available execution surface;
+it cannot prove the protected pixels were artistically correct or
+that a model image was visually inspected.
+
+`MaterialWorkPacket` remains responsible for the intended new
+shade clusters and texture identity. This guard protects existing
+details in or near those clusters; it never changes the palette,
+UV geometry, Rust paint source owner, or the approved reference.
+Regression fixtures for preserved detail, stale original RGBA,
+duplicate old-pixel assertions, rejected reviewer-guard removal
+and rollback are authored but NOT_EXECUTED under the current hold.
+
+
+
 ## Connected pixel-art cluster compiler (SOURCE ONLY)
 
 `FORM_SHADING` packets now require actual `facePlans[].clusters`
