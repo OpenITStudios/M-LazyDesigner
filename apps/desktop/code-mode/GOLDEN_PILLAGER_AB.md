@@ -42,6 +42,29 @@ Baseline and candidate must use comparable model, viewer, reference and work sco
 
 Geometry/UV and Animation remain their respective authoring owners; do not repair a geometry cause by repainting arbitrary atlas pixels.
 
+## User-decision convergence cases
+
+The approved user/Workspace reference, not the agent's latest prose,
+is the source of required art. At the operator-owned Rust visual review
+boundary, project its current decisions into
+`--visual-manifest.reviewCriteria`:
+
+- `PILL-01/PILL-05`: `PRESERVE` Tier 1 shield markings and
+  neutral iron, including bounded physical texture regions when known.
+- `PILL-03/PILL-07`: `CORRECT` the repeatedly rejected helmet
+  bar with its own physical atlas, visible view and source PNG SHA.
+- Every review must report `MET`, `VIOLATED`, or `UNVERIFIED`
+  for *every* criterion; no acceptance from one freeform summary.
+- A regression of approved identity is refused before further Paint.
+  Guest-selected operations remain bounded to the original corrective
+  region, not the reviewer's newly invented wider rectangle.
+- Final all-face/source readiness also needs these criteria all
+  independently `MET` and still returns only readiness for user decision.
+
+These fixture/source gates do NOT prove that a real image reviewer
+recognizes the helmet or improves material quality. Actual A/B
+evaluation, corrections and user acceptance are NOT_EXECUTED.
+
 ## Exact correction loop
 
 1. The authorized operator selects one source .bbmodel revision, actual approved image(s), and current model capture from the same viewed region. Bind their SHAs and view name in the existing Rust Code Mode host.

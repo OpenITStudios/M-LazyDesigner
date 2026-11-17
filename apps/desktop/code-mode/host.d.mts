@@ -87,6 +87,13 @@ export interface CodeModeGuestAPI {
         partId:string;textureUuid:string;fingerprintSha256:string;
         observation:string;
       }>;
+      review_criteria:ReadonlyArray<Readonly<CodeModeReviewCriterion>>;
+      criteria_review:Readonly<{
+        status:"ALL_MET"|"CORRECTIONS_REQUIRED"|"UNVERIFIED";
+        assessments:ReadonlyArray<Readonly<CodeModeReviewCriterionAssessment>>;
+        source:"OPERATOR_SELECTED_REFERENCE_AND_INDEPENDENT_REVIEW_DECLARATION";
+        visual_verdict:"UNVERIFIED";
+      }> | null;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
       /** Specific model Cube faces actually reviewed; separate from camera views. */
       reviewedFaces:ReadonlyArray<Readonly<CodeModeReviewedTextureFace>>;
@@ -209,6 +216,23 @@ export interface CodeModeReviewedMaterialCohort {
   capture_png_sha256?:string;
   view_id?:string;
 }
+/** Selected at the trusted operator boundary from the existing approved
+ * reference/workspace decisions; not an independent approval registry.
+ */
+export interface CodeModeReviewCriterion {
+  id:string;partId:string;
+  kind:"PRESERVE"|"CORRECT";
+  requirement:string;
+  viewId:CodeModeVisualViewId;
+  referencePngSha256:string;
+  textureUuid?:string;
+  allowedRegions?:Array<{from:[number,number];to:[number,number]}>;
+  protectedRegions?:Array<{from:[number,number];to:[number,number]}>;
+}
+export interface CodeModeReviewCriterionAssessment {
+  id:string;verdict:"MET"|"VIOLATED"|"UNVERIFIED";
+  observation:string;
+}
 /** Host-selected from a REAL rendered view comparison. Never supplied by guest. */
 export interface CodeModeReviewedTextureFace {
   cubeUuid:string;
@@ -234,6 +258,10 @@ export interface CodeModeVisualReviewerFeedback {
     decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
     observation:string;
   }>;
+  /** Mandatory complete independent responses when reviewCriteria are bound.
+   * Must account for approved preserved and still-correctable art traits.
+   */
+  criteriaReviews?:CodeModeReviewCriterionAssessment[];
   /** Required by a texturingReadiness decision; arbitrary six-view labels
    * do not prove the selected material faces were examined. Max 256,
    * with incomplete whole-model acceptance if required faces exceed budget.
@@ -311,6 +339,11 @@ export interface CodeModeHostOptions {
       referencePngPath:string;capturePngPath:string;
     }>;
     requireSixDirections?:boolean;
+    /** Optional operator-owned projection of approved Reference/Workspace
+     * decisions. When present it is mandatory for reviewer findings and
+     * Texturing readiness, and bounds reviewer-authorized Paint regions.
+     */
+    reviewCriteria?:CodeModeReviewCriterion[];
   };
   /** Operator-owned, independent visual review adapter. The callback receives
    * bounded original PNG bytes under trusted Node, not in the Deno guest.
@@ -328,6 +361,7 @@ export interface CodeModeHostOptions {
       capture:Readonly<{sha256:string;pngBytes:Buffer}>;
     }>>;
     requiredSixDirections:boolean;
+    reviewCriteria:ReadonlyArray<Readonly<CodeModeReviewCriterion>>;
   }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>) &
     {requiresSourceFaceInventory?:true};
   /** Trusted fixture seams only; never pass untrusted model data as functions. */

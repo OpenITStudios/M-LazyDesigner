@@ -46,7 +46,7 @@ export async function readOperatorVisualManifest(path) {
     throw new Error('VISUAL_MANIFEST_SHAPE_INVALID');
   }
   const keys=['referencePngPath','capturePngPath','captureModelSha256',
-    'viewId','supportingViews','requireSixDirections'];
+    'viewId','supportingViews','requireSixDirections','reviewCriteria'];
   if(Object.keys(content).some(key=>!keys.includes(key))) {
     throw new Error('VISUAL_MANIFEST_FIELD_INVALID');
   }
@@ -121,6 +121,10 @@ export async function createTrustedProgramReviewer(executable, {
       schema_version:1,source_model_sha256:pair.sourceModelSha256,
       required_six_directions:pair.requiredSixDirections===true,
       source_face_inventory:source,
+      // Canonical operator-selected decisions, never inferred from the
+      // model prompt or reviewer text. The image reviewer must answer them
+      // individually; the trusted host validates every result.
+      review_criteria:pair.reviewCriteria??[],
       views:payload,
     });
     const response=await new Promise((resolve,reject)=>{

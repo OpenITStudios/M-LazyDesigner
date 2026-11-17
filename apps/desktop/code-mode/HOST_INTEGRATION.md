@@ -380,6 +380,57 @@ The operator-provided manifest is a regular JSON file with exactly:
 }
 ```
 
+**Freeze approved decisions in the existing visual manifest.** The operator
+can project the current authoritative Reference/Workspace decisions into
+`reviewCriteria` (1–12 entries, maximum six editable corrections). Example
+additional content for the manifest, with actual SHA-256 values substituted:
+
+```json
+{
+  "reviewCriteria": [
+    {
+      "id": "keep-shield", "partId": "tier1-shield", "kind": "PRESERVE",
+      "requirement": "Keep approved Tier 1 shield markings and neutral iron unchanged.",
+      "viewId": "front",
+      "referencePngSha256": "<SHA256 of front reference>",
+      "textureUuid": "approved-atlas-uuid",
+      "protectedRegions": [{"from":[0,0],"to":[4,4]}]
+    },
+    {
+      "id": "fix-helmet", "partId": "tier2-helmet", "kind": "CORRECT",
+      "requirement": "Replace the flat helmet bar with directed metal bevel shading.",
+      "viewId": "front",
+      "referencePngSha256": "<SHA256 of front reference>",
+      "textureUuid": "current-atlas-uuid",
+      "allowedRegions": [{"from":[4,4],"to":[8,8]}]
+    }
+  ]
+}
+```
+
+These are supplemental fields, not a second standalone manifest. `PRESERVE`
+may omit texture/regions when only visual identity is known. When provided,
+approved protected regions cannot intersect the editable region on the
+same atlas. `CORRECT` always requires a physical texture UUID and
+half-open atlas bounds. Source PNG hashes must match the actual selected
+view images. This is operator-selected evidence, NOT independent proof
+that the reference was approved by the user; use the existing approved
+asset owner rather than reconstructing approval from chat guesses.
+
+The independently image-capable reviewer must return exactly one
+`criteriaReviews` entry for each selected criterion:
+`{id, verdict:"MET"|"VIOLATED"|"UNVERIFIED", observation}`.
+Its summary ACCEPTED/REJECTED/UNVERIFIED must match these statements.
+Any violated approved PRESERVE entry refuses the review. An unknown
+PRESERVE cannot authorize corrective painting. Every violated CORRECT
+entry requires an issue with the exact same part/criterion ID; the
+reviewer-selected and guest Paint regions must stay within the frozen
+editable atlas scope. Final professional Texturing readiness is blocked
+without criteria or until every criterion is independently MET.
+This is a trusted-source accountability contract, not image recognition,
+a global persistent approval store or a native/artist quality PASS.
+Model-generated guest code cannot select/change any of these criteria.
+
 For broad propagation and the final review, set
 `requireSixDirections:true` and provide actual front/back/left/right/top/bottom
 image pairs, with an optional `three_quarter`. The example above is only a
@@ -414,6 +465,8 @@ environment. It sends a bounded UTF-8 JSON request on stdin:
 schema_version: 1
 source_model_sha256
 required_six_directions
+review_criteria: [{id, partId, kind, requirement, viewId,
+                   referencePngSha256, ...}, ...]
 source_face_inventory:
   scope: trusted_saved_cube_face_inventory
   source_model_sha256

@@ -15,6 +15,8 @@ import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrection
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
   materialWorkPacketDigest,compileMaterialClusterPaint,
   paintOperationsFingerprint} from './material-work-packet.mjs';
+import {boundReviewCriteria,checkedCriterionReview,criterionPermitsPaint}
+  from './review-criteria.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -95,7 +97,7 @@ async function pinnedVisualPair(source, options, modelSha) {
   if (!options || typeof options !== 'object' || Array.isArray(options) ||
       Object.keys(options).some(key => ![
         'referencePngPath','capturePngPath','captureModelSha256','viewId',
-        'supportingViews','requireSixDirections',
+        'supportingViews','requireSixDirections','reviewCriteria',
       ].includes(key)) ||
       typeof options.captureModelSha256 !== 'string' ||
       !SHA256.test(options.captureModelSha256) ||
@@ -144,6 +146,7 @@ async function pinnedVisualPair(source, options, modelSha) {
     ...primary,modelSha,
     additionalViews:Object.freeze(additionalViews),
     requireSixDirections:options.requireSixDirections===true,
+    reviewCriteria:boundReviewCriteria(options.reviewCriteria,views),
   });
 }
 // Operator review is input from a trusted host callback, not model-written code.
@@ -159,7 +162,7 @@ function normalizedVisualReview(input, viewIds = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key =>
         !['decision','issues','correctionScope','rejectedApproaches','rejectedTreatments','rejectedPaintPlans',
-          'materialCohort','viewReviews','reviewedFaces'].includes(key)) ||
+          'materialCohort','viewReviews','reviewedFaces','criteriaReviews'].includes(key)) ||
       !REVIEW_DECISIONS.has(input.decision) ||
       !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -1002,6 +1005,8 @@ export async function createCodeModeHost({
         rejectedPaintPlans:Object.freeze([]),
         materialCohort:null,face_source_evidence:null,viewReviews:Object.freeze([]),
         reviewedFaces:Object.freeze([]),
+        review_criteria:visualPair.reviewCriteria??Object.freeze([]),
+        criteria_review:null,
         source:'NONE',visual_verdict:'UNVERIFIED',
       });
       if (typeof reviewVisualPair === 'function' && prior === undefined) {
@@ -1051,6 +1056,7 @@ export async function createCodeModeHost({
                   pngBytes:Buffer.from(view.captureBytes)}),
               }))),
             requiredSixDirections:visualPair.requireSixDirections,
+            reviewCriteria:visualPair.reviewCriteria??Object.freeze([]),
             sourceFaceInventory:faceInventory,
           }));
         } finally { execution.resume(); }
@@ -1059,6 +1065,16 @@ export async function createCodeModeHost({
         }
         feedback = normalizedVisualReview(returned,
           visualViews.map(view=>view.viewId));
+        // Every operator-frozen correction and preserve decision must be
+        // independently accounted for. A reviewer's overall ACCEPTED string
+        // cannot override a violated or unobserved approved requirement.
+        const criteriaReview=checkedCriterionReview(
+          visualPair.reviewCriteria,returned.criteriaReviews,
+          feedback.decision,feedback.issues,feedback.correctionScope);
+        feedback=Object.freeze({...feedback,
+          review_criteria:visualPair.reviewCriteria??Object.freeze([]),
+          criteria_review:criteriaReview,
+        });
         if (feedback.reviewedFaces.length>0) {
           // A camera declaration cannot create actual Cube/UV ownership.
           // Bind it to the current SHA-checked Rust model BEFORE caching
@@ -1221,7 +1237,13 @@ export async function createCodeModeHost({
       if (typeof reviewVisualPair!=='function') {
         blocked.push('INDEPENDENT_IMAGE_REVIEW_NOT_CONNECTED');
       }
+      if (visualPair?.reviewCriteria===null || visualPair===null) {
+        blocked.push('APPROVED_REFERENCE_DECISIONS_NOT_BOUND');
+      }
       const feedback=visualPreflights.get(p.expectedSha256);
+      if(feedback?.criteria_review?.status!=='ALL_MET') {
+        blocked.push('APPROVED_REFERENCE_DECISIONS_NOT_MET');
+      }
       if (!feedback || feedback.decision!=='ACCEPTED') {
         blocked.push('CURRENT_REVISION_NOT_ACCEPTED_BY_REVIEWER');
       }
@@ -1593,6 +1615,15 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_MATERIAL_INTENT_REQUIRED');
         }
         if (!materialIntent) throw new Error('CODE_MODE_MATERIAL_INTENT_REQUIRED');
+        if(visualPair.reviewCriteria!==null){
+          const evidence=feedback.criteria_review?.assessments?.find(
+            item=>item.id===materialIntent.issueId &&
+              item.verdict==='VIOLATED');
+          if(!evidence || !criterionPermitsPaint(visualPair.reviewCriteria,
+              materialIntent,requested)) {
+            throw new Error('CODE_MODE_REVIEW_CRITERION_SCOPE_MISMATCH');
+          }
+        }
         const issue = feedback.issues.find(entry =>
           entry.id === materialIntent.issueId);
         if (!issue) throw new Error('CODE_MODE_MATERIAL_ISSUE_NOT_REVIEWED');

@@ -2517,6 +2517,106 @@ test('Texturing readiness is BLOCKED without matched images and reviewer even if
     const result=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
     assert.equal(result.value.state,'BLOCKED');
   }));
+test('trusted reference criteria bind approved art and allowed corrections before any Paint',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const reference=join(folder,'tier1-master.png');
+    const capture=join(folder,'tier2-current.png');
+    const bytes=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,bytes);await writeFile(capture,bytes);
+    const digest=createHash('sha256').update(bytes).digest('hex');
+    const area={from:[4,4],to:[8,8]};
+    const contract=[
+      {id:'keep-shield',partId:'tier1-shield',kind:'PRESERVE',
+        requirement:'Keep the approved shield markings and metal hardware unchanged.',
+        viewId:'front',referencePngSha256:digest,
+        textureUuid:'tier-atlas',protectedRegions:[{from:[0,0],to:[4,4]}]},
+      {id:'fix-helmet',partId:'tier2-helmet',kind:'CORRECT',
+        requirement:'Replace the flat horizontal helmet bar with coherent metal bevel shading.',
+        viewId:'front',referencePngSha256:digest,
+        textureUuid:'tier-atlas',allowedRegions:[area]},
+    ];
+    let calls=0,approvals=0,step=0;
+    const reviewVisualPair=async pair=>{
+      assert.equal(pair.reviewCriteria.length,2);
+      assert.equal(pair.reviewCriteria[0].referencePngSha256,digest);
+      assert.equal(pair.reference.sha256,digest);
+      return {
+        decision:'REJECTED',
+        issues:[{id:'fix-helmet',kind:'FLAT_SHADING',partId:'tier2-helmet',
+          observation:'The horizontal metal helmet bar is still flat.'}],
+        correctionScope:{textureUuid:'tier-atlas',allowedRegions:[area],
+          preserveAlpha:true},
+        criteriaReviews:[
+          {id:'keep-shield',verdict:'MET',
+            observation:'The approved Tier 1 shield hardware and marks are unchanged.'},
+          {id:'fix-helmet',verdict:'VIOLATED',
+            observation:'The Tier 2 helmet still shows one generic horizontal strip.'},
+        ],
+      };
+    };
+    const intent={
+      issueId:'fix-helmet',approachId:'different-shading',
+      partId:'tier2-helmet',material:'metal',
+      cause:'The existing helmet shading consists of one generic horizontal bar.',
+      treatment:'contact_shadows',
+      expectedChange:'Build directional contact shadow masses around the proper helmet bevel.',
+    };
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{viewId:'front',
+        referencePngPath:reference,capturePngPath:capture,
+        captureModelSha256:HASH,reviewCriteria:contract},
+      reviewVisualPair,authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        calls++;
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            visual_verdict:'UNVERIFIED'},
+        };
+        throw Error('No native edit should be requested');
+      },
+      spawnImpl:()=>{
+        const index=step++;
+        if(index===0)return fakeGuest({method:'inspectSelectedVisualPair',
+          args:{project:'p0'}},response=>{
+          assert.equal(response.ok,true);
+          assert.equal(response.result.review_feedback.criteria_review.status,
+            'CORRECTIONS_REQUIRED');
+          assert.equal(response.result.review_feedback.review_criteria[0].id,
+            'keep-shield');
+          return {reviewed:true};
+        });
+        return fakeGuest({method:'apply',args:{
+          project:'p0',output:'bounded-test-'+index+'.bbmodel',
+          operations:[{op:'paint_texture_pixel',texture_index:0,
+            x:5,y:5,rgba:[20,40,60,255]}],
+          correctionScope:{textureUuid:'tier-atlas',
+            allowedRegions:[area],preserveAlpha:true},
+          correctionIntent:index===1?{...intent,partId:'tier1-shield'}:intent,
+        }},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,index===1?
+            'CODE_MODE_REVIEW_CRITERION_SCOPE_MISMATCH':
+            'CODE_MODE_MATERIAL_SAMPLE_REQUIRED');
+          return {refused:response.code};
+        });
+      },
+    });
+    const first=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(first.value.reviewed,true);
+    const forbidden=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(forbidden.value.refused,'CODE_MODE_REVIEW_CRITERION_SCOPE_MISMATCH');
+    const bounded=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(bounded.value.refused,'CODE_MODE_MATERIAL_SAMPLE_REQUIRED');
+    assert.equal(calls,3); // Startup inspect + visual-pair + post-review inspect.
+    assert.equal(approvals,0);
+  }));
+
 test('Texturing readiness reads all saved Cube coverage only after independently reviewed six PNG pairs',()=>
   fixture(async input=>{
     const folder=dirname(input);
@@ -2539,10 +2639,23 @@ test('Texturing readiness reads all saved Cube coverage only after independently
       preselectedVisualPair:{
         ...chosen[0],captureModelSha256:HASH,
         supportingViews:chosen.slice(1),requireSixDirections:true,
+        reviewCriteria:[{
+          id:'helmet-shading',partId:'tier2-helmet',
+          kind:'CORRECT',
+          requirement:'The helmet must use approved directional metal form and bevel shading.',
+          viewId:'front',
+          referencePngSha256:createHash('sha256').update(
+            Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),
+              Buffer.from('front')])).digest('hex'),
+          textureUuid:'tier2-atlas',allowedRegions:[{from:[0,0],to:[4,4]}],
+        }],
       },
       reviewVisualPair:()=>{
         reviewerCalls++;
-        return {decision:'ACCEPTED',issues:[],viewReviews:views.map(viewId=>({
+        return {decision:'ACCEPTED',issues:[],
+          criteriaReviews:[{id:'helmet-shading',verdict:'MET',
+            observation:'The helmet has coherent directional bevel shading and metal form.'}],
+          viewReviews:views.map(viewId=>({
           viewId,decision:'ACCEPTED',observation:'Material form is coherent in this matched view.',
         })),reviewedFaces:[{cubeUuid:REVIEW_CUBE,
           textureUuid:'tier2-atlas',face:'north',style:'STYLED',

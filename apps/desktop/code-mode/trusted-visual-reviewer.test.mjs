@@ -31,7 +31,13 @@ function selectedPair(){
     viewId:entries[0].viewId,
     reference:entries[0].reference,capture:entries[0].capture,
     supportingViews:entries.slice(1),
-    requiredSixDirections:true};
+    requiredSixDirections:true,
+    reviewCriteria:[{id:'fix-helmet',partId:'tier2-helmet',
+      kind:'CORRECT',viewId:'front',
+      referencePngSha256:entries[0].reference.sha256,
+      requirement:'Correct the visible metal bevel and material shading.',
+      textureUuid:'atlas-1',
+      allowedRegions:[{from:[1,1],to:[4,4]}]}]};
 }
 async function fixture(work){
   const directory=await mkdtemp(join(tmpdir(),'ld-visual-review-source-'));
@@ -54,6 +60,10 @@ function stubReviewProcess(response){
       assert.equal(payload.source_face_inventory.scope,
         'trusted_saved_cube_face_inventory');
       assert.equal(payload.source_face_inventory.faces[0].cube_uuid,'cube-1');
+      assert.equal(payload.review_criteria.length,1);
+      assert.equal(payload.review_criteria[0].id,'fix-helmet');
+      assert.equal(payload.review_criteria[0].referencePngSha256,
+        payload.views[0].reference_sha256);
       for(const pair of payload.views){
         assert.equal(Buffer.from(pair.reference_png_base64,'base64')
           .subarray(0,8).toString('hex'),'89504e470d0a1a0a');

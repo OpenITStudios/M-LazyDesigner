@@ -130,6 +130,24 @@ unreviewed known exact-RGBA edits retain their direct path.
 Tests AUTHORED_NOT_RUN. See HOST_INTEGRATION.md.
 
 
+**Approved-reference decision accountability (2026-11-17; SOURCE_ONLY):**
+The operator-selected `--visual-manifest` may now carry a bounded
+`reviewCriteria` projection of current approved Reference/Workspace
+decisions: `PRESERVE` previously accepted appearance, and `CORRECT` a
+specific rejected detail. Each criterion names an actual selected image
+view and exact source PNG SHA; CORRECT also constrains one physical
+texture/atlas patch, while PRESERVE can protect explicit same-atlas
+pixel regions. The trusted reviewer receives every criterion alongside
+actual PNG bytes. Its response must account for each as
+`MET | VIOLATED | UNVERIFIED`, with decisions and editable correction
+scope reconciled before any reviewed Paint. An observed regression of
+an approved PRESERVE criterion is refused; the agent cannot claim a
+global Texturing-ready result without criteria all independently
+declared MET. This is one ephemeral reviewed work packet, NOT a new
+approval database, auto-import of the Local Workspace, vision model,
+or proof of artistic quality. Actual source-bound evaluations
+AUTHORED_NOT_RUN; native/user acceptance remains UNVERIFIED.
+
 **Operator-owned image review bridge (2026-11-17; SOURCE_ONLY):**
 The existing `run.mjs` now accepts `--visual-manifest` with
 `--reviewer-exe` for one explicitly configured, trusted, image-capable
