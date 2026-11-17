@@ -499,15 +499,60 @@ export function createRustCodeModeClient({
       const source = absolute(input, 'input');
       const digest = hash(expectedSha256);
       const payload = serializeInspectionQueries(requests);
+      // A SHA-bound Rust inspect-batch is one immutable model read. Repeated
+      // byte-identical normalized selectors within THAT batch need only one
+      // calculation. Never cache across calls: native Rust must verify the
+      // current disk/source SHA for every new inspection.
+      const normalized = JSON.parse(payload).requests;
+      const positions = [];
+      const unique = [];
+      const seen = new Map();
+      for (const query of normalized) {
+        const key = JSON.stringify(query);
+        if (!seen.has(key)) {
+          seen.set(key, unique.length);
+          unique.push(query);
+        }
+        positions.push(seen.get(key));
+      }
+      const duplicates = unique.length !== normalized.length;
+      const forwarded = duplicates ? JSON.stringify({ requests: unique }) : payload;
       // Query-only data, not an edit plan. Temporary file is private and is
       // cleaned even if the Rust process reports a refusal or fails.
       const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-read-batch-'));
       const file = join(directory, 'queries.json');
       try {
-        await writeFile(file, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-        return await call('inspect-batch', {
+        await writeFile(file, forwarded, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        const receipt = await call('inspect-batch', {
           input: source, queries: file, 'expected-sha256': digest,
         });
+        if (!duplicates) return receipt;
+        // A trusted-Rust receipt must have the same pinned model identity
+        // and one result for every unique selector, in the original order.
+        // Never turn a malformed/truncated receipt into synthetic evidence.
+        if (typeof receipt.sha256 !== 'string' ||
+            receipt.sha256.toLowerCase() !== digest.toLowerCase() ||
+            !Array.isArray(receipt.results) ||
+            receipt.results.length !== unique.length ||
+            receipt.results.some((item, i) => !item ||
+              typeof item !== 'object' || Array.isArray(item) ||
+              item.kind !== unique[i].kind)) {
+          throw new Error('CODE_MODE_INSPECT_BATCH_RECEIPT_INVALID');
+        }
+        // Independent JSON values prevent a guest mutation of one repeated
+        // entry from silently modifying the other. Preserve the native 96 KiB
+        // result-array budget after positional re-expansion, not just before.
+        let expanded;
+        try {
+          expanded = positions.map(index =>
+            JSON.parse(JSON.stringify(receipt.results[index])));
+        } catch {
+          throw new Error('CODE_MODE_INSPECT_BATCH_RECEIPT_INVALID');
+        }
+        if (Buffer.byteLength(JSON.stringify(expanded), 'utf8') > 96 * 1024) {
+          throw new Error('CODE_MODE_INSPECT_BATCH_RESULT_TOO_LARGE');
+        }
+        return { ...receipt, results: expanded };
       } finally {
         await rm(directory, { recursive: true, force: true });
       }

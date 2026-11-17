@@ -244,6 +244,79 @@ test('Code Mode batches focused read selectors into a single Rust CLI call', asy
   await assert.rejects(readFile(queryFile, 'utf8'), (error) => error.code === 'ENOENT');
 });
 
+// SOURCE_AUTHORED_NOT_RUN. Repeated read-only queries inside one Rust
+// inspection may share native work; never reuse responses across SHA checks.
+test('Code Mode coalesces only identical selectors inside one SHA-pinned batch', async () => {
+  let cliCalls = 0;
+  let tempQueries;
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async argv => {
+      cliCalls++;
+      assert.equal(argv[0], 'inspect-batch');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1], SHA);
+      tempQueries = argv[argv.indexOf('--queries')+1];
+      const payload = JSON.parse(await readFile(tempQueries, 'utf8'));
+      assert.deepEqual(payload, {requests: [
+        {kind:'cube_uv_sharing',uuid:'cube-a',texture_uuid:'atlas-a'},
+        {kind:'audit'},
+      ]});
+      return {status:'OK',sha256:SHA,summary:{revision:0},results:[
+        {kind:'cube_uv_sharing',uv_sharing:{visual_verdict:'UNVERIFIED',declared_overlap_pairs:2}},
+        {kind:'audit',audit:{scope:'static_metadata_only'}},
+      ]};
+    },
+  });
+  const first = {kind:'cube_uv_sharing',uuid:'cube-a',texture_uuid:'atlas-a'};
+  const reordered = {texture_uuid:'atlas-a',kind:'cube_uv_sharing',uuid:'cube-a'};
+  const request = {input:'/abs/model.bbmodel',expectedSha256:SHA,
+    requests:[first,{kind:'audit'},reordered,first]};
+  const response = await client.inspectBatch(request);
+  assert.equal(cliCalls,1);
+  assert.equal(response.results.length,4);
+  assert.deepEqual(response.results[0],response.results[2]);
+  assert.deepEqual(response.results[0],response.results[3]);
+  assert.notStrictEqual(response.results[0],response.results[2]);
+  assert.equal(response.results[1].audit.scope,'static_metadata_only');
+  assert.equal(response.sha256,SHA);
+  response.results[0].uv_sharing.declared_overlap_pairs = 999;
+  assert.equal(response.results[2].uv_sharing.declared_overlap_pairs,2);
+  await assert.rejects(readFile(tempQueries,'utf8'), error=>error.code==='ENOENT');
+});
+
+test('Code Mode duplicate inspection refuses stale, missing, mismatched or oversized receipts', async () => {
+  const repeated = [{kind:'audit'},{kind:'audit'}];
+  for(const incorrect of [
+    {status:'OK',sha256:SHA,results:[]},
+    {status:'OK',sha256:'0'.repeat(64),results:[{kind:'audit',audit:{}}]},
+    {status:'OK',sha256:SHA,results:[{kind:'cube',audit:{}}]},
+  ]){
+    let calls=0;
+    const client=createRustCodeModeClient({
+      binary:BIN,runner:async ()=>{calls++;return incorrect;},
+    });
+    await assert.rejects(client.inspectBatch({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,requests:repeated,
+    }),/CODE_MODE_INSPECT_BATCH_RECEIPT_INVALID/);
+    assert.equal(calls,1);
+  }
+  const oversized=createRustCodeModeClient({
+    binary:BIN,runner:async ()=>({status:'OK',sha256:SHA,
+      results:[{kind:'audit',audit:{large:'x'.repeat(50*1024)}}]}),
+  });
+  await assert.rejects(oversized.inspectBatch({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,requests:repeated,
+  }),/CODE_MODE_INSPECT_BATCH_RESULT_TOO_LARGE/);
+  let staleCalls=0;
+  const stale=createRustCodeModeClient({binary:BIN,
+    runner:async ()=>{staleCalls++;throw Error('SOURCE_SHA256_STALE');},
+  });
+  await assert.rejects(stale.inspectBatch({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,requests:repeated,
+  }),/SOURCE_SHA256_STALE/);
+  assert.equal(staleCalls,1);
+});
+
 test('Code Mode rejects unknown or excessive read batches before starting the CLI', async () => {
   let calls = 0;
   const client = createRustCodeModeClient({
