@@ -1,3 +1,8 @@
+## 2026-11-17 — Rust canonical .bbmodel memory/Dirty integration (SOURCE ONLY)
+
+Pinned starting branch `Rust@05435bd563875c9aa12a82d91594fdafc7598486`. Source changes replace cloned owned `BlockbenchV5` export with a borrowed serialization adapter, then replace the Tauri `refresh_dirty` temporary pretty-JSON `Vec<u8>` allocation with the same validated pretty JSON streamed to a bounded SHA-256 writer, including the final newline. Save/No-overwrite and independent raw disk-source identity retain full canonical export bytes. Source-authored regressions compare the borrowed serializer byte-for-byte to the pre-change owned wire, require matching streaming/export SHA on plain/textured/opaque and Tauri Apply/Undo/Redo states, and cover malformed assets and output byte budget.
+The source/consumer review does not establish that the Rust compiler, serde, Windows runtime, Blockbench import/export, or measured RAM/CPU benefit passed; all such checks remain `NOT_EXECUTED` under repository hold. Scope remains source-only on `Rust`; no change to `Local`, `main`, CI, release, Skills, format version or authoring approvals. Speculative broad CoW, daemonization and dependency resolver upgrades are outside this scoped increment.
+
 ## 2026-11-17 — Rust Paint/Animation snapshot efficiency increment (SOURCE ONLY)
 
 Original pinned Rust head for this increment: `551747cecbf44efbbdfa5ed2d5a70d133a86084a`.

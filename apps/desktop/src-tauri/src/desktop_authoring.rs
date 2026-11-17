@@ -1367,12 +1367,18 @@ mod tests {
         active.session.apply(0, &[EditOperation::TranslateCube {
             uuid: cube_uuid, delta: [1.0, 0.0, 0.0],
         }]).unwrap();
+        assert_eq!(active.session.canonical_sha256().unwrap(),
+            sha256(&active.session.export().unwrap()));
         refresh_dirty(&mut active);
         assert!(active.dirty);
         active.session.undo(1).unwrap();
+        assert_eq!(active.session.canonical_sha256().unwrap(),
+            sha256(&active.session.export().unwrap()));
         refresh_dirty(&mut active);
         assert!(!active.dirty);
         active.session.redo(2).unwrap();
+        assert_eq!(active.session.canonical_sha256().unwrap(),
+            sha256(&active.session.export().unwrap()));
         refresh_dirty(&mut active);
         assert!(active.dirty);
         // Save Copy establishes a new checkpoint without removing history.
