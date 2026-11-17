@@ -9,7 +9,7 @@
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
-  import { reconcileTexturePreview } from './rustSnapshotTransport';
+  import { isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
@@ -285,8 +285,29 @@
         ? { knownPreviewSourceKey: snapshot?.previewSourceKey ?? null } : {};
       const next = await invoke<EditorSnapshot>(name, { ...args, ...reuse });
       return accept(next);
-    } catch (cause) { showError(cause); return null; }
-    finally { busy = false; }
+    } catch (cause) {
+      if (isPreviewTransportFailure(cause)) {
+        // Rust may have COMMITTED the edit before this derived IPC preview
+        // was refused. Refresh once with the canonical full snapshot; never
+        // replay an uncertain edit or reuse unverified texture buffers.
+        try {
+          const latest = await invoke<EditorSnapshot | null>('rust_editor_snapshot');
+          if (latest) accept(latest);
+          else {
+            pauseAnimationPlayback();
+            snapshot = null;
+            selectedId = null;
+            selectedBoneId = null;
+          }
+          error = 'Texture preview transfer was rejected. The model view has been refreshed from Rust; review it before editing again.';
+        } catch (refreshError) {
+          showError(refreshError);
+        }
+      } else {
+        showError(cause);
+      }
+      return null;
+    } finally { busy = false; }
   }
   async function load() {
     loading = true;

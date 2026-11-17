@@ -2,6 +2,17 @@
 // content identity from the same epoch; never infer from element count.
 import type { EditorSnapshot } from './rustEditorTypes';
 
+/** A rejected IPC preview shortcut may follow an already-committed Rust edit.
+ * It must be reconciled with a fresh, read-only full snapshot; never retry
+ * the original mutation on this transport error.
+ */
+export function isPreviewTransportFailure(cause: unknown): boolean {
+  return cause instanceof Error && (
+    cause.message === 'RUST_EDITOR_PREVIEW_REUSE_STALE' ||
+    cause.message === 'RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE'
+  );
+}
+
 export function reconcileTexturePreview(
   previous: EditorSnapshot | null, incoming: EditorSnapshot,
 ): EditorSnapshot {

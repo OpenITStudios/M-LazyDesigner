@@ -1,7 +1,7 @@
 // TEST_AUTHORED_NOT_RUN: local/CI hold is active.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reconcileTexturePreview } from './rustSnapshotTransport.ts';
+import { isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport.ts';
 const base={epoch:1,revision:0,previewSourceKey:'k',previewSourcesReused:false,
  textureNames:['atlas'],texturePreviewSources:['data:image/png;base64,QUJD']};
 
@@ -31,4 +31,28 @@ test('missing, stale, extra or partial bodies never silently reuse',()=>{
 test('full snapshot preserves intentionally missing PNG sources',()=>{
  const full={...base,texturePreviewSources:[null]};
  assert.equal(reconcileTexturePreview(null,full),full);
+});
+
+test('only exact preview transport errors qualify for a full read-only Rust refresh', () => {
+  assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_PREVIEW_REUSE_STALE')), true);
+  assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE')), true);
+  for (const unrelated of [
+    new Error('DOCUMENT_REVISION_STALE'),
+    new Error('RUST_EDITOR_SOURCE_CHANGED'),
+    new Error('RUST_EDITOR_PREVIEW_REUSE_STALE_OTHER'),
+    'RUST_EDITOR_PREVIEW_REUSE_STALE',
+    null,
+  ]) assert.equal(isPreviewTransportFailure(unrelated), false);
+});
+
+// This is a source contract, NOT native execution proof.
+test('a rejected preview response cannot trigger another Rust mutation', async () => {
+  const source = await (await import('node:fs/promises')).readFile(
+    new URL('./RustEditorPage.svelte', import.meta.url), 'utf8');
+  const handler = source.slice(
+    source.indexOf("if (isPreviewTransportFailure(cause))"),
+    source.indexOf("async function load()"));
+  assert.match(handler, /invoke<EditorSnapshot \| null>\('rust_editor_snapshot'\)/);
+  assert.doesNotMatch(handler, /invoke<EditorSnapshot>\('rust_editor_apply'/);
+  assert.doesNotMatch(handler, /invoke<EditorSnapshot>\('rust_editor_undo'/);
 });

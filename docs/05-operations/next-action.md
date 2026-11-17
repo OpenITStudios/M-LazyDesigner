@@ -1,3 +1,13 @@
+**Rust UI preview transport recovery (2026-11-17; SOURCE ONLY):**
+Source inspection of the optional epoch+digest PNG-reuse response found that
+a transport mismatch could happen after Rust had already committed a model
+edit, leaving Svelte on its old revision. The command consumer now performs
+one read-only full `rust_editor_snapshot` recovery on its two specific
+preview-transport errors; the original edit is never retried. A second failed
+snapshot remains an error. The pure discriminator and positive/negative
+source regression cases were authored, NOT_EXECUTED under the existing
+CI/localtest hold; no native recovery or latency improvement is claimed.
+
 **Rust source-first efficiency integration — 2026-11-17 (SOURCE_COMMITTED; TEST_AUTHORED_NOT_RUN):**
 The selected `Rust` branch now pins Rust 1.100.0 in `apps/desktop/rust-toolchain.toml` and the source release workflow without changing edition/MSRV, lockfiles, Tauri version, or product release. `RustViewport.svelte` separates Cube selection from GPU scene construction and suppresses unchanged scene rebuilds while explicitly restoring native-projection state after a failed gesture or active texture failure. Rust `EditorSession` groups contiguous guarded same-texture face-local Paint instructions when total regions <=64; every op retains physical UV/alias preflight, correction-scope guards, ordered pixels, one Undo and no-overwrite export. Tauri returns a content+epoch-bound PNG reuse hint on `apply/undo/redo`; Svelte requires an exact previous preview identity or rejects the response instead of risking stale pixels. Native previews still come only from the Rust document; no secondary engine, persistent cache, trusted-host bypass or changed Code Mode execution authority.
 Proof: connector-backed exact source changes and source-authored Rust/Node negative/positive regression cases. Cargo, Node, TypeScript, WebView2, visual Golden A/B, Windows installer and performance measurements NOT_EXECUTED under the active hold. Native compatibility, user-accepted image quality and measured latency/RAM/token benefits UNVERIFIED.
