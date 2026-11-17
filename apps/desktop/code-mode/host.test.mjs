@@ -3297,6 +3297,71 @@ test('accepted material face cannot invent saved Cube/texture ownership',()=>
     assert.equal(nativeFaceReads,1);
   }));
 
+
+test('source-inconsistent face style cannot cache an accepted single-page review',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const reference=join(folder,'source-style-reference.png');
+    const capture=join(folder,'source-style-capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,png);await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    for(const [sourceStatus,reviewedStyle] of [
+      ['measured_nontransparent_pixels','INTENTIONAL_TRANSPARENT'],
+      ['fully_transparent_pixels','STYLED'],
+      ['fully_transparent_pixels','INTENTIONAL_FLAT'],
+    ]){
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{
+          referencePngPath:reference,capturePngPath:capture,
+          captureModelSha256:HASH,viewId:'front',
+        },
+        reviewVisualPair:()=>({
+          decision:'ACCEPTED',issues:[],
+          viewReviews:[{viewId:'front',decision:'ACCEPTED',
+            observation:'Actual selected front PNG pair reviewed.'}],
+          reviewedFaces:[{cubeUuid:REVIEW_CUBE,textureUuid:'tier2-atlas',
+            face:'north',style:reviewedStyle,observedInViewId:'front',
+            observation:'The reviewer assigned a face style that conflicts with saved alpha pixels.'}],
+        }),
+        runner:async argv=>{
+          if(argv[0]==='inspect')return {
+            status:'OK',sha256:HASH,summary:SUMMARY,
+          };
+          if(argv[0]==='inspect-visual-pair')return {
+            status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'},
+          };
+          assert.equal(argv[0],'inspect-batch');
+          return {status:'OK',sha256:HASH,summary:SUMMARY,
+            results:[{kind:'model_texture_coverage',coverage:{
+              scope:'saved_face_texture_coverage_page',
+              offset:0,total_cubes:1,reviewed_cubes:1,next_offset:null,
+              cubes:[{cube_uuid:REVIEW_CUBE,
+                faces:ALL_FACE_SIDES.map(side=>({
+                  side,texture_uuid:side==='north'?'tier2-atlas':null,
+                  status:side==='north'?sourceStatus:'absent_declared',
+                }))}],
+            }}]};
+        },
+        spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',
+          args:{project:'p0'}},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_REVIEWED_FACE_SOURCE_UNVERIFIED');
+          return {refused:true};
+        }),
+      });
+      const result=await host.execute({
+        code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+      });
+      assert.equal(result.value.refused,true);
+    }
+  }));
+
 test('operator-owned visual adapter receives Rust face inventory with exact PNG bytes', ()=>
   fixture(async input=>{
     const folder=dirname(input);

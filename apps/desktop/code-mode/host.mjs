@@ -21,7 +21,8 @@ import {boundReviewCriteria,checkedCriterionReview,criterionPermitsPaint}
 import {bindApprovedWorkspaceReference,assertApprovedWorkspaceReferenceFresh,
   referencePackageLeaseValid} from './approved-reference-package.mjs';
 import {MAX_FACES_PER_REVIEW,MAX_PAGED_REVIEW_FACES,
-  planPagedSourceFaceReview,requireAcceptedFaceReviewPage}
+  planPagedSourceFaceReview,requireAcceptedFaceReviewPage,
+  sourceFaceStyleConsistent}
   from './paged-face-review.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
@@ -1229,9 +1230,7 @@ export async function createCodeModeHost({
                ]));
                return !saved || !saved.texture_uuid ||
                  saved.texture_uuid!==face.textureUuid ||
-                 !['fully_transparent_pixels','partially_transparent_pixels',
-                   'translucent_pixels','measured_nontransparent_pixels']
-                   .includes(saved.source_status);
+                 !sourceFaceStyleConsistent(saved.source_status,face.style);
              })) {
             throw new Error('CODE_MODE_REVIEWED_FACE_SOURCE_UNVERIFIED');
           }

@@ -19,6 +19,16 @@ const SHA = /^[a-f0-9]{64}$/;
 function fail(code) { throw new Error(code); }
 function keyOf(item) { return JSON.stringify([item.cube_uuid,item.face]); }
 
+// A saved pixel-opacity fact must not contradict a reviewer's face-style
+// label. This is source consistency, NOT proof that a face is camera-visible
+// or artistically correct. Final Rust readiness independently rechecks pixels.
+export function sourceFaceStyleConsistent(sourceStatus, style) {
+  return AUDITABLE.has(sourceStatus) &&
+    ['STYLED','INTENTIONAL_FLAT','INTENTIONAL_TRANSPARENT'].includes(style) &&
+    (sourceStatus==='fully_transparent_pixels') ===
+      (style==='INTENTIONAL_TRANSPARENT');
+}
+
 /** Return null for the old single <=256-face callback. An incomplete source
  * or more than 4 pages remains fail-closed at whole-model readiness.
  */
@@ -89,8 +99,7 @@ export function requireAcceptedFaceReviewPage(page,normalized) {
     const source=required.get(key);
     if(!source || seen.has(key) ||
        face.textureUuid!==source.texture_uuid ||
-       (source.source_status==='fully_transparent_pixels' &&
-         face.style!=='INTENTIONAL_TRANSPARENT')) {
+       !sourceFaceStyleConsistent(source.source_status,face.style)) {
       fail('CODE_MODE_PAGED_FACE_REVIEW_SOURCE_MISMATCH');
     }
     seen.add(key);

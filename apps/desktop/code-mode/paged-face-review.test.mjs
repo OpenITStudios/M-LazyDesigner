@@ -82,3 +82,30 @@ test('reviewer cannot omit, substitute, relabel or duplicate one face',()=>{
       /CODE_MODE_PAGED_FACE_REVIEW_/);
   }
 });
+
+test('source opacity and reviewer face style must agree before paged acceptance',()=>{
+  const visible=planPagedSourceFaceReview(inventory(260))[1];
+  const reviewedVisible=reviewerPage(visible);
+  const mislabeledVisible={
+    ...reviewedVisible,
+    reviewedFaces:reviewedVisible.reviewedFaces.map((face,i)=>i===0?
+      {...face,style:'INTENTIONAL_TRANSPARENT'}:face),
+  };
+  assert.throws(()=>requireAcceptedFaceReviewPage(visible,mislabeledVisible),
+    /CODE_MODE_PAGED_FACE_REVIEW_SOURCE_MISMATCH/);
+
+  const original=inventory(260);
+  const withTransparent={...original,faces:original.faces.map((face,i)=>i===256?
+    {...face,source_status:'fully_transparent_pixels'}:face)};
+  const page=planPagedSourceFaceReview(withTransparent)[1];
+  const reviewed=reviewerPage(page);
+  for(const style of ['STYLED','INTENTIONAL_FLAT']){
+    const wrong={...reviewed,reviewedFaces:reviewed.reviewedFaces.map((face,i)=>
+      i===0?{...face,style}:face)};
+    assert.throws(()=>requireAcceptedFaceReviewPage(page,wrong),
+      /CODE_MODE_PAGED_FACE_REVIEW_SOURCE_MISMATCH/);
+  }
+  const intentional={...reviewed,reviewedFaces:reviewed.reviewedFaces.map((face,i)=>
+    i===0?{...face,style:'INTENTIONAL_TRANSPARENT'}:face)};
+  assert.equal(requireAcceptedFaceReviewPage(page,intentional).length,4);
+});

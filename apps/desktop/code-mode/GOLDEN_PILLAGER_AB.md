@@ -40,6 +40,12 @@ Baseline and candidate must use comparable model, viewer, reference and work sco
 | PILL-09 | Finished/approved claims followed receipts without visual acceptance | Never mark PASS/APPROVED on a CLI success, image hash match, or callback declaration alone |
 | PILL-10 | Separate file/export/live-state confusion | Required single asset structure checked on authoritative saved .bbmodel and verified opened state, not assumed from local file existence |
 
+Reviewer face labels must agree with saved pixel opacity before either a
+single-page or paged review can cache ACCEPTED: a fully transparent face
+requires INTENTIONAL_TRANSPARENT, while any face with visible pixels cannot
+claim that exception. This source-level consistency check does not establish
+camera visibility, independent image interpretation, or user artistic approval.
+
 Geometry/UV and Animation remain their respective authoring owners; do not repair a geometry cause by repainting arbitrary atlas pixels.
 
 ## Reference Package automatic handoff: missing evidence remains explicit
