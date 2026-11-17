@@ -532,13 +532,53 @@ views: [{view_id, reference_sha256, capture_sha256,
          reference_png_base64, capture_png_base64}, ...]
 ```
 
+**Optional paged whole-model review:** When the saved source includes
+more than 256 auditable faces, a paging-aware trusted reviewer
+gets sequential invocations with `source_face_inventory.scope` set
+to `trusted_saved_cube_face_inventory_page`. Each page includes
+`source_model_sha256`, `complete:true` for the complete *original
+scan*, `total_cubes`, `total_faces`, `page_index` (zero-based),
+`page_count`, `face_offset`, and its own 1–256 `faces`.
+The host imposes at most four such pages (1024 active mapped faces)
+and still scans at most 256 Cubes using native Rust. The request also
+contains `face_page_binding` with those page coordinates and
+`page_faces_sha256` (SHA-256 over compact JSON of that page's ordered
+source-face inventory). The executable MUST return the same
+`face_page_binding` in its top-level response. Missing, reordered,
+fabricated, or stale echoes fail closed. The first-party
+`createTrustedProgramReviewer` advertises paging support; the trusted
+external executable must actually implement the echo to use it.
+
+Each reviewer page must independently return `decision:'ACCEPTED'`,
+accepted `viewReviews` for all selected directions, `MET` for each
+operator-frozen `reviewCriteria`, and a `reviewedFaces` entry for
+**every** source face in that page. The host checks each declaration
+against that page's real saved Cube UUID, face and texture UUID, with
+no omissions or cross-page substitutions. A first-page REJECTED
+review may still supply an independently scoped local correction;
+a later rejected, missing, or unverified page cannot grant a global
+completion verdict. The source SHA and all original image PNG hashes
+are verified again after all page invocations. No partial page becomes
+a hidden whole-model PASS or bypasses Style/UV checks.
+
+The complete source-face list remains host-local; the untrusted Deno
+guest receives a compact `paged_face_review` count and a final
+`texturingReadiness` that independently re-reads the complete source
+faces and applies every existing styling gate. Models exceeding the
+page/scan caps or containing unresolvable faces remain explicitly
+BLOCKED, not silently skipped. The 12 approved visual criteria
+budget remains independent and unchanged. A source-only reviewer
+declaration is **never** native/artist/user acceptance.
+
 The inventory is gathered by the trusted host from the pinned Rust
 `model_texture_coverage` inspector. It lets an image reviewer use real
 Cube/texture identities instead of inventing UUIDs from image appearance.
 It remains a *source face inventory*, **not proof a source face corresponds
-to a particular camera pixel**. The bounded inventory reports
-`complete:false` if more than 256 source faces or 256 Cubes cannot be
-represented; missing/occluded faces must remain UNVERIFIED.
+to a particular camera pixel**. The original single reviewer payload remains capped at 256 source
+faces. Paging-aware review supports four separately bound 256-face
+pages when a complete source scan includes up to 256 Cubes. Larger
+or incomplete inventories are represented as `complete:false` or
+explicitly BLOCKED; missing/occluded faces remain UNVERIFIED.
 
 The reviewer must actually inspect the decoded reference and current PNG
 bytes through its own visual-capable implementation. It writes one compact
@@ -562,7 +602,9 @@ JSON object to stdout (no logs or Markdown):
 }
 ```
 
-Every selected view must have exactly one binding. The `review` object
+Every selected view must have exactly one binding. For paged calls the
+top-level response also MUST echo the request's exact
+`face_page_binding`; normal single-page responses must omit it. The `review` object
 uses `CodeModeVisualReviewerFeedback` from `host.d.mts`, including
 per-direction findings, bounded `reviewedFaces`, or a diagnosis with
 correction scope for a rejected material. Missing, mismatched, duplicate,
@@ -596,9 +638,11 @@ also checks its Cube, face and texture UUID against the SHA-bound Rust
 source-face inventory. A camera label cannot create a nonexistent source
 face; however, neither this lookup nor the label proves camera direction,
 face visibility, image ingestion or artistic quality. There is no implicit PASS for
-`measured_nontransparent_pixels`. The selected review array is capped at
-256 faces and the scan at 256 Cubes: exceeding a bound stays BLOCKED,
-never falsely complete. Full six-direction files alone do not prove each
+`measured_nontransparent_pixels`. An individual reviewer response is capped at 256 face claims,
+and the Rust source scan at 256 Cubes. A trusted host may reconcile
+up to four complete source-bound reviewer pages (1024 face claims)
+without exposing those claims to the guest; exceeding either
+bound remains BLOCKED, never falsely complete. Full six-direction files alone do not prove each
 hidden face was visually seen.
 
 Source fixtures have been authored for both successful transport and

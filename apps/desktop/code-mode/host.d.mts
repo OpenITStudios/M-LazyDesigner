@@ -94,6 +94,16 @@ export interface CodeModeGuestAPI {
         source:"OPERATOR_SELECTED_REFERENCE_AND_INDEPENDENT_REVIEW_DECLARATION";
         visual_verdict:"UNVERIFIED";
       }> | null;
+      /** Compact host-only paged material review evidence; face entries
+       * remain in the trusted host, never returned in a >128 KiB guest RPC.
+       */
+      paged_face_review?:Readonly<{
+        status:"ALL_SOURCE_PAGES_REVIEWER_DECLARED_ACCEPTED";
+        source_model_sha256:string;
+        page_count:number;
+        reviewed_source_faces:number;
+        visual_verdict:"UNVERIFIED";
+      }> | null;
       reference_package_evidence?:Readonly<{
         source:"EXISTING_WORKSPACE_REFERENCE_JSON_DECLARATION";
         fingerprint_sha256:string;
@@ -272,8 +282,8 @@ export interface CodeModeVisualReviewerFeedback {
    */
   criteriaReviews?:CodeModeReviewCriterionAssessment[];
   /** Required by a texturingReadiness decision; arbitrary six-view labels
-   * do not prove the selected material faces were examined. Max 256,
-   * with incomplete whole-model acceptance if required faces exceed budget.
+   * do not prove the selected material faces were examined. Each response
+   * is capped at 256; bounded multi-page evidence remains host-only.
    */
   reviewedFaces?:CodeModeReviewedTextureFace[];
   issues:Array<{
@@ -377,8 +387,22 @@ export interface CodeModeHostOptions {
     }>>;
     requiredSixDirections:boolean;
     reviewCriteria:ReadonlyArray<Readonly<CodeModeReviewCriterion>>;
+    /** Native source scan, or one explicit <=256-face source page. */
+    sourceFaceInventory?:Readonly<{
+      scope:"trusted_saved_cube_face_inventory"|
+        "trusted_saved_cube_face_inventory_page";
+      source_model_sha256:string;
+      total_cubes:number|null;
+      complete:boolean;
+      faces:ReadonlyArray<Readonly<{
+        cube_uuid:string;face:CubeFaceSurface["side"];
+        texture_uuid:string|null;source_status:string;
+      }>>;
+      total_faces?:number;page_index?:number;page_count?:number;
+      face_offset?:number;reason?:string;
+    }> | null;
   }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>) &
-    {requiresSourceFaceInventory?:true};
+    {requiresSourceFaceInventory?:true;supportsPagedSourceFaceReview?:true};
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;

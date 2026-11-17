@@ -3010,6 +3010,239 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     assert.equal(inspectedPages,10); // One early source-face binding plus nine terminal scans.
   }));
 
+test('paged reviewer closes 260 saved faces without exposing them through guest RPC',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const directions=['front','back','left','right','top','bottom'];
+    const sides=['north','east','south','west','up','down'];
+    const chosen=[];
+    for(const id of directions){
+      const referencePngPath=join(folder,'large-reference-'+id+'.png');
+      const capturePngPath=join(folder,'large-current-'+id+'.png');
+      await writeFile(referencePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('ref-'+id)]));
+      await writeFile(capturePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('current-'+id)]));
+      chosen.push({viewId:id,referencePngPath,capturePngPath});
+    }
+    const modelFaces=Array.from({length:44},(_,cubeIdx)=>({
+      cube_uuid:'paged-cube-'+cubeIdx,
+      review_candidates:0,
+      faces:sides.map((side,sideIdx)=>({
+        side,texture_uuid:cubeIdx*6+sideIdx<260?'tier2-atlas':null,
+        status:cubeIdx*6+sideIdx<260?
+          'measured_nontransparent_pixels':'absent_declared',
+      })),
+    }));
+    let sourcePages=0,styles=0,preflights=0,readiness=0;
+    let reviewerCalls=0,guest=0;
+    const criterion={id:'helmet-shading',partId:'tier2-helmet',
+      kind:'CORRECT',
+      requirement:'The full metal helmet family must retain approved directional bevel shading.',
+      viewId:'front',referencePngSha256:createHash('sha256').update(
+        await readFile(chosen[0].referencePngPath)).digest('hex'),
+      textureUuid:'tier2-atlas',
+      allowedRegions:[{from:[0,0],to:[4,4]}]};
+    const reviewer=async selection=>{
+      reviewerCalls++;
+      assert.equal(selection.sourceFaceInventory.scope,
+        'trusted_saved_cube_face_inventory_page');
+      const page=selection.sourceFaceInventory;
+      assert.equal(page.page_index,reviewerCalls-1);
+      assert.equal(page.page_count,2);
+      assert.equal(page.total_faces,260);
+      assert.equal(page.faces.length,reviewerCalls===1?256:4);
+      return {decision:'ACCEPTED',issues:[],
+        criteriaReviews:[{id:'helmet-shading',verdict:'MET',
+          observation:'Material forms match the approved reference in all selected directions.'}],
+        viewReviews:directions.map(viewId=>({
+          viewId,decision:'ACCEPTED',
+          observation:'The selected image has been reviewed against material and silhouette intent.',
+        })),
+        reviewedFaces:page.faces.map(face=>({
+          cubeUuid:face.cube_uuid,face:face.face,
+          textureUuid:face.texture_uuid,style:'STYLED',
+          observedInViewId:'front',
+          observation:'Material-specific directional clusters and edge highlights were independently reviewed.',
+        })),
+      };
+    };
+    reviewer.requiresSourceFaceInventory=true;
+    reviewer.supportsPagedSourceFaceReview=true;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{...chosen[0],captureModelSha256:HASH,
+        supportingViews:chosen.slice(1),requireSixDirections:true,
+        reviewCriteria:[criterion]},
+      reviewVisualPair:reviewer,
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair'){
+          preflights++;
+          const reference=argv[argv.indexOf('--reference-sha256')+1];
+          const capture=argv[argv.indexOf('--capture-sha256')+1];
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:reference,capture_png_sha256:capture,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:reference,capture_png_sha256:capture,
+              visual_verdict:'UNVERIFIED'}};
+        }
+        assert.equal(argv[0],'inspect-batch');
+        const queries=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+        if(queries.requests[0].kind==='texture_styling_face'){
+          styles++;
+          return {status:'OK',sha256:HASH,summary:SUMMARY,
+            results:queries.requests.map(query=>({
+              kind:'texture_styling_face',
+              styling:{scope:'saved_cube_face_local_pixels',
+                texture_uuid:query.texture_uuid,
+                cube_uuid:query.cube_uuid,face:query.face,
+                visible_pixels:16,status:'NOT_EVALUATED',review_hints:[],
+                visual_verdict:'UNVERIFIED',texture_completion_attested:false},
+            }))};
+        }
+        sourcePages++;
+        assert.deepEqual(queries.requests[0].kind,'model_texture_coverage');
+        const {offset,limit}=queries.requests[0];
+        const reviewed=Math.min(limit,modelFaces.length-offset);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          results:[{kind:'model_texture_coverage',coverage:{
+            scope:'saved_face_texture_coverage_page',
+            offset,total_cubes:modelFaces.length,reviewed_cubes:reviewed,
+            review_candidates:0,unresolved_reference_or_mapping_faces:0,
+            next_offset:offset+reviewed===modelFaces.length?null:offset+reviewed,
+            cubes:modelFaces.slice(offset,offset+reviewed),
+          }}]};
+      },
+      spawnImpl:()=>{
+        const index=guest++;
+        return fakeGuest({method:index===0?
+          'inspectSelectedVisualPair':'texturingReadiness',
+          args:{project:'p0'}},response=>{
+          assert.equal(response.ok,true);
+          if(index===0){
+            assert.equal(response.result.review_feedback.decision,'ACCEPTED');
+            assert.equal(response.result.review_feedback.reviewedFaces.length,0);
+            assert.deepEqual(response.result.review_feedback.paged_face_review, {
+              status:'ALL_SOURCE_PAGES_REVIEWER_DECLARED_ACCEPTED',
+              source_model_sha256:HASH,page_count:2,
+              reviewed_source_faces:260,visual_verdict:'UNVERIFIED',
+            });
+            assert.ok(!JSON.stringify(response.result).includes('paged-cube-'));
+            return {reviewed:true};
+          }
+          assert.equal(response.result.status,
+            'REVIEWER_DECLARED_READY_FOR_USER_DECISION');
+          assert.equal(response.result.texture_completion_attested,false);
+          assert.equal(response.result.face_scan.required_source_faces,260);
+          assert.equal(response.result.face_scan.required_source_faces_unreviewed,0);
+          assert.equal(response.result.material_faces.inspected,260);
+          readiness++;
+          return {readyForUserDecision:true};
+        });
+      },
+    });
+    assert.equal((await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    })).value.reviewed,true);
+    assert.equal((await host.execute({
+      code:'return codemode.texturingReadiness({project:"p0"});',
+    })).value.readyForUserDecision,true);
+    assert.equal(reviewerCalls,2);
+    assert.equal(preflights,6);
+    assert.equal(sourcePages,12); // 6 native scan pages for intake and readiness
+    assert.equal(styles,33); // 260 face candidates inspected 8 at a time
+    assert.equal(readiness,1);
+  }));
+
+test('missing second reviewer page cannot cache partial whole-model acceptance',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const selected=[];
+    for(const viewId of ['front','back','left','right','top','bottom']){
+      const referencePngPath=join(folder,'paged-ref-'+viewId+'.png');
+      const capturePngPath=join(folder,'paged-current-'+viewId+'.png');
+      await writeFile(referencePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('reference-'+viewId)]));
+      await writeFile(capturePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('candidate-'+viewId)]));
+      selected.push({viewId,referencePngPath,capturePngPath});
+    }
+    let reviewerCalls=0;
+    const sides=['north','east','south','west','up','down'];
+    const reviewer=async pair=>{
+      reviewerCalls++;
+      const all=pair.sourceFaceInventory.faces;
+      return {decision:'ACCEPTED',issues:[],
+        viewReviews:selected.map(({viewId})=>({
+          viewId,decision:'ACCEPTED',
+          observation:'Checked the exact source-bound face set for this image pair.',
+        })),
+        criteriaReviews:[{id:'retain-metal',verdict:'MET',
+          observation:'The material surface is consistent with its approved reference.'}],
+        reviewedFaces:(reviewerCalls===2?all.slice(1):all).map(face=>({
+          cubeUuid:face.cube_uuid,face:face.face,
+          textureUuid:face.texture_uuid,style:'STYLED',
+          observedInViewId:'front',
+          observation:'Selected saved face is declared visually consistent with the model reference.',
+        })),
+      };
+    };
+    reviewer.requiresSourceFaceInventory=true;
+    reviewer.supportsPagedSourceFaceReview=true;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{...selected[0],captureModelSha256:HASH,
+        supportingViews:selected.slice(1),requireSixDirections:true,
+        reviewCriteria:[{id:'retain-metal',partId:'metal',kind:'PRESERVE',
+          requirement:'Preserve the accepted material appearance throughout the model.',
+          viewId:'front',referencePngSha256:createHash('sha256').update(
+            await readFile(selected[0].referencePngPath)).digest('hex')}]},
+      reviewVisualPair:reviewer,
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair'){
+          const r=argv[argv.indexOf('--reference-sha256')+1];
+          const c=argv[argv.indexOf('--capture-sha256')+1];
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:r,capture_png_sha256:c,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:r,capture_png_sha256:c,
+              visual_verdict:'UNVERIFIED'}};
+        }
+        assert.equal(argv[0],'inspect-batch');
+        const queries=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+        const {offset,limit}=queries.requests[0];
+        const total=44, count=Math.min(limit,total-offset);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          results:[{kind:'model_texture_coverage',coverage:{
+            scope:'saved_face_texture_coverage_page',offset,
+            total_cubes:total,reviewed_cubes:count,
+            next_offset:offset+count===total?null:offset+count,
+            cubes:Array.from({length:count},(_,i)=>{
+              const cube=offset+i;
+              return {cube_uuid:'paged-'+cube,review_candidates:0,
+                faces:sides.map((side,j)=>({
+                  side,texture_uuid:cube*6+j<260?'tier-atlas':null,
+                  status:cube*6+j<260?'measured_nontransparent_pixels':
+                    'absent_declared',
+                }))};
+            }),
+          }}]};
+      },
+      spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',
+        args:{project:'p0'}},response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_PAGED_FACE_REVIEW_INCOMPLETE');
+          return {refused:true};
+        }),
+    });
+    assert.equal((await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    })).value.refused,true);
+    assert.equal(reviewerCalls,2);
+  }));
+
 test('accepted material face cannot invent saved Cube/texture ownership',()=>
   fixture(async input=>{
     const folder=dirname(input);

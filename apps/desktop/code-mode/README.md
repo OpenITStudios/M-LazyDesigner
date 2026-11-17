@@ -186,6 +186,31 @@ remains permitted. Different hashes are a *necessary* identity check, not
 proof of camera direction, native rendering, or independent artistic review.
 Multi-view and per-image-region-ID regressions AUTHORED_NOT_RUN.
 
+**Paged large-model source-face review (2026-11-18; SOURCE ONLY):**
+The trusted Code Mode image-review host now scans the SHA-pinned Rust
+model's saved face inventory and, when all source identities are
+resolvable, sends at most **256 distinct faces per external reviewer
+invocation**. For a complete model with 257–1024 explicitly active
+mapped faces, the operator-owned six-view reviewer can review up to four
+independent sequential source-bound pages. The reviewer must independently
+return one matching Cube/face/texture review for every saved face on each
+page, all selected views and each frozen visual criterion. The host verifies
+page identity, SHA-bound source membership and completeness, then keeps
+the combined face ledger private; the Deno guest gets only a compact
+source-only count. An incomplete/rejected page never becomes all-model
+readiness. A focused single-view correction can still use an incomplete
+bounded inventory but cannot claim all-face completion.
+
+The original 256-face single callback path remains compatible.
+The first-party external reviewer adapter now requires an explicit
+`face_page_binding` echo for each paged invocation; an older reviewer
+that lacks that capability refuses rather than silently accepting
+partial images. Models above four pages, over 256 saved Cubes, with
+unknown mapped faces, or beyond the separate 12-criterion contract remain
+BLOCKED for whole-model completion. The original per-image PNG/renderer
+and actual artistic/user review limitations remain. Source regressions
+AUTHORED_NOT_RUN; no measured review latency or artistic quality gain.
+
 **Operator-owned image review bridge (2026-11-17; SOURCE_ONLY):**
 The existing `run.mjs` now accepts `--visual-manifest` with
 `--reviewer-exe` for one explicitly configured, trusted, image-capable
@@ -232,9 +257,11 @@ Source regression cases AUTHORED_NOT_RUN.
 The terminal readiness now checks all Rust-saved explicitly active
 Cube faces, including fully opaque faces with no alpha attention warning,
 against the selected reviewer-facing source identities. An unreviewed
-required face blocks completion. Reviewer face entries are bounded at
-256; bigger models remain UNVERIFIED, not silently approved. Six camera
-images alone do not prove the appearance of hidden surfaces.
+required face blocks completion. Each reviewer call remains bounded to 256 source faces. A complete,
+SHA-pinned inventory of 257–1024 auditable faces can be accounted for
+in up to four individually reviewed pages; more faces, unresolved native
+mappings, incomplete cube scans, or any missing page remain BLOCKED.
+Six camera images alone do not prove the appearance of hidden surfaces.
 
 
 **Attention-face closure (2026-11-17; SOURCE_ONLY):**

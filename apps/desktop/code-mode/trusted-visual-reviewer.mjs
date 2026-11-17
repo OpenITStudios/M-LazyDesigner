@@ -11,6 +11,8 @@ import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {lstat, readFile, realpath} from 'node:fs/promises';
 import {isAbsolute} from 'node:path';
+import {MAX_FACES_PER_REVIEW,MAX_PAGED_FACE_REVIEWS}
+  from './paged-face-review.mjs';
 
 const MAX_MANIFEST_BYTES=12*1024;
 const MAX_IMAGE_INPUT_BYTES=24*1024*1024;
@@ -72,12 +74,38 @@ export async function createTrustedProgramReviewer(executable, {
   }
   const reviewer=async function reviewVisualPair(pair) {
     const source=pair.sourceFaceInventory;
-    if(!source || source.scope!=='trusted_saved_cube_face_inventory' ||
+    const paged=source?.scope==='trusted_saved_cube_face_inventory_page';
+    if(!source || ![
+        'trusted_saved_cube_face_inventory',
+        'trusted_saved_cube_face_inventory_page',
+      ].includes(source.scope) ||
        source.source_model_sha256!==pair.sourceModelSha256 ||
        typeof source.complete!=='boolean' ||
-       !Array.isArray(source.faces) || source.faces.length>256) {
+       !Array.isArray(source.faces) ||
+       source.faces.length>MAX_FACES_PER_REVIEW ||
+       (paged && (!source.complete ||
+         !Number.isSafeInteger(source.page_index) ||
+         !Number.isSafeInteger(source.page_count) ||
+         source.page_index<0 || source.page_count<2 ||
+         source.page_count>MAX_PAGED_FACE_REVIEWS ||
+         source.page_index>=source.page_count ||
+         !Number.isSafeInteger(source.total_faces) ||
+         source.total_faces<=MAX_FACES_PER_REVIEW ||
+         source.total_faces>MAX_FACES_PER_REVIEW*MAX_PAGED_FACE_REVIEWS ||
+         Math.ceil(source.total_faces/MAX_FACES_PER_REVIEW)!==source.page_count ||
+         source.face_offset!==source.page_index*MAX_FACES_PER_REVIEW ||
+         source.faces.length!==Math.min(MAX_FACES_PER_REVIEW,
+           source.total_faces-source.face_offset)))) {
       throw new Error('VISUAL_REVIEWER_FACE_INVENTORY_MISSING');
     }
+    const pageBinding=paged?Object.freeze({
+      page_index:source.page_index,
+      page_count:source.page_count,
+      face_offset:source.face_offset,
+      total_faces:source.total_faces,
+      page_faces_sha256:createHash('sha256').update(
+        JSON.stringify(source.faces)).digest('hex'),
+    }):null;
     const views=[{viewId:pair.viewId,
       reference:pair.reference,capture:pair.capture},
       ...pair.supportingViews];
@@ -121,6 +149,7 @@ export async function createTrustedProgramReviewer(executable, {
       schema_version:1,source_model_sha256:pair.sourceModelSha256,
       required_six_directions:pair.requiredSixDirections===true,
       source_face_inventory:source,
+      ...(pageBinding?{face_page_binding:pageBinding}:{}),
       // Canonical operator-selected decisions, never inferred from the
       // model prompt or reviewer text. The image reviewer must answer them
       // individually; the trusted host validates every result.
@@ -181,6 +210,7 @@ export async function createTrustedProgramReviewer(executable, {
         Array.isArray(response) ||
         Object.keys(response).some(key=>![
           'schema_version','source_model_sha256','view_bindings','review',
+          'face_page_binding',
         ].includes(key)) ||
         response.schema_version!==1 ||
         response.source_model_sha256!==pair.sourceModelSha256 ||
@@ -190,6 +220,16 @@ export async function createTrustedProgramReviewer(executable, {
         typeof response.review!=='object' ||
         Array.isArray(response.review)) {
       throw new Error('VISUAL_REVIEWER_RESULT_BINDING_INVALID');
+    }
+    if(pageBinding){
+      const echo=response.face_page_binding;
+      if(!echo || typeof echo!=='object' || Array.isArray(echo) ||
+         Object.keys(echo).length!==Object.keys(pageBinding).length ||
+         Object.entries(pageBinding).some(([key,value])=>echo[key]!==value)){
+        throw new Error('VISUAL_REVIEWER_FACE_PAGE_BINDING_INVALID');
+      }
+    } else if(response.face_page_binding!==undefined){
+      throw new Error('VISUAL_REVIEWER_FACE_PAGE_BINDING_INVALID');
     }
     for(const selected of payload) {
       const matches=response.view_bindings.filter(item=>
@@ -207,5 +247,9 @@ export async function createTrustedProgramReviewer(executable, {
   // Only the trusted host can choose this callback; the untrusted guest
   // cannot request access to the model face inventory or raw images.
   Object.defineProperty(reviewer,'requiresSourceFaceInventory',{value:true});
+  // The trusted host, not the guest, chooses when to submit a sequence of
+  // independently reviewed, hash-bound <=256-face pages. An executable that
+  // does not echo the page binding fails closed on oversized models.
+  Object.defineProperty(reviewer,'supportsPagedSourceFaceReview',{value:true});
   return reviewer;
 }

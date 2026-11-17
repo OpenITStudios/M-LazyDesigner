@@ -20,6 +20,9 @@ import {boundReviewCriteria,checkedCriterionReview,criterionPermitsPaint}
   from './review-criteria.mjs';
 import {bindApprovedWorkspaceReference,assertApprovedWorkspaceReferenceFresh,
   referencePackageLeaseValid} from './approved-reference-package.mjs';
+import {MAX_FACES_PER_REVIEW,MAX_PAGED_REVIEW_FACES,
+  planPagedSourceFaceReview,requireAcceptedFaceReviewPage}
+  from './paged-face-review.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -669,13 +672,13 @@ async function sourceFacesForImageReviewer(model) {
       }
     }
     pages++;
-    if(faces.length>256) {
+    if(faces.length>MAX_PAGED_REVIEW_FACES) {
       return Object.freeze({
         scope:'trusted_saved_cube_face_inventory',
         source_model_sha256:model.expectedSha256,
         total_cubes:totalCubes,complete:false,
-        reason:'REVIEW_INVENTORY_FACE_LIMIT',
-        faces:Object.freeze(faces.slice(0,256)),
+        reason:'REVIEW_INVENTORY_TOTAL_FACE_LIMIT',
+        faces:Object.freeze(faces.slice(0,MAX_FACES_PER_REVIEW)),
       });
     }
     if(item.next_offset===null) {
@@ -896,6 +899,10 @@ export async function createCodeModeHost({
   // provided Rust re-verifies the model SHA and Node re-hashes EVERY PNG.
   // Cache never grants review/paint approval or persists between hosts.
   let verifiedMultiViewRead = null;
+  // Only trusted, same-session, SHA-bound reviewer outputs are accumulated.
+  // The untrusted Deno guest sees a compact summary, never 1024 raw face
+  // declarations or a second persistent approval/asset registry.
+  let pagedFaceLedger = null;
   // One coherent reviewed correction per source revision. Do not create
   // multiple variants from a stale, already-rejected capture.
   const completedReviewedCorrections = new Set();
@@ -1084,32 +1091,94 @@ export async function createCodeModeHost({
           await sourceFacesForImageReviewer(model):null;
         // The host callback must present both actual buffers to its reviewer;
         // a text/SHAs-only response has no authority to claim the AI saw images.
+        // Keep one-view/local corrections available when a large model
+        // contains unresolved/unsupported saved face mappings. Only a
+        // six-view, explicitly paging-aware reviewer may attempt full-model
+        // acceptance; failed page planning falls back to INCOMPLETE source
+        // inventory, never an implicit PASS.
+        let sourcePages=null,sourcePagingGap=null;
+        if(faceInventory?.complete &&
+           faceInventory.faces.length>MAX_FACES_PER_REVIEW &&
+           visualPair.requireSixDirections &&
+           reviewVisualPair.supportsPagedSourceFaceReview===true){
+          try{sourcePages=planPagedSourceFaceReview(faceInventory);}
+          catch(error){
+            if(!['CODE_MODE_PAGED_FACE_SOURCE_INCOMPLETE',
+                  'CODE_MODE_PAGED_FACE_SOURCE_UNRESOLVED']
+              .includes(error?.message))throw error;
+            // Preserve a precise source blocker while retaining a local
+            // focused correction on the explicitly incomplete inventory.
+            sourcePagingGap=error.message;
+          }
+        }
+        const supportsPages=sourcePages!==null;
+        // Legacy reviewer callbacks keep a bounded, explicitly INCOMPLETE
+        // inventory and may still report a focused REJECTED correction.
+        // They cannot claim full-face readiness for an oversized model.
+        const legacyInventory=faceInventory?.faces.length>MAX_FACES_PER_REVIEW?
+          Object.freeze({...faceInventory,complete:false,
+            reason:sourcePagingGap??faceInventory.reason??
+              'REVIEW_INVENTORY_FACE_LIMIT',
+            faces:Object.freeze(faceInventory.faces.slice(0,MAX_FACES_PER_REVIEW))}):
+          faceInventory;
+        const basePair=Object.freeze({
+          sourceModelSha256:model.expectedSha256,
+          viewId:visualPair.viewId,
+          reference:Object.freeze({
+            sha256:primaryBytes.referenceSha,
+            pngBytes:Buffer.from(primaryBytes.referenceBytes),
+          }),
+          capture:Object.freeze({
+            sha256:primaryBytes.captureSha,
+            pngBytes:Buffer.from(primaryBytes.captureBytes),
+          }),
+          supportingViews:Object.freeze(selectedBytes.slice(1).map(view=>
+            Object.freeze({
+              viewId:view.viewId,
+              reference:Object.freeze({sha256:view.referenceSha,
+                pngBytes:Buffer.from(view.referenceBytes)}),
+              capture:Object.freeze({sha256:view.captureSha,
+                pngBytes:Buffer.from(view.captureBytes)}),
+            }))),
+          requiredSixDirections:visualPair.requireSixDirections,
+          reviewCriteria:visualPair.reviewCriteria??Object.freeze([]),
+        });
         execution.pause();
         let returned;
+        let pendingFaceLedger=null;
         try {
-          returned = await reviewVisualPair(Object.freeze({
-            sourceModelSha256:model.expectedSha256,
-            viewId:visualPair.viewId,
-            reference:Object.freeze({
-              sha256:primaryBytes.referenceSha,
-              pngBytes:Buffer.from(primaryBytes.referenceBytes),
-            }),
-            capture:Object.freeze({
-              sha256:primaryBytes.captureSha,
-              pngBytes:Buffer.from(primaryBytes.captureBytes),
-            }),
-            supportingViews:Object.freeze(selectedBytes.slice(1).map(view=>
-              Object.freeze({
-                viewId:view.viewId,
-                reference:Object.freeze({sha256:view.referenceSha,
-                  pngBytes:Buffer.from(view.referenceBytes)}),
-                capture:Object.freeze({sha256:view.captureSha,
-                  pngBytes:Buffer.from(view.captureBytes)}),
-              }))),
-            requiredSixDirections:visualPair.requireSixDirections,
-            reviewCriteria:visualPair.reviewCriteria??Object.freeze([]),
-            sourceFaceInventory:faceInventory,
+          returned=await reviewVisualPair(Object.freeze({...basePair,
+            sourceFaceInventory:supportsPages?sourcePages[0]:legacyInventory,
           }));
+          // The first page may be REJECTED for a focused correction; do not
+          // force whole-model review before such a bounded repair. Only a
+          // globally ACCEPTED declaration starts paged all-face closure.
+          if(supportsPages && returned?.decision==='ACCEPTED'){
+            const ids=visualViews.map(view=>view.viewId);
+            const examined=[];
+            for(let i=0;i<sourcePages.length;i++){
+              const raw=i===0?returned:await reviewVisualPair(Object.freeze({
+                ...basePair,sourceFaceInventory:sourcePages[i],
+              }));
+              const normalized=normalizedVisualReview(raw,ids);
+              const criteria=checkedCriterionReview(
+                visualPair.reviewCriteria,raw.criteriaReviews,
+                normalized.decision,normalized.issues,normalized.correctionScope);
+              if(criteria?.status!=='ALL_MET'){
+                throw new Error('CODE_MODE_PAGED_FACE_REVIEW_CRITERIA_INCOMPLETE');
+              }
+              examined.push(...requireAcceptedFaceReviewPage(
+                sourcePages[i],normalized));
+            }
+            pendingFaceLedger=Object.freeze({
+              sourceModelSha256:model.expectedSha256,
+              faceCount:examined.length,pageCount:sourcePages.length,
+              faces:Object.freeze(examined),
+            });
+            // Never expose or accidentally cache one page as an apparent
+            // whole-model subset. The authoritative ledger stays host-only.
+            returned={...returned,reviewedFaces:[]};
+          }
         } finally { execution.resume(); }
         if (execution.closed || activeExecution !== execution) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
@@ -1125,6 +1194,13 @@ export async function createCodeModeHost({
         feedback=Object.freeze({...feedback,
           review_criteria:visualPair.reviewCriteria??Object.freeze([]),
           criteria_review:criteriaReview,
+          paged_face_review:pendingFaceLedger?Object.freeze({
+            status:'ALL_SOURCE_PAGES_REVIEWER_DECLARED_ACCEPTED',
+            source_model_sha256:model.expectedSha256,
+            page_count:pendingFaceLedger.pageCount,
+            reviewed_source_faces:pendingFaceLedger.faceCount,
+            visual_verdict:'UNVERIFIED',
+          }):null,
           reference_package_evidence:visualPair.referencePackageBinding?
             Object.freeze({
               source:'EXISTING_WORKSPACE_REFERENCE_JSON_DECLARATION',
@@ -1261,6 +1337,10 @@ export async function createCodeModeHost({
         if(execution.closed || activeExecution!==execution) {
           throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
         }
+        // Only publish the transient full-face ledger after exact model and
+        // every selected PNG are fresh again. Failed mid-page evidence is
+        // never cached or promoted to a guest-visible readiness result.
+        if(pendingFaceLedger) pagedFaceLedger=pendingFaceLedger;
       }
       if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
       const readReceipt = {
@@ -1332,8 +1412,9 @@ export async function createCodeModeHost({
         visual_verdict:'UNVERIFIED',
         texture_completion_attested:false,
       };
-      if (!Array.isArray(feedback?.reviewedFaces) ||
-          feedback.reviewedFaces.length===0) {
+      const reviewFaces=pagedFaceLedger?.sourceModelSha256===p.expectedSha256?
+        pagedFaceLedger.faces:feedback?.reviewedFaces;
+      if (!Array.isArray(reviewFaces) || reviewFaces.length===0) {
         blocked.push('MATERIAL_FACE_REVIEW_SCOPE_MISSING');
       }
       if (blocked.length) return {...base,status:'BLOCKED',
@@ -1449,7 +1530,7 @@ export async function createCodeModeHost({
       if (cursor!==null) blocked.push('SOURCE_FACE_SCAN_INCOMPLETE');
       if (totalCubes===0) blocked.push('NO_MODEL_SURFACES');
       if (unresolvedFaces>0) blocked.push('SOURCE_FACE_REFERENCES_NEED_REVIEW');
-      const reviewerFaces=new Map(feedback.reviewedFaces.map(item=>[
+      const reviewerFaces=new Map(reviewFaces.map(item=>[
         JSON.stringify([item.cubeUuid,item.face]),item,
       ]));
       let requiredUnreviewed=0, attentionUnreviewed=0;
@@ -1475,7 +1556,7 @@ export async function createCodeModeHost({
       if (attentionUnreviewed>0) {
         blocked.push('SOURCE_ATTENTION_FACES_UNREVIEWED');
       }
-      if (feedback.reviewedFaces.some(item=>
+      if (reviewFaces.some(item=>
         !requiredFaces.get(JSON.stringify([item.cubeUuid,item.face])) ||
         requiredFaces.get(JSON.stringify([item.cubeUuid,item.face]))
           .textureUuid!==item.textureUuid)) {
@@ -1487,7 +1568,6 @@ export async function createCodeModeHost({
       // A uniform saved face cannot be declared STYLED without an explicit,
       // observed INTENTIONAL_FLAT exception. Statistical non-warnings are
       // likewise not visual PASS.
-      const reviewFaces=feedback.reviewedFaces;
       for (let start=0;start<reviewFaces.length;start+=8) {
         const group=reviewFaces.slice(start,start+8);
         let measured;

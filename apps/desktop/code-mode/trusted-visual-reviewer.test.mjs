@@ -57,8 +57,10 @@ function stubReviewProcess(response){
       assert.equal(payload.schema_version,1);
       assert.equal(payload.required_six_directions,true);
       assert.equal(payload.views.length,6);
-      assert.equal(payload.source_face_inventory.scope,
-        'trusted_saved_cube_face_inventory');
+      assert.ok([
+        'trusted_saved_cube_face_inventory',
+        'trusted_saved_cube_face_inventory_page',
+      ].includes(payload.source_face_inventory.scope));
       assert.equal(payload.source_face_inventory.faces[0].cube_uuid,'cube-1');
       assert.equal(payload.review_criteria.length,1);
       assert.equal(payload.review_criteria[0].id,'fix-helmet');
@@ -115,6 +117,55 @@ test('operator-selected real bytes are carried via no-shell reviewer IPC with ex
     assert.equal(result.decision,'ACCEPTED');
     assert.equal(result.viewReviews.length,6);
     assert.equal(invoked,1);
+  }));
+test('paged reviewer transport carries <=256 source faces and requires exact page echo',()=>
+  fixture(async (_dir,executable)=>{
+    const pair=selectedPair();
+    const faces=Array.from({length:256},(_,i)=>({
+      cube_uuid:'cube-'+(Math.floor(i/6)+1),
+      face:['north','east','south','west','up','down'][i%6],
+      texture_uuid:'atlas-1',source_status:'measured_nontransparent_pixels',
+    }));
+    pair.sourceFaceInventory={
+      scope:'trusted_saved_cube_face_inventory_page',
+      source_model_sha256:pair.sourceModelSha256,
+      complete:true,total_cubes:43,total_faces:257,
+      page_index:0,page_count:2,face_offset:0,faces,
+    };
+    for(const tamper of ['correct','missing','wrong']){
+      let requests=0;
+      const reviewer=await createTrustedProgramReviewer(executable,{
+        timeoutMs:2000,
+        spawnImpl:()=>stubReviewProcess(input=>{
+          requests++;
+          assert.equal(input.source_face_inventory.faces.length,256);
+          assert.equal(input.face_page_binding.page_index,0);
+          assert.equal(input.face_page_binding.page_count,2);
+          const response={
+            schema_version:1,
+            source_model_sha256:input.source_model_sha256,
+            view_bindings:input.views.map(v=>({
+              view_id:v.view_id,reference_sha256:v.reference_sha256,
+              capture_sha256:v.capture_sha256,
+            })),
+            review:{decision:'UNVERIFIED',issues:[]},
+          };
+          if(tamper!=='missing'){
+            response.face_page_binding={...input.face_page_binding,
+              ...(tamper==='wrong'?{page_index:1}:{})};
+          }
+          return response;
+        }),
+      });
+      assert.equal(reviewer.supportsPagedSourceFaceReview,true);
+      if(tamper==='correct'){
+        assert.equal((await reviewer(pair)).decision,'UNVERIFIED');
+      }else{
+        await assert.rejects(reviewer(pair),
+          /VISUAL_REVIEWER_FACE_PAGE_BINDING_INVALID/);
+      }
+      assert.equal(requests,1);
+    }
   }));
 test('wrong image receipt or forged model SHA is rejected, never accepted from text alone',()=>
   fixture(async (_dir,executable)=>{

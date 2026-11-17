@@ -94,6 +94,31 @@ evaluation, corrections and user acceptance are NOT_EXECUTED.
 5. Record actual accepted/rejected outcomes and diagnostic direction. If the same approach is rejected twice, stop that approach and require new causal visual evidence. For a rejected exact Paint operation plan, retain `texturing_workflow.operation_plan_fingerprint_sha256` in the authorized review history and return it as `rejectedPaintPlans` with the same part and texture UUID. The trusted host rejects that exact replay despite renamed labels. The existing host has no cross-session retry-memory; the operator's recorded evaluation supplies continuity. A fingerprint match is operation identity, not visual equivalence.
 
 
+## Paged Golem/large-Pillager face accounting — source-only
+
+The historical Golem's 372 mapped Cube-face entries exceeded the first
+external reviewer inventory's 256-face limit. The reviewed Rust Code Mode
+source now uses bounded pages (256+116 for an exactly 372-face source
+inventory) rather than claiming one partial inventory is complete.
+Every page keeps the exact model SHA, its own native Cube/face/texture
+IDs, all six matched camera pairs, and the current approved visual
+criteria. A genuinely independent image-capable reviewer must examine
+and acknowledge each face and source image page. Missing, duplicate,
+unresolvable or unreviewed source faces retain BLOCKED. Source face
+counts and reviewed declarations do not demonstrate that a hidden
+face was visually present in an image; genuine visibility and artistic
+quality still require reviewer/user assessment. The host also repeats
+native saved face coverage and style diagnostics before issuing only
+`REVIEWER_DECLARED_READY_FOR_USER_DECISION`.
+
+The maximum admitted paged source is four 256-face pages and 256
+saved Cubes; larger models remain unresolved rather than fabricating
+coverage. Likewise the current 12-criterion manifest limit is
+unchanged and must not silently drop user-approved requirements.
+All positive/negative Node cases are AUTHORED_NOT_RUN; the historical
+Local Golem was **not** independently reviewed in Rust or converted
+into a verified rendering in this change.
+
 ## Multi-view acceptance gate for source-only Rust workflow
 
 Broad reviewed texture propagation **requires** six selected camera
@@ -148,8 +173,10 @@ stale image hashes, mismatched reviewer replies, absent source inventory,
 and missing opaque-but-required Cube faces even when six directions were
 declared ACCEPTED. For PILL-06, intentional absent faces may be excluded;
 valid opaque faces must not be silently excluded from reviewer accountability.
-A material with more than the bounded 256 reviewed faces remains
-UNVERIFIED until an authorized broader process exists. Existing PILL-01
+A material requiring more than 256 reviewed faces uses the separately
+source-bound paged reviewer process (up to 1024 active faces across four
+pages). Missing or unverifiable page evidence remains UNVERIFIED;
+the process is source-authored but not native/artistic-tested. Existing PILL-01
 through PILL-10 acceptance and test holds remain unchanged.
 
 ## PILL-03 cluster geometry and execution coherence — source only
