@@ -1,7 +1,7 @@
 // TEST_AUTHORED_NOT_RUN: local/CI hold is active.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canReusePreviewInCommand, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport.ts';
+import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport.ts';
 const base={epoch:1,revision:0,previewSourceKey:'k',previewSourcesReused:false,
  textureNames:['atlas'],texturePreviewSources:['data:image/png;base64,QUJD']};
 
@@ -28,6 +28,16 @@ test('missing, stale, extra or partial bodies never silently reuse',()=>{
    /RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE/);
 });
 
+test('detached immutable projection refuses older epoch/revision responses',()=>{
+  const current={...base,epoch:8,revision:6};
+  assert.equal(isOlderEditorSnapshot(null,current),false);
+  assert.equal(isOlderEditorSnapshot(current,{...base,epoch:7,revision:99}),true);
+  assert.equal(isOlderEditorSnapshot(current,{...base,epoch:8,revision:5}),true);
+  assert.equal(isOlderEditorSnapshot(current,{...base,epoch:8,revision:6}),false);
+  assert.equal(isOlderEditorSnapshot(current,{...base,epoch:8,revision:7}),false);
+  assert.equal(isOlderEditorSnapshot(current,{...base,epoch:9,revision:0}),false);
+});
+
 test('full snapshot preserves intentionally missing PNG sources',()=>{
  const full={...base,texturePreviewSources:[null]};
  assert.equal(reconcileTexturePreview(null,full),full);
@@ -36,6 +46,7 @@ test('full snapshot preserves intentionally missing PNG sources',()=>{
 test('only exact preview transport errors qualify for a full read-only Rust refresh', () => {
   assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_PREVIEW_REUSE_STALE')), true);
   assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE')), true);
+  assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_SNAPSHOT_STALE')), true);
   for (const unrelated of [
     new Error('DOCUMENT_REVISION_STALE'),
     new Error('RUST_EDITOR_SOURCE_CHANGED'),

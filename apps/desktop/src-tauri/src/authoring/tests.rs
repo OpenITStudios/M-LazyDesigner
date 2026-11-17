@@ -48,6 +48,33 @@ fn validated_inspection_matches_standalone_public_source_contract() {
     }
 }
 
+// SOURCE-AUTHORED_NOT_RUN: a published snapshot survives a later transaction
+// and Undo restores the exact saved immutable version. A failed edit cannot
+// mutate the frozen projection source through an alias.
+#[test]
+fn immutable_session_snapshots_survive_mutation_and_undo() {
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Snapshot", "snapshot").unwrap()
+    ).unwrap();
+    let initial = session.snapshot_document();
+    assert!(std::sync::Arc::ptr_eq(&initial, &session.snapshot_document()));
+    let before = initial.clone();
+    let uuid = "00000000-0000-4000-8000-000000000987".to_owned();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid, name:"idle".into(), length:1.0,
+    }]).unwrap();
+    let edited = session.snapshot_document();
+    assert!(!std::sync::Arc::ptr_eq(&initial, &edited));
+    assert!(initial.animation_assets.is_empty());
+    assert_eq!(edited.animation_assets.len(), 1);
+    assert_eq!(initial, before);
+
+    session.undo(1).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&initial, &session.snapshot_document()));
+    session.redo(2).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&edited, &session.snapshot_document()));
+}
+
 fn sample_cube(uuid: &str) -> Cube {
     let mut value: Value = serde_json::from_str(SAMPLE).unwrap();
     value["elements"][0]["uuid"] = json!(uuid);

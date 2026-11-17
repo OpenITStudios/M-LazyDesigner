@@ -10,7 +10,7 @@
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
-  import { canReusePreviewInCommand, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport';
+  import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
@@ -249,6 +249,11 @@
     else error = 'The native authoring operation could not be completed.';
   }
   function accept(incoming: EditorSnapshot): EditorSnapshot {
+    // Detached native projections are immutable but can complete out of order.
+    // Never replace a newer Rust epoch/revision with an older IPC response.
+    if (isOlderEditorSnapshot(snapshot, incoming)) {
+      throw new Error('RUST_EDITOR_SNAPSHOT_STALE');
+    }
     // A missing image body is valid only with the exact prior epoch and key.
     const next = reconcileTexturePreview(snapshot, incoming);
     // Any document receipt invalidates the frame-clock identity. Resume is
@@ -301,7 +306,7 @@
             selectedId = null;
             selectedBoneId = null;
           }
-          error = 'Texture preview transfer was rejected. The model view has been refreshed from Rust; review it before editing again.';
+          error = 'An editor snapshot was stale or incomplete. The model view was refreshed from Rust; review it before editing again.';
         } catch (refreshError) {
           showError(refreshError);
         }

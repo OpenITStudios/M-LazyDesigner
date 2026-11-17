@@ -28,7 +28,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::State;
 
 #[derive(Default)]
@@ -50,6 +50,18 @@ struct ActiveModel {
     // Last Open/Save Copy canonical Rust model bytes: Undo/Redo dirty status.
     saved_canonical_sha: Option<String>,
     dirty: bool,
+}
+
+/// A revision-bound read-only projection of the same canonical Rust document.
+/// Capture under the store lock; render the large Svelte snapshot after unlock.
+struct FrozenEditorProjection {
+    document: Arc<AuthoringDocument>,
+    epoch: u64,
+    revision: u64,
+    source_name: Option<String>,
+    dirty: bool,
+    can_undo: bool,
+    can_redo: bool,
 }
 
 #[derive(Serialize)]
@@ -651,28 +663,40 @@ fn preview_source_key(epoch: u64, assets: &[Option<(&str, [u32; 2])>]) -> String
     format!("{:x}", digest.finalize())
 }
 
-fn project_with_preview_reuse(
-    store: &EditorStore, known_preview_source_key: Option<&str>,
-) -> Option<EditorSnapshot> {
-    store.active.as_ref().map(|model| {
-        let doc = model.session.document();
+fn freeze_projection(store: &EditorStore) -> Option<FrozenEditorProjection> {
+    store.active.as_ref().map(|model| FrozenEditorProjection {
+        document: model.session.snapshot_document(),
+        epoch: store.epoch,
+        revision: model.session.summary().revision,
+        source_name: model.source_path.as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned()),
+        dirty: model.dirty,
+        can_undo: model.session.can_undo(),
+        can_redo: model.session.can_redo(),
+    })
+}
+
+fn project_frozen(
+    model: &FrozenEditorProjection, known_preview_source_key: Option<&str>,
+) -> EditorSnapshot {
+        let doc = model.document.as_ref();
         let default_box_uv = doc.meta.box_uv.unwrap_or(false);
         let preview_assets = texture_preview_assets(doc);
-        let preview_source_key = preview_source_key(store.epoch, &preview_assets);
+        let preview_source_key = preview_source_key(model.epoch, &preview_assets);
         let preview_sources_reused = known_preview_source_key == Some(preview_source_key.as_str());
         let uv_mode = preview_uv_mode(doc);
         let scope_indices = (uv_mode == PreviewUvMode::ScopedAttachable)
             .then(|| texture_scope_indices(doc));
         EditorSnapshot {
-            epoch: store.epoch,
-            revision: model.session.summary().revision,
+            epoch: model.epoch,
+            revision: model.revision,
             name: doc.extensions.get("name").and_then(Value::as_str)
                 .unwrap_or("Untitled Model").to_owned(),
-            source_name: model.source_path.as_ref()
-                .and_then(|path| path.file_name()).map(|name| name.to_string_lossy().into_owned()),
+            source_name: model.source_name.clone(),
             dirty: model.dirty,
-            can_undo: model.session.can_undo(),
-            can_redo: model.session.can_redo(),
+            can_undo: model.can_undo,
+            can_redo: model.can_redo,
             cubes: doc.cubes.iter().map(|cube| CubeView {
                 uuid: cube.uuid.clone(),
                 name: cube.name.clone().unwrap_or_else(|| "cube".into()),
@@ -739,22 +763,35 @@ fn project_with_preview_reuse(
             animations: animation_views(doc),
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
         }
-    })
 }
 
+fn project_with_preview_reuse(
+    store: &EditorStore, known_preview_source_key: Option<&str>,
+) -> Option<EditorSnapshot> {
+    let frozen = freeze_projection(store)?;
+    Some(project_frozen(&frozen, known_preview_source_key))
+}
+
+#[cfg(test)]
 fn project(store: &EditorStore) -> Option<EditorSnapshot> {
     project_with_preview_reuse(store, None)
 }
 
-fn current_with_preview_reuse(
-    store: &EditorStore, known_preview_source_key: Option<&str>,
-) -> Result<EditorSnapshot, DesktopError> {
-    project_with_preview_reuse(store, known_preview_source_key)
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))
+// Reads remain revision-consistent without retaining EditorStore's mutex
+// while decoding/scanning embedded PNGs or projecting all geometry/animation.
+fn project_detached(
+    guard: MutexGuard<'_, EditorStore>, known_preview_source_key: Option<&str>,
+) -> Option<EditorSnapshot> {
+    let frozen = freeze_projection(&guard);
+    drop(guard);
+    frozen.as_ref().map(|source| project_frozen(source, known_preview_source_key))
 }
 
-fn current(store: &EditorStore) -> Result<EditorSnapshot, DesktopError> {
-    current_with_preview_reuse(store, None)
+fn current_detached(
+    guard: MutexGuard<'_, EditorStore>, known_preview_source_key: Option<&str>,
+) -> Result<EditorSnapshot, DesktopError> {
+    project_detached(guard, known_preview_source_key)
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))
 }
 
 fn create_uuid() -> String {
@@ -772,7 +809,7 @@ fn create_uuid() -> String {
 
 #[tauri::command(async)]
 pub fn rust_editor_snapshot(state: State<'_, EditorState>) -> Result<Option<EditorSnapshot>, DesktopError> {
-    Ok(project(&lock(&state)?))
+    Ok(project_detached(lock(&state)?, None))
 }
 
 #[tauri::command(async)]
@@ -799,7 +836,7 @@ pub fn rust_editor_new(
         session, source_path: None, source_sha: None,
         saved_canonical_sha: None, dirty: true,
     });
-    current(&store)
+    current_detached(store, None)
 }
 
 #[tauri::command]
@@ -834,7 +871,7 @@ pub async fn rust_editor_open(
         saved_canonical_sha: Some(canonical_sha),
         dirty: false,
     });
-    current(&guard).map(Some)
+    current_detached(guard, None).map(Some)
 }
 
 #[tauri::command(async)]
@@ -851,7 +888,7 @@ pub fn rust_editor_apply(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 /// Read a user-selected PNG entirely inside the native Rust host and
@@ -891,7 +928,7 @@ pub async fn rust_editor_import_paint_png(
         uuid: create_uuid(), name: filename, source,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard).map(Some)
+    current_detached(guard, None).map(Some)
 }
 
 /// Verify a bounded encoded WebGL PNG. The browser canvas is a *preview*,
@@ -1130,7 +1167,7 @@ pub fn rust_editor_add_cube(
     });
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 
@@ -1150,7 +1187,7 @@ pub fn rust_editor_duplicate_cube(
         source_uuid, new_uuid: create_uuid(),
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&store, known_preview_source_key.as_deref())
+    current_detached(store, known_preview_source_key.as_deref())
 }
 
 #[tauri::command(async)]
@@ -1181,7 +1218,7 @@ pub fn rust_editor_add_bone(
         parent_uuid,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 
@@ -1199,7 +1236,7 @@ pub fn rust_editor_create_animation(
         uuid: create_uuid(), name, length,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 #[tauri::command(async)]
@@ -1216,7 +1253,7 @@ pub fn rust_editor_add_rotation_keyframe(
         animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 #[tauri::command(async)]
@@ -1230,7 +1267,7 @@ pub fn rust_editor_undo(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.undo(expected_revision).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 #[tauri::command(async)]
@@ -1244,7 +1281,7 @@ pub fn rust_editor_redo(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.redo(expected_revision).map_err(model_failure)?;
     refresh_dirty(active);
-    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
+    current_detached(guard, known_preview_source_key.as_deref())
 }
 
 /// Export a separate Minecraft Bedrock Geometry JSON without modifying the
@@ -1430,12 +1467,51 @@ pub async fn rust_editor_save_copy(
     active.saved_canonical_sha = Some(saved_hash);
     active.source_path = Some(path);
     active.dirty = false;
-    current(&guard).map(Some)
+    current_detached(guard, None).map(Some)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE-AUTHORED_NOT_RUN: expensive projection must hold an immutable
+    // document revision even after another writer commits; the store lock
+    // becomes available before the projection itself runs.
+    #[test]
+    fn frozen_projection_releases_mutex_without_mixing_revisions() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Native", "native").unwrap()
+        ).unwrap();
+        let store = Mutex::new(EditorStore {
+            epoch: 9, active: Some(ActiveModel {
+                session, source_path: None, source_sha: None,
+                saved_canonical_sha: None, dirty: true,
+            }),
+        });
+        let frozen = {
+            let guard = store.lock().unwrap();
+            freeze_projection(&guard).unwrap()
+        };
+        let before = project_frozen(&frozen, None);
+        {
+            let mut guard = store.try_lock().unwrap();
+            let active = guard.active.as_mut().unwrap();
+            active.session.apply(0, &[EditOperation::CreateAnimation {
+                uuid: "00000000-0000-4000-8000-000000000982".into(),
+                name: "idle".into(), length: 1.0,
+            }]).unwrap();
+            refresh_dirty(active);
+        }
+        let first = project_frozen(&frozen, Some(&before.preview_source_key));
+        let after = project_detached(store.lock().unwrap(), Some(&before.preview_source_key))
+            .unwrap();
+        assert_eq!((before.epoch, before.revision), (9, 0));
+        assert_eq!((first.epoch, first.revision, first.animation_count), (9, 0, 0));
+        assert_eq!((after.epoch, after.revision, after.animation_count), (9, 1, 1));
+        assert_eq!(first.texture_preview_sources.len(), 0);
+        assert!(after.preview_sources_reused);
+        assert!(store.try_lock().is_ok());
+    }
 
     // Source-authored Rust/Tauri projection regression; native tests held.
     #[test]

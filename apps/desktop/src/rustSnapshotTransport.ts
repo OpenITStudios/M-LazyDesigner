@@ -22,7 +22,20 @@ export function canReusePreviewInCommand(name: string): boolean {
 export function isPreviewTransportFailure(cause: unknown): boolean {
   return cause instanceof Error && (
     cause.message === 'RUST_EDITOR_PREVIEW_REUSE_STALE' ||
-    cause.message === 'RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE'
+    cause.message === 'RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE' ||
+    cause.message === 'RUST_EDITOR_SNAPSHOT_STALE'
+  );
+}
+
+/** A completed IPC projection may arrive after a newer edit or model open.
+ * This test compares authoritative epoch/revision only; it cannot grant
+ * changes to authored data or infer that the file on disk is current. */
+export function isOlderEditorSnapshot(
+  current: EditorSnapshot | null, incoming: EditorSnapshot,
+): boolean {
+  return current !== null && (
+    incoming.epoch < current.epoch ||
+    (incoming.epoch === current.epoch && incoming.revision < current.revision)
   );
 }
 

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 mod bbmodel;
 mod geometry;
@@ -3161,26 +3162,33 @@ impl ValidatedInspection<'_> {
 /// The only mutable authoring state. Each GUI/CLI caller must supply the
 /// expected in-process revision; CLI also checks exact source SHA-256.
 pub struct EditorSession {
-    doc: AuthoringDocument,
+    // Immutable published versions are shared by Tauri read projections and
+    // history. The transaction candidate remains an independent full copy.
+    doc: Arc<AuthoringDocument>,
     revision: u64,
-    undo: Vec<AuthoringDocument>,
-    redo: Vec<AuthoringDocument>,
+    undo: Vec<Arc<AuthoringDocument>>,
+    redo: Vec<Arc<AuthoringDocument>>,
 }
 
 impl EditorSession {
     pub fn open(bytes: &[u8]) -> Result<Self> {
         // bbmodel::decode already validates all imported model data.
         let doc = AuthoringDocument::import_bbmodel(bytes)?;
-        Ok(Self { doc, revision: 0, undo: Vec::new(), redo: Vec::new() })
+        Ok(Self { doc: Arc::new(doc), revision: 0, undo: Vec::new(), redo: Vec::new() })
     }
     pub fn from_document(doc: AuthoringDocument) -> Result<Self> {
         // Direct constructors still admit caller-owned, potentially invalid state.
         doc.validate()?;
-        Ok(Self { doc, revision: 0, undo: Vec::new(), redo: Vec::new() })
+        Ok(Self { doc: Arc::new(doc), revision: 0, undo: Vec::new(), redo: Vec::new() })
     }
-    pub fn document(&self) -> &AuthoringDocument { &self.doc }
+    pub fn document(&self) -> &AuthoringDocument { self.doc.as_ref() }
+    /// A revision-fixed immutable view for read-only projection outside an
+    /// editor store lock. Sharing never allows a GUI caller to mutate source.
+    pub fn snapshot_document(&self) -> Arc<AuthoringDocument> {
+        Arc::clone(&self.doc)
+    }
     pub fn inspections(&self) -> ValidatedInspection<'_> {
-        ValidatedInspection { doc: &self.doc }
+        ValidatedInspection { doc: self.doc.as_ref() }
     }
     pub fn can_undo(&self) -> bool { !self.undo.is_empty() }
     pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
@@ -3210,7 +3218,7 @@ impl EditorSession {
         if operations.is_empty() || operations.len() > MAX_OPERATIONS {
             return Err(fail("EDIT_BATCH_SIZE_INVALID"));
         }
-        let mut next = self.doc.clone();
+        let mut next = self.doc.as_ref().clone();
         let mut changed = Vec::new();
         let mut index = 0;
         while index < operations.len() {
@@ -3265,8 +3273,8 @@ impl EditorSession {
         if let (Some(item), Some(index)) = (scope, scope_index) {
             correction_scope::verify_after(&self.doc, &next, item, index)?;
         }
-        if next == self.doc { return Err(fail("EDIT_NO_OP")); }
-        let prior = std::mem::replace(&mut self.doc, next);
+        if &next == self.doc.as_ref() { return Err(fail("EDIT_NO_OP")); }
+        let prior = std::mem::replace(&mut self.doc, Arc::new(next));
         if self.undo.len() == MAX_HISTORY { self.undo.remove(0); }
         self.undo.push(prior);
         self.redo.clear();
