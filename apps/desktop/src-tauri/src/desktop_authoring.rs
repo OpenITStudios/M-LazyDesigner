@@ -18,6 +18,7 @@ use rand::RngCore;
 use rfd::FileDialog;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -129,6 +130,9 @@ pub struct EditorSnapshot {
     texture_names: Vec<String>,
     texture_uuids: Vec<Option<String>>,
     texture_preview_sources: Vec<Option<String>>,
+    // Optional PNG transport shortcut only; never model or permission authority.
+    preview_source_key: String,
+    preview_sources_reused: bool,
     texture_preview_sides: Vec<Option<&'static str>>,
     texture_preview_resolutions: Vec<Option<[u32; 2]>>,
     scoped_texture_preview: bool,
@@ -548,11 +552,34 @@ fn animation_views(doc: &AuthoringDocument) -> Vec<AnimationView> {
     }).collect()
 }
 
-fn project(store: &EditorStore) -> Option<EditorSnapshot> {
+fn preview_source_key(epoch: u64, assets: &[Option<(String, [u32; 2])>]) -> String {
+    let mut digest = Sha256::new();
+    digest.update(epoch.to_le_bytes());
+    digest.update((assets.len() as u64).to_le_bytes());
+    for asset in assets {
+        match asset {
+            None => digest.update([0u8]),
+            Some((source, resolution)) => {
+                digest.update([1u8]);
+                digest.update((source.len() as u64).to_le_bytes());
+                digest.update(source.as_bytes());
+                digest.update(resolution[0].to_le_bytes());
+                digest.update(resolution[1].to_le_bytes());
+            }
+        }
+    }
+    format!("{:x}", digest.finalize())
+}
+
+fn project_with_preview_reuse(
+    store: &EditorStore, known_preview_source_key: Option<&str>,
+) -> Option<EditorSnapshot> {
     store.active.as_ref().map(|model| {
         let doc = model.session.document();
         let default_box_uv = doc.meta.box_uv.unwrap_or(false);
         let preview_assets = texture_preview_assets(doc);
+        let preview_source_key = preview_source_key(store.epoch, &preview_assets);
+        let preview_sources_reused = known_preview_source_key == Some(preview_source_key.as_str());
         let uv_mode = preview_uv_mode(doc);
         EditorSnapshot {
             epoch: store.epoch,
@@ -604,8 +631,12 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
             texture_uuids: doc.texture_assets.iter().map(|texture|
                 texture.get("uuid").and_then(Value::as_str).map(str::to_owned)
             ).collect(),
-            texture_preview_sources: preview_assets.iter().map(|asset|
-                asset.as_ref().map(|(source, _)| source.clone())).collect(),
+            texture_preview_sources: if preview_sources_reused { Vec::new() } else {
+                preview_assets.iter().map(|asset|
+                    asset.as_ref().map(|(source, _)| source.clone())).collect()
+            },
+            preview_source_key,
+            preview_sources_reused,
             texture_preview_sides: doc.texture_assets.iter().map(texture_preview_side).collect(),
             texture_preview_resolutions: preview_assets.iter().map(|asset|
                 asset.as_ref().map(|(_, resolution)| *resolution)).collect(),
@@ -628,8 +659,19 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
     })
 }
 
+fn project(store: &EditorStore) -> Option<EditorSnapshot> {
+    project_with_preview_reuse(store, None)
+}
+
+fn current_with_preview_reuse(
+    store: &EditorStore, known_preview_source_key: Option<&str>,
+) -> Result<EditorSnapshot, DesktopError> {
+    project_with_preview_reuse(store, known_preview_source_key)
+        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))
+}
+
 fn current(store: &EditorStore) -> Result<EditorSnapshot, DesktopError> {
-    project(store).ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))
+    current_with_preview_reuse(store, None)
 }
 
 fn create_uuid() -> String {
@@ -718,6 +760,7 @@ pub fn rust_editor_apply(
     expected_epoch: u64,
     expected_revision: u64,
     operations: Vec<EditOperation>,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -725,7 +768,7 @@ pub fn rust_editor_apply(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
 /// Read a user-selected PNG entirely inside the native Rust host and
@@ -976,6 +1019,7 @@ pub fn rust_editor_add_rotation_keyframe(
 #[tauri::command]
 pub fn rust_editor_undo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -983,12 +1027,13 @@ pub fn rust_editor_undo(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.undo(expected_revision).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
 #[tauri::command]
 pub fn rust_editor_redo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -996,7 +1041,7 @@ pub fn rust_editor_redo(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     active.session.redo(expected_revision).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
 /// Export a separate Minecraft Bedrock Geometry JSON without modifying the

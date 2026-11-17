@@ -109,6 +109,9 @@ export type EditorSnapshot = {
   textureNames: string[];
   textureUuids: (string | null)[];
   texturePreviewSources: (string | null)[];
+  /** Optional for older standalone fixtures; Rust always supplies both. */
+  previewSourceKey?: string;
+  previewSourcesReused?: boolean;
   texturePreviewSides: ('front' | 'double' | null)[];
   texturePreviewResolutions: ([number, number] | null)[];
   scopedTexturePreview: boolean;

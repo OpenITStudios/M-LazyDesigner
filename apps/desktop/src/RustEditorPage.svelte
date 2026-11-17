@@ -9,6 +9,7 @@
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
+  import { reconcileTexturePreview } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
@@ -245,7 +246,9 @@
     else if (typeof cause === 'string') error = cause;
     else error = 'The native authoring operation could not be completed.';
   }
-  function accept(next: EditorSnapshot) {
+  function accept(incoming: EditorSnapshot): EditorSnapshot {
+    // A missing image body is valid only with the exact prior epoch and key.
+    const next = reconcileTexturePreview(snapshot, incoming);
     // Any document receipt invalidates the frame-clock identity. Resume is
     // always explicit; never replay a stale animation after Undo/Open/Save.
     pauseAnimationPlayback();
@@ -272,14 +275,16 @@
     if (selectedId && !next.cubes.some((cube) => cube.uuid === selectedId)) selectedId = null;
     if (selectedBoneId && !next.bones.some((bone) => bone.uuid === selectedBoneId)) selectedBoneId = null;
     notice = '';
+    return next;
   }
   async function command(name: string, args: Record<string, unknown>): Promise<EditorSnapshot | null> {
     if (busy) return null;
     busy = true; closeMenus(); error = '';
     try {
-      const next = await invoke<EditorSnapshot>(name, args);
-      accept(next);
-      return next;
+      const reuse = (name === 'rust_editor_apply' || name === 'rust_editor_undo' || name === 'rust_editor_redo')
+        ? { knownPreviewSourceKey: snapshot?.previewSourceKey ?? null } : {};
+      const next = await invoke<EditorSnapshot>(name, { ...args, ...reuse });
+      return accept(next);
     } catch (cause) { showError(cause); return null; }
     finally { busy = false; }
   }
