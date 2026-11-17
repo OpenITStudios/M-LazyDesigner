@@ -23,7 +23,14 @@ export interface CodeModeRunReceipt {
   status: "OK";
   value: unknown;
   logs: string[];
+  /** Count of guest-to-host RPC calls, not model-facing tool invocations. */
   rpc_calls: number;
+  /** Total UTF-8 bytes in serialized RPC reply frames admitted to the guest,
+   * including envelopes; NOT billed model tokens or file bytes. */
+  rpc_response_bytes: number;
+  /** UTF-8 JSON bytes in the final value returned for model consumption,
+   * excluding tool envelope/logs. Not a quality/efficiency PASS claim. */
+  model_result_bytes: number;
 }
 export interface CodeModeTexturingReadinessReceipt {
   scope:"saved_model_texture_workflow_review";

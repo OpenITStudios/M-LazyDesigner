@@ -691,23 +691,34 @@ page the Cube/Bone/Texture/Animation catalog and guess a tool. Use the
 existing `inspectBatch` with `authoring_target`:
 
 ```js
-// One Code Mode program / one Rust inspect-batch call for this orientation.
-const result = await codemode.inspectBatch({
+// One model-facing call; process Rust data inside the isolated guest.
+const report = await codemode.inspectBatch({
   project: codemode.initial.project,
   requests: [{
-    kind: 'authoring_target', domain: 'texturing',
-    category: 'cubes', name: 'Helmet',
+    kind:'authoring_target', domain:'texturing',
+    category:'cubes', name:'Helmet', // Illustrative exact saved part name.
   }],
 });
-const target = result.results[0].target;
+const target = report.results[0].target;
 if (target.status !== 'EXACT_MATCH') {
-  return { status: target.status, candidates: target.candidates };
+  return {status:target.status, count:target.candidate_count,
+    candidates:target.candidates.slice(0,4).map(({name,uuid})=>({name,uuid})),
+    truncated:target.candidates_truncated};
 }
+const surfaces = target.selected.source.surfaces;
+const attention = (surfaces?.faces ?? []).filter(face=>
+  face.uv_zero_span || face.uv_rotation_supported === false ||
+  ['false','unset'].includes(face.reference_kind));
 return {
+  status: target.source_blockers.length ? 'SOURCE_BLOCKED' : 'EXACT_MATCH',
+  sourceSha256: report.sha256,
   cubeUuid: target.selected.identity.uuid,
-  source: target.selected.source.surfaces,
-  candidateOperations: target.candidate_operations,
-  visualVerdict: target.visual_verdict,
+  uvMode:{boxUv:surfaces?.uv.box_uv,autoUv:surfaces?.uv.auto_uv},
+  sourceAttention:attention.map(({side,reference_kind})=>
+    ({face:side,reference:reference_kind})),
+  candidateOperations:target.candidate_operations,
+  blockers:target.source_blockers,
+  visualVerdict:target.visual_verdict, // Always UNVERIFIED here.
 };
 ```
 
@@ -719,7 +730,38 @@ appear as non-authoritative suggestions. Unsupported/missing UUIDs do not
 silently become a writable target. For a Cube in UV/Texturing, the same
 native read also includes the existing six-face/UV inspector; for Geometry
 it includes focused transforms, and for Texture/Animation assets it returns
-bounded metadata. No raw atlas, extra index or mutable state is created.
+bounded metadata. No raw atlas, extra index or mutable state is created. The example
+filters the transient six-face read into bounded decision fields **in
+guest JavaScript**; intentionally absent faces and statistics are
+never automatically labeled artistic failures. If full UV geometry is
+needed for an actual edit, it remains available inside that same script
+without requiring a second model turn.
+
+For independent, known read selectors, aggregate in one batch and
+return only the requested summary, rather than `return report`:
+
+```js
+const report = await codemode.inspectBatch({
+  project:codemode.initial.project,
+  requests:[
+    {kind:'catalog',category:'cubes',limit:8},
+    {kind:'audit'},
+  ],
+});
+const [catalog,audit] = report.results;
+return {
+  sourceSha256:report.sha256,
+  cubeIds:catalog.catalog.entries.map(item=>item.uuid),
+  sourceFaceReferenceCounts:audit.audit.faces,
+  visualVerdict:audit.audit.visual_verdict, // Still UNVERIFIED.
+};
+```
+
+This reuses the same native `inspectBatch`, with **no new public
+tool, runner, cache or approval bypass**. If the caller already knows
+the UUID and needs only one focused read, do not add an
+`authoring_target` lookup. Batch only questions needed for this
+decision; do not force unrelated inspections to reduce a tool counter.
 
 `candidate_operations` is filtered using source-owned UV mode, explicit
 saved texture-link presence and Rust Paint editability where applicable.
@@ -765,7 +807,12 @@ return {status:'SOURCE_SAVED_NOT_VISUALLY_APPROVED',
 
 This composes **one source lookup and one approved mutation inside one
 model-visible Code Mode invocation**. It does not remove either Rust call or
-the host approval/reopened-output checks. Do not use the pattern for art
+the host approval/reopened-output checks. The host receipt now includes
+`rpc_calls` (guest RPC count), `rpc_response_bytes` (serialized
+host-to-guest RPC reply frames) and `model_result_bytes` (final JSON
+value emitted by the guest). These are **raw UTF-8 byte counts**, not
+token costs, native CLI invocation counts or proof of fewer corrections.
+Use matched real tasks and accepted asset outcomes for efficiency claims. Do not use the pattern for art
 decisions that need a fresh visual review, for ambiguous targets, or when
 the required operation/data are not supported. Source-authored regressions
 remain NOT_EXECUTED; measured token/call/latency savings are UNVERIFIED.

@@ -45,6 +45,28 @@ Legacy Local: Gateway -> Runtime -> Blockbench (preserved separately).
 
 Programmatic use does not imply a new model engine, second document registry, or a remote API server.
 
+## Programmatic tool calling adaptation — 2026-11-18 (SOURCE_ONLY)
+
+The existing `lazydesigner_code_mode` tool and permission-denied Deno
+guest implement the useful **PTC pattern** without Anthropic's hosted
+code-execution product or a second tool registry. The single model-facing
+tool now gives a short native-valid example: batch only related Rust
+reads, inspect exact saved target identities, process/filter intermediate
+records within the guest and return compact decision data with SHA,
+source blockers and explicit `UNVERIFIED` status. Incorrect/ambiguous
+targets do not cause an automatic edit; deterministic source-compatible
+writes retain the independent host approval and one Rust transaction.
+The existing Code Mode README owns examples; no duplicated executable
+framework or authoring authority is introduced.
+
+Host receipts expose `rpc_calls`, serialized `rpc_response_bytes`
+and final `model_result_bytes` to support later matched-task comparisons.
+They are not billed tokens, cost savings or measured speed. The first-party
+Node/Rust fixture updates are authored but NOT_EXECUTED; PC-local validation
+and real visual/artist acceptance remain held. This is an adaptation of
+PTC and tool-use-example principles, **not** an installation of Anthropic's
+native `input_examples` feature or Cloudflare's Worker sandbox.
+
 ## Programmatic read batching — 2026-11-15 (SOURCE_ONLY)
 
 **Write launch integrity:** A host-approved transaction is rechecked by a

@@ -188,11 +188,16 @@ test('Code Mode exposes a single host-side code tool, with read-only RPC', () =>
     assert.match(tool.description, /authoring_target/);
     assert.match(tool.description, /domain:"texturing",category:"cubes"/);
     assert.match(tool.description, /SAME Code Mode script/);
+    assert.match(tool.description, /return only decision-relevant JSON/);
+    assert.match(tool.description, /t\.candidates\.slice\(0,4\)/);
     assert.deepEqual(tool.inputSchema.required, ['code']);
     const result = await tool.execute({ code: "return { x: 1 };" });
     assert.equal(result.status, 'OK');
     assert.equal(result.value.observed, 1);
     assert.equal(result.rpc_calls, 1);
+    assert.equal(result.model_result_bytes,
+      Buffer.byteLength(JSON.stringify(result.value), 'utf8'));
+    assert.ok(result.rpc_response_bytes > result.model_result_bytes);
     assert.equal(spawns, 1);
     assert.deepEqual(calls.map((args) => args[0]), ['inspect', 'inspect-batch']);
   }));

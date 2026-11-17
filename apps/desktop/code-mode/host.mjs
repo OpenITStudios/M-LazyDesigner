@@ -2062,6 +2062,10 @@ export async function createCodeModeHost({
       let stderrBytes = 0;
       let calls = 0;
       let pendingRpc = 0;
+      // Byte counts of admitted RPC frames vs the final guest-selected
+      // value. This observes context projection, not tokens or elapsed time.
+      let rpcResponseBytes = 0;
+      let modelResultBytes = 0;
       let chain = Promise.resolve();
       const decoder = new StringDecoder('utf8');
       let remaining = TIMEOUT_MS;
@@ -2105,7 +2109,10 @@ export async function createCodeModeHost({
         if (Buffer.byteLength(data, 'utf8') > MAX_RPC_BYTES) {
           throw new Error('CODE_MODE_RPC_RESPONSE_TOO_LARGE');
         }
-        if (!closed && !child.stdin.destroyed) child.stdin.write(data);
+        if (!closed && !child.stdin.destroyed) {
+          child.stdin.write(data);
+          rpcResponseBytes += Buffer.byteLength(data, 'utf8');
+        }
       }
       async function processMessage(line) {
         if (!line || Buffer.byteLength(line, 'utf8') > MAX_RPC_BYTES) {
@@ -2130,6 +2137,7 @@ export async function createCodeModeHost({
                 Buffer.byteLength(JSON.stringify(logs), 'utf8') > 4096))) {
             throw new Error('CODE_MODE_FINAL_RESULT_TOO_LARGE');
           }
+          modelResultBytes = resultBytes;
           concluded = message;
           return;
         }
@@ -2234,6 +2242,8 @@ export async function createCodeModeHost({
             logs: Array.isArray(concluded.logs) ?
               concluded.logs.slice(0, 12) : [],
             rpc_calls: calls,
+            rpc_response_bytes: rpcResponseBytes,
+            model_result_bytes: modelResultBytes,
           }));
         }).catch(reject);
       });
@@ -2262,7 +2272,12 @@ export function createCodeModeTool(host) {
   }
   return Object.freeze({
     name: 'lazydesigner_code_mode',
-    description: 'Execute bounded JavaScript against the approved Rust model. For a named target with unknown UUID, use codemode.inspectBatch({project:codemode.initial.project,requests:[{kind:"authoring_target",domain:"texturing",category:"cubes",name:"Helmet"}]}). Select the user-requested domain/category: geometry=cubes|bones, uv=cubes, texturing=cubes|textures, animation=bones|animations. Only an EXACT_MATCH and source-compatible candidate operation may guide editing; never treat substring hints, blocked sources or a reviewer claim as authorization. For explicit deterministic approved edits, conditionally compose that read and ONE codemode.apply transaction in the SAME Code Mode script to avoid another model round trip; edits require independent host approval. For art/uncertain choices return the read for human judgment. Guest has no filesystem/network/shell access; Paint still needs fresh visual review.',
+    description: [
+      'Use one bounded, isolated Code Mode script to run typed Rust reads, process results in code and return only decision-relevant JSON; never dump whole native receipts into model context.',
+      'For a named target with unknown UUID, use authoring_target inside inspectBatch. Read-only example: const r=await codemode.inspectBatch({project:codemode.initial.project,requests:[{kind:"authoring_target",domain:"texturing",category:"cubes",name:"Helmet"}]}); const t=r.results[0].target; return {status:t.status,uuid:t.selected?.identity.uuid??null,ops:t.candidate_operations,blockers:t.source_blockers,candidates:t.status==="EXACT_MATCH"?undefined:t.candidates.slice(0,4)};',
+      'Known UUID: skip name discovery. Group independent source questions in one inspectBatch; filter/aggregate in JavaScript, then return only the answer, source SHA and meaningful blockers. A null/absent face is not automatically an artistic defect.',
+      'Do not select substring/ambiguous matches, ignore source blockers or treat source/visual hints as accepted art. For explicitly specified deterministic edits only, conditionally read and perform ONE host-approved apply in the SAME Code Mode script. Do not auto-retry unknown outcomes; Paint still needs real matched-view review. Guest cannot access shell, files or network.',
+    ].join(' '),
     inputSchema: Object.freeze({
       type: 'object',
       additionalProperties: false,
