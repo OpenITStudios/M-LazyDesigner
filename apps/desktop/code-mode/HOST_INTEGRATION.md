@@ -779,6 +779,17 @@ affected shaded front/back/side/underside views independently;
 this source reader alone never authorizes whole-model completion.
 ### Multiple operator-selected rendered views (source-only)
 
+The Rust editor offers a user-triggered fixed-camera `Capture PNG` for
+front/back/left/right/top/bottom. It saves a new PNG alongside a canonical,
+clean `.bbmodel` and returns the exact saved model and PNG SHA. To use
+that image, the operator must separately select the file in the existing
+`--visual-manifest`, supply a genuinely approved corresponding reference
+view, and bind `captureModelSha256` to the file's verified model SHA.
+There is **no automatic camera-to-Code Mode link** and no reviewer installed
+by this capability. The Three.js preview supports only a subset of
+Blockbench/Bedrock rendering; a saved camera image is review input,
+not a visual PASS or proof of actual in-game output.
+
 To review more than one camera direction without conflating actual
 rendering with saved Cube alpha faces, the trusted host adds view
 pairs to the **existing** `preselectedVisualPair` object:

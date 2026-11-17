@@ -1,5 +1,23 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Source-bound user-initiated camera PNG capture (2026-11-17; SOURCE ONLY):**
+Rust desktop now offers a six-direction fixed-camera `Capture PNG` action for the
+current Three.js viewport. The renderer reads a synchronous PNG after drawing
+one selected fixed camera, omitting editor grid/gizmo/edge overlays. The
+existing Tauri session binds epoch and revision to a clean, canonical saved
+`.bbmodel` disk SHA before and after the user-owned Save dialog. It refuses
+unsaved or changed models, noncanonical imported disk files (use Save Copy),
+invalid/oversized PNGs, another output directory or overwriting existing
+files. PNG bytes are decoded and saved through the canonical no-overwrite
+publisher; the returned source-model SHA can be matched to Code Mode's
+`captureModelSha256`. The human operator still supplies independently
+approved reference image paths and selects each capture in the existing
+Code Mode visual manifest. This is a first-party **Rust Three.js preview
+subset**, not Bedrock rendering, authenticated camera visibility, image
+reviewer installation, or artistic acceptance. One direction per explicit
+user action, not an unattended six-shot capture. TypeScript and Rust
+regressions authored, but Tauri, Node, GPU and visual trials NOT_EXECUTED.
+
 **Validated-session canonical Dirty hashing (2026-11-17; SOURCE ONLY):** The Rust editor's `EditorSession::canonical_sha256()` now reuses its guaranteed validated-document invariant instead of running `AuthoringDocument::validate()` again after every successful Apply/Undo/Redo before streaming the exact saved `.bbmodel` SHA. Construction, imports and every accepted transaction continue validation; history only restores validated documents. Public direct `AuthoringDocument::export_bbmodel()` and Save Copy still validate independently, and malformed input cannot establish a session. The checked fingerprint implementation remains a test-only negative oracle. Source regressions for valid session fingerprint, malformed-session refusal, old/new byte equality and size boundary are AUTHORED_NOT_RUN. No compiler, native or performance measurements executed.
 
 **Borrowed UUID validation sets (2026-11-17; SOURCE ONLY):** Rust `AuthoringDocument::validate` no longer allocates separate copied UUID strings into all-ID, Cube-ID, Bone-ID and Outliner-seen sets on each canonical export or editor Dirty hash. All membership checks use references to the immutable document/Outliner; validation order, error codes and duplicate, missing or incomplete hierarchy refusals remain unchanged. Source regression cases cover valid import/export and duplicate/missing/incomplete IDs without modifying assets. Tests AUTHORED_NOT_RUN under active hold; actual Rust compiler behavior and allocation savings remain unverified.

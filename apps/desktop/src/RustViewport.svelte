@@ -11,6 +11,7 @@
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
+  import { reviewCameraAxes, type ReviewViewId } from './rustReviewCapture';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
@@ -435,6 +436,60 @@
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
     scheduleRender();
+  }
+
+  /** User-requested view of the current Rust Three.js preview, never a
+   * Bedrock/Blockbench render or independent artistic verdict. No model edit.
+   * Synchronous draw/read makes each direction capture the same scene state.
+   */
+  export function captureReviewPng(viewId: ReviewViewId): string {
+    if (!ready || !renderer || !scene || !camera || !modelRoot ||
+        !projectedScene || mutationPending || drag) {
+      throw new Error('REVIEW_CAPTURE_VIEWPORT_NOT_READY');
+    }
+    const axes = reviewCameraAxes(viewId);
+    if (!axes) throw new Error('REVIEW_CAPTURE_VIEW_UNKNOWN');
+    const bounds = new THREE.Box3().setFromObject(modelRoot);
+    if (bounds.isEmpty()) throw new Error('REVIEW_CAPTURE_NO_RENDERABLE_MODEL');
+    // Never silently export placeholder colors while used GPU textures
+    // are still loading. Unsupported imported materials remain UNVERIFIED.
+    for (const index of paintMaterialsByTexture.keys()) {
+      if (!textureCache.get(index)?.texture.image) {
+        throw new Error('REVIEW_CAPTURE_TEXTURE_NOT_READY');
+      }
+    }
+    const target = bounds.getCenter(new THREE.Vector3());
+    const distance = Math.max(12, bounds.getSize(new THREE.Vector3()).length() * 2);
+    const captureCamera = camera.clone();
+    captureCamera.position.copy(target).add(new THREE.Vector3(
+      ...axes.direction).multiplyScalar(distance));
+    captureCamera.up.set(...axes.up);
+    captureCamera.lookAt(target);
+    captureCamera.updateMatrixWorld(true);
+    const hidden: Array<{ node: THREE.Object3D; visible: boolean }> = [];
+    scene.traverse((node) => {
+      if (node === gizmo || node instanceof THREE.GridHelper ||
+          node instanceof THREE.AxesHelper || node instanceof THREE.LineSegments) {
+        hidden.push({ node, visible: node.visible });
+        node.visible = false;
+      }
+    });
+    const priorSelection = renderedSelection;
+    updateSelection(null);
+    try {
+      renderer.render(scene, captureCamera);
+      const png = canvas.toDataURL('image/png');
+      // IPC/native PNG decoding imposes a second independent size limit.
+      if (!png.startsWith('data:image/png;base64,') ||
+          png.length > 3 * 1024 * 1024) {
+        throw new Error('REVIEW_CAPTURE_PNG_UNAVAILABLE');
+      }
+      return png;
+    } finally {
+      for (const item of hidden) item.node.visible = item.visible;
+      updateSelection(priorSelection);
+      scheduleRender();
+    }
   }
 
   export function frameModel() {

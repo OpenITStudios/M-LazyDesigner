@@ -4,6 +4,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount, tick } from 'svelte';
   import RustViewport from './RustViewport.svelte';
+  import type { ReviewViewId } from './rustReviewCapture';
   import { prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
   import { supportedFaceUvRotation } from './rustTextureProjection';
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
@@ -35,6 +36,7 @@
   let transformTool: 'translate' | 'rotate' | 'scale' | null = 'translate';
   let selectedFace = 'north';
   let workspaceMode: WorkspaceMode = 'edit';
+  let reviewViewId: ReviewViewId = 'front';
   // UI-only selection and input buffers; animation data is owned by Rust.
   let selectedAnimationId: string | null = null;
   let selectedKeyframeUuid: string | null = null;
@@ -68,7 +70,7 @@
   let collapsed = new Set<string>();
   let nameInput: HTMLInputElement;
   let discardCancel: HTMLButtonElement;
-  let viewport: { frameModel: () => void } | undefined;
+  let viewport: { frameModel: () => void; captureReviewPng: (view: ReviewViewId) => string } | undefined;
   let editorBody: HTMLDivElement;
   let editorWidth = 980;
   let editorHeight = 550;
@@ -423,6 +425,36 @@
     } catch (cause) { showError(cause); }
     finally { busy = false; }
   }
+  type ReviewCaptureReceipt = {
+    sourceModelSha256: string;
+    capturePngSha256: string;
+    viewId: ReviewViewId;
+    fileName: string;
+    byteCount: number;
+    previewScope: 'RUST_THREEJS_PREVIEW_NOT_BEDROCK_VERIFIED';
+  };
+  async function exportReviewCapture() {
+    if (!snapshot || snapshot.dirty || !snapshot.sourceName ||
+        busy || loading || paintStroke || workspaceMode === 'animate') return;
+    const epoch = snapshot.epoch;
+    const revision = snapshot.revision;
+    busy = true; closeMenus(); error = '';
+    try {
+      const pngDataUrl = viewport?.captureReviewPng(reviewViewId);
+      if (!pngDataUrl) throw new Error('3D viewport is not available for capture.');
+      const saved = await invoke<ReviewCaptureReceipt | null>(
+        'rust_editor_export_review_capture', {
+          expectedEpoch: epoch, expectedRevision: revision,
+          viewId: reviewViewId, pngDataUrl,
+        },
+      );
+      if (saved) notice = 'Saved ' + saved.fileName +
+        ' from model SHA ' + saved.sourceModelSha256.slice(0, 12) +
+        '. Rust preview only; visual quality is not verified.';
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
+
   async function saveCopy() {
     if (!snapshot || busy) return;
     busy = true; closeMenus(); error = '';
@@ -2201,6 +2233,18 @@
     {/if}
     <div class="tool-spacer"></div>
     <button onclick={() => viewport?.frameModel()} disabled={!snapshot || busy}>Frame</button>
+    <select bind:value={reviewViewId} aria-label="Review camera direction"
+      disabled={!snapshot || busy || loading} title="Choose a fixed model camera for a source-bound PNG capture">
+      <option value="front">Front</option><option value="back">Back</option>
+      <option value="left">Left</option><option value="right">Right</option>
+      <option value="top">Top</option><option value="bottom">Bottom</option>
+    </select>
+    <button onclick={() => void exportReviewCapture()}
+      disabled={!snapshot || snapshot.dirty || !snapshot.sourceName ||
+        busy || loading || !!paintStroke || workspaceMode === 'animate'}
+      title="Save a new source-bound Rust preview PNG. Save Copy first; this is not Bedrock rendering proof.">
+      Capture PNG
+    </button>
   </div>
 
   <div class="editor-body" bind:this={editorBody} style:grid-template-columns={gridTemplate}>

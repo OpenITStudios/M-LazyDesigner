@@ -155,6 +155,19 @@ pub struct PaintPngExportReceipt {
     byte_count: usize,
 }
 
+/// User-initiated PNG of the current Three.js Rust preview only. This receipt
+/// reports exact saved .bbmodel and PNG bytes, NOT camera/image fidelity.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewCaptureReceipt {
+    source_model_sha256: String,
+    capture_png_sha256: String,
+    view_id: String,
+    file_name: String,
+    byte_count: usize,
+    preview_scope: &'static str,
+}
+
 /// Read-only geometry output receipt; native file paths never enter Svelte.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -875,6 +888,121 @@ pub async fn rust_editor_import_paint_png(
     current(&guard).map(Some)
 }
 
+/// Verify a bounded encoded WebGL PNG. The browser canvas is a *preview*,
+/// never a proof of native Minecraft fidelity or a writable model asset.
+fn decode_review_capture_png(data_url: &str) -> Result<Vec<u8>, DesktopError> {
+    let encoded = data_url.strip_prefix("data:image/png;base64,")
+        .ok_or_else(|| failure("REVIEW_CAPTURE_FORMAT_INVALID", "Expected a PNG canvas capture."))?;
+    if encoded.is_empty() || encoded.len() > 3 * 1024 * 1024 {
+        return Err(failure("REVIEW_CAPTURE_SIZE_INVALID", "Captured PNG exceeds the review budget."));
+    }
+    let bytes = STANDARD.decode(encoded).map_err(|_| failure(
+        "REVIEW_CAPTURE_FORMAT_INVALID", "Captured PNG Base64 is not valid."))?;
+    if bytes.is_empty() || bytes.len() > MAX_EXPORT_PNG_BYTES {
+        return Err(failure("REVIEW_CAPTURE_SIZE_INVALID", "Captured PNG is too large."));
+    }
+    let decoder = png::Decoder::new(std::io::Cursor::new(bytes.as_slice()));
+    let mut reader = decoder.read_info().map_err(|_| failure(
+        "REVIEW_CAPTURE_PNG_INVALID", "Captured PNG could not be decoded."))?;
+    let info = reader.info();
+    if !(32..=2048).contains(&info.width) || !(32..=2048).contains(&info.height) ||
+       info.width.saturating_mul(info.height) > 2_097_152 ||
+       info.bit_depth != png::BitDepth::Eight ||
+       !matches!(info.color_type, png::ColorType::Rgb | png::ColorType::Rgba) {
+        return Err(failure("REVIEW_CAPTURE_PNG_UNSUPPORTED", "Capture PNG dimensions or color are unsupported."));
+    }
+    let mut image = vec![0u8; reader.output_buffer_size()];
+    reader.next_frame(&mut image).map_err(|_| failure(
+        "REVIEW_CAPTURE_PNG_INVALID", "Captured PNG pixel data is invalid."))?;
+    Ok(bytes)
+}
+
+/// A review capture must match the exact saved on-disk model used by Code
+/// Mode; an unsaved scene or imported noncanonical source cannot masquerade
+/// as its saved .bbmodel. Save Copy creates that canonical source boundary.
+fn review_capture_source(active: &ActiveModel) -> Result<(PathBuf, String), DesktopError> {
+    if active.dirty {
+        return Err(failure("REVIEW_CAPTURE_MODEL_UNSAVED", "Save Copy before capturing review images."));
+    }
+    let path = active.source_path.as_ref().ok_or_else(|| failure(
+        "REVIEW_CAPTURE_MODEL_UNSAVED", "This model has no saved .bbmodel source."))?;
+    let disk_sha = active.source_sha.as_ref().ok_or_else(|| failure(
+        "REVIEW_CAPTURE_SOURCE_UNKNOWN", "Saved .bbmodel identity is unavailable."))?;
+    let canonical = active.session.canonical_sha256().map_err(model_failure)?;
+    if canonical != *disk_sha || active.saved_canonical_sha.as_ref() != Some(&canonical) {
+        return Err(failure("REVIEW_CAPTURE_CANONICAL_COPY_REQUIRED",
+            "Save Copy to bind this preview to exact canonical .bbmodel bytes."));
+    }
+    let current = storage::read_bounded(path, MAX_MODEL_BYTES).map_err(model_failure)?;
+    if sha256(&current) != canonical {
+        return Err(failure("RUST_EDITOR_SOURCE_CHANGED",
+            "Saved model changed on disk; review capture was refused."));
+    }
+    Ok((path.clone(), canonical))
+}
+
+/// Capture is explicitly initiated by the user, not by Code Mode guest
+/// JavaScript. The renderer supplies PNG pixels; Rust owns current revision,
+/// exact saved model SHA, output path selection and no-overwrite publishing.
+#[tauri::command]
+pub async fn rust_editor_export_review_capture(
+    state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    view_id: String, png_data_url: String,
+) -> Result<Option<ReviewCaptureReceipt>, DesktopError> {
+    if !["front","back","left","right","top","bottom"].contains(&view_id.as_str()) {
+        return Err(failure("REVIEW_CAPTURE_VIEW_INVALID", "Select one of the six fixed camera views."));
+    }
+    let bytes = decode_review_capture_png(&png_data_url)?;
+    let (source_path, source_sha) = {
+        let store = lock(&state)?;
+        check_epoch(&store, expected_epoch)?;
+        let active = store.active.as_ref().ok_or_else(|| failure(
+            "RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+        if active.session.summary().revision != expected_revision {
+            return Err(failure("RUST_EDITOR_REVISION_STALE", "Model changed before review capture."));
+        }
+        review_capture_source(active)?
+    };
+    let stem = source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("model");
+    let label: String = stem.chars().filter(|c|
+        c.is_ascii_alphanumeric() || *c=='_' || *c=='-').take(48).collect();
+    let filename = format!("{}-{view_id}.review.png",
+        if label.is_empty() {"model"} else {&label});
+    let pick_from = source_path.clone();
+    let destination = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = FileDialog::new()
+            .add_filter("Rust preview PNG", &["png"])
+            .set_file_name(&filename);
+        if let Some(folder) = pick_from.parent() {
+            dialog = dialog.set_directory(folder);
+        }
+        dialog.save_file()
+    }).await.map_err(|_| failure("RUST_EDITOR_PICKER_FAILED",
+        "Review PNG save dialog did not complete."))?;
+    let Some(path) = destination else { return Ok(None); };
+    storage::png(&path).map_err(model_failure)?;
+    let store = lock(&state)?;
+    check_epoch(&store, expected_epoch)?;
+    let active = store.active.as_ref().ok_or_else(|| failure(
+        "RUST_EDITOR_NO_MODEL", "No model is available for review capture."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE", "Model changed during review capture selection."));
+    }
+    let (still_source, still_sha) = review_capture_source(active)?;
+    if still_source != source_path || still_sha != source_sha {
+        return Err(failure("REVIEW_CAPTURE_MODEL_STALE", "The selected saved model changed during capture."));
+    }
+    storage::same_directory(&source_path, &path).map_err(model_failure)?;
+    storage::publish_new_png(&path, &bytes, MAX_EXPORT_PNG_BYTES).map_err(model_failure)?;
+    Ok(Some(ReviewCaptureReceipt {
+        source_model_sha256: source_sha,
+        capture_png_sha256: sha256(&bytes),
+        view_id, file_name: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+        byte_count: bytes.len(),
+        preview_scope: "RUST_THREEJS_PREVIEW_NOT_BEDROCK_VERIFIED",
+    }))
+}
+
 /// A read-only PNG export, selected by stable UUID and Rust revision.
 /// Only native Rust knows the local path and publishes the file.
 #[tauri::command]
@@ -1439,6 +1567,42 @@ mod tests {
         let store = EditorStore::default();
         assert!(project(&store).is_none());
         assert_eq!(store.epoch, 0);
+    }
+
+    // SOURCE ONLY: no live canvas capture or native test execution.
+    #[test]
+    fn review_capture_requires_real_decoded_png_and_an_exact_saved_model() {
+        let valid = png_candidate(32, 32);
+        assert!(decode_review_capture_png(&valid).is_ok());
+        for bad in [
+            "data:image/png;base64,",
+            "data:image/png;base64,AAAA",
+            "data:image/jpeg;base64,AAAA",
+        ] {
+            assert!(decode_review_capture_png(bad).is_err());
+        }
+        assert!(decode_review_capture_png(&png_candidate(16, 16)).is_err());
+        let raw = include_bytes!("../fixtures/bedrock-basic.bbmodel");
+        let session = EditorSession::open(raw).unwrap();
+        let mut active = ActiveModel {
+            session, source_path: None, source_sha: None,
+            saved_canonical_sha: None, dirty: true,
+        };
+        assert!(review_capture_source(&active).is_err());
+        let tmp = std::env::temp_dir().join(format!(
+            "ld-review-{:016x}.bbmodel", rand::rng().next_u64()));
+        let canonical = active.session.export().unwrap();
+        std::fs::write(&tmp, &canonical).unwrap();
+        let exact = sha256(&canonical);
+        active.source_path = Some(tmp.clone());
+        active.source_sha = Some(exact.clone());
+        active.saved_canonical_sha = Some(exact.clone());
+        assert!(review_capture_source(&active).is_err()); // still dirty
+        active.dirty = false;
+        assert_eq!(review_capture_source(&active).unwrap().1, exact);
+        std::fs::write(&tmp, b"external model changed").unwrap();
+        assert!(review_capture_source(&active).is_err());
+        let _ = std::fs::remove_file(tmp);
     }
 
     fn png_candidate(width: u32, height: u32) -> String {
