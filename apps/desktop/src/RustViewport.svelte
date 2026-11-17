@@ -7,6 +7,7 @@
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { cubeSelectionColors } from './rustViewportSelection';
+  import { sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import type { BoneTransformPose } from './rustAnimationPose';
@@ -47,6 +48,7 @@
   let pickMeshes: THREE.Mesh[] = [];
   const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
   const failedTextureSources = new Set<string>();
+  let projectedScene: SceneInputs | null = null;
   const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
   let pivots = new Map<string, THREE.Group>();
   // Existing Bone scene nodes and bind rotations, not a mutable asset model.
@@ -108,6 +110,7 @@
         textureCache.delete(index);
         failedTextureSources.add(source);
         entry.texture?.dispose();
+        projectedScene = null;
         rebuild(cubes, bones, hierarchy);
       },
     );
@@ -217,6 +220,17 @@
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
     if (!modelRoot || drag || mutationPending) return;
+    // IPC snapshots allocate fresh arrays even for edits limited to a keyframe
+    // or a document label. Compare ONLY renderer dependencies; never stringify
+    // PNG data or use this derived cache as authored model authority.
+    const identity: SceneInputs = {
+      structure: JSON.stringify([
+        currentCubes, currentBones, currentHierarchy, _sides, _resolutions,
+        _scopedTexturePreview, _resolution, _previewTextureIndex,
+      ]),
+      sources: _sources,
+    };
+    if (sameSceneInputs(projectedScene, identity)) return;
     gizmo?.detach();
     reconcileTextures();
     for (const child of [...modelRoot.children]) {
@@ -323,6 +337,7 @@
     };
 
     visit(currentHierarchy, modelRoot, [0, 0, 0]);
+    projectedScene = { structure: identity.structure, sources: [...identity.sources] };
     applyPreviewPose(previewBoneTransforms);
     updateSelection(selectedId);
     syncGizmo(canTransform, transformMode);
@@ -398,6 +413,7 @@
           );
     if (!edit || gesture.uuid !== selectedId || !canTransform ||
         gesture.mode !== transformMode) {
+      projectedScene = null;
       rebuild(cubes, bones, hierarchy);
       return;
     }
@@ -413,6 +429,9 @@
         // No speculative retry or model mutation in the viewport.
       } finally {
         mutationPending = false;
+        // A rejected or unconfirmed gizmo gesture must restore the last
+        // authoritative Rust snapshot, even if its scene identity is equal.
+        projectedScene = null;
         rebuild(cubes, bones, hierarchy);
       }
     })();
@@ -429,6 +448,7 @@
       gizmo?.reset();
       drag = null;
       if (controls) controls.enabled = true;
+      projectedScene = null;
       rebuild(cubes, bones, hierarchy);
     }
   }
@@ -527,6 +547,7 @@
       failedTextureSources.clear();
       renderer?.dispose();
       renderer = null;
+      projectedScene = null;
       scene = null;
       camera = null;
       modelRoot = null;
