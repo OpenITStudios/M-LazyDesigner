@@ -419,7 +419,7 @@ fn register_preview_time<'a>(
     // authoritative rejection rule, not the bucket index.
     for nearby in bucket.saturating_sub(2)..=bucket.saturating_add(2) {
         if seen.get(&(bone_uuid, channel, nearby)).is_some_and(|times|
-            times.iter().any(|previous| (previous - time).abs() <= 1e-6)) {
+            times.iter().any(|previous| (*previous - time).abs() <= 1e-6)) {
             return false;
         }
     }

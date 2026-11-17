@@ -1,3 +1,11 @@
+## 2026-11-17 — Rust Paint/Animation snapshot efficiency increment (SOURCE ONLY)
+
+Original pinned Rust head for this increment: `551747cecbf44efbbdfa5ed2d5a70d133a86084a`.
+Source commits through `45a20f77a45a3b3b97968e641855cfcd19aefe51` removed the redundant decoded-atlas `visited` allocation in 4-neighbor RGBA8 Paint fill, added a short-lived `bedrock_attachable` scope index for read-only Tauri Texture projection, indexed near-duplicate numeric Animation timestamps per Bone/channel while retaining the exact original 1e-6 rejection criterion, and indexed Bone UUID/name lookups once per Animation snapshot.
+The source review keeps original PNG/alpha, Cube/UV, all collision refusals, bounds, keyframe UUID and complete-clip admission checks, .bbmodel data, transaction/Undo, Code Mode approval and native no-overwrite publishers unchanged. Tauri caches/indexes live only during projection and are not a second model authority. Authored regression source covers large connected four-neighbor Paint with a barrier and undo/redo, 12 scoped preview textures with duplicate/unsupported membership, per-Bone/channel timestamp boundaries and unknown/duplicate Bone label ownership.
+Proof: direct GitHub connector source review and exact changed files/commit receipt. Rust compiler, node:test, Svelte typecheck, Windows/WebView, Blockbench/Minecraft interoperability, real Pillager visual A/B and measured CPU/RAM/GPU/token performance are NOT_EXECUTED under the active hold. This is SOURCE_COMMITTED / TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED, not an observed speedup or visual PASS.
+Next source work should be triggered by a concrete source defect or measured bottleneck; broad Copy-on-Write history, long-lived Code Mode process and dependency mass-upgrades are not prerequisites and are not implemented.
+
 ## 2026-11-17 — Rust native Paint and GPU working-set reduction (SOURCE ONLY)
 
 Source baseline: `Rust@7b825e5900477c81476371a30358e812a57aada6`; reviewed development chain through `a68d904097cb2afe8c2763bad4364d1c356bfba1`.
