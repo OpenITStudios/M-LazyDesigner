@@ -383,6 +383,23 @@ fn inspect_authoring_target(
                 if !linked {
                     suggested_operations.clear();
                     source_blockers.push("EXPLICIT_SAVED_FACE_TEXTURE_REQUIRED");
+                } else {
+                    // A declared Cube texture link does not mean the target
+                    // PNG is admitted by Rust Paint. Inspect the actual linked
+                    // texture owners, not only the Face reference kind.
+                    let editable_link = surfaces["faces"].as_array().is_some_and(|faces|
+                        faces.iter().any(|face| {
+                            let explicit = face["reference_kind"] == "uuid" ||
+                                face["reference_kind"] == "index";
+                            explicit && face["texture_index"].as_u64()
+                                .and_then(|value| usize::try_from(value).ok())
+                                .and_then(|index| doc.texture_assets.get(index))
+                                .is_some_and(paint_texture_editable)
+                        }));
+                    if !editable_link {
+                        suggested_operations.clear();
+                        source_blockers.push("LINKED_TEXTURE_NOT_RUST_PAINT_EDITABLE");
+                    }
                 }
             }
         } else if category == "textures" && domain == "texturing" {
@@ -1202,6 +1219,22 @@ mod tests {
             {"kind":"authoring_target","domain":"texturing",
              "category":"cubes","name":"Helmet"}
         ]})).unwrap();
+        let not_editable = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
+        assert_eq!(not_editable["candidate_operations"], json!([]));
+        assert_eq!(not_editable["source_blockers"][0],
+            "LINKED_TEXTURE_NOT_RUST_PAINT_EDITABLE");
+        // Admit a narrowly supported test-owned RGBA8 bitmap; imported
+        // source metadata is never upgraded automatically in production.
+        let imported = textured.texture_assets[0].as_object_mut().unwrap();
+        imported.remove("texture_set");
+        imported.insert("paint_owner".into(), json!("lazydesigner-rgba8-v1"));
+        imported.insert("render_mode".into(), json!("default"));
+        imported.insert("render_sides".into(), json!("double"));
+        assert!(paint_texture_editable(&textured.texture_assets[0]));
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"texturing",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
         let ready = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
         assert_eq!(ready["status"], "EXACT_MATCH");
         assert_eq!(ready["candidate_operations"][0],
@@ -1237,7 +1270,7 @@ mod tests {
         // Imported but unadopted atlases are not editable Rust Paint assets.
         let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
             {"kind":"authoring_target","domain":"texturing",
-             "category":"textures","name":"atlas.png"}
+             "category":"textures","name":"external.png"}
         ]})).unwrap();
         let imported = &inspect_batch(&textured, q.requests).unwrap()[0]["target"];
         assert_eq!(imported["status"], "EXACT_MATCH");
