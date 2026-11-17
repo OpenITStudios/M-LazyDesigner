@@ -1357,8 +1357,8 @@ export async function createCodeModeHost({
       }
       const reviewedTextureSession = visualPair !== null &&
         typeof reviewVisualPair === 'function';
-      // Only inside an independently reviewed material session, a FORM
-      // packet may be compiled into the existing Rust guarded face paint.
+      // Reviewer-backed FORM_SHADING samples and propagation use the
+      // same deterministic cluster-to-Rust guarded face Paint compiler.
       // Guest-supplied operations are not authoritative for this path.
       let activeOperations=args.operations;
       let proposedPacket;
@@ -1456,14 +1456,32 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_MATERIAL_COHORT_IDENTITY_MISMATCH');
         }
         if (cohort.phase === 'sample') {
-          if(args.materialWorkPacket!==undefined){
-            throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_PROPAGATION_ONLY');
-          }
           if (!correctionFitsReview(requested,{
             textureUuid:feedback.correctionScope.textureUuid,
             allowedRegions:[cohort.sampleRegion],
             preserveAlpha:feedback.correctionScope.preserveAlpha,
           })) throw new Error('CODE_MODE_MATERIAL_SAMPLE_REGION_REQUIRED');
+          // A reviewed flat-material defect needs form-following clusters
+          // even in the FIRST sample. Do not accept another generic base fill.
+          // Small identity/detail corrections retain their direct pixel path.
+          if (issue.kind==='FLAT_SHADING' && !proposedPacket) {
+            throw new Error('CODE_MODE_MATERIAL_FORM_SAMPLE_PACKET_REQUIRED');
+          }
+          if (proposedPacket) {
+            const facePlan=proposedPacket.facePlans[0];
+            const exact=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&
+              a.length===2&&b.length===2&&a.every((n,i)=>n===b[i]);
+            if (proposedPacket.shadingIntent!=='FORM_SHADING' ||
+                proposedPacket.facePlans.length!==1 ||
+                facePlan.cubeUuid!==cohort.cubeUuid ||
+                facePlan.face!==cohort.face ||
+                !requested.allowed_regions.some(region=>
+                  exact(region.from,facePlan.atlasRegion.from) &&
+                  exact(region.to,facePlan.atlasRegion.to))) {
+              throw new Error('CODE_MODE_MATERIAL_SAMPLE_FORM_PLAN_MISMATCH');
+            }
+            workPacket=proposedPacket;
+          }
         } else {
           // A single front view is sufficient for a small sample, never
           // enough authority for broad material propagation. All six
@@ -1498,6 +1516,8 @@ export async function createCodeModeHost({
              feedback.correctionScope.editableBeforeRgba.length===0){
             throw new Error('CODE_MODE_REVIEWED_SOURCE_COLOR_GUARD_REQUIRED');
           }
+        }
+        if(workPacket) {
           if(workPacket.sourceModelSha256!==p.expectedSha256 ||
              workPacket.referencePngSha256!==visualPair.reference.sha256 ||
              workPacket.textureUuid!==requested.texture_uuid ||

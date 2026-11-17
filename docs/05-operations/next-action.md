@@ -1,3 +1,16 @@
+**Rust first-sample material cluster gate (2026-11-17; SOURCE ONLY):**
+A trusted-reviewer `FLAT_SHADING` sample now requires the same
+source/reviewer-bound `MaterialWorkPacket` and connected face-local
+shadow/highlight compiler previously used only at propagation.
+The Host binds one sampled Cube/face, current model/reference SHA,
+and the exact allowed atlas region; existing Rust UV/guarded Paint is
+reused. Missing packets, wrong sample face/reference and direct
+base-only shortcuts refuse before approval. Narrow independently
+reviewed detail and unreviewed exact-RGBA edits retain the direct path.
+Host/Golden/Skill docs and positive/negative regressions authored.
+TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED; actual visual
+quality, native runtime and performance remain UNVERIFIED.
+
 **Rust scoped Paint receipt trust closure (2026-11-17; SOURCE ONLY):**
 The Rust `apply` receipt now reports the enforced original RGBA
 preimage guard count alongside existing protected regions and

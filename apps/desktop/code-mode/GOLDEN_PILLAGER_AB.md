@@ -111,6 +111,19 @@ through PILL-10 acceptance and test holds remain unchanged.
 
 ## PILL-03 cluster geometry and execution coherence — source only
 
+A reviewer-selected first `FLAT_SHADING` helmet sample must now
+include the same `MaterialWorkPacket` form/light/palette/connected
+shadow/highlight masks required by broad propagation, but confined
+to exactly one actual reviewer-selected Cube face and scoped atlas
+patch. Direct flat-fill shortcuts and mismatched model/reference/
+face plans are refused before approval. Rust remains the single
+bitmap, UV and Undo owner. Source regressions cover missing and
+incorrect sample plans as well as valid compiled samples; none
+establishes that the submitted cluster actually resembles metal.
+Independent fresh visual acceptance of the saved sample is still
+required. Intentional flat marks and small independent detail
+corrections are not forced into FORM_SHADING. TEST_AUTHORED_NOT_RUN.
+
 ## PILL-01/PILL-05 — preserve source identity by original RGBA guard
 
 An allowed metal-shading patch that contains original red/blue artwork

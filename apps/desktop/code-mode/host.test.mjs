@@ -28,6 +28,23 @@ const ALL_FACE_SIDES=Object.freeze(['north','east','south','west','up','down']);
 async function mockedNativeFaceBinding(argv, sha) {
   assert.equal(argv[0],'inspect-batch');
   const plan=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+  if(plan.requests.length===1 &&
+      plan.requests[0].kind==='material_face_patch'){
+    const q=plan.requests[0];
+    assert.equal(q.cube_uuid,REVIEW_CUBE);
+    assert.equal(q.face,'north');
+    assert.equal(q.texture_uuid,'tier2-atlas');
+    return {status:'OK',sha256:sha,summary:SUMMARY,
+      results:[{kind:'material_face_patch',binding:{
+        scope:'source_explicit_cube_face_patch',status:'bound_source_only',
+        texture_uuid:q.texture_uuid,cube_uuid:q.cube_uuid,
+        face:q.face,sample_region:q.region,
+        texture_reference:'explicit_saved_link',
+        pixel_alias:'no_detected_overlap_for_sample',
+        visual_verdict:'UNVERIFIED',face_coverage_verdict:'UNVERIFIED',
+        view_correspondence:'NOT_VERIFIED',
+      }}]};
+  }
   assert.deepEqual(plan.requests.map(x=>x.kind),[
     'material_face_patch','cube_face_alpha',
   ]);
@@ -613,8 +630,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
         assert.equal(selection.reference.sha256,digest);
         return {
           decision:'REJECTED',
-          issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
-            observation:'Helmet needs reviewed material shading.',
+          issues:[{id:'helmet-flat',kind:'MISSING_DETAIL',
+            observation:'Helmet needs one bounded identity detail correction.',
             partId:'tier2-helmet'}],
           correctionScope:{
             textureUuid:'tier2-atlas',
@@ -1211,6 +1228,17 @@ test('representative material is constrained; propagation requires fresh accepte
         ],
       }],
     };
+    const samplePacket={
+      ...workPacket,sourceModelSha256:HASH,
+      reviewedIssueObservation:'Metal helmet needs one representative sample.',
+      facePlans:[{
+        ...workPacket.facePlans[0],face:'north',
+        atlasRegion:{from:[1,1],to:[5,5]},
+        formCue:'The front helmet rim turns from upper bevel into the face plane.',
+        shadowPlacement:'Build a bounded contact shadow beneath the actual metal rim.',
+        highlightPlacement:'Keep the upper lit bevel distinct from its darker joint.',
+      }],
+    };
     let firstStep=0, secondStep=0, approvals=0;
     const actualApprovals=[];
     const sampleHost=await createCodeModeHost({
@@ -1263,30 +1291,57 @@ test('representative material is constrained; propagation requires fresh accepte
           assert.equal(value.result.review_feedback.materialCohort.sampleVerdict,'UNVERIFIED');
           return {reviewed:true};
         });
-        const broad=step===2;
+        const broad=step===2,missingPacket=step===3;
+        const wrongReference=step===4,wrongFace=step===5;
         return fakeGuest({method:'apply',args:{
-          project:'p0',output:broad?'too-broad.bbmodel':'representative.bbmodel',
-          operations:[{op:'paint_texture_pixel',texture_index:0,
-            x:broad?10:2,y:broad?10:2,rgba:[30,40,50,255]}],
+          project:'p0',output:broad?'too-broad.bbmodel':
+            missingPacket?'missing-sample-plan.bbmodel':
+            wrongReference?'wrong-sample-source.bbmodel':
+            wrongFace?'wrong-sample-face.bbmodel':'representative.bbmodel',
+          ...(broad||missingPacket?{operations:[{
+            op:'paint_texture_pixel',texture_index:0,
+            x:broad?10:2,y:broad?10:2,rgba:[30,40,50,255],
+          }]}:{}),
           correctionScope:{textureUuid:'tier2-atlas',
             allowedRegions:broad?[{from:[8,8],to:[12,12]}]:
-              [{from:[2,2],to:[4,4]}],preserveAlpha:true},
+              [{from:[1,1],to:[5,5]}],preserveAlpha:true},
           correctionIntent:intent,
+          ...(!broad&&!missingPacket?{materialWorkPacket:
+            wrongReference?{...samplePacket,sourceModelSha256:'d'.repeat(64)}:
+              wrongFace?{...samplePacket,facePlans:[{
+                ...samplePacket.facePlans[0],face:'east'}]}:samplePacket}:{})
         }},value=>{
           if(broad){
             assert.equal(value.ok,false);
             assert.equal(value.code,'CODE_MODE_MATERIAL_SAMPLE_REGION_REQUIRED');
             return {blocked:true};
           }
+          if(missingPacket||wrongReference||wrongFace){
+            assert.equal(value.ok,false);
+            assert.equal(value.code,missingPacket?
+              'CODE_MODE_MATERIAL_FORM_SAMPLE_PACKET_REQUIRED':
+              wrongReference?'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH':
+                'CODE_MODE_MATERIAL_SAMPLE_FORM_PLAN_MISMATCH');
+            return {blocked:true};
+          }
           assert.equal(value.ok,true);
           assert.equal(value.result.project,'p1');
+          assert.equal(value.result.texturing_workflow.material_work_packet.planned_faces,1);
+          assert.equal(value.result.texturing_workflow.material_work_packet.visual_verdict,'UNVERIFIED');
           return {sampleSaved:true};
         });
       },
     });
     assert.equal((await sampleHost.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.reviewed,true);
     assert.equal((await sampleHost.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
-    assert.equal((await sampleHost.execute({code:'return codemode.apply({project:"p0"});'})).value.sampleSaved,true);
+    for(let i=0;i<3;i++){
+      assert.equal((await sampleHost.execute({
+        code:'return codemode.apply({project:"p0"});',
+      })).value.blocked,true);
+    }
+    assert.equal((await sampleHost.execute({
+      code:'return codemode.apply({project:"p0"});',
+    })).value.sampleSaved,true);
     assert.equal(approvals,1);
 
     // A NEW selected .bbmodel source and new model capture are required.
@@ -2716,8 +2771,8 @@ test('reviewed sample freezes its source after a potentially published but unver
         captureModelSha256:HASH,viewId:'front',
       },
       reviewVisualPair:()=>({
-        decision:'REJECTED',issues:[{id:'helmet-flat',kind:'FLAT_SHADING',
-          partId:'tier2-helmet',observation:'The helmet has one flat band.'}],
+        decision:'REJECTED',issues:[{id:'helmet-flat',kind:'MISSING_DETAIL',
+          partId:'tier2-helmet',observation:'A reviewed helmet edge mark is missing.'}],
         correctionScope:{textureUuid:'tier2-atlas',
           allowedRegions:[{from:[1,1],to:[5,5]}],preserveAlpha:true},
         materialCohort:{phase:'sample',issueId:'helmet-flat',

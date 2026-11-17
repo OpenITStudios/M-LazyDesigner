@@ -245,7 +245,7 @@ operations apply only to non-FORM_SHADING intents.
 
 ## MaterialWorkPacket: reviewer-bound material composition (SOURCE ONLY)
 
-For **broad, independently reviewed material propagation only**, the guest
+For **independently reviewed FLAT_SHADING samples and broad material propagation**, the guest
 supplies `materialWorkPacket` to `codemode.apply` together with the existing
 `correctionIntent`, `correctionScope`, and Rust-owned
 `paint_cube_face_regions_guarded` operations. This is a bounded,
@@ -284,8 +284,9 @@ The host refuses:
   observation that conflicts with the trusted reviewer and Rust model;
 - face plans missing shadow/highlight placement for FORM_SHADING, duplicate
   faces/regions, malformed shade palette or unaccounted correction patches;
-- raw atlas Paint or a Cube/face missing from the packet during broad
-  reviewed propagation (sample and unreviewed exact-RGBA edits are unchanged);
+- raw atlas Paint or a Cube/face missing from the packet during reviewed
+  FORM_SHADING samples or propagation; narrow non-FLAT_SHADING samples and
+  unreviewed exact-RGBA edits retain the existing direct Paint path;
 - arbitrary RGB not in the named palette, base-only FORM_SHADING paint,
   unsupported/shared/reused UV source and edits to the accepted sample.
 
@@ -309,11 +310,14 @@ model client do not gain a new process/network/asset mutation capability.
 ```text
 Fresh approved reference + current model snapshot
  → independent visual issue (part, source SHA, actual visual mismatch)
- → bounded reviewed representative face sample
+ → reviewer selects one bounded representative Cube face/atlas patch
+ → agent proposes one-face FORM_SHADING MaterialWorkPacket (for flat-material defects)
+ → host verifies issue, source, sample and exact saved Cube/UV
+ → Rust guarded Paint under existing operator approval
  → new model SHA + actual image comparison of improved sample
  → reviewer authorizes broad, compatible material propagation
- → agent proposes MaterialWorkPacket (form/light/palette/clusters/targets)
- → host binds issue, sample, source and exact Cube/UV face patches
+ → agent proposes new MaterialWorkPacket (form/light/palette/clusters/targets)
+ → host binds the accepted sample, source and remaining Cube/UV faces
  → Rust guarded face-local Paint under existing operator approval
  → fresh mapped-view and all-face visual review
  → revised source packet only if evidence supports another correction
@@ -691,7 +695,18 @@ return {
 
 The guest must name the matching issue/part/approach in
 `correctionIntent` and keep its `correctionScope` inside the reviewer
-sample. The host refuses broad edits despite their earlier approved
+sample. For a reviewed `FLAT_SHADING` issue, the **first sample** must
+also supply a source/reviewer-bound `materialWorkPacket` with
+`shadingIntent:'FORM_SHADING'`, exactly **one** face plan on the
+reviewer-selected Cube and face, and an atlas region equal to the
+requested correction scope inside the sample. The packet describes
+form/light causes and connected shadow/highlight clusters; omit
+guest-supplied `operations`. The host compiles these into existing
+Rust guarded face-local Paint, confirms exact saved Cube/UV ownership,
+and refuses missing, wrong-source or wrong-face plans before approval.
+The saved sample is still visually UNVERIFIED until a new matched
+image review. Other exact identity/detail corrections retain direct Paint.
+The host refuses broad edits despite their earlier approved
 larger scope. Rust still checks actual changes before publishing.
 
 To expand the treatment, first save the sample into a new `.bbmodel`,
