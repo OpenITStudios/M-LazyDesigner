@@ -893,6 +893,7 @@ pub fn rust_editor_add_cube(
     expected_epoch: u64,
     expected_revision: u64,
     parent_uuid: Option<String>,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -931,7 +932,7 @@ pub fn rust_editor_add_cube(
     });
     active.session.apply(expected_revision, &operations).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
 
@@ -940,6 +941,7 @@ pub fn rust_editor_add_cube(
 pub fn rust_editor_duplicate_cube(
     state: State<'_, EditorState>,
     expected_epoch: u64, expected_revision: u64, source_uuid: String,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut store = lock(&state)?;
     check_epoch(&store, expected_epoch)?;
@@ -950,7 +952,7 @@ pub fn rust_editor_duplicate_cube(
         source_uuid, new_uuid: create_uuid(),
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&store)
+    current_with_preview_reuse(&store, known_preview_source_key.as_deref())
 }
 
 #[tauri::command]
@@ -959,6 +961,7 @@ pub fn rust_editor_add_bone(
     expected_epoch: u64,
     expected_revision: u64,
     parent_uuid: Option<String>,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -980,7 +983,7 @@ pub fn rust_editor_add_bone(
         parent_uuid,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
 
@@ -988,6 +991,7 @@ pub fn rust_editor_add_bone(
 pub fn rust_editor_create_animation(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     name: String, length: f64,
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -997,7 +1001,7 @@ pub fn rust_editor_create_animation(
         uuid: create_uuid(), name, length,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
 #[tauri::command]

@@ -9,7 +9,7 @@
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
-  import { isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport';
+  import { canReusePreviewInCommand, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
@@ -281,7 +281,7 @@
     if (busy) return null;
     busy = true; closeMenus(); error = '';
     try {
-      const reuse = (name === 'rust_editor_apply' || name === 'rust_editor_undo' || name === 'rust_editor_redo')
+      const reuse = canReusePreviewInCommand(name)
         ? { knownPreviewSourceKey: snapshot?.previewSourceKey ?? null } : {};
       const next = await invoke<EditorSnapshot>(name, { ...args, ...reuse });
       return accept(next);

@@ -1,7 +1,7 @@
 // TEST_AUTHORED_NOT_RUN: local/CI hold is active.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport.ts';
+import { canReusePreviewInCommand, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport.ts';
 const base={epoch:1,revision:0,previewSourceKey:'k',previewSourcesReused:false,
  textureNames:['atlas'],texturePreviewSources:['data:image/png;base64,QUJD']};
 
@@ -55,4 +55,17 @@ test('a rejected preview response cannot trigger another Rust mutation', async (
   assert.match(handler, /invoke<EditorSnapshot \| null>\('rust_editor_snapshot'\)/);
   assert.doesNotMatch(handler, /invoke<EditorSnapshot>\('rust_editor_apply'/);
   assert.doesNotMatch(handler, /invoke<EditorSnapshot>\('rust_editor_undo'/);
+});
+
+test('only implemented Rust snapshot-returning commands receive the PNG reuse hint', () => {
+  for (const supported of [
+    'rust_editor_apply', 'rust_editor_undo', 'rust_editor_redo',
+    'rust_editor_add_cube', 'rust_editor_duplicate_cube',
+    'rust_editor_add_bone', 'rust_editor_create_animation',
+  ]) assert.equal(canReusePreviewInCommand(supported), true);
+  for (const unsupported of [
+    'rust_editor_open', 'rust_editor_new', 'rust_editor_save_copy',
+    'rust_editor_import_paint_png', 'rust_editor_export_bedrock_geometry',
+    'rust_editor_snapshot', 'unknown',
+  ]) assert.equal(canReusePreviewInCommand(unsupported), false);
 });
