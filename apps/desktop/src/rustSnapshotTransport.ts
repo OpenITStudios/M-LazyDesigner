@@ -9,6 +9,7 @@ const REUSE_COMMANDS = new Set([
   'rust_editor_apply', 'rust_editor_undo', 'rust_editor_redo',
   'rust_editor_add_cube', 'rust_editor_duplicate_cube',
   'rust_editor_add_bone', 'rust_editor_create_animation',
+  'rust_editor_add_rotation_keyframe',
 ]);
 export function canReusePreviewInCommand(name: string): boolean {
   return REUSE_COMMANDS.has(name);

@@ -1,5 +1,11 @@
 //! Tauri adapter for the one authoritative Rust Bedrock document session.
 //! This module never implements its own geometry, history or .bbmodel codec.
+//!
+//! Synchronous snapshot/transaction commands use Tauri's `command(async)`
+//! dispatch rather than running validation, history cloning, Paint, Dirty SHA
+//! and snapshot projection on the main UI thread. The existing EditorStore
+//! mutex and expected epoch/revision still serialize source edits. This
+//! does not prove runtime responsiveness or remove the clone/Undo cost.
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
@@ -764,12 +770,12 @@ fn create_uuid() -> String {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_snapshot(state: State<'_, EditorState>) -> Result<Option<EditorSnapshot>, DesktopError> {
     Ok(project(&lock(&state)?))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_new(
     state: State<'_, EditorState>,
     name: String,
@@ -831,7 +837,7 @@ pub async fn rust_editor_open(
     current(&guard).map(Some)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_apply(
     state: State<'_, EditorState>,
     expected_epoch: u64,
@@ -1079,7 +1085,7 @@ fn new_cube_faces(textures: &[Value]) -> Map<String, Value> {
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_add_cube(
     state: State<'_, EditorState>,
     expected_epoch: u64,
@@ -1129,7 +1135,7 @@ pub fn rust_editor_add_cube(
 
 
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_duplicate_cube(
     state: State<'_, EditorState>,
     expected_epoch: u64, expected_revision: u64, source_uuid: String,
@@ -1147,7 +1153,7 @@ pub fn rust_editor_duplicate_cube(
     current_with_preview_reuse(&store, known_preview_source_key.as_deref())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_add_bone(
     state: State<'_, EditorState>,
     expected_epoch: u64,
@@ -1179,7 +1185,7 @@ pub fn rust_editor_add_bone(
 }
 
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_create_animation(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     name: String, length: f64,
@@ -1196,10 +1202,11 @@ pub fn rust_editor_create_animation(
     current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_add_rotation_keyframe(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     animation_uuid: String, bone_uuid: String, time: f64, rotation: [f64; 3],
+    known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
@@ -1209,10 +1216,10 @@ pub fn rust_editor_add_rotation_keyframe(
         animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
     }]).map_err(model_failure)?;
     refresh_dirty(active);
-    current(&guard)
+    current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_undo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<String>,
@@ -1226,7 +1233,7 @@ pub fn rust_editor_undo(
     current_with_preview_reuse(&guard, known_preview_source_key.as_deref())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rust_editor_redo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<String>,
@@ -1465,6 +1472,22 @@ mod tests {
         let reopened=project_with_preview_reuse(&store,Some(&painted.preview_source_key)).unwrap();
         assert!(!reopened.preview_sources_reused);
         assert_ne!(reopened.preview_source_key,painted.preview_source_key);
+        // An animation-only transaction must retain the same Paint source key
+        // and omit immutable embedded PNG bytes when the editor knows it.
+        let before_animation_revision=store.active.as_ref().unwrap()
+            .session.summary().revision;
+        store.active.as_mut().unwrap().session.apply(
+            before_animation_revision, &[EditOperation::CreateAnimation {
+                uuid:"00000000-0000-4000-8000-000000009988".into(),
+                name:"idle".into(), length:1.0,
+            }],
+        ).unwrap();
+        let after_animation=project_with_preview_reuse(
+            &store,Some(&reopened.preview_source_key)).unwrap();
+        assert_eq!(after_animation.revision,before_animation_revision+1);
+        assert!(after_animation.preview_sources_reused);
+        assert!(after_animation.texture_preview_sources.is_empty());
+        assert_eq!(after_animation.preview_source_key,reopened.preview_source_key);
     }
 
 

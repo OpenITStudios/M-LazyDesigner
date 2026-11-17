@@ -62,6 +62,7 @@ test('only implemented Rust snapshot-returning commands receive the PNG reuse hi
     'rust_editor_apply', 'rust_editor_undo', 'rust_editor_redo',
     'rust_editor_add_cube', 'rust_editor_duplicate_cube',
     'rust_editor_add_bone', 'rust_editor_create_animation',
+    'rust_editor_add_rotation_keyframe',
   ]) assert.equal(canReusePreviewInCommand(supported), true);
   for (const unsupported of [
     'rust_editor_open', 'rust_editor_new', 'rust_editor_save_copy',
