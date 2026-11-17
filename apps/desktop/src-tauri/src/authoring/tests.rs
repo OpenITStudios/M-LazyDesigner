@@ -3284,6 +3284,82 @@ fn face_local_region_refuses_aliases_invalid_regions_and_opaque_rules_atomically
     assert!(!corrupt.can_undo());
 }
 
+// SOURCE_AUTHORED_NOT_RUN: the reference preflight and guarded region Paint
+// must agree on physical pixels, including when only PART of a face is shared.
+// A disjoint sample may be painted; shared pixels and mixed batches fail closed.
+#[test]
+fn face_local_paint_allows_exclusive_patch_on_partially_shared_uv_face() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009947";
+    let mut setup = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    setup.apply(0,&[
+        EditOperation::CreatePaintTexture {uuid:TEX.into(),name:"atlas.png".into()},
+        EditOperation::AssignCubeTexture {cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ]).unwrap();
+    let mut original = setup.document().clone();
+    // A manual layout with exactly one partial north/east overlap.
+    for (side, uv) in [
+        ("north",[1,2,5,6]),("east",[4,4,8,8]),
+        ("south",[12,2,16,6]),("west",[20,2,24,6]),
+        ("up",[28,2,32,6]),("down",[36,2,40,6]),
+    ] {
+        original.cubes[0].faces.get_mut(side).unwrap()["uv"]=json!(uv);
+    }
+    original.validate().unwrap();
+    let overlap = inspect_cube_uv_sharing(&original,CUBE,TEX).unwrap();
+    assert_eq!(overlap["report_truncated"],json!(false));
+    assert!(overlap["declared_overlap_pairs"].as_u64().unwrap() > 0);
+    let exclusive=MaterialPatchRegion{from:[1,2],to:[2,3]};
+    assert_eq!(inspect_material_face_patch(
+        &original,TEX,CUBE,"north",&exclusive
+    ).unwrap()["status"],json!("bound_source_only"));
+    let shared=MaterialPatchRegion{from:[4,4],to:[5,5]};
+    assert_eq!(inspect_material_face_patch(
+        &original,TEX,CUBE,"north",&shared
+    ).unwrap_err(),"MATERIAL_FACE_PATCH_UV_SHARED");
+
+    let paint = |regions:Vec<CubeFaceRegionPaintPatch>| {
+        EditOperation::PaintCubeFaceRegionsGuarded {
+            cube_uuid:CUBE.into(),texture_uuid:TEX.into(),regions,
+        }
+    };
+    let safe=CubeFaceRegionPaintPatch{
+        face:"north".into(),from:[0,0],to:[1,1],
+        rgba:[90,50,30,255],erase:false,
+    };
+    let unsafe_shared=CubeFaceRegionPaintPatch{
+        face:"north".into(),from:[3,2],to:[4,3],
+        rgba:[180,80,40,255],erase:false,
+    };
+    let mut session=EditorSession::from_document(original.clone()).unwrap();
+    assert_eq!(session.apply(0,&[paint(vec![unsafe_shared.clone()])])
+        .unwrap_err(),"PAINT_CUBE_UV_GUARD_SHARED");
+    assert_eq!(session.document(),&original);
+    assert!(!session.can_undo());
+
+    session.apply(0,&[paint(vec![safe])]).unwrap();
+    let painted=session.document().clone();
+    assert_eq!(painted.cubes,original.cubes);
+    let pixels=paint::decode_for_uv_inspection(
+        &painted.texture_assets[0],128,128
+    ).unwrap();
+    let pixel=|x:usize,y:usize| -> &[u8] {
+        let i=(y*128+x)*4; &pixels[i..i+4]
+    };
+    assert_eq!(pixel(1,2),&[90,50,30,255]);
+    assert_eq!(pixel(4,4),&[0,0,0,0]);
+    assert_eq!(session.apply(1,&[paint(vec![
+        CubeFaceRegionPaintPatch {
+            face:"north".into(),from:[0,1],to:[1,2],
+            rgba:[50,120,90,255],erase:false,
+        },
+        unsafe_shared,
+    ])]).unwrap_err(),"PAINT_CUBE_UV_GUARD_SHARED");
+    assert_eq!(session.document(),&painted);
+    assert_eq!(session.summary().revision,1);
+    session.undo(1).unwrap();
+    assert_eq!(session.document(),&original);
+}
+
 // SOURCE-AUTHORED: one Cube's painted Box UV can be relocated without
 // erasing the shared source, then painted independently from its duplicate.
 #[test]

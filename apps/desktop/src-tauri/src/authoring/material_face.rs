@@ -3,10 +3,6 @@ use super::{AuthoringDocument, FACE_NAMES, Result, uv_sharing};
 use super::material_pair::MaterialPatchRegion;
 use serde_json::{json, Value};
 
-fn intersects(a0:[u32;2],a1:[u32;2],b0:[u32;2],b1:[u32;2])->bool{
-    a0[0]<b1[0] && a1[0]>b0[0] && a0[1]<b1[1] && a1[1]>b0[1]
-}
-
 /// Reuses Rust Box/manual UV projection and explicit alias inspection.
 /// Unsupported/implicit references are unresolved, never silently accepted.
 pub fn inspect_material_face_patch(doc:&AuthoringDocument,
@@ -53,14 +49,9 @@ pub fn inspect_material_face_patch(doc:&AuthoringDocument,
        share["report_truncated"]!=Value::Bool(false){
         return Err("MATERIAL_FACE_OWNERSHIP_UNRESOLVED".into());
     }
-    let overlaps=share["overlaps"].as_array()
-        .ok_or_else(||"MATERIAL_FACE_OWNERSHIP_UNRESOLVED".to_string())?;
-    for item in overlaps{
-        let rect:[u32;4]=serde_json::from_value(item["pixel_rect"].clone())
-            .map_err(|_|"MATERIAL_FACE_OWNERSHIP_UNRESOLVED".to_string())?;
-        if intersects(patch.from,patch.to,[rect[0],rect[1]],[rect[2],rect[3]]){
-            return Err("MATERIAL_FACE_PATCH_UV_SHARED".into());
-        }
+    if uv_sharing::face_patch_has_alias(&share,side,patch.from,patch.to)
+        .map_err(|_|"MATERIAL_FACE_OWNERSHIP_UNRESOLVED".to_string())? {
+        return Err("MATERIAL_FACE_PATCH_UV_SHARED".into());
     }
     Ok(json!({
         "scope":"source_explicit_cube_face_patch",

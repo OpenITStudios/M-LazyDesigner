@@ -204,6 +204,40 @@ fn overlap(
     (from[0] < to[0] && from[1] < to[1]).then_some((from, to))
 }
 
+/// Check the EXACT physical atlas patch against all bounded overlap witnesses
+/// for this face. A face can have aliases elsewhere while this patch remains
+/// exclusive. The read-only inspector and guarded Paint use this one test.
+/// An incomplete/malformed overlap report is NEVER proof of exclusivity.
+pub(super) fn face_patch_has_alias(
+    report: &Value, side: &str, from: [u32; 2], to: [u32; 2],
+) -> Result<bool> {
+    const INCOMPLETE: &str = "UV_SHARING_PATCH_EVIDENCE_INCOMPLETE";
+    if report["report_truncated"] != Value::Bool(false) {
+        return Err(INCOMPLETE.into());
+    }
+    let details = report["overlaps"].as_array()
+        .ok_or_else(|| INCOMPLETE.to_owned())?;
+    if report["declared_overlap_pairs"].as_u64() != Some(details.len() as u64) {
+        return Err(INCOMPLETE.into());
+    }
+    for item in details {
+        let focus = item["focus_face"].as_str()
+            .ok_or_else(|| INCOMPLETE.to_owned())?;
+        if !FACE_NAMES.contains(&focus) { return Err(INCOMPLETE.into()); }
+        let rect: [u32; 4] = serde_json::from_value(item["pixel_rect"].clone())
+            .map_err(|_| INCOMPLETE.to_owned())?;
+        if rect[0] >= rect[2] || rect[1] >= rect[3] {
+            return Err(INCOMPLETE.into());
+        }
+        if focus == side && overlap(
+            from, to, [rect[0], rect[1]], [rect[2], rect[3]]
+        ).is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Compare a selected Cube's *explicitly linked* texture-face UV rectangles
 /// with all explicitly linked face regions using the exact same PNG atlas.
 /// Includes the selected Cube's other faces; cross-Cube references are not
@@ -338,4 +372,32 @@ pub(super) fn inspect_cube_uv_sharing_for_faces(
         return Err("UV_SHARING_RESULT_TOO_LARGE".into());
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod region_alias_tests {
+    use super::*;
+    #[test]
+    fn sampled_alias_reports_must_be_complete_before_paint() {
+        let report = json!({
+            "report_truncated":false,
+            "declared_overlap_pairs":1,
+            "overlaps":[{"focus_face":"north","pixel_rect":[4,4,5,5]}]
+        });
+        assert_eq!(face_patch_has_alias(&report,"north",[1,2],[2,3]),Ok(false));
+        assert_eq!(face_patch_has_alias(&report,"north",[4,4],[5,5]),Ok(true));
+        assert_eq!(face_patch_has_alias(&report,"east",[4,4],[5,5]),Ok(false));
+        let mut stale=report.clone();
+        stale["report_truncated"]=json!(true);
+        assert_eq!(face_patch_has_alias(&stale,"north",[1,2],[2,3])
+            .unwrap_err(),"UV_SHARING_PATCH_EVIDENCE_INCOMPLETE");
+        stale=report.clone();
+        stale["declared_overlap_pairs"]=json!(2);
+        assert_eq!(face_patch_has_alias(&stale,"north",[1,2],[2,3])
+            .unwrap_err(),"UV_SHARING_PATCH_EVIDENCE_INCOMPLETE");
+        stale=report.clone();
+        stale["overlaps"][0]["pixel_rect"]=json!([4,4,4,5]);
+        assert_eq!(face_patch_has_alias(&stale,"north",[1,2],[2,3])
+            .unwrap_err(),"UV_SHARING_PATCH_EVIDENCE_INCOMPLETE");
+    }
 }

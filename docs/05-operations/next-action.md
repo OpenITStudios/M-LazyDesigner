@@ -1,3 +1,16 @@
+**Rust scoped UV-alias Texturing alignment (2026-11-17; SOURCE ONLY):**
+A reviewed Code Mode `material_face_patch` could approve a disjoint
+atlas sample although `paint_cube_face_regions_guarded` rejected
+the entire face because unrelated UV pixels were shared. Rust now
+reuses one bounded, fail-closed physical-patch overlap checker
+across native preflight and guarded Paint: safe disjoint edits can
+proceed; any touched alias, incomplete report, unsupported or
+implicit mapping remains blocked. The existing correction-scope
+RGBA, alpha, Undo and SHA protections are unchanged. Rust regression
+source for partial overlap, mixed-batch atomic rejection and Undo
+AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED. Native/editor correctness,
+measured efficiency and artistic texture quality remain UNVERIFIED.
+
 **Rust first-sample material cluster gate (2026-11-17; SOURCE ONLY):**
 A trusted-reviewer `FLAT_SHADING` sample now requires the same
 source/reviewer-bound `MaterialWorkPacket` and connected face-local

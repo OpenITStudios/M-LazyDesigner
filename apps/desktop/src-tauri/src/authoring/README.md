@@ -1,5 +1,15 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Scoped UV alias Paint alignment (2026-11-17; SOURCE_ONLY):**
+The existing saved `material_face_patch` inspector and the canonical
+`paint_cube_face_regions_guarded` now reuse one Rust overlap-witness
+check for the **actual selected physical atlas rectangle**. A face may
+have unrelated shared UV elsewhere while a disjoint, uniquely owned
+patch is painted; any actual shared-pixel touch, truncated collision
+report, missing texture mapping or unknown owner still refuses.
+No new Paint engine, release, or visual-quality assertion. Rust
+positive/negative regression source AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.
+
 
 **Catmull-Rom Position/Scale visibility bound (2026-11-16; SOURCE_ONLY):** The existing SHA-bound `asset_handoff.geometry.translation_clearance` now includes numeric Catmull-Rom Position and Scale. A read-only helper evaluates the exact *uniform index-neighbor* cubic construction represented by pinned Blockbench 5.2.1 `SplineCurve` and the existing Rust preview: for four saved values `p0,p1,p2,p3`, each spline segment's equivalent scalar Bernstein controls are `p1`, `p1+(p2-p0)/6`, `p2-(p3-p1)/6`, `p2`. Their maximum absolute value provides a conservative per-axis bound even when actual interpolated motion overshoots authored keys. The scan retains Step-before-Catmull priority and Blockbench's first/last neighbor rules for loop clips; short tracks have no invented segment. Bounded Position components are recombined by Euclidean norm; Scale uses the existing maximum hierarchy amplification. The report adds the optional `catmullrom_numeric_tracks` count to the existing type, without modifying `.bbmodel`, Geometry/PNG/Animation export bytes, Undo, file publishers or the Code Mode host. Positive/negative Rust regression source covers overshoot, Step, looping neighbors, malformed numeric values, independent resource hashes, save/reopen and nonmutation; **TEST_AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED**. This is a **conservative single-clip source model**, not verification of Bedrock's interpolation, native visual correctness, controller blending or performance. Primary references: pinned `JannisX11/blockbench@e2ede0809ee6bc91f374ac7e00d34cffbdf86a14` `js/animations/keyframe.js`, `js/animations/timeline_animators.js`, plus `apps/desktop/src/rustAnimationPose.ts`.
 

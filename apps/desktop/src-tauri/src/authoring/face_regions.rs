@@ -83,8 +83,9 @@ pub(super) fn face_local_pixel_rectangle(
 
 /// One model-aware transaction paints up to 64 ordered local regions on
 /// selected Cube faces without requiring the agent to calculate atlas UVs.
-/// Strict non-aliasing reuses the canonical UV sharing inspector: other faces
-/// may be absent intentionally, but implicit/unsupported links are refused.
+/// Reuse the same exact physical-patch alias guard as the read-only material
+/// preflight. Other face aliases may exist OUTSIDE touched rectangles, but
+/// incomplete/unsupported UV ownership remains blocked.
 pub(super) fn paint_cube_face_regions_guarded(
     doc: &mut AuthoringDocument, cube_uuid: &str,
     texture_uuid: &str, regions: &[CubeFaceRegionPaintPatch],
@@ -110,8 +111,8 @@ pub(super) fn paint_cube_face_regions_guarded(
        count("implicit_reference_faces") > 0 {
         return Err("PAINT_CUBE_UV_GUARD_UNRESOLVED".into());
     }
-    if count("declared_overlap_pairs") > 0 {
-        return Err("PAINT_CUBE_UV_GUARD_SHARED".into());
+    if report["report_truncated"] != Value::Bool(false) {
+        return Err("PAINT_CUBE_UV_GUARD_UNRESOLVED".into());
     }
     if has_per_texture_uv_rules(doc) {
         return Err("PAINT_CUBE_UV_RULESET_UNSUPPORTED".into());
@@ -162,6 +163,14 @@ pub(super) fn paint_cube_face_regions_guarded(
             doc.resolution.width, doc.resolution.height,
             uv, rotation, region.from, region.to,
         )?;
+        // Check the ACTUAL projected face-local cluster pixels rather than
+        // rejecting a disjoint patch because this face shares other texels.
+        // The same helper validates inspector and painter outcomes.
+        if uv_sharing::face_patch_has_alias(&report, &region.face, from, end)
+            .map_err(|_| "PAINT_CUBE_UV_GUARD_UNRESOLVED".to_string())?
+        {
+            return Err("PAINT_CUBE_UV_GUARD_SHARED".into());
+        }
         steps.push(PaintRectangleStep {
             from, to: [end[0] - 1, end[1] - 1],
             rgba: region.rgba, erase: region.erase,
