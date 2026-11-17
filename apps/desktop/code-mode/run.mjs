@@ -16,7 +16,8 @@ import {readOperatorVisualManifest, createTrustedProgramReviewer} from './truste
 function parseArgs(argv) {
   const accepted = new Set([
     '--rust', '--deno', '--input', '--output-dir', '--code', '--png',
-    '--visual-manifest', '--reviewer-exe', '--approve-interactive',
+    '--visual-manifest', '--reviewer-exe',
+    '--approved-material-reference-uuid', '--approve-interactive',
   ]);
   const out = Object.create(null);
   for (let i = 0; i < argv.length; i++) {
@@ -51,6 +52,10 @@ function parseArgs(argv) {
       out['--input']===undefined) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_REQUIRES_EXISTING_MODEL');
   }
+  if (out['--approved-material-reference-uuid']!==undefined &&
+      out['--input']===undefined) {
+    throw new Error('CODE_MODE_MATERIAL_REFERENCE_REQUIRES_EXISTING_MODEL');
+  }
   return out;
 }
 async function main() {
@@ -79,6 +84,8 @@ async function main() {
         source_sha256: request.expectedSha256 ?? null,
         plan_sha256: request.planSha256 ?? null,
         material_work_packet_sha256: request.materialWorkPacketSha256 ?? null,
+        approved_material_reference_uuid:
+          args['--approved-material-reference-uuid'] ?? null,
         material_work_packet:request.materialWorkPacket?{
           cohort:request.materialWorkPacket.partId,
           issue:request.materialWorkPacket.issueId,
@@ -114,6 +121,9 @@ async function main() {
       rustBinary: args['--rust'], denoBinary: args['--deno'],
       ...(preselectedVisualPair?{preselectedVisualPair}:{}),
       ...(reviewVisualPair?{reviewVisualPair}:{}),
+      ...(args['--approved-material-reference-uuid']?{
+        approvedMaterialReferenceUuid:args['--approved-material-reference-uuid'],
+      }:{}),
       ...(args['--input'] ? { input: args['--input'] }
         : { outputDirectory: args['--output-dir'] }),
       authorizeMutation,

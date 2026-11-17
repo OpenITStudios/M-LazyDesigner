@@ -200,6 +200,16 @@ bevel edges remain available. It cannot judge real material form, image
 similarity or all unsupported variations of generic stripes. Authored
 negative/positive Node regressions are NOT_EXECUTED.
 
+**Operator CLI approved-material selection (2026-11-17; SOURCE ONLY):**
+The first-party `code-mode/run.mjs` now accepts
+`--approved-material-reference-uuid` only with an existing `--input`
+model. It forwards the operator's selected approved Texture UUID into
+the existing trusted host for SHA-bound material comparisons and scoped
+Paint refusal when that exact master is targeted. The guest cannot
+choose the reference UUID. No new permission or native editor binding
+is introduced; this is not proof the UUID exists or the visual style
+matches the approved image. CLI regression authored, NOT_EXECUTED.
+
 **Reviewed rejected-operation replay guard (2026-11-17; SOURCE_ONLY):**
 The trusted host now records a SHA-256 fingerprint of the exact ordered,
 key-canonicalized Paint operations in a saved-pixel receipt. An independent

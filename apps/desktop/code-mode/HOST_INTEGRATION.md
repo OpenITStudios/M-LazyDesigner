@@ -955,6 +955,22 @@ node code-mode/run.mjs --rust <absolute-first-party-cli> \
 
 For an existing source, supply --input <absolute.bbmodel>. For New-model bootstrap, replace --input with --output-dir <absolute-existing-directory>; **exactly one is required**. By default, all writes are refused. Optional --approve-interactive requires a real TTY and asks for a new challenge response for every exact write, showing target, source SHA, operation kinds/count and plan digest. A TTY can be spoofed by a sufficiently privileged agent; interactive confirmation is a UX guard, **not** cryptographic identity proof. For stronger host integration use a permission mechanism controlled outside the generated code. The operator can add --png followed by an absolute, separately selected import path.
 
+**Approved material master at the CLI boundary (source only, NOT_EXECUTED):**
+With an existing `--input` model the trusted operator may specify
+`--approved-material-reference-uuid <existing-texture-uuid>`. The
+operator-owned value is passed to the existing
+`approvedMaterialReferenceUuid` host option; it is never read from
+model-authored JavaScript. `inspectApprovedMaterial` uses that one
+reference UUID against the current SHA-bound model, while scoped Paint
+cannot target the selected master and other Paint still requires a
+correction scope. The operator must verify that the UUID belongs to
+the actual approved texture; merely typing a string does not prove
+reference presence or user acceptance. The flag is invalid with
+`--output-dir`. It does not protect unrelated Geometry operations,
+prove artistic match or grant write authorization. CLI argument
+regression is authored, not executed; existing host reference guards
+remain the actual enforcement owner.
+
 No automatic installation or download of Deno/Rust is performed. The user-PC host and its actual executable versions must be verified only in the separately authorized local phase.
 
 ## Security, limits and proof ceiling
