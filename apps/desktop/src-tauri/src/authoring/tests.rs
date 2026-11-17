@@ -1,63 +1,3 @@
-
-// SOURCE-AUTHORED_NOT_RUN: one Rust decode/encode for contiguous, same-atlas
-// guarded Cube face plans must preserve the sequential pixels and atomic Undo.
-#[test]
-fn contiguous_guarded_face_paints_share_one_atlas_write_without_changing_pixels() {
-    const TEX: &str = "00000000-0000-4000-8000-000000009954";
-    let mut source = EditorSession::from_document(
-        AuthoringDocument::new_bedrock("Batch Paint", "batch_paint").unwrap()
-    ).unwrap();
-    source.apply(0, &[
-        EditOperation::SetEmptyAtlasResolution { width:32, height:32 },
-        EditOperation::AddBone { bone:serde_json::from_value(json!({
-            "uuid":BONE, "name":"root", "origin":[0,0,0]
-        })).unwrap(), parent_uuid:None },
-        EditOperation::AddCube { cube:sample_cube(CUBE), bone_uuid:BONE.into() },
-        EditOperation::CreatePaintTexture { uuid:TEX.into(), name:"atlas.png".into() },
-        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(), texture_uuid:TEX.into() },
-    ]).unwrap();
-    let original = source.document().clone();
-    let make = |face:&str, rgba:[u8;4]| EditOperation::PaintCubeFaceRegionsGuarded {
-        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
-        regions:vec![CubeFaceRegionPaintPatch {
-            face:face.into(), from:[0,0], to:[1,1], rgba, erase:false,
-        }],
-    };
-    let a = make("north", [100,80,50,255]);
-    let b = make("east", [140,180,220,255]);
-    let mut sequential = EditorSession::from_document(original.clone()).unwrap();
-    sequential.apply(0, &[a.clone()]).unwrap();
-    sequential.apply(1, &[b.clone()]).unwrap();
-    let mut batched = EditorSession::from_document(original.clone()).unwrap();
-    let receipt = batched.apply(0, &[a.clone(), b.clone()]).unwrap();
-    assert_eq!(receipt.operation_count, 2);
-    assert_eq!(receipt.changed_uuids, vec![TEX.to_owned()]);
-    assert_eq!(batched.document(), sequential.document());
-    let saved = batched.document().clone();
-    assert_eq!(saved.cubes, original.cubes);
-    assert_eq!(saved.animation_assets, original.animation_assets);
-    assert_eq!(AuthoringDocument::import_bbmodel(&batched.export().unwrap()).unwrap(), saved);
-    batched.undo(1).unwrap();
-    assert_eq!(batched.document(), &original);
-    batched.redo(2).unwrap();
-    assert_eq!(batched.document(), &saved);
-    assert_eq!(batched.apply(3, &[a.clone(), b.clone()]).unwrap_err(), "EDIT_NO_OP");
-    assert_eq!(batched.document(), &saved);
-
-    let mut refused = EditorSession::from_document(original.clone()).unwrap();
-    let bad = EditOperation::PaintCubeFaceRegionsGuarded {
-        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
-        regions:vec![CubeFaceRegionPaintPatch {
-            face:"north".into(), from:[3,0], to:[5,1],
-            rgba:[10,10,10,255], erase:false,
-        }],
-    };
-    assert_eq!(refused.apply(0, &[a, bad, b]).unwrap_err(),
-        "PAINT_FACE_REGION_BOUNDS_INVALID");
-    assert_eq!(refused.document(), &original);
-    assert!(!refused.can_undo());
-}
-
 //! Rust source regression intent; TEST_AUTHORED_NOT_RUN.
 
 use super::*;
@@ -3167,6 +3107,65 @@ fn face_local_region_maps_rotated_and_reversed_uv_pixel_rectangles() {
     assert_eq!(face_regions::face_local_pixel_rectangle(
         16, 16, [0.5,2.0,5.0,6.0], 0, [0,0], [1,1]).unwrap_err(),
         "PAINT_UV_RECT_NON_INTEGRAL");
+}
+
+// SOURCE-AUTHORED_NOT_RUN: one Rust decode/encode for contiguous, same-atlas
+// guarded Cube face plans must preserve the sequential pixels and atomic Undo.
+#[test]
+fn contiguous_guarded_face_paints_share_one_atlas_write_without_changing_pixels() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009954";
+    let mut source = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Batch Paint", "batch_paint").unwrap()
+    ).unwrap();
+    source.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width:32, height:32 },
+        EditOperation::AddBone { bone:serde_json::from_value(json!({
+            "uuid":BONE, "name":"root", "origin":[0,0,0]
+        })).unwrap(), parent_uuid:None },
+        EditOperation::AddCube { cube:sample_cube(CUBE), bone_uuid:BONE.into() },
+        EditOperation::CreatePaintTexture { uuid:TEX.into(), name:"atlas.png".into() },
+        EditOperation::AssignCubeTexture { cube_uuid:CUBE.into(), texture_uuid:TEX.into() },
+    ]).unwrap();
+    let original = source.document().clone();
+    let make = |face:&str, rgba:[u8;4]| EditOperation::PaintCubeFaceRegionsGuarded {
+        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
+        regions:vec![CubeFaceRegionPaintPatch {
+            face:face.into(), from:[0,0], to:[1,1], rgba, erase:false,
+        }],
+    };
+    let a = make("north", [100,80,50,255]);
+    let b = make("east", [140,180,220,255]);
+    let mut sequential = EditorSession::from_document(original.clone()).unwrap();
+    sequential.apply(0, &[a.clone()]).unwrap();
+    sequential.apply(1, &[b.clone()]).unwrap();
+    let mut batched = EditorSession::from_document(original.clone()).unwrap();
+    let receipt = batched.apply(0, &[a.clone(), b.clone()]).unwrap();
+    assert_eq!(receipt.operation_count, 2);
+    assert_eq!(receipt.changed_uuids, vec![TEX.to_owned()]);
+    assert_eq!(batched.document(), sequential.document());
+    let saved = batched.document().clone();
+    assert_eq!(saved.cubes, original.cubes);
+    assert_eq!(saved.animation_assets, original.animation_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&batched.export().unwrap()).unwrap(), saved);
+    batched.undo(1).unwrap();
+    assert_eq!(batched.document(), &original);
+    batched.redo(2).unwrap();
+    assert_eq!(batched.document(), &saved);
+    assert_eq!(batched.apply(3, &[a.clone(), b.clone()]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(batched.document(), &saved);
+
+    let mut refused = EditorSession::from_document(original.clone()).unwrap();
+    let bad = EditOperation::PaintCubeFaceRegionsGuarded {
+        cube_uuid:CUBE.into(), texture_uuid:TEX.into(),
+        regions:vec![CubeFaceRegionPaintPatch {
+            face:"north".into(), from:[3,0], to:[5,1],
+            rgba:[10,10,10,255], erase:false,
+        }],
+    };
+    assert_eq!(refused.apply(0, &[a, bad, b]).unwrap_err(),
+        "PAINT_FACE_REGION_BOUNDS_INVALID");
+    assert_eq!(refused.document(), &original);
+    assert!(!refused.can_undo());
 }
 
 #[test]
