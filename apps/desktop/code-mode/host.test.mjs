@@ -937,6 +937,18 @@ test('invalid or stale reviewer evidence fails before it can permit Paint', () =
           fingerprintSha256:'a'.repeat(64),
           observation:'Reviewer claimed old failure on accepted image.'}],
       },'CODE_MODE_VISUAL_REVIEW_INVALID'],
+      [{decision:'ACCEPTED',issues:[],
+        viewReviews:[{viewId:'front',decision:'ACCEPTED',
+          observation:'Reviewed the actual front image pair.'}],
+        reviewedFaces:[{cubeUuid:REVIEW_CUBE,textureUuid:'tier2',
+          face:'north',style:'STYLED',observedInViewId:'back',
+          observation:'Reviewer falsely linked a back view in a front-only selection.'}],
+      },'CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID'],
+      [{decision:'ACCEPTED',issues:[],
+        reviewedFaces:[{cubeUuid:REVIEW_CUBE,textureUuid:'tier2',
+          face:'north',style:'STYLED',
+          observation:'The specific camera evidence was omitted altogether.'}],
+      },'CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID'],
     ]){
       const host=await createCodeModeHost({
         rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
@@ -2483,6 +2495,7 @@ test('Texturing readiness reads all saved Cube coverage only after independently
           viewId,decision:'ACCEPTED',observation:'Material form is coherent in this matched view.',
         })),reviewedFaces:[{cubeUuid:REVIEW_CUBE,
           textureUuid:'tier2-atlas',face:'north',style:'STYLED',
+          observedInViewId:'front',
           observation:'The saved helmet face has deliberate form-based shading and controlled edge highlights.',
         }]};
       },
@@ -2618,7 +2631,60 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     const opaque=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
     assert.equal(opaque.value.reason,'REQUIRED_SOURCE_FACES_UNREVIEWED');
     assert.equal(reviewerCalls,1);
-    assert.equal(inspectedPages,9);
+    assert.equal(inspectedPages,10); // One early source-face binding plus nine terminal scans.
+  }));
+
+test('accepted material face cannot invent saved Cube/texture ownership',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'approved-face.png'),capture=join(folder,'current-face.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    let nativeFaceReads=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{referencePngPath:ref,capturePngPath:capture,
+        captureModelSha256:HASH,viewId:'front'},
+      reviewVisualPair:()=>({
+        decision:'ACCEPTED',issues:[],
+        viewReviews:[{viewId:'front',decision:'ACCEPTED',
+          observation:'Reviewed the selected front image pair.'}],
+        reviewedFaces:[{cubeUuid:'invented-cube',textureUuid:'tier2-atlas',
+          face:'north',style:'STYLED',observedInViewId:'front',
+          observation:'This supposed face was claimed without actual Cube ownership.'}],
+      }),
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(argv[0]==='inspect-visual-pair')return {
+          status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            visual_verdict:'UNVERIFIED'},
+        };
+        assert.equal(argv[0],'inspect-batch');
+        nativeFaceReads++;
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          results:[{kind:'model_texture_coverage',coverage:{
+            scope:'saved_face_texture_coverage_page',offset:0,
+            total_cubes:1,reviewed_cubes:1,next_offset:null,
+            cubes:[{cube_uuid:REVIEW_CUBE,faces:ALL_FACE_SIDES.map(side=>({
+              side,status:side==='north'?'measured_nontransparent_pixels':'absent_declared',
+              texture_uuid:side==='north'?'tier2-atlas':null,
+            }))}],
+          }}]};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },response=>{
+        assert.equal(response.ok,false);
+        assert.equal(response.code,'CODE_MODE_REVIEWED_FACE_SOURCE_UNVERIFIED');
+        return {refused:true};
+      }),
+    });
+    const result=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+    assert.equal(result.value.refused,true);
+    assert.equal(nativeFaceReads,1);
   }));
 
 test('operator-owned visual adapter receives Rust face inventory with exact PNG bytes', ()=>

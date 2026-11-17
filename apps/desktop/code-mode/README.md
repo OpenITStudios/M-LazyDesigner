@@ -142,6 +142,17 @@ Without configuration, the standard CLI still has NO visual reviewer.
 See `HOST_INTEGRATION.md` for the manifest, input/output protocol, privacy
 and local-test hold.
 
+**Reviewer face-to-view/source binding (2026-11-17; SOURCE ONLY):**
+Each independently accepted material-face declaration must identify a
+specific already accepted rendered view (`observedInViewId`). The
+trusted host now checks the declared Cube/face/texture against the
+current SHA-bound Rust source inventory before exposing reviewer
+acceptance to the guest. Missing, mismatched or unresolvable faces
+fail closed; an incomplete source inventory remains incomplete at final
+readiness. This is provenance/accounting, NOT proof that a camera image
+actually shows a face or that an image-capable reviewer is connected.
+Source regression cases AUTHORED_NOT_RUN.
+
 **Full source-face review (2026-11-17; SOURCE_ONLY):**
 The terminal readiness now checks all Rust-saved explicitly active
 Cube faces, including fully opaque faces with no alpha attention warning,

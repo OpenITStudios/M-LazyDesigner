@@ -481,7 +481,13 @@ an independently reviewed exact `cubeUuid + face + textureUuid` entry.
 Declared absent faces are not styled; ambiguous/unmapped/unsupported faces
 are blocked, and intentional transparency requires an observed exception.
 Missing fully opaque faces are blocked as
-`REQUIRED_SOURCE_FACES_UNREVIEWED`. There is no implicit PASS for
+`REQUIRED_SOURCE_FACES_UNREVIEWED`. Each accepted
+`reviewedFaces` entry must cite `observedInViewId` from a selected,
+independently accepted image pair. Before accepting that entry, the host
+also checks its Cube, face and texture UUID against the SHA-bound Rust
+source-face inventory. A camera label cannot create a nonexistent source
+face; however, neither this lookup nor the label proves camera direction,
+face visibility, image ingestion or artistic quality. There is no implicit PASS for
 `measured_nontransparent_pixels`. The selected review array is capped at
 256 faces and the scan at 256 Cubes: exceeding a bound stays BLOCKED,
 never falsely complete. Full six-direction files alone do not prove each

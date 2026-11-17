@@ -215,6 +215,10 @@ export interface CodeModeReviewedTextureFace {
   textureUuid:string;
   face:CubeFaceSurface["side"];
   style:"STYLED"|"INTENTIONAL_FLAT"|"INTENTIONAL_TRANSPARENT";
+  /** Selected and accepted view claimed to show this exact face.
+   * Reviewer assertion, NOT camera/occlusion/native render proof.
+   */
+  observedInViewId:CodeModeVisualViewId;
   /** Why this exact face is shaded or intentionally flat in the reference. */
   observation:string;
 }

@@ -224,14 +224,18 @@ function normalizedVisualReview(input, viewIds = []) {
   // material-specific source/UV evidence. No guest can add these records.
   const suppliedFaces=input.reviewedFaces??[];
   if (!Array.isArray(suppliedFaces) || suppliedFaces.length>256 ||
-      (input.decision!=='ACCEPTED' && suppliedFaces.length>0)) {
+      (input.decision!=='ACCEPTED' && suppliedFaces.length>0) ||
+      (suppliedFaces.length>0 && viewReviews.length!==viewIds.length)) {
     throw new Error('CODE_MODE_REVIEWED_MATERIAL_FACES_INVALID');
   }
   const reviewedFaces=suppliedFaces.map(item=>{
     if (!item || typeof item!=='object' || Array.isArray(item) ||
         Object.keys(item).some(key=>![
-          'cubeUuid','textureUuid','face','style','observation',
+          'cubeUuid','textureUuid','face','style','observation','observedInViewId',
         ].includes(key)) ||
+        !viewIds.includes(item.observedInViewId) ||
+        !viewReviews.some(view=>view.viewId===item.observedInViewId &&
+          view.decision==='ACCEPTED') ||
         !['north','east','south','west','up','down'].includes(item.face) ||
         !['STYLED','INTENTIONAL_FLAT','INTENTIONAL_TRANSPARENT'].includes(item.style) ||
         ![item.cubeUuid,item.textureUuid].every(id=>
@@ -1055,6 +1059,31 @@ export async function createCodeModeHost({
         }
         feedback = normalizedVisualReview(returned,
           visualViews.map(view=>view.viewId));
+        if (feedback.reviewedFaces.length>0) {
+          // A camera declaration cannot create actual Cube/UV ownership.
+          // Bind it to the current SHA-checked Rust model BEFORE caching
+          // accepted feedback, without pretending to verify face visibility.
+          const inventory=faceInventory ??
+            await sourceFacesForImageReviewer(model);
+          const sourceFaces=new Map(inventory.faces.map(face=>[
+            JSON.stringify([face.cube_uuid,face.face]),face,
+          ]));
+          if(inventory.source_model_sha256!==model.expectedSha256 ||
+             feedback.reviewedFaces.some(face=>{
+               const saved=sourceFaces.get(JSON.stringify([
+                 face.cubeUuid,face.face,
+               ]));
+               return !saved || !saved.texture_uuid ||
+                 saved.texture_uuid!==face.textureUuid ||
+                 !['fully_transparent_pixels','partially_transparent_pixels',
+                   'translucent_pixels','measured_nontransparent_pixels']
+                   .includes(saved.source_status);
+             })) {
+            throw new Error('CODE_MODE_REVIEWED_FACE_SOURCE_UNVERIFIED');
+          }
+          // An incomplete inventory is never whole-model evidence; the
+          // separate final readiness scan must still account for all faces.
+        }
         if (feedback.materialCohort) {
           const cohort=feedback.materialCohort;
           // Re-read the *actual* model through one pinned Rust inspection
