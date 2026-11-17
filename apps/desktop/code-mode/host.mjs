@@ -38,6 +38,13 @@ const VISUAL_VIEWS = new Set([
   'front', 'back', 'left', 'right', 'top', 'bottom', 'three_quarter',
 ]);
 const CARDINAL_VIEWS = Object.freeze(['front','back','left','right','top','bottom']);
+// These patterns repeatedly passed numeric color-count checks in Local
+// Pillager sessions while still failing the required material finish.
+const STYLING_FINISH_VETO_HINTS = new Set([
+  'UNIFORM_HORIZONTAL_BANDS_REVIEW',
+  'UNIFORM_VERTICAL_BANDS_REVIEW',
+  'FRAGMENTED_OR_NOISE_FIRST_REVIEW',
+]);
 const SHA256 = /^[a-f0-9]{64}$/i;
 
 function requireAbsolute(value, label) {
@@ -1283,6 +1290,24 @@ export async function createCodeModeHost({
             blocked.push('REVIEWED_FACE_SOURCE_INSPECTION_INVALID');break;
           }
           inspectedFaces++;
+          if (!Array.isArray(evidence.review_hints) ||
+              evidence.review_hints.length>8 ||
+              evidence.review_hints.some(h=>
+                typeof h!=='string' || h.length>96) ||
+              (evidence.status==='REVIEW_REQUIRED' &&
+               evidence.review_hints.length===0) ||
+              (evidence.status==='NOT_EVALUATED' &&
+               evidence.review_hints.length>0) ||
+              (evidence.status==='BASE_ONLY_CANDIDATE' &&
+               !evidence.review_hints.includes(
+                 'UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE'))) {
+            blocked.push('REVIEWED_FACE_SOURCE_INSPECTION_INVALID');
+            break;
+          }
+          if (selected.style==='STYLED' &&
+              evidence.review_hints.some(h=>STYLING_FINISH_VETO_HINTS.has(h))) {
+            blocked.push('BAND_OR_NOISE_FACE_CANNOT_CLAIM_STYLED');
+          }
           if (evidence.reason!==undefined ||
               !Number.isSafeInteger(evidence.visible_pixels)) {
             blocked.push('REVIEWED_FACE_SOURCE_NOT_EVALUATED');

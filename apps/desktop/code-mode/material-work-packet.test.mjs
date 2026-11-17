@@ -102,6 +102,29 @@ test('single-color fake FORM ramp, missing shading cues and extra JSON fields re
       /MATERIAL_WORK_PACKET_INVALID/);
   }
 });
+test('form-shading cannot disguise full-width shadow/highlight bars as modeled shading',()=>{
+  const striped=packet();
+  striped.facePlans[0].clusters=[
+    {id:'flat-shadow',role:'shadow',
+      formReason:'Horizontal shadow band presented as helmet shape.',
+      spans:[{y:0,x0:0,x1:4},{y:1,x0:0,x1:4}]},
+    {id:'flat-highlight',role:'highlight',
+      formReason:'Horizontal highlight band repeated across whole width.',
+      spans:[{y:2,x0:0,x1:4},{y:3,x0:0,x1:4}]},
+  ];
+  assert.throws(()=>normalizedMaterialWorkPacket(striped),
+    /MATERIAL_WORK_PACKET_INVALID/);
+  // A real edge treatment with independently positioned masses remains
+  // expressible; this guard is not a blanket ban on straight bevels.
+  const edge=packet();
+  edge.facePlans[0].clusters=[
+    {...edge.facePlans[0].clusters[0],
+      spans:[{y:0,x0:0,x1:2}]},
+    {...edge.facePlans[0].clusters[1],
+      spans:[{y:3,x0:3,x1:4}]},
+  ];
+  assert.equal(normalizedMaterialWorkPacket(edge).facePlans.length,1);
+});
 test('compiled shading refuses arbitrary guest mutations or off-scope paint',()=>{
   const p=normalizedMaterialWorkPacket(packet());
   const painted=ops();

@@ -110,6 +110,16 @@ function normalizedFaceClusters(value,palette,shadingIntent){
   if(shadingIntent==='FORM_SHADING'){
     if(!clusters.some(x=>['shadow','deep_shadow'].includes(x.role)) ||
        !clusters.some(x=>['highlight','edge_light'].includes(x.role)))fail();
+    // Repeated full-width horizontal bars are not form-following shade
+    // masses. The local face extent is checked later by canonical Rust UV;
+    // this narrow structural guard rejects only same-width rectangular
+    // shadow/highlight strips, not stepped clusters or tiny details.
+    const shadeMasses=clusters.filter(x=>
+      ['shadow','deep_shadow','highlight','edge_light'].includes(x.role));
+    const first=shadeMasses[0].spans[0];
+    if(first.x1-first.x0>=4 && shadeMasses.every(cluster=>
+      cluster.spans.every(span=>
+        span.x0===first.x0 && span.x1===first.x1)))fail();
   }
   return Object.freeze(clusters);
 }

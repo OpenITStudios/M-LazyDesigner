@@ -180,12 +180,25 @@ the PNG changed. After a real operator-owned reviewed six-camera view set,
 evidence, paged saved-face coverage, and up to 32 independently
 reviewer-selected Cube-local faces, each marked `STYLED`, `INTENTIONAL_FLAT`, or
 `INTENTIONAL_TRANSPARENT` with an observed reason. An opaque exact one-color
-face declared STYLED cannot clear this gate. Even a cleared gate returns
+face declared STYLED cannot clear this gate. Native warnings for straight
+horizontal/vertical color bands or noise-first styling also block STYLED
+readiness despite a positive reviewer declaration; deliberate simple material
+areas may be reviewed as INTENTIONAL_FLAT with a concrete visual reason.
+Weak value variation alone stays advisory because subtle shading may be valid.
+Even a cleared gate returns
 `REVIEWER_DECLARED_READY_FOR_USER_DECISION`, never visual PASS or
 user acceptance. Without the actual independent reviewer callback
 (including `run.mjs` without an explicitly configured reviewer executable), it remains BLOCKED.
 No native render/camera provenance is invented; matched-view observation
 is still the final artistic authority. Test sources authored NOT_EXECUTED.
+
+**Form-shading strip guard (2026-11-17; SOURCE_ONLY):** The reviewed
+MaterialWorkPacket rejects a claimed form-shading plan made only from
+same-width rectangular shadow/highlight strips. This is checked before
+host approval and Rust Paint; stepped value masses and deliberately offset
+bevel edges remain available. It cannot judge real material form, image
+similarity or all unsupported variations of generic stripes. Authored
+negative/positive Node regressions are NOT_EXECUTED.
 
 **Artist order, not extra tools:** approved reference/part → Geometry + UV
 approved → one material's value/base/shadow/highlight design → tiny

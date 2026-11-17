@@ -2404,6 +2404,7 @@ test('Texturing readiness reads all saved Cube coverage only after independently
       chosen.push({viewId,referencePngPath,capturePngPath});
     }
     let step=0, inspectedPages=0, reviewerCalls=0, forceFlatWarning=false;
+    let forcedStyleHint=null, omitStyleHints=false;
     let extraAttention=false, extraOpaque=false;
     const host=await createCodeModeHost({
       rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
@@ -2442,9 +2443,12 @@ test('Texturing readiness reads all saved Cube coverage only after independently
             kind:'texture_styling_face',styling:{
               scope:'saved_cube_face_local_pixels',
               texture_uuid:'tier2-atlas',cube_uuid:REVIEW_CUBE,
-              face:'north',status:forceFlatWarning?'BASE_ONLY_CANDIDATE':'NOT_EVALUATED',
+              face:'north',status:forceFlatWarning?'BASE_ONLY_CANDIDATE':
+                forcedStyleHint?'REVIEW_REQUIRED':'NOT_EVALUATED',
               visible_pixels:16,
-              review_hints:forceFlatWarning?['UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE']:[],
+              ...(omitStyleHints?{}:{review_hints:forceFlatWarning?
+                ['UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE']:
+                forcedStyleHint?[forcedStyleHint]:[]}),
               visual_verdict:'UNVERIFIED',texture_completion_attested:false,
             },
           }]};
@@ -2486,6 +2490,12 @@ test('Texturing readiness reads all saved Cube coverage only after independently
           if(blocked.includes('UNIFORM_FACE_CANNOT_CLAIM_STYLED')){
             return {sourceOnlyReady:false,flatRejected:true};
           }
+          if(blocked.includes('BAND_OR_NOISE_FACE_CANNOT_CLAIM_STYLED')){
+            return {sourceOnlyReady:false,patternRejected:true};
+          }
+          if(blocked.includes('REVIEWED_FACE_SOURCE_INSPECTION_INVALID')){
+            return {sourceOnlyReady:false,invalidEvidence:true};
+          }
           if(blocked.includes('SOURCE_ATTENTION_FACES_UNREVIEWED')){
             assert.equal(response.result.face_scan.source_attention_faces_unreviewed,1);
             return {sourceOnlyReady:false,reason:'SOURCE_ATTENTION_FACES_UNREVIEWED'};
@@ -2502,7 +2512,8 @@ test('Texturing readiness reads all saved Cube coverage only after independently
         assert.equal(response.result.face_scan.required_source_faces_unreviewed,0);
         assert.equal(response.result.material_faces.expected,1);
         assert.equal(response.result.material_faces.inspected,1);
-        return {sourceOnlyReady:true};
+        return {sourceOnlyReady:true,
+          styleWarnings:response.result.material_faces.styling_warning_candidates};
       }),
     });
     assert.equal((await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'}))
@@ -2513,6 +2524,25 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     const flat=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
     assert.equal(flat.value.flatRejected,true);
     forceFlatWarning=false;
+    for(const hint of ['UNIFORM_HORIZONTAL_BANDS_REVIEW',
+      'UNIFORM_VERTICAL_BANDS_REVIEW','FRAGMENTED_OR_NOISE_FIRST_REVIEW']){
+      forcedStyleHint=hint;
+      const rejected=await host.execute({
+        code:'return codemode.texturingReadiness({project:"p0"});'});
+      assert.equal(rejected.value.patternRejected,true);
+    }
+    // Subtle value variation is advisory: actual image review still owns it.
+    forcedStyleHint='LOW_FORM_VALUE_VARIATION_CANDIDATE';
+    const subtle=await host.execute({
+      code:'return codemode.texturingReadiness({project:"p0"});'});
+    assert.equal(subtle.value.sourceOnlyReady,true);
+    assert.equal(subtle.value.styleWarnings,1);
+    forcedStyleHint=null;
+    omitStyleHints=true;
+    const malformed=await host.execute({
+      code:'return codemode.texturingReadiness({project:"p0"});'});
+    assert.equal(malformed.value.invalidEvidence,true);
+    omitStyleHints=false;
     extraAttention=true;
     const missing=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
     assert.equal(missing.value.sourceOnlyReady,false);
@@ -2523,7 +2553,7 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     const opaque=await host.execute({code:'return codemode.texturingReadiness({project:"p0"});'});
     assert.equal(opaque.value.reason,'REQUIRED_SOURCE_FACES_UNREVIEWED');
     assert.equal(reviewerCalls,1);
-    assert.equal(inspectedPages,4);
+    assert.equal(inspectedPages,9);
   }));
 
 test('operator-owned visual adapter receives Rust face inventory with exact PNG bytes', ()=>
