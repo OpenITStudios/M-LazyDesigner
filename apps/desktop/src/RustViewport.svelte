@@ -198,6 +198,10 @@
         material.transparent = Boolean(texture);
         material.alphaTest = texture ? BEDROCK_PREVIEW_ALPHA_TEST : 0;
         material.opacity = texture ? 1 : 0.94;
+        // A failed prior image may have used the default double-sided
+        // fallback; an accepted replacement must restore its saved side.
+        material.side = previewRenderSide(texture ? texturePreviewSides[index] : null) === 'front'
+          ? THREE.FrontSide : THREE.DoubleSide;
         material.needsUpdate = true;
       }
     }

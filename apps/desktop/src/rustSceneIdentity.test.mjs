@@ -39,4 +39,6 @@ test('material-only refresh keeps native structure and falls back on any other c
   assert.match(text,/material\.userData\.previewTextureIndex/);
   assert.match(text,/reconcileTextures\(\);/);
   assert.match(text,/material\.needsUpdate = true;/);
+  assert.match(text,/material\.side = previewRenderSide\(texture \? texturePreviewSides\[index\] : null\)/);
+
 });
