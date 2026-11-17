@@ -1125,6 +1125,14 @@ test('representative material is constrained; propagation requires fresh accepte
         shadowPlacement:'Place the darker cluster toward the recessed joining edge.',
         highlightPlacement:'Keep a small high-value cluster on the light-facing metal bevel.',
         clusterPlan:'Use connected stepped pixels and a quiet resting field without stripes.',
+        clusters:[
+          {id:'side-shadow',role:'shadow',
+            formReason:'The recessed side seam needs one coherent shadow mass.',
+            spans:[{y:0,x0:0,x1:2},{y:1,x0:0,x1:3}]},
+          {id:'rim-light',role:'highlight',
+            formReason:'The upper bevel needs a separate connected light mass.',
+            spans:[{y:2,x0:2,x1:4},{y:3,x0:3,x1:4}]},
+        ],
       }],
     };
     let firstStep=0, secondStep=0, approvals=0;
@@ -1283,6 +1291,15 @@ test('representative material is constrained; propagation requires fresh accepte
           return mockedNativeFaceBinding(argv,modifiedSha);
         }
         assert.equal(argv[0],'apply');
+        const nativePlan=JSON.parse(await readFile(
+          argv[argv.indexOf('--plan')+1],'utf8'));
+        assert.equal(nativePlan.operations.length,1);
+        assert.equal(nativePlan.operations[0].op,'paint_cube_face_regions_guarded');
+        assert.equal(nativePlan.operations[0].regions.length,4);
+        assert.deepEqual(nativePlan.operations[0].regions[0],{
+          face:'east',from:[0,0],to:[2,1],
+          rgba:[60,70,80,255],erase:false,
+        });
         await writeFile(argv[argv.indexOf('--output')+1],'{}');
         return {status:'OK',source_sha256:modifiedSha,output_sha256:widenedSha,
           summary:SUMMARY,mutation:{revision:1,operation_count:1,changed_uuids:[]}};
@@ -1304,22 +1321,21 @@ test('representative material is constrained; propagation requires fresh accepte
         const overlap=step===2;
         const missingPacket=step===3;
         const wrongReference=step===4;
-        const baseOnly=step===5;
+        const manualOverride=step===5;
         const invalidSource=step===6;
         return fakeGuest({method:'apply',args:{
           project:'p0',output:overlap?'overlap.bbmodel':
             missingPacket?'missing-packet.bbmodel':
             wrongReference?'wrong-reference.bbmodel':
-            baseOnly?'base-only.bbmodel':
+            manualOverride?'manual-override.bbmodel':
             invalidSource?'invalid-face.bbmodel':'extended.bbmodel',
-          operations:overlap?[{op:'paint_texture_pixel',texture_index:0,
-            x:2,y:2,rgba:[60,70,80,255]}]:[{
-            op:'paint_cube_face_regions_guarded',
-            cube_uuid:REVIEW_CUBE,texture_uuid:'tier2-atlas',
-            regions:[{face:'east',from:[0,0],to:[1,1],
-              rgba:baseOnly?[80,100,120,255]:[60,70,80,255],
-              erase:false}],
-          }],
+          ...(overlap || missingPacket || manualOverride?{operations:
+            overlap?[{op:'paint_texture_pixel',texture_index:0,
+              x:2,y:2,rgba:[60,70,80,255]}]:
+            [{op:'paint_cube_face_regions_guarded',cube_uuid:REVIEW_CUBE,
+              texture_uuid:'tier2-atlas',
+              regions:[{face:'east',from:[0,0],to:[1,1],
+                rgba:[80,100,120,255],erase:false}]}]}:{}),
           correctionScope:{textureUuid:'tier2-atlas',
             allowedRegions:overlap?[{from:[2,2],to:[4,4]}]:
               [{from:[8,8],to:[12,12]}],preserveAlpha:true},
@@ -1332,13 +1348,13 @@ test('representative material is constrained; propagation requires fresh accepte
             assert.equal(value.code,'CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
             return {blocked:true};
           }
-          if(missingPacket || wrongReference || baseOnly || invalidSource){
+          if(missingPacket || wrongReference || manualOverride || invalidSource){
             assert.equal(value.ok,false);
             assert.equal(value.code,missingPacket?
               'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED':
               wrongReference?
               'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH':
-              baseOnly?'CODE_MODE_MATERIAL_WORK_PACKET_BASE_ONLY':
+              manualOverride?'CODE_MODE_MATERIAL_CLUSTER_HOST_OWNED':
               'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
             return {negative:value.code};
           }
@@ -1354,12 +1370,15 @@ test('representative material is constrained; propagation requires fresh accepte
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH');
-    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_BASE_ONLY');
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_CLUSTER_HOST_OWNED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.propagated,true);
     assert.equal(approvals,2);
     assert.match(actualApprovals[0].materialWorkPacketSha256,/^[0-9a-f]{64}$/);
     assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].face,'east');
+    assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].clusters.length,2);
+    assert.deepEqual(actualApprovals[0].operationKinds,
+      ['paint_cube_face_regions_guarded']);
   }));
 
 test('invalid source-only sample review declarations fail before Paint', () =>

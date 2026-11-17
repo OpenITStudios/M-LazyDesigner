@@ -13,7 +13,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
-  materialWorkPacketDigest} from './material-work-packet.mjs';
+  materialWorkPacketDigest,compileMaterialClusterPaint} from './material-work-packet.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -1239,15 +1239,33 @@ export async function createCodeModeHost({
       }
       const reviewedTextureSession = visualPair !== null &&
         typeof reviewVisualPair === 'function';
+      // Only inside an independently reviewed material session, a FORM
+      // packet may be compiled into the existing Rust guarded face paint.
+      // Guest-supplied operations are not authoritative for this path.
+      let activeOperations=args.operations;
+      if(args.materialWorkPacket!==undefined) {
+        let proposed;
+        try {
+          proposed=normalizedMaterialWorkPacket(args.materialWorkPacket);
+        } catch {
+          throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_INVALID');
+        }
+        if(proposed?.shadingIntent==='FORM_SHADING') {
+          if(args.operations!==undefined) {
+            throw new Error('CODE_MODE_MATERIAL_CLUSTER_HOST_OWNED');
+          }
+          activeOperations=compileMaterialClusterPaint(proposed);
+        }
+      }
       // When an operator binds a reviewed texture correction, an unrelated
       // structural/import operation must not bypass the sample scope by
       // making the existing pixelEdit predicate false.
-      if (reviewedTextureSession && (!Array.isArray(args.operations) ||
-          args.operations.some(op => !PIXEL_MUTATIONS.has(op?.op)))) {
+      if (reviewedTextureSession && (!Array.isArray(activeOperations) ||
+          activeOperations.some(op => !PIXEL_MUTATIONS.has(op?.op)))) {
         throw new Error('CODE_MODE_REVIEWED_CORRECTION_PAINT_ONLY');
       }
-      const pixelEdit = Array.isArray(args.operations) &&
-        args.operations.some(op => PIXEL_MUTATIONS.has(op?.op));
+      const pixelEdit = Array.isArray(activeOperations) &&
+        activeOperations.some(op => PIXEL_MUTATIONS.has(op?.op));
       if (referenceMaster !== null || visualPair !== null) {
         if (pixelEdit && args.correctionScope === undefined) {
           throw new Error('CODE_MODE_MATERIAL_CORRECTION_SCOPE_REQUIRED');
@@ -1368,7 +1386,7 @@ export async function createCodeModeHost({
             throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH');
           }
           validateMaterialWorkPacketOperations(
-            workPacket,requested,args.operations);
+            workPacket,requested,activeOperations);
           // The Rust source inspector (same pinned model and actual UV
           // owner as guarded Paint) validates EVERY planned atlas patch.
           // Text cannot certify a 3D form or prove cluster artistic quality.
@@ -1412,7 +1430,7 @@ export async function createCodeModeHost({
         ]));
       }
       const output = await outputPath(args.output, '.bbmodel');
-      const receipt = await p.apply({ output, operations: args.operations,
+      const receipt = await p.apply({ output, operations: activeOperations,
         correctionScope: args.correctionScope,
         ...(materialIntent ? {correctionIntent:materialIntent} : {}),
         ...(workPacket ? {materialWorkPacket:workPacket} : {}) });

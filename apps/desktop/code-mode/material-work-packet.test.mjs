@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createRustCodeModeClient} from './client.mjs';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest,
-  validateMaterialWorkPacketOperations} from './material-work-packet.mjs';
+  validateMaterialWorkPacketOperations,compileMaterialClusterPaint}
+  from './material-work-packet.mjs';
 
 const CUBE='00000000-0000-4000-8000-000000000002';
 const MODEL='a'.repeat(64);
@@ -33,6 +34,14 @@ function packet(){
       shadowPlacement:'Local shadow mass follows the recessed joint under the bevel.',
       highlightPlacement:'A narrow value mass follows the outward illuminated edge.',
       clusterPlan:'Use controlled irregular connected stepped clusters, not full-width stripes.',
+      clusters:[
+        {id:'joint-shadow',role:'shadow',
+          formReason:'The helmet joint needs one connected irregular shadow mass.',
+          spans:[{y:0,x0:0,x1:2},{y:1,x0:0,x1:3}]},
+        {id:'bevel-highlight',role:'highlight',
+          formReason:'The bevel needs a small connected light facing pixel mass.',
+          spans:[{y:2,x0:2,x1:4},{y:3,x0:3,x1:4}]},
+      ],
     }],
   };
 }
@@ -40,7 +49,10 @@ function scope(){
   return {texture_uuid:'tier2-atlas',allowed_regions:[REGION],
     preserve_alpha:true};
 }
-function ops(rgb=[55,65,80,255]){
+function ops(){
+  return compileMaterialClusterPaint(packet());
+}
+function manualOps(rgb=[55,65,80,255]){
   return [{op:'paint_cube_face_regions_guarded',cube_uuid:CUBE,
     texture_uuid:'tier2-atlas',
     regions:[{face:'east',from:[0,0],to:[1,1],rgba:rgb,erase:false}]}];
@@ -51,6 +63,12 @@ test('a normalized source packet is bounded and binds real planned Paint targets
   assert.equal(p.facePlans.length,1);
   assert.match(materialWorkPacketDigest(p),/^[0-9a-f]{64}$/);
   assert.equal(validateMaterialWorkPacketOperations(p,scope(),ops()),true);
+  assert.equal(ops().length,1);
+  assert.equal(ops()[0].regions.length,4);
+  assert.deepEqual(ops()[0].regions[0],{
+    face:'east',from:[0,0],to:[2,1],
+    rgba:[55,65,80,255],erase:false,
+  });
   assert.equal(Object.isFrozen(p),true);
   assert.equal(Object.isFrozen(p.facePlans[0].atlasRegion),true);
 });
@@ -65,41 +83,65 @@ test('single-color fake FORM ramp, missing shading cues and extra JSON fields re
     {...packet(),facePlans:[packet().facePlans[0],packet().facePlans[0]]},
     {...packet(),facePlans:[{...packet().facePlans[0],
       atlasRegion:{from:[0,0],to:[256,256]}}]},
+    {...packet(),facePlans:[{...packet().facePlans[0],
+      clusters:packet().facePlans[0].clusters.slice(0,1)}]},
+    {...packet(),facePlans:[{...packet().facePlans[0],
+      clusters:[{...packet().facePlans[0].clusters[0],
+        spans:[{y:0,x0:0,x1:2},{y:3,x0:0,x1:3}]},
+        packet().facePlans[0].clusters[1]]}]},
+    {...packet(),facePlans:[{...packet().facePlans[0],
+      clusters:[packet().facePlans[0].clusters[0],
+        {...packet().facePlans[0].clusters[1],
+          spans:[{y:1,x0:2,x1:4},{y:2,x0:3,x1:4}]}]}]},
+    {...packet(),facePlans:[{...packet().facePlans[0],
+      clusters:[{...packet().facePlans[0].clusters[0],
+        extra:'fake-approval'},packet().facePlans[0].clusters[1]]}]},
   ];
   for(const value of cases){
     assert.throws(()=>normalizedMaterialWorkPacket(value),
       /MATERIAL_WORK_PACKET_INVALID/);
   }
 });
-test('propagation cannot paint outside reviewer scope, change face or sneak palette noise',()=>{
+test('compiled shading refuses arbitrary guest mutations or off-scope paint',()=>{
   const p=normalizedMaterialWorkPacket(packet());
+  const painted=ops();
   const cases=[
-    [scope(),[{op:'paint_texture_pixel',texture_index:0,x:9,y:9,
-      rgba:[55,65,80,255]}],'CODE_MODE_MATERIAL_WORK_PACKET_FACE_PAINT_REQUIRED'],
-    [{...scope(),allowed_regions:[{from:[0,0],to:[1,1]}]},ops(),
+    [scope(),manualOps(),'CODE_MODE_MATERIAL_CLUSTER_OPERATION_MISMATCH'],
+    [{...scope(),allowed_regions:[{from:[0,0],to:[1,1]}]},painted,
       'CODE_MODE_MATERIAL_WORK_PACKET_SCOPE_MISMATCH'],
-    [{...scope(),preserve_alpha:false},ops(),
+    [{...scope(),preserve_alpha:false},painted,
       'CODE_MODE_MATERIAL_WORK_PACKET_SCOPE_MISMATCH'],
-    [scope(),[{...ops()[0],regions:[{...ops()[0].regions[0],face:'west'}]}],
-      'CODE_MODE_MATERIAL_WORK_PACKET_UNPLANNED_PAINT'],
-    [scope(),ops([37,39,40,255]),
-      'CODE_MODE_MATERIAL_WORK_PACKET_UNPLANNED_PAINT'],
-    [scope(),ops([90,105,125,255]),
-      'CODE_MODE_MATERIAL_WORK_PACKET_BASE_ONLY'],
+    [scope(),[{...painted[0],regions:[{...painted[0].regions[0],
+      rgba:[37,39,40,255]}]}],
+      'CODE_MODE_MATERIAL_CLUSTER_OPERATION_MISMATCH'],
+    [scope(),[{...painted[0],cube_uuid:'another-cube'}],
+      'CODE_MODE_MATERIAL_CLUSTER_OPERATION_MISMATCH'],
+    [scope(),[{...painted[0],regions:painted[0].regions.slice(0,1)}],
+      'CODE_MODE_MATERIAL_CLUSTER_OPERATION_MISMATCH'],
   ];
   for(const [scoped,operations,error] of cases) {
     assert.throws(()=>validateMaterialWorkPacketOperations(p,scoped,operations),
       new RegExp(error));
   }
 });
+test('deterministic compiler preserves deliberate contiguous clusters, never invents noisy pixels',()=>{
+  const input=packet();
+  // Input span order is irrelevant; compiled source has a canonical order.
+  const span=input.facePlans[0].clusters[0].spans;
+  input.facePlans[0].clusters[0].spans=[span[1],span[0]];
+  assert.deepEqual(compileMaterialClusterPaint(input),ops());
+  assert.equal(normalizedMaterialWorkPacket(input).shadingIntent,'FORM_SHADING');
+  assert.equal(normalizedMaterialWorkPacket(input).facePlans[0].clusters[0]
+    .spans.length,2);
+});
 test('a small identity detail can use a single color without fake forced shading',()=>{
   const p=packet();
   p.shadingIntent='SURFACE_DETAIL';
   p.palette=[{role:'detail',rgb:[180,20,20],
     purpose:'Preserve the exact painted red face trace.'}];
-  p.facePlans=p.facePlans.map(({shadowPlacement,highlightPlacement,...face})=>face);
+  p.facePlans=p.facePlans.map(({shadowPlacement,highlightPlacement,clusters,...face})=>face);
   assert.equal(validateMaterialWorkPacketOperations(
-    normalizedMaterialWorkPacket(p),scope(),ops([180,20,20,255])),true);
+    normalizedMaterialWorkPacket(p),scope(),manualOps([180,20,20,255])),true);
 });
 
 test('operator approval sees the plan digest and description but cannot bypass the Rust write guard',async()=>{

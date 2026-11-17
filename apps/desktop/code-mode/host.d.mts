@@ -144,7 +144,10 @@ export interface CodeModeGuestAPI {
   audit(args: { project: string }): Promise<InspectReceipt>;
   newModel(args: { output: string; name: string; modelIdentifier: string }):
     Promise<CodeModeProjectReference & { receipt: OutputReceipt }>;
-  apply(args: { project: string; output: string; operations: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent; materialWorkPacket?: MaterialWorkPacket }):
+  /** FORM_SHADING with a connected-cluster packet is compiled by the trusted
+   * host: omit operations. Existing sample/direct edits still pass operations.
+   */
+  apply(args: { project: string; output: string; operations?: EditOperation[]; correctionScope?: TextureCorrectionScope; correctionIntent?: MaterialCorrectionIntent; materialWorkPacket?: MaterialWorkPacket }):
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt;
       texturing_workflow?:{
         status:"PAINT_SAVED_NOT_VISUALLY_ACCEPTED";source_model_sha256:string;

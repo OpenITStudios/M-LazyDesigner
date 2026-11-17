@@ -1,3 +1,13 @@
+**Rust connected face-local cluster execution (2026-11-17; SOURCE ONLY):**
+The Texturing FORM_SHADING path now compiles guest-proposed connected
+shadow/highlight row spans into existing Rust guarded Cube-face Paint,
+instead of trusting a free-text cluster plan plus arbitrary guest
+pixel operations. Reviewer/model/UV/source gates and protected sample
+remain; small exact-RGBA edits are unchanged. Source-only authored
+regressions NOT_EXECUTED; artistic outcomes and real reviewer
+accuracy are still UNVERIFIED under the current hold. No CI, localtest
+or release changes.
+
 **Rust reviewed material planning (2026-11-17; SOURCE ONLY):**
 The Code Mode reviewer-backed propagation path now requires a bounded
 MaterialWorkPacket (current source/reviewer SHA, issue and part,

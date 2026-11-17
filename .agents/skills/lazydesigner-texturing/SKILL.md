@@ -42,6 +42,21 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Rust Texturing review admission (source-authored; NOT_EXECUTED):**
 
+**Rust cluster-to-pixel execution (source-only; NOT_EXECUTED):**
+When the reviewer confirms a representative form-shading sample,
+declare small connected shadow/highlight *face-local row-span clusters*
+in `MaterialWorkPacket.facePlans[].clusters` from actual approved
+material form and light. Do not make the assistant invent freehand
+Rectangle/Pixel operations after that plan: omit `operations` and
+let the trusted host compile bounded spans into the SAME existing
+Rust guarded Cube-face Paint owner. Isolated noise masquerading as
+one cluster and accidental overlapping shade roles are rejected
+structurally. A row-span connection, palette ramp or successful
+source binding does NOT prove artistic styling; inspect the actual
+fresh shaded model/crops after saved Paint. This is only for reviewer-
+authorized FORM_SHADING propagation, not pixel-by-pixel approvals,
+intentionally flat details, or independent Geometry/UV edits.
+
 **Rust reviewed material propagation plan (source-only):**
 Before *broad reviewed* Texture propagation, the AI must submit one
 bounded `materialWorkPacket` with approved/current SHA binding, latest

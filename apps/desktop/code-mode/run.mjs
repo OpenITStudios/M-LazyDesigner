@@ -88,6 +88,10 @@ async function main() {
           planned_cube_faces:request.materialWorkPacket.facePlans.map(face=>({
             cube_uuid:face.cubeUuid,face:face.face,
             atlas_region:face.atlasRegion,
+            clusters:(face.clusters??[]).map(cluster=>({
+              role:cluster.role,form_reason:cluster.formReason,
+              row_spans:cluster.spans.length,
+            })),
           })),
         }:null,
         operation_kinds: request.operationKinds ?? null,

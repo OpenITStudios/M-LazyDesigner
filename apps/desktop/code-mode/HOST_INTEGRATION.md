@@ -1,6 +1,55 @@
 # Rust Code Mode — first-party local host integration
 
 
+## Connected pixel-art cluster compiler (SOURCE ONLY)
+
+`FORM_SHADING` packets now require actual `facePlans[].clusters`
+rather than only a free-text `clusterPlan`. Each cluster supplies:
+
+```json
+{
+  "id": "joint-shadow",
+  "role": "shadow",
+  "formReason": "The recessed armor joint needs a connected shadow mass.",
+  "spans": [{"y": 0, "x0": 0, "x1": 2},
+            {"y": 1, "x0": 0, "x1": 3}]
+}
+```
+
+`spans` are integer, half-open *Cube face-local pixels*.
+Each cluster is one 4-connected mass; same-row spans may not overlap
+or remain unnecessarily adjacent, and different clusters cannot
+claim the same pixel. Each FORM_SHADING face needs a dark-form and
+light-form cluster in the declared palette (the base can be preserved).
+The whole packet is bounded to eight faces, 16 clusters per face,
+64 total one-pixel-high row spans and 4096 declared local pixels.
+The renderer-facing shape, pixel scale, lighting and historical
+style approval are **not inferred** from row connectivity.
+
+For this intent, model-generated code calls
+`codemode.apply({project,output,correctionScope,correctionIntent,
+materialWorkPacket})` and **omits `operations`**.
+The host normalizes and compiles the masks to the pre-existing
+Rust `paint_cube_face_regions_guarded` operations and checks those
+against native SHA-bound `material_face_patch` UV ownership. Extra
+guest-supplied operations are rejected rather than silently used.
+Each normalized span becomes one 1-pixel-high guarded rectangle
+with RGB taken from the named palette role. Rust still performs all
+actual texture writes, alpha/scoped preservation and Undo in its
+single document/PNG owner.
+
+This is a constrained authoring primitive, not procedural random
+noise generation, a new native paint engine, or a claim that a
+connected cluster is professionally shaded. Approaches that need
+actual source-image interpretation, curved surface lighting and
+cross-face seam review still depend on actual independently reviewed
+mapped pictures. A material whose reference calls for intentional
+flat color should not be forced into FORM_SHADING; `SURFACE_DETAIL`
+and exact known-safe edits retain the existing typed paths.
+The prior `MaterialWorkPacket` section below describes general
+source/reviewer binding; its references to guest-supplied Rust Paint
+operations apply only to non-FORM_SHADING intents.
+
 ## MaterialWorkPacket: reviewer-bound material composition (SOURCE ONLY)
 
 For **broad, independently reviewed material propagation only**, the guest

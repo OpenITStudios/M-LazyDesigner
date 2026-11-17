@@ -109,6 +109,21 @@ A material with more than the bounded 256 reviewed faces remains
 UNVERIFIED until an authorized broader process exists. Existing PILL-01
 through PILL-10 acceptance and test holds remain unchanged.
 
+## PILL-03 cluster geometry and execution coherence — source only
+
+After a real reviewer accepts the representative helmet sample, a
+`FORM_SHADING` propagation packet must supply distinct connected
+Cube face-local shadow/highlight masks, not a textual claim that
+two shades will appear. The trusted host compiles these masks into
+the existing Rust guarded face-region painter, refuses arbitrary
+alternate guest operations, disconnected fragments, accidental
+overlap, duplicate/unknown palette roles and invalid scope/UV.
+An intentional flat face does not need false gradients. These
+source checks are not pixel-art quality acceptance: compare current
+images with the approved actual references and preserve the accepted
+sample/shield before any final verdict. Source fixtures authored but
+NOT_EXECUTED.
+
 ## Golden PILL-03/PILL-07 MaterialWorkPacket source contract
 
 A reviewed propagation sample may not become a cohort-wide Paint unless

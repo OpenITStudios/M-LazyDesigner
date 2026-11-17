@@ -1,6 +1,22 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
 
+**Connected cluster paint composition (2026-11-17; SOURCE ONLY):**
+For reviewer-authorized `FORM_SHADING` propagation, the guest now supplies
+`facePlans[].clusters`: connected, 4-neighbour face-local row spans with
+explicit shadow/highlight roles and form-based justification. The trusted
+host compiles the cluster masks into **existing Rust
+`paint_cube_face_regions_guarded` transactions**. No arbitrary guest Paint
+operations are accepted alongside this packet. Every pixel comes from a
+declared span and palette role; disconnected noise, overlapping clusters,
+missing shadow/highlight and off-scope operations refuse before native
+mutation. The same pinned Rust UV/atlas and correction-scope owner protects
+actual edits; there is NO second bitmap engine, renderer or persistent DB.
+`SURFACE_DETAIL` and small exact-RGBA edits retain the existing direct
+path. Connected geometry does NOT prove good pixel art; the independent
+reviewer must still inspect fresh matched rendered views. Node regressions
+are AUTHORED_NOT_RUN under the active hold.
+
 **MaterialWorkPacket — planned professional Rust Texturing (2026-11-17; SOURCE ONLY):**
 Reviewed `materialCohort.phase:'propagation'` now requires the guest to
 supply a bounded `materialWorkPacket` alongside `correctionIntent` and

@@ -1,3 +1,18 @@
+## 2026-11-17 — Connected Rust Texturing cluster compilation (SOURCE ONLY)
+
+The reviewer-bound FORM_SHADING MaterialWorkPacket now requires
+4-connected Cube-local row-span clusters for explicit shadow/highlight
+palette roles; the trusted Code Mode host compiles their exact pixels
+to the *existing* Rust guarded face-region Paint operation. Guest
+alternate operations, disconnected/noisy clusters, overlapping
+roles, missing shade forms, malformed bounds and excess spans are
+refused before native mutation. This closes the previous gap where
+free-text cluster intent did not bind actual painted pixels.
+SURFACE_DETAIL and direct known-safe small corrections remain on
+the existing path. Authored Node positive/negative tests NOT_EXECUTED;
+current native image/texturing fidelity remains UNVERIFIED under the
+existing CI/localtest hold. No new engine or source-of-truth DB.
+
 ## 2026-11-17 — Rust material work packet source slice (SOURCE ONLY)
 
 Reviewed propagation now requires a Code Mode guest-proposed bounded
