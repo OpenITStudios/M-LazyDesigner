@@ -7,7 +7,7 @@
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { cubeSelectionColors, selectionTargetIds } from './rustViewportSelection';
-  import { canRefreshPaintSources, sceneRenderStructure, sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
+  import { canRefreshPaintSources, sceneRenderStructure, sameSceneInputs, singleCubeRotationUpdate, type SceneInputs } from './rustSceneIdentity';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
@@ -212,6 +212,23 @@
     return true;
   }
 
+  // Keep an unchanged Three.js scene for one admitted Cube rotation. This
+  // does not reuse source-derived matrices when UV, hierarchy, texture or
+  // any other saved property changes; those take the full rebuild path.
+  function refreshCubeRotation(identity: SceneInputs): boolean {
+    const update = singleCubeRotationUpdate(projectedScene, identity);
+    if (!update) return false;
+    const pivot = pivots.get(update.uuid);
+    if (!pivot) return false;
+    pivot.rotation.set(
+      deg(update.rotation[0]), deg(update.rotation[1]),
+      deg(update.rotation[2]), 'ZYX',
+    );
+    projectedScene = { structure: identity.structure, sources: [...identity.sources] };
+    scheduleRender();
+    return true;
+  }
+
   function deg(value: number) { return THREE.MathUtils.degToRad(value); }
   function vector(v: Vec3) { return new THREE.Vector3(v[0], v[1], v[2]); }
 
@@ -296,6 +313,7 @@
     };
     if (sameSceneInputs(projectedScene, identity)) return;
     if (refreshPaintSources(identity)) return;
+    if (refreshCubeRotation(identity)) return;
     gizmo?.detach();
     reconcileTextures();
     for (const child of [...modelRoot.children]) {
@@ -557,19 +575,23 @@
     }
     mutationPending = true;
     if (gizmo) gizmo.enabled = false;
-    // Rust commits exactly one transform command; failures restore the snapshot.
+    // Rust commits exactly one transform command; failed/unknown outcomes
+    // must restore the source pose, while a successful source-bound rotation
+    // can use the local pivot-only path instead of replacing every GPU mesh.
     void (async () => {
+      let accepted = false;
       try {
-        if (edit.op === 'translate_cube') await onTranslate(edit.uuid, edit.delta);
-        else if (edit.op === 'set_cube_rotation') await onRotate(edit.uuid, edit.rotation);
-        else await onScale(edit.uuid, edit.factors);
+        if (edit.op === 'translate_cube') accepted = await onTranslate(edit.uuid, edit.delta);
+        else if (edit.op === 'set_cube_rotation') accepted = await onRotate(edit.uuid, edit.rotation);
+        else accepted = await onScale(edit.uuid, edit.factors);
       } catch {
         // No speculative retry or model mutation in the viewport.
       } finally {
         mutationPending = false;
-        // A rejected or unconfirmed gizmo gesture must restore the last
-        // authoritative Rust snapshot, even if its scene identity is equal.
-        projectedScene = null;
+        // A rejected, canceled or unconfirmed gesture has moved the transient
+        // gizmo even though the authoritative Rust scene may be unchanged.
+        // Force reconstruction only for that rollback case.
+        if (!accepted) projectedScene = null;
         rebuild(cubes, bones, hierarchy);
       }
     })();

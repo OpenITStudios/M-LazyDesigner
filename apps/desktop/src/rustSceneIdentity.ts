@@ -17,6 +17,54 @@ export function sameSceneInputs(previous: SceneInputs | null, next: SceneInputs)
  * Changed sources must stay non-null (painted PNG replacement, not a new
  * asset/unsupported source). Other transitions keep the full scene rebuild.
  */
+
+/**
+ * Recognize the ONLY in-place Cube update supported by this viewport:
+ * one source Cube's saved rotation changed, while geometry, UV, materials,
+ * Bone transforms, hierarchy, texture content and all other Cubes did not.
+ * Inputs are derived by sceneRenderStructure(), never arbitrary model JSON.
+ * A mismatch means full rebuild, not an attempt to guess update reach.
+ */
+export function singleCubeRotationUpdate(
+  previous: SceneInputs | null, next: SceneInputs,
+): {uuid:string;rotation:[number,number,number]} | null {
+  if (!previous || previous.structure === next.structure ||
+      previous.sources.length !== next.sources.length ||
+      previous.sources.some((source, i) => source !== next.sources[i])) return null;
+  let oldTree: unknown;
+  let newTree: unknown;
+  try {
+    oldTree = JSON.parse(previous.structure);
+    newTree = JSON.parse(next.structure);
+  } catch { return null; }
+  if (!Array.isArray(oldTree) || !Array.isArray(newTree) ||
+      oldTree.length !== 8 || newTree.length !== 8 ||
+      !Array.isArray(oldTree[0]) || !Array.isArray(newTree[0]) ||
+      oldTree[0].length !== newTree[0].length) return null;
+  // All non-Cube render inputs must be byte-for-byte semantically equal.
+  for (let i = 1; i < 8; i++) {
+    if (JSON.stringify(oldTree[i]) !== JSON.stringify(newTree[i])) return null;
+  }
+  let changed: {uuid:string;rotation:[number,number,number]} | null = null;
+  for (let i = 0; i < oldTree[0].length; i++) {
+    const before = oldTree[0][i];
+    const after = newTree[0][i];
+    if (!Array.isArray(before) || !Array.isArray(after) ||
+        before.length !== 15 || after.length !== 15 ||
+        before[0] !== after[0] || typeof after[0] !== 'string') return null;
+    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    if (changed ||
+        JSON.stringify(before.slice(0, 4)) !== JSON.stringify(after.slice(0, 4)) ||
+        JSON.stringify(before.slice(5)) !== JSON.stringify(after.slice(5))) return null;
+    const rotation = after[4];
+    if (!Array.isArray(rotation) || rotation.length !== 3 ||
+        !rotation.every((axis: unknown) =>
+          typeof axis === 'number' && Number.isFinite(axis))) return null;
+    changed = {uuid: after[0], rotation: rotation as [number,number,number]};
+  }
+  return changed;
+}
+
 export function canRefreshPaintSources(previous: SceneInputs | null, next: SceneInputs): boolean {
   if (!previous || previous.structure !== next.structure ||
       previous.sources.length !== next.sources.length) return false;
