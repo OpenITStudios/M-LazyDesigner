@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -283,6 +283,7 @@ enum InspectBatchQuery {
     MaterialFacePatch { texture_uuid: String, cube_uuid: String, face: String,
         region: MaterialPatchRegion },
     TextureStyling { texture_uuid: String, region: MaterialPatchRegion },
+    TextureSourceColors { texture_uuid: String, region: MaterialPatchRegion },
     TextureStylingFace { texture_uuid: String, cube_uuid: String, face: String },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
@@ -369,6 +370,11 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 let styling=inspect_texture_styling_region(
                     doc,batch_id(&texture_uuid)?,&region)?;
                 json!({"kind":"texture_styling","styling":styling})
+            },
+            InspectBatchQuery::TextureSourceColors {texture_uuid,region} => {
+                let colors=inspect_texture_source_colors(
+                    doc,batch_id(&texture_uuid)?,&region)?;
+                json!({"kind":"texture_source_colors","colors":colors})
             },
             InspectBatchQuery::TextureStylingFace {texture_uuid,cube_uuid,face} => {
                 let styling=inspect_texture_styling_face(doc,

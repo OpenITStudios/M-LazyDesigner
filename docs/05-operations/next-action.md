@@ -1,3 +1,15 @@
+**Rust source-color preimage safety (2026-11-17; SOURCE ONLY):**
+Reviewed Texturing propagation now requires reviewer-selected original
+RGBA overwrite colors. Rust checks every changed atlas pixel against
+that exact source-color set; stray identity/detail colors abort the
+entire transaction. A bounded `texture_source_colors` read lets the
+reviewer inspect actual saved palette counts without implying source
+color approval. The guest cannot expand reviewer restrictions.
+Existing small exact edits remain compatible. Source integration
+and regression cases authored, tests on hold, real visual review
+UNVERIFIED. Continue only from actual new evidence or separately
+authorized scope; do not claim pixel-art completion from a guard.
+
 **Rust protected identity inside correction scope (2026-11-17; SOURCE ONLY):**
 A reviewed Texturing correction may now preserve approved atlas marks
 within its allowed region by declaring trusted protected rectangles and

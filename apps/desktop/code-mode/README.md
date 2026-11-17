@@ -1,5 +1,19 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Source-color-aware safe cluster propagation (2026-11-17; SOURCE ONLY):**
+A reviewed broad material Paint now requires an independent reviewer
+to select allowed **original** atlas RGBA colors; the guest cannot
+expand that source-color set. Rust compares every changed pixel's
+pre-image RGBA to the selected colors and rejects the entire edit
+when a detail/marking color outside the set is overwritten. The existing
+physical-pixel protection and expected-before guards still apply.
+A new read-only `texture_source_colors` query shows exact, bounded
+source RGBA counts to support grounded reviewer selection without
+guessing from render lighting. Source data is not artistic approval;
+actual image comparison remains required. Native/Node regression
+sources authored; no local/CI tests executed.
+
+
 
 **Reviewed landmark protection inside correction scope (SOURCE ONLY):**
 Rust now accepts optional `protectedRegions` (preserve the ORIGINAL

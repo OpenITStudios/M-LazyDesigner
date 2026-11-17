@@ -636,6 +636,19 @@ export interface TextureStylingCorrectionEvidence {
   visual_verdict:"UNVERIFIED";texture_completion_attested:false;
   next?:string;
 }
+/** Read-only original atlas RGBAs. A palette read is not the reviewer's
+ * authorization to overwrite those colors, nor an artistic PASS.
+ */
+export interface TextureSourceColorsEvidence {
+  scope:"saved_physical_atlas_original_rgba_colors";
+  texture_uuid:string;region:MaterialPatchRegion;
+  sampled_pixels:number;unique_rgba:number;
+  colors:Array<{rgba:[number,number,number,number];pixels:number}>;
+  complete:boolean;
+  reason:null|"SOURCE_COLORS_MORE_THAN_16_UNIQUE";
+  visual_verdict:"UNVERIFIED";texture_completion_attested:false;
+  note:string;
+}
 export type InspectBatchQuery =
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
@@ -646,6 +659,7 @@ export type InspectBatchQuery =
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
   | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion }
   | { kind: "texture_styling"; texture_uuid: string; region: MaterialPatchRegion }
+  | { kind: "texture_source_colors"; texture_uuid: string; region: MaterialPatchRegion }
   | { kind: "texture_styling_face"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"] }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }
@@ -697,6 +711,7 @@ export type InspectBatchResult =
   | { kind: "material_pair"; comparison: MaterialPairComparison }
   | { kind: "material_face_patch"; binding: MaterialFacePatchBinding }
   | { kind: "texture_styling"; styling: TextureStylingEvidence }
+  | { kind: "texture_source_colors"; colors: TextureSourceColorsEvidence }
   | { kind: "texture_styling_face"; styling: TextureStylingFaceEvidence }
   | { kind: "catalog"; catalog: CatalogPage }
   | { kind: "texture"; asset: InspectAsset }

@@ -42,6 +42,21 @@ If a decision-critical item is missing, request only that exact context through 
 
 **Rust Texturing review admission (source-authored; NOT_EXECUTED):**
 
+**Reviewed source-color preconditions (Rust source-only):**
+For broad material shading propagation on an already painted atlas,
+inspect the actual saved crop's `texture_source_colors` palette and
+obtain an independent reviewer-selected `editableBeforeRgba` list of
+the original RGBA colors that may be replaced. Do not assume all
+opaque colors are base or that the most frequent color is safe to
+overwrite. Rust refuses any changed pixel whose original RGBA is
+outside that reviewer-owned list, even inside an allowed rectangle;
+this protects artwork not explicitly marked by a coordinate box.
+The guest may only narrow the reviewed source palette, never broaden
+it. If the reviewer cannot establish which source colors may be
+replaced, keep propagation BLOCKED and request one evidence-backed
+sample/crop, not a guessed multi-color clearance. Same native bitmap,
+transaction and Undo authority. No automatic visual PASS.
+
 **Preserve approved pixel landmarks during Rust corrections (source-only):**
 When a material correction overlaps already-approved identity details,
 have the independent reviewer identify exact original atlas areas as

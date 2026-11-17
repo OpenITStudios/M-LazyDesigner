@@ -1,5 +1,61 @@
 # Rust Code Mode — first-party local host integration
 
+## Source-color overwrite guards for reviewed material propagation (SOURCE ONLY)
+
+The existing Rust correction scope can now carry
+`editableBeforeRgba` (serialized `editable_before_rgba`): one to
+16 exact RGBA8 colors which may be **replaced** during a correction.
+Every actually changed physical atlas pixel is compared against the
+ORIGINAL saved PNG in the canonical Rust transaction. A changed pixel
+whose pre-image RGBA is not on the list aborts the entire transaction,
+including all earlier edits. This prevents generic cluster shading
+from overwriting a red emblem or neutral metal detail that occupies
+the same permitted atlas rectangle. Alpha, protected regions, the
+per-pixel expected-before guard, UV ownership and all prior
+correction-scope checks remain intact.
+
+For independently reviewed **broad propagation**, the host requires
+that the trusted reviewer, not the Deno guest, supplies a nonempty
+`correctionScope.editableBeforeRgba`. The guest may omit the field
+(the reviewer guard is inherited) or narrow the list; any extra
+guest-listed colors are discarded by intersection. A disjoint guest
+list is rejected before write authorization. A guest-supplied list
+without a reviewer-supplied source color set cannot authorize broad
+propagation. The existing small representative correction and direct
+known-safe exact-RGBA workflows remain backward compatible; the
+pre-image allowlist is optional outside reviewed propagation.
+This does not transform a pixel into an accepted reference or certify
+correct shading.
+
+Before the reviewer chooses replaceable original colors, use a SHA-
+bound **read-only** Code Mode inspection, for example:
+
+```js
+await codemode.inspectBatch({project,requests:[{
+  kind:"texture_source_colors",
+  texture_uuid:"<actual selected texture UUID>",
+  region:{from:[8,8],to:[12,12]}
+}]});
+```
+
+The Rust result reports up to 16 most frequent **exact RGBA** values
+and counts from the selected physical atlas crop; its `complete` flag
+distinguishes a full list from a crop with more than 16 unique colors.
+It never includes full image bytes, never selects overwrite permission,
+and does not infer which colors in a lit reference render correspond
+to those saved pixels. Only approved source/reviewer evidence can
+justify which colors are intentional material base versus protected
+identity/secondary details.
+
+The Rust `apply` receipt now reports the number of source colors
+actually guarded. The host compares all guard counts with its own
+effective scope; this is source-level enforcement evidence only.
+Source-authored Rust and Node tests cover base-color correction with
+adjacent artwork preservation, stale/duplicate lists, reviewer-owned
+intersection, absence of reviewer permission and original source
+palette inspection. All remain TEST_AUTHORED_NOT_RUN under the hold.
+
+
 
 ## Reviewer-owned inner-scope landmark preservation (SOURCE ONLY)
 

@@ -383,6 +383,25 @@ Examples include `wood_grain`, `painted_metal`, `stone_cluster`, `cloth_weave`, 
 
 ## Reference-Bound Pixel Clusters (source-side, opt-in)
 
+## Rust reviewed source-RGBA preservation (source-only)
+
+For multi-face reviewed material propagation, old atlas pixels need
+protection beyond rect bounds. The optional canonical Rust
+`editable_before_rgba` correction guard identifies exact ORIGINAL
+RGBA8 values permitted to be overwritten, and verifies every
+actually changed pixel in one atomic Paint transaction. Details
+with an original RGB/alpha outside the whitelist remain unchanged
+even when geometrically inside an approved correction area. The
+trusted host requires the independent reviewer to supply these
+colors for broad reviewed propagation; model-generated proposals
+cannot expand the allowlist. The bounded `texture_source_colors`
+inspector reports real saved RGBA counts from a physical atlas crop
+to support, but never automate, the reviewer decision. An incomplete
+source palette, screenshot-only RGB guess or reference-image label is
+not permission to overwrite. Preserve the previous inner-scope
+`protected_regions` and exact `expected_before_pixels` checks.
+This is asset-integrity safety, not proof of hand-painted shading.
+
 ## Rust Code Mode inner-scope landmark preservation (source-only)
 
 The standalone Rust `correction_scope` now accepts optional

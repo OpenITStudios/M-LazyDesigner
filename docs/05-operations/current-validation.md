@@ -1,3 +1,18 @@
+## 2026-11-17 — Original atlas color guarding in reviewed Texturing (SOURCE ONLY)
+
+The existing Rust atomic correction owner now compares every actually
+changed pixel's original saved RGBA against an optional bounded
+`editable_before_rgba` set. Reviewer-authorized broad propagation
+requires a nonempty trusted source-color set; the model may narrow
+but cannot broaden it. This protects original markings/detail colors
+inside otherwise allowed atlas regions. The source-only read
+`texture_source_colors` returns up to 16 counted exact original
+colors per bounded physical crop for grounded reviewer choice, and
+explicitly marks partial palette results. SDK, CLI, types, host
+admission, tests and docs were authored; no Node/Cargo/native
+execution or live reviewer observation occurred. Image quality
+and pixel-art craft remain UNVERIFIED.
+
 ## 2026-11-17 — Rust source-only inner-region identity protection
 
 Extended the canonical Rust correction scope with optional

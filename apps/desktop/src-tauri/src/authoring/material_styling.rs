@@ -124,6 +124,73 @@ pub fn inspect_texture_styling_region(doc:&AuthoringDocument,
     Ok(report)
 }
 
+/// Original saved RGBA source colors in one bounded physical atlas crop.
+/// This allows a trusted reviewer to CHOOSE explicit overwrite preconditions
+/// from actual source colors instead of guessing RGBs from a lit 3D render.
+/// It is not a permission/approval list, source-reference match or artistic
+/// verdict. More than 16 original colors makes the returned palette partial.
+pub fn inspect_texture_source_colors(
+    doc:&AuthoringDocument, texture_uuid:&str, region:&MaterialPatchRegion
+)->Result<Value>{
+    doc.validate()?;
+    if !super::valid_uuid(texture_uuid) {
+        return Err("SOURCE_COLORS_UUID_INVALID".into());
+    }
+    let width=doc.resolution.width;
+    let height=doc.resolution.height;
+    if region.from[0]>=region.to[0] || region.from[1]>=region.to[1] ||
+       region.to[0]>width || region.to[1]>height {
+        return Err("SOURCE_COLORS_REGION_INVALID".into());
+    }
+    let w=region.to[0]-region.from[0];
+    let h=region.to[1]-region.from[1];
+    if w.checked_mul(h).is_none_or(|count|count>4096) {
+        return Err("SOURCE_COLORS_REGION_TOO_LARGE".into());
+    }
+    let mut assets=doc.texture_assets.iter().filter(|texture|
+        texture.get("uuid").and_then(Value::as_str)==Some(texture_uuid));
+    let texture=assets.next().ok_or_else(||
+        "SOURCE_COLORS_TEXTURE_NOT_FOUND".to_string())?;
+    if assets.next().is_some(){
+        return Err("SOURCE_COLORS_TEXTURE_AMBIGUOUS".into());
+    }
+    let pixels=paint::decode_for_uv_inspection(texture,width,height)
+        .map_err(|_|"SOURCE_COLORS_BITMAP_UNSUPPORTED".to_string())?;
+    let mut counts=std::collections::HashMap::<[u8;4],u32>::new();
+    for y in region.from[1]..region.to[1] {
+        for x in region.from[0]..region.to[0] {
+            let at=((y*width+x)*4) as usize;
+            let rgba=[
+                pixels[at],pixels[at+1],pixels[at+2],pixels[at+3]
+            ];
+            *counts.entry(rgba).or_default()+=1;
+        }
+    }
+    let unique=counts.len();
+    let mut colors:Vec<_>=counts.into_iter().collect();
+    colors.sort_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    colors.truncate(16);
+    let entries=colors.into_iter().map(|(rgba,pixels)|json!({
+        "rgba":rgba,"pixels":pixels
+    })).collect::<Vec<_>>();
+    let complete=unique<=16;
+    Ok(json!({
+        "scope":"saved_physical_atlas_original_rgba_colors",
+        "texture_uuid":texture_uuid,
+        "region":region,
+        "sampled_pixels":w*h,
+        "unique_rgba":unique,
+        "colors":entries,
+        "complete":complete,
+        "reason":if complete {Value::Null}else{
+            json!("SOURCE_COLORS_MORE_THAN_16_UNIQUE")
+        },
+        "visual_verdict":"UNVERIFIED",
+        "texture_completion_attested":false,
+        "note":"Measured original saved texture RGBA only. The reviewer must independently choose which colors may be overwritten; these counts grant no paint permission."
+    }))
+}
+
 /// Review every approved correction rectangle, not only the first one.
 /// A large/unreadable region is reported as NOT_EVALUATED with its index
 /// instead of silently disappearing from the mutation receipt. These
@@ -304,6 +371,54 @@ mod tests{
     fn region()->MaterialPatchRegion{MaterialPatchRegion{
         from:[0,0],to:[8,8]
     }}
+    #[test]
+    fn original_source_color_palette_is_exact_and_not_an_artistic_pass() {
+        let mut s=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Source palette","source_palette").unwrap()
+        ).unwrap();
+        s.apply(0,&[EditOperation::CreatePaintTexture {
+            uuid:TEX.into(),name:"original.png".into(),
+        }]).unwrap();
+        s.apply(1,&[
+            EditOperation::PaintTexturePixel {
+                texture_index:0,x:1,y:1,rgba:[80,100,120,255],
+            },
+            EditOperation::PaintTexturePixel {
+                texture_index:0,x:2,y:1,rgba:[170,25,25,255],
+            },
+        ]).unwrap();
+        let crop=MaterialPatchRegion{from:[1,1],to:[3,2]};
+        let palette=inspect_texture_source_colors(s.document(),TEX,&crop).unwrap();
+        assert_eq!(palette["scope"],"saved_physical_atlas_original_rgba_colors");
+        assert_eq!(palette["complete"],true);
+        assert_eq!(palette["unique_rgba"],2);
+        assert_eq!(palette["colors"][0]["pixels"],1);
+        assert_eq!(palette["colors"][0]["rgba"],json!([80,100,120,255]));
+        assert_eq!(palette["colors"][1]["rgba"],json!([170,25,25,255]));
+        assert_eq!(palette["visual_verdict"],"UNVERIFIED");
+        assert_eq!(palette["texture_completion_attested"],false);
+        let bad=MaterialPatchRegion{from:[0,0],to:[256,256]};
+        assert_eq!(inspect_texture_source_colors(s.document(),TEX,&bad).unwrap_err(),
+            "SOURCE_COLORS_REGION_TOO_LARGE");
+
+        // A detailed source with >16 unique original colors is explicitly
+        // partial, not a complete overwrite permission inferred from top-N.
+        let details=(0u32..17).map(|index|
+            EditOperation::PaintTexturePixel {
+                texture_index:0,x:1+index,y:3,
+                rgba:[index as u8,5,8,255],
+            }
+        ).collect::<Vec<_>>();
+        s.apply(2,&details).unwrap();
+        let detailed=inspect_texture_source_colors(s.document(),TEX,
+            &MaterialPatchRegion{from:[1,3],to:[18,4]}).unwrap();
+        assert_eq!(detailed["unique_rgba"],17);
+        assert_eq!(detailed["colors"].as_array().unwrap().len(),16);
+        assert_eq!(detailed["complete"],false);
+        assert_eq!(detailed["reason"],"SOURCE_COLORS_MORE_THAN_16_UNIQUE");
+        assert_eq!(detailed["visual_verdict"],"UNVERIFIED");
+    }
+
     #[test]
     fn one_color_saved_png_is_not_final_texture_shading(){
         let mut session=EditorSession::from_document(

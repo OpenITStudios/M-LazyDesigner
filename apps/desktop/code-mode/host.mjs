@@ -322,6 +322,10 @@ function normalizedVisualReview(input, viewIds = []) {
             rgba:Object.freeze([...pixel.rgba]),
           }))),
       }:{}),
+      ...(scope.editable_before_rgba?{
+        editableBeforeRgba:Object.freeze(scope.editable_before_rgba.map(rgba=>
+          Object.freeze([...rgba]))),
+      }:{}),
     });
     return Object.freeze({
       status:'RECORDED',decision:'REJECTED',
@@ -457,6 +461,23 @@ function mergeReviewedPixelGuards(requested,reviewed) {
     }
     beforePixels.set(key,{at:[...entry.at],rgba:[...entry.rgba]});
   }
+  // If the reviewer allowed only original metal base RGBA, the guest may
+  // narrow that set but cannot authorize overwriting previously approved
+  // red/blue artwork simply by adding those colors to its own request.
+  const reviewerColors=reviewed.editableBeforeRgba;
+  const guestColors=requested.editable_before_rgba;
+  let editableBeforeRgba;
+  if(reviewerColors?.length){
+    const reviewerSet=new Set(reviewerColors.map(rgb=>rgb.join(',')));
+    editableBeforeRgba=(guestColors===undefined?reviewerColors:
+      guestColors.filter(rgb=>reviewerSet.has(rgb.join(','))))
+      .map(rgb=>[...rgb]);
+    if(editableBeforeRgba.length===0){
+      throw new Error('CODE_MODE_REVIEWED_SOURCE_COLOR_CONFLICT');
+    }
+  }else if(guestColors!==undefined){
+    editableBeforeRgba=guestColors.map(rgb=>[...rgb]);
+  }
   // Re-run the shared strict admission before invoking any write or sending
   // an approval request. Unknown/overbudget guard combinations fail closed.
   const combined={
@@ -467,6 +488,7 @@ function mergeReviewedPixelGuards(requested,reviewed) {
     preserveAlpha:requested.preserve_alpha,
     ...(rectangles.size?{protectedRegions:[...rectangles.values()]}:{}),
     ...(beforePixels.size?{expectedBeforePixels:[...beforePixels.values()]}:{}),
+    ...(editableBeforeRgba?{editableBeforeRgba}:{}),
   };
   try{normalizedCorrectionScope(combined);}
   catch{throw new Error('CODE_MODE_REVIEWED_PIXEL_GUARD_INVALID');}
@@ -1434,6 +1456,10 @@ export async function createCodeModeHost({
           if(!workPacket){
             throw new Error('CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
           }
+          if(!Array.isArray(feedback.correctionScope.editableBeforeRgba) ||
+             feedback.correctionScope.editableBeforeRgba.length===0){
+            throw new Error('CODE_MODE_REVIEWED_SOURCE_COLOR_GUARD_REQUIRED');
+          }
           if(workPacket.sourceModelSha256!==p.expectedSha256 ||
              workPacket.referencePngSha256!==visualPair.reference.sha256 ||
              workPacket.textureUuid!==requested.texture_uuid ||
@@ -1507,11 +1533,14 @@ export async function createCodeModeHost({
           source_pixel_guards:{
             protected_regions:effectiveCorrectionScope?.protectedRegions?.length??0,
             expected_before_pixels:effectiveCorrectionScope?.expectedBeforePixels?.length??0,
+            editable_before_rgba:effectiveCorrectionScope?.editableBeforeRgba?.length??0,
             verified_by_rust_receipt:receipt.correction_scope?.status==='enforced' &&
               receipt.correction_scope.protected_regions===
                 (effectiveCorrectionScope?.protectedRegions?.length??0) &&
               receipt.correction_scope.expected_before_pixels===
-                (effectiveCorrectionScope?.expectedBeforePixels?.length??0),
+                (effectiveCorrectionScope?.expectedBeforePixels?.length??0) &&
+              receipt.correction_scope.editable_before_rgba===
+                (effectiveCorrectionScope?.editableBeforeRgba?.length??0),
           },
           ...(workPacket?{material_work_packet:{
             status:'SOURCE_BOUND_PLAN_NOT_ARTISTICALLY_VERIFIED',

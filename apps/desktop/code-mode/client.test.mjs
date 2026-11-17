@@ -1429,3 +1429,56 @@ test('Code Mode forwards inner protected pixels and exact-before preconditions t
   assert.equal(launches.length,1);
   assert.equal(approval.length,1);
 });
+
+test('reviewed source-color allowlist is sent as exact RGBA preimage guard',async()=>{
+  let approvals=0,invocations=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:descriptor=>{
+      approvals++;
+      assert.deepEqual(descriptor.correctionScope.editableBeforeRgba,[
+        [80,90,100,255],
+      ]);
+      return true;
+    },
+    runner:async argv=>{
+      invocations++;
+      const native=JSON.parse(await readFile(
+        argv[argv.indexOf('--plan')+1],'utf8'));
+      assert.deepEqual(native.correction_scope.editable_before_rgba,[
+        [80,90,100,255],
+      ]);
+      return {status:'OK',mutation:{revision:1,
+        operation_count:1,changed_uuids:[]}};
+    },
+  });
+  const base={
+    textureUuid:'00000000-0000-4000-8000-000000007101',
+    allowedRegions:[{from:[1,1],to:[5,5]}],
+    preserveAlpha:true,
+    editableBeforeRgba:[[80,90,100,255]],
+  };
+  const apply=scope=>client.apply({
+    input:'/abs/model.bbmodel',output:'/abs/model-next.bbmodel',
+    expectedSha256:SHA,
+    correctionScope:scope,
+    operations:[{op:'paint_texture_pixel',texture_index:0,
+      x:1,y:1,rgba:[100,110,130,255]}],
+  });
+  await apply(base);
+  assert.equal(invocations,1);
+  assert.equal(approvals,1);
+  for(const bad of [
+    {...base,editableBeforeRgba:[]},
+    {...base,editableBeforeRgba:[[80,90,100,255],[80,90,100,255]]},
+    {...base,editableBeforeRgba:[[80,90,100,300]]},
+    {...base,editableBeforeRgba:[[80,90,100]]},
+    {...base,editableBeforeRgba:17},
+    {...base,editableBeforeRgba:Array.from({length:17},
+      (_,i)=>[i,90,100,255])},
+  ]) {
+    await assert.rejects(apply(bad),/CORRECTION_SCOPE_INVALID/);
+  }
+  assert.equal(invocations,1);
+  assert.equal(approvals,1);
+});

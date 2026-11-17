@@ -111,6 +111,26 @@ through PILL-10 acceptance and test holds remain unchanged.
 
 ## PILL-03 cluster geometry and execution coherence — source only
 
+## PILL-01/PILL-05 — preserve source identity by original RGBA guard
+
+An allowed metal-shading patch that contains original red/blue artwork
+must not have its old identity colors silently repainted just because
+they lie inside a broad correction rectangle. In reviewed propagation
+the independent reviewer must select the actual saved RGBA colors that
+may be overwritten (typically identified with a SHA-bound
+`texture_source_colors` atlas read). The Deno guest cannot increase
+that permission. Rust atomically refuses any changed pixel whose
+old RGBA falls outside the selected source colors, as well as
+protected-coordinate violations and alpha regressions.
+
+Source-authored cases: one metal base recolor succeeds; attempting
+metal recolor plus old red marking alteration in the same transaction
+refuses all writes/Undo changes; stale and duplicate before-colors
+refuse; guest-only source colors do not authorize reviewed propagation;
+a guest trying to replace the reviewer's palette cannot broaden it.
+This checks source identity protection, not reference-to-render style
+or Pillager artistic acceptance. Native tests NOT_EXECUTED.
+
 ## PILL-01/PILL-04 — protected identity pixels within correction scope
 
 A Tier 2/3 helmet correction may legitimately change the surrounding

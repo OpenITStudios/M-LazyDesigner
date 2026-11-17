@@ -605,6 +605,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             preserveAlpha:true,
             protectedRegions:[{from:[1,1],to:[2,2]}],
             expectedBeforePixels:[{at:[2,2],rgba:[70,90,100,255]}],
+            editableBeforeRgba:[[70,90,100,255]],
           },
           materialCohort:{phase:'sample',issueId:'helmet-flat',
             cubeUuid:REVIEW_CUBE,face:'north',
@@ -644,12 +645,18 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
           assert.deepEqual(plan.correction_scope.expected_before_pixels,[
             {at:[2,2],rgba:[70,90,100,255]},
           ]);
+          // The guest supplied no source-color guard at this step.
+          // Reviewer restriction was automatically merged into Rust scope.
+          assert.deepEqual(plan.correction_scope.editable_before_rgba,[
+            [70,90,100,255],
+          ]);
           return {status:'OK',source_sha256:HASH,
             output_sha256:'b'.repeat(64),summary:{...SUMMARY,revision:1},
             mutation:{revision:1,operation_count:1,changed_uuids:[]},
             correction_scope:{
               status:'enforced',texture_uuid:'tier2-atlas',
               protected_regions:1,expected_before_pixels:1,
+              editable_before_rgba:1,
               visual_verdict:'UNVERIFIED',
             }};
         }
@@ -679,7 +686,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
           project:'p0',output:step===2?'bad.bbmodel':
             step===3?'weakened-alpha.bbmodel':
             step===4?'conflicting-before.bbmodel':
-            step===5?'good.bbmodel':'repeat.bbmodel',
+            step===5?'conflicting-color.bbmodel':
+            step===6?'good.bbmodel':'repeat.bbmodel',
           operations:[{op:'paint_texture_pixel',texture_index:1,
             x:target.from[0],y:target.from[1],rgba:[80,100,120,255]}],
           correctionScope:{
@@ -688,6 +696,7 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             ...(step===4?{expectedBeforePixels:[{
               at:[2,2],rgba:[20,25,30,255],
             }]}:{}),
+            ...(step===5?{editableBeforeRgba:[[170,25,25,255]]}:{}),
           },
           correctionIntent:{"issueId":"helmet-flat","approachId":"helmet-value-masses","partId":"tier2-helmet","material":"metal","cause":"Helmet shadows and highlights form one generic horizontal band.","treatment":"form_value_masses","expectedChange":"Separate the base, shadow and highlights following the helmet curvature."},
         }},response=>{
@@ -701,7 +710,12 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
             assert.equal(response.code,'CODE_MODE_REVIEWED_BEFORE_PIXEL_CONFLICT');
             return {sourceConflictBlocked:true};
           }
-          if(step===6){
+          if(step===5){
+            assert.equal(response.ok,false);
+            assert.equal(response.code,'CODE_MODE_REVIEWED_SOURCE_COLOR_CONFLICT');
+            return {sourceColorConflict:true};
+          }
+          if(step===7){
             assert.equal(response.ok,false);
             assert.equal(response.code,'CODE_MODE_VISUAL_REVIEW_FRESH_CAPTURE_REQUIRED');
             return {freshCaptureRequired:true};
@@ -722,6 +736,8 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     assert.equal(alphaWeakened.value.refused,true);
     const conflict=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(conflict.value.sourceConflictBlocked,true);
+    const colors=await host.execute({code:'return codemode.apply({project:"p0"});'});
+    assert.equal(colors.value.sourceColorConflict,true);
     const permitted=await host.execute({code:'return codemode.apply({project:"p0"});'});
     assert.equal(permitted.value.edited,true);
     const repeated=await host.execute({code:'return codemode.apply({project:"p0"});'});
@@ -734,6 +750,9 @@ test('rejected Pillager-style image review permits only reviewer-scoped correcti
     ]);
     assert.deepEqual(approvals[0].correctionScope.expectedBeforePixels,[
       {at:[2,2],rgba:[70,90,100,255]},
+    ]);
+    assert.deepEqual(approvals[0].correctionScope.editableBeforeRgba,[
+      [70,90,100,255],
     ]);
     assert.equal(approvals[0].materialCorrectionIntent.issueId,'helmet-flat');
     assert.equal(approvals[0].materialCorrectionIntent.approachId,'helmet-value-masses');
@@ -1273,7 +1292,8 @@ test('representative material is constrained; propagation requires fresh accepte
           partId:'tier2-helmet',
           observation:'Sample is acceptable; other metal faces still need styling.'}],
         correctionScope:{textureUuid:'tier2-atlas',
-          allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
+          allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true,
+          editableBeforeRgba:[[80,100,120,255]]},
         materialCohort:{phase:'propagation',
           cubeUuid:REVIEW_CUBE,face:'north',
           issueId:'helmet-flat',partId:'tier2-helmet',
@@ -1328,6 +1348,9 @@ test('representative material is constrained; propagation requires fresh accepte
         const nativePlan=JSON.parse(await readFile(
           argv[argv.indexOf('--plan')+1],'utf8'));
         assert.equal(nativePlan.operations.length,1);
+        assert.deepEqual(nativePlan.correction_scope.editable_before_rgba,[
+          [80,100,120,255],
+        ]);
         assert.equal(nativePlan.operations[0].op,'paint_cube_face_regions_guarded');
         assert.equal(nativePlan.operations[0].regions.length,4);
         assert.deepEqual(nativePlan.operations[0].regions[0],{
@@ -1413,6 +1436,8 @@ test('representative material is constrained; propagation requires fresh accepte
     assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].clusters.length,2);
     assert.deepEqual(actualApprovals[0].operationKinds,
       ['paint_cube_face_regions_guarded']);
+    assert.deepEqual(actualApprovals[0].correctionScope.editableBeforeRgba,
+      [[80,100,120,255]]);
   }));
 
 test('invalid source-only sample review declarations fail before Paint', () =>
@@ -2406,4 +2431,107 @@ test('operator-owned visual adapter receives Rust face inventory with exact PNG 
     assert.equal(result.value.reviewed,true);
     assert.equal(reviewerCalls,1);
     assert.equal(inventoryCalls,1);
+  }));
+
+test('reviewed broad propagation cannot infer original overwrite colors from guest plan',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const directions=['front','back','left','right','top','bottom'];
+    const selected=[];
+    for(const viewId of directions){
+      const referencePngPath=join(folder,'base-'+viewId+'.png');
+      const capturePngPath=join(folder,'candidate-'+viewId+'.png');
+      await writeFile(referencePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('base-'+viewId)]));
+      await writeFile(capturePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('candidate-'+viewId)]));
+      selected.push({viewId,referencePngPath,capturePngPath});
+    }
+    const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+    const referenceSha=sha(await readFile(selected[0].referencePngPath));
+    let changes=0,steps=0;
+    const observation='The metal helmet side has a missing approved edge marking.';
+    const intent={issueId:'missing-edge',approachId:'restore-edge',
+      partId:'helmet-side',material:'metal',treatment:'hand_painted_clusters',
+      cause:'The originally approved metal edge marking is missing from the current face.',
+      expectedChange:'Restore one bounded colored highlight without disturbing the rest.'};
+    const packet={
+      sourceModelSha256:HASH,referencePngSha256:referenceSha,
+      issueId:intent.issueId,approachId:intent.approachId,partId:intent.partId,
+      textureUuid:'tier2-atlas',material:'metal',
+      shadingIntent:'SURFACE_DETAIL',
+      reviewedIssueObservation:observation,
+      styleIntent:'Restore only the approved helmet side identity edge detail.',
+      lightDirection:'Light direction is unchanged from the approved reference image.',
+      lightRationale:'This correction changes only the observed missing edge accent.',
+      palette:[{role:'detail',rgb:[120,130,150],
+        purpose:'Restore an approved rim detail pixel.'}],
+      facePlans:[{cubeUuid:REVIEW_CUBE,face:'east',
+        atlasRegion:{from:[8,8],to:[12,12]},
+        formCue:'The side plane contains an edge marking on its outer rim.',
+        clusterPlan:'Place only the selected approved edge pixel, not random noise.'}],
+    };
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{
+        ...selected[0],supportingViews:selected.slice(1),
+        captureModelSha256:HASH,requireSixDirections:true,
+      },
+      reviewVisualPair:()=>({
+        decision:'REJECTED',
+        viewReviews:directions.map(viewId=>({
+          viewId,decision:viewId==='front'?'REJECTED':'ACCEPTED',
+          observation:'The selected material was viewed with the matched frame.',
+        })),
+        issues:[{id:intent.issueId,kind:'MISSING_DETAIL',
+          partId:intent.partId,observation}],
+        correctionScope:{textureUuid:'tier2-atlas',
+          allowedRegions:[{from:[0,0],to:[16,16]}],preserveAlpha:true},
+        materialCohort:{phase:'propagation',issueId:intent.issueId,
+          partId:intent.partId,approachId:intent.approachId,
+          cubeUuid:REVIEW_CUBE,face:'north',
+          sampleRegion:{from:[1,1],to:[4,4]},sampleVerdict:'ACCEPTED'},
+      }),
+      authorizeMutation:()=>{changes++;return true;},
+      runner:async args=>{
+        if(args[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(args[0]==='inspect-visual-pair'){
+          const refSha=args[args.indexOf('--reference-sha256')+1];
+          const capSha=args[args.indexOf('--capture-sha256')+1];
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:refSha,capture_png_sha256:capSha,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:refSha,capture_png_sha256:capSha,
+              visual_verdict:'UNVERIFIED'}};
+        }
+        if(args[0]==='inspect-batch')return mockedNativeFaceBinding(args,HASH);
+        throw Error('native write must not be invoked');
+      },
+      spawnImpl:()=>fakeGuest({
+        method:steps++===0?'inspectSelectedVisualPair':'apply',
+        args:steps===1?{project:'p0'}:{
+          project:'p0',output:'blocked.bbmodel',
+          operations:[{op:'paint_cube_face_regions_guarded',
+            cube_uuid:REVIEW_CUBE,texture_uuid:'tier2-atlas',
+            regions:[{face:'east',from:[0,0],to:[1,1],
+              rgba:[120,130,150,255],erase:false}]}],
+          correctionScope:{textureUuid:'tier2-atlas',
+            allowedRegions:[{from:[8,8],to:[12,12]}],
+            preserveAlpha:true,
+            editableBeforeRgba:[[80,90,100,255]]},
+          correctionIntent:intent,materialWorkPacket:packet,
+        },
+      },response=>{
+        if(response.ok && response.result.review_feedback){
+          return {reviewed:true};
+        }
+        assert.equal(response.ok,false);
+        assert.equal(response.code,
+          'CODE_MODE_REVIEWED_SOURCE_COLOR_GUARD_REQUIRED');
+        return {blocked:true};
+      }),
+    });
+    assert.equal((await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.reviewed,true);
+    assert.equal((await host.execute({code:'return codemode.apply({project:"p0"});'})).value.blocked,true);
+    assert.equal(changes,0);
   }));

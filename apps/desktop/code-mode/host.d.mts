@@ -155,6 +155,7 @@ export interface CodeModeGuestAPI {
         source_pixel_guards:{
           protected_regions:number;
           expected_before_pixels:number;
+          editable_before_rgba:number;
           /** Only matching Rust receipt counts attest enforcement; no
            * artistic/reference correctness is inferred. */
           verified_by_rust_receipt:boolean;

@@ -231,6 +231,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
   material_face_patch: ['texture_uuid','cube_uuid','face','region'],
   texture_styling: ['texture_uuid','region'],
+  texture_source_colors: ['texture_uuid','region'],
   texture_styling_face: ['texture_uuid','cube_uuid','face'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
@@ -320,7 +321,8 @@ function serializeInspectionQueries(requests) {
         if (Buffer.byteLength(output[field], 'utf8') > 128) {
           throw new TypeError('Inspection UUID is too long');
         }
-        if (['material_face_patch','texture_styling_face'].includes(kind) &&
+        if (['material_face_patch','texture_styling_face',
+             'texture_source_colors'].includes(kind) &&
             (field === 'texture_uuid' || field === 'cube_uuid') &&
             /[\s\x00-\x1f\x7f]/.test(output[field])) {
           throw new TypeError('MATERIAL_FACE_UUID_INVALID');

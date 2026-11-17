@@ -38,6 +38,12 @@ pub struct TextureCorrectionScope {
     /// can be committed. This is a precondition, not reference approval.
     #[serde(default)]
     pub expected_before_pixels: Vec<ExpectedBeforePixel>,
+    /// For every ACTUALLY changed pixel, the original saved RGBA must
+    /// belong to this exact source-color set. Protects identity/details
+    /// not captured by a handful of landmark rectangles. Empty means
+    /// legacy unrestricted-before-color editing, not artistic approval.
+    #[serde(default)]
+    pub editable_before_rgba: Vec<[u8; 4]>,
 }
 
 pub(super) fn validate_scope(
@@ -50,7 +56,13 @@ pub(super) fn validate_scope(
     let width = doc.resolution.width;
     let height = doc.resolution.height;
     if scope.protected_regions.len() > 16 ||
-        scope.expected_before_pixels.len() > 64 {
+        scope.expected_before_pixels.len() > 64 ||
+        scope.editable_before_rgba.len() > 16 {
+        return Err("CORRECTION_SCOPE_INVALID".into());
+    }
+    let mut seen_colors = HashSet::new();
+    if scope.editable_before_rgba.iter()
+        .any(|rgba| !seen_colors.insert(*rgba)) {
         return Err("CORRECTION_SCOPE_INVALID".into());
     }
     let valid_rect = |rect: &CorrectionRectangle| {
@@ -157,6 +169,14 @@ pub(super) fn verify_after(
         if scope.preserve_alpha && old[3] != new[3] {
             return Err("CORRECTION_ALPHA_CHANGED".into());
         }
+        // This is a PRE-IMAGE guard on every changed pixel. One stray
+        // approved marking color aborts the entire Rust edit transaction;
+        // a changed highlight cannot silently overwrite old artwork.
+        if !scope.editable_before_rgba.is_empty() &&
+           !scope.editable_before_rgba.iter()
+               .any(|allowed| old == allowed.as_slice()) {
+            return Err("CORRECTION_SOURCE_COLOR_NOT_ALLOWED".into());
+        }
         changed += 1;
     }
     if changed == 0 { return Err("CORRECTION_NO_PIXEL_CHANGE".into()); }
@@ -187,6 +207,7 @@ mod tests {
             preserve_alpha,
             protected_regions: Vec::new(),
             expected_before_pixels: Vec::new(),
+            editable_before_rgba: Vec::new(),
         }
     }
     fn pixel(x: u32, y: u32, rgba: [u8; 4]) -> EditOperation {
@@ -319,6 +340,55 @@ mod tests {
     }
 
     #[test]
+    fn source_color_preimage_guard_preserves_details_in_any_allowed_region() {
+        let mut s = session();
+        s.apply(1, &[
+            pixel(1,1,[80,90,100,255]),  // replaceable metal base
+            pixel(2,1,[170,25,25,255]),  // prior approved red mark
+        ]).unwrap();
+        let before = s.export().unwrap();
+        let mut guard = scope(true);
+        guard.editable_before_rgba = vec![[80,90,100,255]];
+        assert_eq!(s.apply_with_correction_scope(2, &[
+            pixel(1,1,[100,112,130,255]),
+            pixel(2,1,[95,110,125,255]),
+        ], Some(&guard)).unwrap_err(), "CORRECTION_SOURCE_COLOR_NOT_ALLOWED");
+        assert_eq!(s.summary().revision,2);
+        assert_eq!(s.export().unwrap(),before);
+
+        let mut wrong = guard.clone();
+        wrong.editable_before_rgba = vec![[81,90,100,255]];
+        assert_eq!(s.apply_with_correction_scope(2, &[
+            pixel(1,1,[100,112,130,255]),
+        ], Some(&wrong)).unwrap_err(), "CORRECTION_SOURCE_COLOR_NOT_ALLOWED");
+        assert_eq!(s.export().unwrap(),before);
+
+        s.apply_with_correction_scope(2, &[
+            pixel(1,1,[100,112,130,255]),
+        ], Some(&guard)).unwrap();
+        assert_eq!(s.summary().revision,3);
+        s.undo(3).unwrap();
+        assert_eq!(s.export().unwrap(),before);
+    }
+
+    #[test]
+    fn source_color_guard_refuses_duplicates_and_oversized_sets() {
+        let mut s=session();
+        let before=s.export().unwrap();
+        let mut dup=scope(false);
+        dup.editable_before_rgba=vec![[0,0,0,0],[0,0,0,0]];
+        assert_eq!(s.apply_with_correction_scope(1,&[
+            pixel(1,1,[20,30,40,255]),
+        ],Some(&dup)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
+        let mut many=scope(false);
+        many.editable_before_rgba=(0..17).map(|n|[n,0,0,255]).collect();
+        assert_eq!(s.apply_with_correction_scope(1,&[
+            pixel(1,1,[20,30,40,255]),
+        ],Some(&many)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
+        assert_eq!(s.export().unwrap(),before);
+    }
+
+    #[test]
     fn strict_plan_parses_scope_without_changing_legacy_edits() {
         let guarded = serde_json::json!({
             "expected_revision":0,
@@ -333,6 +403,7 @@ mod tests {
         assert!(parsed.preserve_alpha);
         assert!(parsed.protected_regions.is_empty());
         assert!(parsed.expected_before_pixels.is_empty());
+        assert!(parsed.editable_before_rgba.is_empty());
         let guarded_extra=serde_json::json!({
             "expected_revision":0,
             "operations":[{"op":"paint_texture_pixel","texture_index":0,
@@ -341,12 +412,15 @@ mod tests {
                 "texture_uuid":TEX,
                 "allowed_regions":[{"from":[1,1],"to":[2,2]}],
                 "protected_regions":[{"from":[1,1],"to":[2,2]}],
-                "expected_before_pixels":[{"at":[1,1],"rgba":[0,0,0,0]}]
+                "expected_before_pixels":[{"at":[1,1],"rgba":[0,0,0,0]}],
+                "editable_before_rgba":[[0,0,0,0]]
             }
         });
         let guarded_plan:crate::authoring::EditPlan =
             serde_json::from_value(guarded_extra).unwrap();
-        assert_eq!(guarded_plan.correction_scope.unwrap().expected_before_pixels.len(),1);
+        let guarded_scope=guarded_plan.correction_scope.unwrap();
+        assert_eq!(guarded_scope.expected_before_pixels.len(),1);
+        assert_eq!(guarded_scope.editable_before_rgba,vec![[0,0,0,0]]);
         let mut bad = guarded;
         bad["correction_scope"]["unrecognized"] = serde_json::json!(true);
         assert!(serde_json::from_value::<crate::authoring::EditPlan>(bad).is_err());
