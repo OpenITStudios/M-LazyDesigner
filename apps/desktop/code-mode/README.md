@@ -142,6 +142,14 @@ Without configuration, the standard CLI still has NO visual reviewer.
 See `HOST_INTEGRATION.md` for the manifest, input/output protocol, privacy
 and local-test hold.
 
+**Post-review source/image freshness (2026-11-17; SOURCE ONLY):**
+A reviewer callback is now followed by a fresh SHA-bound Rust model
+inspection and a rehash of every selected reference/capture PNG
+BEFORE the review is cached. A long-running reviewer cannot return a
+fresh-looking result for replaced source or images. Existing per-write
+approval, Rust source guards and post-Paint fresh-capture requirement
+remain separate. Source regressions AUTHORED_NOT_RUN.
+
 **Reviewer face-to-view/source binding (2026-11-17; SOURCE ONLY):**
 Each independently accepted material-face declaration must identify a
 specific already accepted rendered view (`observedInViewId`). The

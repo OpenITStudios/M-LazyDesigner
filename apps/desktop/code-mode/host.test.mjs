@@ -1004,6 +1004,57 @@ test('invalid or stale reviewer evidence fails before it can permit Paint', () =
     assert.equal(callbackInvoked,0);
   }));
 
+test('pending reviewer findings cannot be cached after model or capture changes',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    for(const drift of ['capture','model']){
+      const reference=join(folder,'source-'+drift+'.png');
+      const capture=join(folder,'review-'+drift+'.png');
+      const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+      await writeFile(reference,png);await writeFile(capture,png);
+      const digest=createHash('sha256').update(png).digest('hex');
+      let callback=0,modelChanged=false,readCount=0;
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{referencePngPath:reference,
+          capturePngPath:capture,captureModelSha256:HASH,viewId:'front'},
+        reviewVisualPair:async()=>{
+          callback++;
+          if(drift==='capture')await writeFile(capture,
+            Buffer.concat([png,Buffer.from('changed')]));
+          else modelChanged=true;
+          return {decision:'UNVERIFIED',issues:[]};
+        },
+        runner:async argv=>{
+          if(argv[0]==='inspect'){
+            readCount++;
+            return {status:'OK',
+              sha256:modelChanged?'b'.repeat(64):HASH,summary:SUMMARY};
+          }
+          assert.equal(argv[0],'inspect-visual-pair');
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:digest,capture_png_sha256:digest,
+              visual_verdict:'UNVERIFIED'}};
+        },
+        spawnImpl:()=>fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },response=>{
+          assert.equal(response.ok,false);
+          assert.equal(response.code,drift==='capture'?
+            'CODE_MODE_VISUAL_REVIEW_INPUT_STALE':
+            'CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+          return {stale:true};
+        }),
+      });
+      const result=await host.execute({code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.equal(result.value.stale,true);
+      assert.equal(callback,1);
+      assert.equal(readCount,2); // startup and post-review source recheck
+    }
+  }));
+
 // Synthetic header-only PNG fixtures test host authority, NOT artistic image quality.
 test('repeat visual review cannot downgrade accepted Pillager snapshot', () =>
   fixture(async input=>{

@@ -1164,6 +1164,21 @@ export async function createCodeModeHost({
             }),
           });
         }
+        // The independent reviewer may take minutes. Source or PNGs can
+        // change while it is inspecting images, even when all preflight
+        // hashes were correct. Never cache a verdict against stale bytes.
+        const fresh=await client.inspect({
+          input:model.input,expectedSha256:model.expectedSha256,
+        });
+        if(fresh.sha256!==model.expectedSha256) {
+          throw new Error('CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+        }
+        await Promise.all(visualViews.flatMap(view=>[
+          pinnedReviewBytes(view.reference),pinnedReviewBytes(view.capture),
+        ]));
+        if(execution.closed || activeExecution!==execution) {
+          throw new Error('CODE_MODE_VISUAL_REVIEW_SESSION_STALE');
+        }
       }
       if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
       const readReceipt = {
