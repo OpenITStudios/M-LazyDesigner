@@ -580,13 +580,13 @@ pub(super) fn fill(
     let desired = if erase { [0, 0, 0, 0] } else { rgba };
     if target == desired { return Ok(()); }
 
-    // Pixel count is bounded by the existing 256² RGBA8 codec; never
-    // recurse or grow data structures in proportion to untrusted PNG bytes.
-    let mut visited = vec![false; w * h];
+    // Since target != desired, recoloring a pixel is itself the visit marker:
+    // it can no longer match target on any later worklist entry. Do not also
+    // allocate a width*height visited map for the same bounded RGBA8 bitmap.
+    // Each accepted pixel queues at most four neighbors, so the iterative
+    // worklist remains bounded by 4 * the existing 256² pixel limit.
     let mut stack = vec![seed];
     while let Some(index) = stack.pop() {
-        if visited[index] { continue; }
-        visited[index] = true;
         let offset = index * 4;
         if pixels[offset..offset + 4] != target { continue; }
         pixels[offset..offset + 4].copy_from_slice(&desired);

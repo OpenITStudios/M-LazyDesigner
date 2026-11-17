@@ -2155,6 +2155,61 @@ fn region_fill_out_of_bounds_and_unsupported_source_refuse_atomically() {
     assert_eq!(imported.document(), &original_import);
 }
 
+// SOURCE-AUTHORED_NOT_RUN: recolored pixels mark their own visitation
+// without a second full-atlas visited buffer. Verify 4-way boundaries,
+// diagonal exclusion, transparency, Undo/Redo and no-op source identity.
+#[test]
+fn region_fill_in_place_marks_large_connected_area_without_crossing_barriers() {
+    const TEX: &str = "00000000-0000-4000-8000-000000009803";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Region in place", "region_in_place").unwrap()).unwrap();
+    session.apply(0, &[
+        EditOperation::SetEmptyAtlasResolution { width: 64, height: 64 },
+        EditOperation::CreatePaintTexture { uuid: TEX.into(), name: "atlas.png".into() },
+    ]).unwrap();
+    let barrier = [75, 20, 140, 255];
+    let painted = [20, 100, 185, 200];
+    // A vertical barrier separates two large transparent connected areas.
+    // A second marked pixel touching only diagonally must not leak across it.
+    session.apply(1, &[EditOperation::PaintTextureRectangle {
+        texture_index: 0, from: [31, 0], to: [31, 63],
+        rgba: barrier, erase: false,
+    }]).unwrap();
+    let before = session.document().clone();
+    session.apply(2, &[EditOperation::PaintTextureFill {
+        texture_index: 0, at: [0, 0], rgba: painted, erase: false,
+    }]).unwrap();
+    let saved = session.document().clone();
+    let rgba = paint::decode_for_uv_inspection(&saved.texture_assets[0], 64, 64).unwrap();
+    for y in 0..64usize {
+        for x in 0..64usize {
+            let start = (y * 64 + x) * 4;
+            let expected = if x < 31 { painted } else if x == 31 {
+                barrier
+            } else { [0, 0, 0, 0] };
+            assert_eq!(&rgba[start..start + 4], &expected,
+                "unexpected pixel at ({x}, {y})");
+        }
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(), saved);
+    assert_eq!(session.apply(3, &[EditOperation::PaintTextureFill {
+        texture_index: 0, at: [0, 0], rgba: painted, erase: false,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &saved);
+    session.undo(3).unwrap();
+    assert_eq!(session.document(), &before);
+    session.redo(4).unwrap();
+    assert_eq!(session.document(), &saved);
+    session.apply(5, &[EditOperation::PaintTextureFill {
+        texture_index: 0, at: [0, 0], rgba: [1, 2, 3, 4], erase: true,
+    }]).unwrap();
+    assert_eq!(session.document(), &before);
+    assert_eq!(session.apply(6, &[EditOperation::PaintTextureFill {
+        texture_index: 0, at: [0, 0], rgba: painted, erase: true,
+    }]).unwrap_err(), "EDIT_NO_OP");
+    assert_eq!(session.document(), &before);
+}
+
 // Authored-only Rust regressions (Cargo/Windows/Blockbench held).
 #[test]
 fn authoring_rig_pivots_and_cube_inflate_roundtrip_and_undo() {
