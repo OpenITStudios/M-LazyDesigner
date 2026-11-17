@@ -1,5 +1,5 @@
 //! Exact saved Cube face → physical atlas patch evidence, never art quality.
-use super::{AuthoringDocument, FACE_NAMES, Result, uv_sharing};
+use super::{AuthoringDocument, FACE_NAMES, Result, uv_sharing, face_regions, face_uv};
 use super::material_pair::MaterialPatchRegion;
 use serde_json::{json, Value};
 
@@ -68,6 +68,63 @@ pub fn inspect_material_face_patch(doc:&AuthoringDocument,
         "view_correspondence":"NOT_VERIFIED"
     }))
 }
+/// Bounded face-local row span supplied by Code Mode for Rust-only projection.
+/// This is NOT a color, texture proof or permission to mutate the atlas.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FaceLocalRowSpan {
+    pub y: u32,
+    pub x0: u32,
+    pub x1: u32,
+}
+
+/// Optional form-cluster footprint read. When spans are present, project each
+/// through the SAME signed/rotated UV helper that native Paint uses and
+/// refuse any span outside the exact trusted physical atlas patch BEFORE
+/// a host asks permission to write. Legacy patch-only callers are unchanged.
+pub fn inspect_material_face_patch_with_spans(
+    doc: &AuthoringDocument, texture_uuid: &str, cube_uuid: &str,
+    side: &str, patch: &MaterialPatchRegion,
+    spans: Option<&[FaceLocalRowSpan]>,
+) -> Result<Value> {
+    let mut binding=inspect_material_face_patch(
+        doc,texture_uuid,cube_uuid,side,patch)?;
+    let Some(spans)=spans else {return Ok(binding)};
+    if spans.is_empty() || spans.len()>64 {
+        return Err("MATERIAL_FACE_CLUSTER_SPANS_INVALID".into());
+    }
+    let cube=doc.cubes.iter().find(|c|c.uuid==cube_uuid)
+        .ok_or_else(||"MATERIAL_FACE_CUBE_NOT_FOUND".to_string())?;
+    let projected=uv_sharing::project_supported_uv(doc,cube)
+        .map_err(|_|"MATERIAL_FACE_CLUSTER_MAPPING_UNSUPPORTED".to_string())?;
+    let surface=projected.faces.get(side).and_then(Value::as_object)
+        .ok_or_else(||"MATERIAL_FACE_CLUSTER_MAPPING_UNSUPPORTED".to_string())?;
+    let rotation=face_regions::face_region_rotation(surface)
+        .map_err(|_|"MATERIAL_FACE_CLUSTER_MAPPING_UNSUPPORTED".to_string())?;
+    let uv=face_uv(&projected,side)
+        .map_err(|_|"MATERIAL_FACE_CLUSTER_MAPPING_UNSUPPORTED".to_string())?;
+    for span in spans {
+        if span.y>=256 || span.x0>=span.x1 || span.x1>256 {
+            return Err("MATERIAL_FACE_CLUSTER_SPANS_INVALID".into());
+        }
+        let (from,to)=face_regions::face_local_pixel_rectangle(
+            doc.resolution.width,doc.resolution.height,uv,rotation,
+            [span.x0,span.y],[span.x1,span.y+1]
+        ).map_err(|_|"MATERIAL_FACE_CLUSTER_MAPPING_UNSUPPORTED".to_string())?;
+        if from[0]<patch.from[0] || from[1]<patch.from[1] ||
+           to[0]>patch.to[0] || to[1]>patch.to[1] {
+            return Err("MATERIAL_FACE_CLUSTER_OUTSIDE_PATCH".into());
+        }
+    }
+    binding["cluster_footprint"]=json!({
+        "scope":"saved_face_local_to_atlas",
+        "status":"within_selected_patch",
+        "span_count":spans.len(),
+        "visual_verdict":"UNVERIFIED"
+    });
+    Ok(binding)
+}
+
 #[cfg(test)]
 mod tests{
     use super::*;
@@ -90,6 +147,29 @@ mod tests{
         assert_eq!(r["face_uv_region"]["from"],json!([1,2]));
         assert_eq!(r["face_uv_region"]["to"],json!([5,6]));
         assert_eq!(r["visual_verdict"],json!("UNVERIFIED"));
+        assert_eq!(d,original);
+    }
+    #[test]
+    fn rotated_face_local_clusters_must_fit_reviewed_atlas_patch(){
+        let d=doc();let original=d.clone();
+        // The pinned fixture north is rotated 90 degrees on UV [1,2,5,6].
+        // Local [0,0] projects to atlas [1,5], never atlas [1,2].
+        let spans=[FaceLocalRowSpan{y:0,x0:0,x1:1}];
+        let accepted=inspect_material_face_patch_with_spans(
+            &d,TEX,CUBE,"north",&region([1,5],[2,6]),Some(&spans)).unwrap();
+        assert_eq!(accepted["cluster_footprint"]["status"],json!("within_selected_patch"));
+        assert_eq!(accepted["cluster_footprint"]["span_count"],json!(1));
+        assert_eq!(accepted["cluster_footprint"]["visual_verdict"],json!("UNVERIFIED"));
+        assert_eq!(inspect_material_face_patch_with_spans(
+            &d,TEX,CUBE,"north",&region([1,2],[2,3]),Some(&spans))
+            .unwrap_err(),"MATERIAL_FACE_CLUSTER_OUTSIDE_PATCH");
+        assert_eq!(inspect_material_face_patch_with_spans(
+            &d,TEX,CUBE,"north",&region([1,5],[2,6]),Some(&[]))
+            .unwrap_err(),"MATERIAL_FACE_CLUSTER_SPANS_INVALID");
+        assert_eq!(inspect_material_face_patch_with_spans(
+            &d,TEX,CUBE,"north",&region([1,5],[2,6]),
+            Some(&[FaceLocalRowSpan{y:4,x0:0,x1:1}]))
+            .unwrap_err(),"MATERIAL_FACE_CLUSTER_MAPPING_UNSUPPORTED");
         assert_eq!(d,original);
     }
     #[test]

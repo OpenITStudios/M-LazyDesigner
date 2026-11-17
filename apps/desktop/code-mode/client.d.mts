@@ -596,6 +596,13 @@ export interface MaterialFacePatchBinding {
   effective_material:"UNVERIFIED";
   face_coverage_verdict:"UNVERIFIED";
   view_correspondence:"NOT_VERIFIED";
+  /** Optional Rust-only source containment of projected face-local spans. */
+  cluster_footprint?:{
+    scope:"saved_face_local_to_atlas";
+    status:"within_selected_patch";
+    span_count:number;
+    visual_verdict:"UNVERIFIED";
+  };
 }
 /** Native saved atlas statistics only. Never model appearance PASS. */
 export interface TextureStylingEvidence {
@@ -663,7 +670,7 @@ export type InspectBatchQuery =
   | { kind: "asset_handoff"; texture_uuid: string; offset?: number; limit?: number }
   | { kind: "model_texture_coverage"; offset?: number; limit?: number; attention_only?: boolean }
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
-  | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion }
+  | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion; face_spans?:Array<{y:number;x0:number;x1:number}> }
   | { kind: "texture_styling"; texture_uuid: string; region: MaterialPatchRegion }
   | { kind: "texture_source_colors"; texture_uuid: string; region: MaterialPatchRegion }
   | { kind: "texture_styling_face"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"] }

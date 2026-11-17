@@ -271,6 +271,44 @@ test('Code Mode rejects unknown or excessive read batches before starting the CL
   assert.equal(calls, 0);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: do not calculate UV coordinates inside JS.
+// The native face projector alone determines where a row span actually lands.
+test('material face span selectors stay bounded until native projection',async()=>{
+  const query={kind:'material_face_patch',
+    texture_uuid:'texture-1',cube_uuid:'cube-1',face:'north',
+    region:{from:[1,5],to:[2,6]},
+    face_spans:[{y:0,x0:0,x1:1}]};
+  let batchCalls=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    runner:async argv=>{
+      if(argv[0]==='inspect')
+        return {status:'OK',sha256:SHA,summary:{revision:0}};
+      assert.equal(argv[0],'inspect-batch');
+      const data=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+      assert.deepEqual(data.requests,[query]);
+      batchCalls++;
+      return {status:'OK',sha256:SHA,summary:{revision:0},
+        results:[{kind:'material_face_patch',binding:{
+          scope:'source_explicit_cube_face_patch',status:'bound_source_only',
+          cluster_footprint:{scope:'saved_face_local_to_atlas',
+            status:'within_selected_patch',span_count:1,visual_verdict:'UNVERIFIED'},
+        }}]};
+    },
+  });
+  const project=await openRustCodeModeProject(client,'/abs/model.bbmodel');
+  assert.equal((await project.inspectBatch([query])).results[0]
+    .binding.cluster_footprint.span_count,1);
+  for(const spans of [
+    [],[{y:0,x0:0,x1:0}],[{y:256,x0:0,x1:1}],
+    [{y:0,x0:0,x1:1,file:'/secret'}],
+    Array.from({length:65},()=>({y:0,x0:0,x1:1})),
+  ])await assert.rejects(project.inspectBatch([
+    {...query,face_spans:spans}
+  ]),/MATERIAL_FACE_SPANS_INVALID/);
+  assert.equal(batchCalls,1);
+});
+
 test('invalid SHA, nonfinite fields and unbounded batches fail before invoking CLI', async () => {
   let count = 0;
   const client = createRustCodeModeClient({ binary: BIN, runner: async () => {

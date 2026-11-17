@@ -81,6 +81,23 @@ pub(super) fn face_local_pixel_rectangle(
     Ok((from_atlas, to_atlas))
 }
 
+/// The exact quarter-turn convention shared by native painter and
+/// read-only cluster-footprint preflight. A guessed rotation never passes.
+pub(super) fn face_region_rotation(
+    surface: &serde_json::Map<String, Value>,
+) -> Result<u16> {
+    match surface.get("rotation") {
+        None => Ok(0),
+        Some(value) => match value.as_f64() {
+            Some(angle) if angle == 0.0 => Ok(0),
+            Some(angle) if angle == 90.0 => Ok(90),
+            Some(angle) if angle == 180.0 => Ok(180),
+            Some(angle) if angle == 270.0 => Ok(270),
+            _ => Err("PAINT_FACE_REGION_ROTATION_UNSUPPORTED".into()),
+        },
+    }
+}
+
 /// One model-aware transaction paints up to 64 ordered local regions on
 /// selected Cube faces without requiring the agent to calculate atlas UVs.
 /// Reuse the same exact physical-patch alias guard as the read-only material
@@ -148,16 +165,7 @@ pub(super) fn paint_cube_face_regions_guarded(
         if !linked {
             return Err("PAINT_CUBE_FACE_TEXTURE_MISMATCH".into());
         }
-        let rotation = match surface.get("rotation") {
-            None => 0,
-            Some(value) => match value.as_f64() {
-                Some(angle) if angle == 0.0 => 0,
-                Some(angle) if angle == 90.0 => 90,
-                Some(angle) if angle == 180.0 => 180,
-                Some(angle) if angle == 270.0 => 270,
-                _ => return Err("PAINT_FACE_REGION_ROTATION_UNSUPPORTED".into()),
-            },
-        };
+        let rotation = face_region_rotation(surface)?;
         let uv = face_uv(&projected, &region.face)?;
         let (from, end) = face_local_pixel_rectangle(
             doc.resolution.width, doc.resolution.height,

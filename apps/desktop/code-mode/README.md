@@ -1,5 +1,15 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**Native cluster footprint admission (2026-11-17; SOURCE ONLY):**
+Reviewed `FORM_SHADING` sample/propagation plans now send their
+actual Cube-local row spans to the existing `material_face_patch`
+inspector. Rust verifies signed/rotated UV projection into the
+reviewed atlas region before write approval; missing or contradictory
+`cluster_footprint` source receipts block Paint. The Deno guest
+cannot compute a substitute atlas mapping or grant visual acceptance.
+The small exact-RGBA/detail paths remain available. Regression source
+AUTHORED_NOT_RUN; real native behavior and visual quality UNVERIFIED.
+
 **Reference-bound FORM_SHADING samples (2026-11-17; SOURCE ONLY):**
 A trusted reviewer-selected `FLAT_SHADING` sample now requires the
 same source/reviewer-bound form, light and connected-cluster

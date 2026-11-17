@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
+    inspect_bedrock_asset_handoff_page, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -281,7 +281,7 @@ enum InspectBatchQuery {
     MaterialPair { reference_uuid: String, candidate_uuid: String,
         reference_region: MaterialPatchRegion, candidate_region: MaterialPatchRegion },
     MaterialFacePatch { texture_uuid: String, cube_uuid: String, face: String,
-        region: MaterialPatchRegion },
+        region: MaterialPatchRegion, face_spans: Option<Vec<FaceLocalRowSpan>> },
     TextureStyling { texture_uuid: String, region: MaterialPatchRegion },
     TextureSourceColors { texture_uuid: String, region: MaterialPatchRegion },
     TextureStylingFace { texture_uuid: String, cube_uuid: String, face: String },
@@ -361,9 +361,10 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
                 json!({"kind":"material_pair","comparison":comparison})
             },
             InspectBatchQuery::MaterialFacePatch {texture_uuid,cube_uuid,
-                face,region} => {
-                let binding=inspect_material_face_patch(doc,
-                    batch_id(&texture_uuid)?,batch_id(&cube_uuid)?,&face,&region)?;
+                face,region,face_spans} => {
+                let binding=inspect_material_face_patch_with_spans(doc,
+                    batch_id(&texture_uuid)?,batch_id(&cube_uuid)?,&face,
+                    &region,face_spans.as_deref())?;
                 json!({"kind":"material_face_patch","binding":binding})
             },
             InspectBatchQuery::TextureStyling {texture_uuid,region} => {

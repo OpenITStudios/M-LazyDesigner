@@ -276,7 +276,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   asset_handoff: ['texture_uuid', 'offset', 'limit'],
   model_texture_coverage: ['offset', 'limit', 'attention_only'],
   material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
-  material_face_patch: ['texture_uuid','cube_uuid','face','region'],
+  material_face_patch: ['texture_uuid','cube_uuid','face','region','face_spans'],
   texture_styling: ['texture_uuid','region'],
   texture_source_colors: ['texture_uuid','region'],
   texture_styling_face: ['texture_uuid','cube_uuid','face'],
@@ -340,6 +340,22 @@ function serializeInspectionQueries(requests) {
             kind === 'animation_timeline_markers' || kind === 'asset_handoff' ? 32 : 64) :
             (field === 'offset' && kind === 'asset_handoff' ? 393216 : 65536),
         ));
+      } else if (field === 'face_spans') {
+        // Exact face-local row spans; only Rust maps them through rotated UV.
+        if(kind!=='material_face_patch' || !Array.isArray(value) ||
+           value.length<1 || value.length>64) {
+          throw new TypeError('MATERIAL_FACE_SPANS_INVALID');
+        }
+        output.face_spans=value.map(span=>{
+          if(!span || typeof span!=='object' || Array.isArray(span) ||
+             Object.keys(span).some(key=>!['y','x0','x1'].includes(key)) ||
+             !['y','x0','x1'].every(key=>Number.isInteger(span[key])) ||
+             span.y<0 || span.y>=256 || span.x0<0 || span.x0>=span.x1 ||
+             span.x1>256) {
+            throw new TypeError('MATERIAL_FACE_SPANS_INVALID');
+          }
+          return {y:span.y,x0:span.x0,x1:span.x1};
+        });
       } else if (field === 'attention_only') {
         if (typeof value !== 'boolean') {
           throw new TypeError('Inspection attention_only must be a boolean');
@@ -377,7 +393,7 @@ function serializeInspectionQueries(requests) {
       }
     }
     for (const field of allowed) {
-      if (!['offset', 'limit', 'attention_only'].includes(field) && output[field] === undefined) {
+      if (!['offset', 'limit', 'attention_only', 'face_spans'].includes(field) && output[field] === undefined) {
         throw new TypeError('Missing required inspection selector field: ' + field);
       }
     }

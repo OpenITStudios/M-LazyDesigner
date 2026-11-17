@@ -43,6 +43,11 @@ async function mockedNativeFaceBinding(argv, sha) {
         pixel_alias:'no_detected_overlap_for_sample',
         visual_verdict:'UNVERIFIED',face_coverage_verdict:'UNVERIFIED',
         view_correspondence:'NOT_VERIFIED',
+        ...(q.face_spans?{cluster_footprint:{
+          scope:'saved_face_local_to_atlas',
+          status:'within_selected_patch',
+          span_count:q.face_spans.length,visual_verdict:'UNVERIFIED',
+        }}:{}),
       }}]};
   }
   assert.deepEqual(plan.requests.map(x=>x.kind),[
@@ -1419,6 +1424,10 @@ test('representative material is constrained; propagation requires fresh accepte
                 visual_verdict:'UNVERIFIED',
                 face_coverage_verdict:'UNVERIFIED',
                 view_correspondence:'NOT_VERIFIED',
+                ...(q.face_spans && secondStep!==7?{cluster_footprint:{
+                  scope:'saved_face_local_to_atlas',status:'within_selected_patch',
+                  span_count:q.face_spans.length,visual_verdict:'UNVERIFIED',
+                }}:{}),
               }}]};
           }
           return mockedNativeFaceBinding(argv,modifiedSha);
@@ -1462,13 +1471,14 @@ test('representative material is constrained; propagation requires fresh accepte
         const missingPacket=step===3;
         const wrongReference=step===4;
         const manualOverride=step===5;
-        const invalidSource=step===6;
+        const invalidSource=step===6,missingFootprint=step===7;
         return fakeGuest({method:'apply',args:{
           project:'p0',output:overlap?'overlap.bbmodel':
             missingPacket?'missing-packet.bbmodel':
             wrongReference?'wrong-reference.bbmodel':
             manualOverride?'manual-override.bbmodel':
-            invalidSource?'invalid-face.bbmodel':'extended.bbmodel',
+            invalidSource?'invalid-face.bbmodel':
+            missingFootprint?'missing-footprint.bbmodel':'extended.bbmodel',
           ...(overlap || missingPacket || manualOverride?{operations:
             overlap?[{op:'paint_texture_pixel',texture_index:0,
               x:2,y:2,rgba:[60,70,80,255]}]:
@@ -1488,7 +1498,8 @@ test('representative material is constrained; propagation requires fresh accepte
             assert.equal(value.code,'CODE_MODE_MATERIAL_ACCEPTED_SAMPLE_PROTECTED');
             return {blocked:true};
           }
-          if(missingPacket || wrongReference || manualOverride || invalidSource){
+          if(missingPacket || wrongReference || manualOverride ||
+             invalidSource || missingFootprint){
             assert.equal(value.ok,false);
             assert.equal(value.code,missingPacket?
               'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED':
@@ -1513,6 +1524,7 @@ test('representative material is constrained; propagation requires fresh accepte
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_CLUSTER_HOST_OWNED');
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.propagated,true);
     assert.equal(approvals,2);

@@ -194,6 +194,22 @@ first read versus one Rust source check on a repeat), stale model
 and replaced supporting PNG. These are authored—not executed or
 benchmarked—in the current ChatGPT/GitHub source work surface.
 
+## Rust-projected face-local cluster footprint (SOURCE ONLY)
+
+For reviewed `FORM_SHADING` sample/propagation packets, Code Mode now
+sends actual `facePlans[].clusters[].spans` as bounded `face_spans`
+in the existing SHA-pinned Rust `material_face_patch` batch read.
+Legacy patch-only reads are unchanged. The native source inspector
+uses the exact signed/quarter-turn face-local UV mapper that Paint
+uses, and refuses every span projected outside the selected, reviewed
+physical atlas rectangle. The host verifies the returned bounded
+`cluster_footprint` status and span count **before** requesting
+write approval. A missing/mismatched footprint cannot be replaced by
+a model-authored assertion. No JS-side UV engine or second atlas owner.
+This source containment is not a shading, lighting, 3D-form or image
+quality PASS. Positive/negative Rust and Node regression fixtures are
+AUTHORED_NOT_RUN under the current localtest/CI hold.
+
 ## Connected pixel-art cluster compiler (SOURCE ONLY)
 
 `FORM_SHADING` packets now require actual `facePlans[].clusters`

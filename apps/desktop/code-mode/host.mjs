@@ -1530,14 +1530,16 @@ export async function createCodeModeHost({
           }
           validateMaterialWorkPacketOperations(
             workPacket,requested,activeOperations);
-          // The Rust source inspector (same pinned model and actual UV
-          // owner as guarded Paint) validates EVERY planned atlas patch.
-          // Text cannot certify a 3D form or prove cluster artistic quality.
+          // Rust validates every face-local cluster span after canonical
+          // signed/rotated UV projection, not just the atlas patch outline.
           const bounded=await p.inspectBatch(workPacket.facePlans.map(face=>({
             kind:'material_face_patch',
             texture_uuid:workPacket.textureUuid,
             cube_uuid:face.cubeUuid,
             face:face.face,region:face.atlasRegion,
+            ...(workPacket.shadingIntent==='FORM_SHADING'?{
+              face_spans:face.clusters.flatMap(cluster=>cluster.spans),
+            }:{}),
           })));
           if(bounded.sha256!==p.expectedSha256 ||
              bounded.results?.length!==workPacket.facePlans.length ||
@@ -1557,6 +1559,12 @@ export async function createCodeModeHost({
                  binding?.visual_verdict!=='UNVERIFIED' ||
                  binding?.face_coverage_verdict!=='UNVERIFIED' ||
                  binding?.view_correspondence!=='NOT_VERIFIED' ||
+                 (workPacket.shadingIntent==='FORM_SHADING' && (
+                   binding?.cluster_footprint?.scope!=='saved_face_local_to_atlas' ||
+                   binding?.cluster_footprint?.status!=='within_selected_patch' ||
+                   binding?.cluster_footprint?.visual_verdict!=='UNVERIFIED' ||
+                   binding?.cluster_footprint?.span_count!==face.clusters.reduce(
+                     (sum,cluster)=>sum+cluster.spans.length,0))) ||
                  !exact(binding?.sample_region?.from,face.atlasRegion.from) ||
                  !exact(binding?.sample_region?.to,face.atlasRegion.to);
              })) {

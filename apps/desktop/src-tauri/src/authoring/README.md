@@ -1,5 +1,17 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+**Saved face-local cluster footprint (2026-11-17; SOURCE ONLY):**
+The existing headless `inspect-batch` `material_face_patch` selector
+now accepts optional, bounded `face_spans` rows. Canonical Rust
+projects each Cube-face-local span through the same signed/rotated UV
+mapper as guarded Paint and refuses any projected texel outside the
+selected physical atlas patch. A matching `cluster_footprint` receipt
+is source-containment evidence only; it is not visual material QA or
+permission to write. Patch-only reads remain backward compatible,
+and actual Rust Paint, Undo, protection and no-overwrite authority
+are unchanged. Rust/Node tests AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED.
+
+
 **Scoped UV alias Paint alignment (2026-11-17; SOURCE_ONLY):**
 The existing saved `material_face_patch` inspector and the canonical
 `paint_cube_face_regions_guarded` now reuse one Rust overlap-witness

@@ -1,3 +1,16 @@
+**Rust source-bound face-local cluster footprint (2026-11-17; SOURCE ONLY):**
+For independently reviewed FORM_SHADING samples and propagation, the
+existing Code Mode `material_face_patch` batch read now accepts
+bounded face-local row spans. Rust projects them through the canonical
+signed/rotated face mapping and refuses any physical pixel outside
+the exact reviewed atlas patch before host write approval. The host
+requires a matching native `cluster_footprint` receipt; absent or
+contradictory source evidence blocks Paint. Original SHA, scoped RGBA,
+alpha, Undo and reviewer permissions remain unchanged, while existing
+small detail operations and patch-only reads retain compatibility.
+Rust and Node regression source AUTHORED_NOT_RUN; LOCAL_TEST_DEFERRED;
+actual runtime/visual quality and measured efficiency UNVERIFIED.
+
 **Rust scoped UV-alias Texturing alignment (2026-11-17; SOURCE ONLY):**
 A reviewed Code Mode `material_face_patch` could approve a disjoint
 atlas sample although `paint_cube_face_regions_guarded` rejected

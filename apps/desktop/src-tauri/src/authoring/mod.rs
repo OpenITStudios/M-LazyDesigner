@@ -16,7 +16,7 @@ pub use material_pair::{inspect_material_pair, MaterialPatchRegion};
 mod material_styling;
 pub use material_styling::{inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors};
 mod material_face;
-pub use material_face::inspect_material_face_patch;
+pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;
 pub use visual_pair::{inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES};
 mod uv_sharing;
