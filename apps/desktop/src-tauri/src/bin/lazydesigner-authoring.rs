@@ -259,6 +259,119 @@ fn inspect_model_audit(doc: &AuthoringDocument) -> Value {
     })
 }
 
+/// One task-oriented read from the already SHA-pinned model. Resolve a
+/// named part and its relevant source evidence before selecting an operation.
+/// Substring suggestions are NEVER selected as targets or write authority.
+fn inspect_authoring_target(
+    doc: &AuthoringDocument, domain: &str, category: &str, name: &str,
+) -> Result<Value> {
+    if name.is_empty() || name.trim() != name || name.chars().count() > 128 ||
+       name.chars().any(char::is_control) {
+        return Err(fail("AUTHORING_TARGET_NAME_INVALID"));
+    }
+    let possible_ops: &[&str] = match (domain, category) {
+        ("geometry", "cubes") =>
+            &["translate_cube", "reframe_cube", "set_cube_rotation", "set_cube_origin"],
+        ("geometry", "bones") =>
+            &["translate_bone_subtree", "set_bone_origin", "set_bone_rotation"],
+        ("uv", "cubes") =>
+            &["set_face_uv", "set_box_uv_offset", "isolate_cube_box_uv"],
+        ("texturing", "cubes") =>
+            &["paint_cube_face_regions_guarded", "paint_cube_uv_faces_guarded",
+              "recolor_cube_faces_palette_guarded"],
+        ("texturing", "textures") =>
+            &["paint_texture_rectangles", "paint_texture_fill"],
+        ("animation", "bones") =>
+            &["add_bone_transform_keyframe", "update_bone_transform_keyframe"],
+        ("animation", "animations") =>
+            &["set_animation_length", "set_animation_loop_mode",
+              "scale_animation_timeline", "duplicate_animation_clip"],
+        _ => return Err(fail("AUTHORING_TARGET_DOMAIN_MISMATCH")),
+    };
+
+    let mut exact = Vec::<Value>::new();
+    let mut suggestions = Vec::<Value>::new();
+    let mut exact_count = 0usize;
+    let mut suggestion_count = 0usize;
+    let needle = name.to_lowercase();
+    let mut inspect = |index: usize, uuid: Option<&str>, title: Option<&str>| {
+        let Some(title) = title else { return; };
+        if title == name {
+            exact_count += 1;
+            if exact.len() < 8 {
+                exact.push(json!({"index":index, "uuid":uuid, "name":title}));
+            }
+        } else if title.to_lowercase().contains(&needle) {
+            suggestion_count += 1;
+            if suggestions.len() < 8 {
+                suggestions.push(json!({"index":index, "uuid":uuid, "name":title}));
+            }
+        }
+    };
+    match category {
+        "cubes" => for (i, cube) in doc.cubes.iter().enumerate() {
+            inspect(i, Some(&cube.uuid), cube.name.as_deref());
+        },
+        "bones" => for (i, bone) in doc.bones.iter().enumerate() {
+            inspect(i, Some(&bone.uuid), Some(&bone.name));
+        },
+        "textures" => for (i, texture) in doc.texture_assets.iter().enumerate() {
+            inspect(i, texture.get("uuid").and_then(Value::as_str),
+                    texture.get("name").and_then(Value::as_str));
+        },
+        "animations" => for (i, clip) in doc.animation_assets.iter().enumerate() {
+            inspect(i, clip.get("uuid").and_then(Value::as_str),
+                    clip.get("name").and_then(Value::as_str));
+        },
+        _ => unreachable!(), // Restricted by the domain/category match.
+    }
+    let selected = if exact_count == 1 {
+        let candidate = &exact[0];
+        let uuid = candidate.get("uuid").and_then(Value::as_str);
+        if let Some(uuid) = uuid {
+            let source = match category {
+                "cubes" => {
+                    let element = focused_element(doc, uuid)?;
+                    let surfaces = if domain == "uv" || domain == "texturing" {
+                        Some(inspect_cube_surfaces(doc, uuid)?)
+                    } else { None };
+                    json!({"element":element, "surfaces":surfaces})
+                },
+                "bones" => json!({"element":focused_element(doc, uuid)?}),
+                "textures" => json!({"asset":inspect_asset(doc, "texture",
+                    &candidate["index"].as_u64().unwrap().to_string())?}),
+                "animations" => json!({"asset":inspect_asset(doc, "animation", uuid)?}),
+                _ => unreachable!(),
+            };
+            Some(json!({"identity":candidate, "source":source}))
+        } else { None }
+    } else { None };
+    let status = if selected.is_some() { "EXACT_MATCH" }
+        else if exact_count > 1 { "AMBIGUOUS_NAME" }
+        else if exact_count == 1 { "IDENTITY_MISSING" }
+        else { "NO_EXACT_MATCH" };
+    let matched_count = if exact_count > 0 { exact_count } else { suggestion_count };
+    let candidates = if exact_count > 0 { exact } else { suggestions };
+    // These operation labels are advisory, not proof of admission or
+    // permission; unsupported UV and material cases still fail in Rust.
+    let suggested_operations: &[&str] =
+        if status == "EXACT_MATCH" { possible_ops } else { &[] };
+    Ok(json!({
+        "scope":"saved_model_named_target_orientation",
+        "domain":domain, "category":category, "requested_name":name,
+        "status":status, "candidate_count":matched_count,
+        "candidates_truncated":matched_count > candidates.len(),
+        "candidates":candidates, "selected":selected,
+        "candidate_operations":suggested_operations,
+        "write_authority":"NOT_GRANTED", "visual_verdict":"UNVERIFIED",
+        "next":if status == "EXACT_MATCH" {
+            "Use the selected source identity and the relevant operation contract; apply one bounded Rust transaction only after authorization."
+        } else {
+            "Select an exact, unambiguous saved part identity; never mutate a substring suggestion."
+        },
+    }))
+}
+
 /// Read-only Code Mode query batch. A single model read and Rust parse answer
 /// several focused questions. Unknown fields/shapes refuse, not auto-correct.
 /// Each query reuses existing canonical source projections; no new authoring
@@ -272,6 +385,7 @@ struct InspectBatchInput {
 #[derive(serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum InspectBatchQuery {
+    AuthoringTarget { domain: String, category: String, name: String },
     Cube { uuid: String },
     CubeSurfaces { uuid: String },
     CubeFaceAlpha { uuid: String },
@@ -324,6 +438,10 @@ fn inspect_batch(doc: &AuthoringDocument, requests: Vec<InspectBatchQuery>) -> R
     let mut results = Vec::with_capacity(requests.len());
     for query in requests {
         let entry = match query {
+            InspectBatchQuery::AuthoringTarget { domain, category, name } => {
+                let target = inspect_authoring_target(doc, &domain, &category, &name)?;
+                json!({"kind":"authoring_target", "target":target})
+            },
             InspectBatchQuery::Cube { uuid } => {
                 let element = focused_element(doc, batch_id(&uuid)?)?;
                 json!({"kind":"cube","element":element})
@@ -994,6 +1112,69 @@ mod tests {
     }
 
     // Source-authored CLI/Rust proof only; Cargo/native execution is held.
+
+    // SOURCE-AUTHORED_NOT_RUN: one immutable native source read resolves a
+    // named target, its relevant inspection and the correct operation family.
+    #[test]
+    fn named_target_orientation_refuses_guesses_and_preserves_model() {
+        let mut doc = AuthoringDocument::import_bbmodel(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        doc.cubes[0].name = Some("Helmet".into());
+        let prior = doc.clone();
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"texturing",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
+        let out = inspect_batch(&doc, q.requests).unwrap();
+        let evidence = &out[0]["target"];
+        assert_eq!(evidence["status"], "EXACT_MATCH");
+        assert_eq!(evidence["selected"]["identity"]["uuid"], doc.cubes[0].uuid);
+        assert_eq!(evidence["selected"]["source"]["surfaces"]["faces"]
+            .as_array().unwrap().len(), 6);
+        assert_eq!(evidence["candidate_operations"][0],
+            "paint_cube_face_regions_guarded");
+        assert_eq!(evidence["write_authority"], "NOT_GRANTED");
+        assert_eq!(evidence["visual_verdict"], "UNVERIFIED");
+
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"texturing",
+             "category":"cubes","name":"Hel"}
+        ]})).unwrap();
+        let hint = &inspect_batch(&doc, q.requests).unwrap()[0]["target"];
+        assert_eq!(hint["status"], "NO_EXACT_MATCH");
+        assert_eq!(hint["candidate_count"], 1);
+        assert!(hint["selected"].is_null());
+        assert_eq!(hint["candidate_operations"], json!([]));
+
+        let mut second = doc.cubes[0].clone();
+        second.uuid = "00000000-0000-4000-8000-000000000599".into();
+        doc.cubes.push(second.clone());
+        if let OutlinerNode::Bone(root) = &mut doc.hierarchy[0] {
+            root.children.push(OutlinerNode::Cube(second.uuid.clone()));
+        } else { panic!("fixture needs a root bone"); }
+        doc.validate().unwrap();
+        let q: InspectBatchInput = serde_json::from_value(json!({"requests":[
+            {"kind":"authoring_target","domain":"geometry",
+             "category":"cubes","name":"Helmet"}
+        ]})).unwrap();
+        let ambiguous = &inspect_batch(&doc, q.requests).unwrap()[0]["target"];
+        assert_eq!(ambiguous["status"], "AMBIGUOUS_NAME");
+        assert_eq!(ambiguous["candidate_count"], 2);
+        assert!(ambiguous["selected"].is_null());
+        assert_eq!(ambiguous["candidate_operations"], json!([]));
+
+        assert_eq!(inspect_authoring_target(
+            &prior, "geometry", "textures", "Helmet").unwrap_err(),
+            "AUTHORING_TARGET_DOMAIN_MISMATCH");
+        assert_eq!(inspect_authoring_target(
+            &prior, "uv", "cubes", " Helmet").unwrap_err(),
+            "AUTHORING_TARGET_NAME_INVALID");
+        assert_eq!(prior.cubes[0].name.as_deref(), Some("Helmet"));
+        assert_eq!(prior, AuthoringDocument::import_bbmodel(
+            &prior.export_bbmodel().unwrap()).unwrap());
+    }
+
     #[test]
     fn code_mode_inspect_batch_projects_multiple_reads_from_one_immutable_document() {
         let doc = AuthoringDocument::import_bbmodel(

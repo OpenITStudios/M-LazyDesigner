@@ -269,6 +269,7 @@ function checkedScopedApplyReceipt(receipt,scope,expectedSourceSha,operationCoun
 // Multiple focused read selectors, using one Rust document load. The program
 // host still owns filesystem permissions; this is not an OS sandbox.
 const INSPECTION_QUERY_FIELDS = Object.freeze({
+  authoring_target: ['domain', 'category', 'name'],
   cube: ['uuid'],
   cube_surfaces: ['uuid'],
   cube_face_alpha: ['uuid'],
@@ -366,6 +367,18 @@ function serializeInspectionQueries(requests) {
           throw new TypeError('Unsupported transform channel');
         }
         output.channel = value;
+      } else if (field === 'domain') {
+        if (!['geometry','uv','texturing','animation'].includes(value)) {
+          throw new TypeError('Unknown authoring domain');
+        }
+        output.domain = value;
+      } else if (field === 'name' && kind === 'authoring_target') {
+        if (typeof value !== 'string' || value !== value.trim() ||
+            !value.length || [...value].length > 128 ||
+            /[\x00-\x1f\x7f]/.test(value)) {
+          throw new TypeError('AUTHORING_TARGET_NAME_INVALID');
+        }
+        output.name = value;
       } else if (field === 'category') {
         if (!['cubes', 'bones', 'textures', 'animations'].includes(value)) {
           throw new TypeError('Unknown catalog category');
@@ -391,6 +404,12 @@ function serializeInspectionQueries(requests) {
           throw new TypeError('MATERIAL_FACE_UUID_INVALID');
         }
       }
+    }
+    if (kind === 'authoring_target' &&
+        !({geometry:['cubes','bones'],uv:['cubes'],
+           texturing:['cubes','textures'],animation:['bones','animations']}[
+           output.domain] ?? []).includes(output.category)) {
+      throw new TypeError('AUTHORING_TARGET_DOMAIN_MISMATCH');
     }
     for (const field of allowed) {
       if (!['offset', 'limit', 'attention_only', 'face_spans'].includes(field) && output[field] === undefined) {

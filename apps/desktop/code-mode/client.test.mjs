@@ -202,6 +202,51 @@ test('Code Mode forwards strict explicit UV-sharing selector without allowing un
   assert.equal(calls.length, 1);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: a part name and stage resolve via one native
+// batch without scanning catalogs or exposing arbitrary operations.
+test('named target orientation uses one SHA-bound read and refuses wrong domains',async()=>{
+  let calls=0;
+  const client=createRustCodeModeClient({binary:BIN,runner:async argv=>{
+    calls++;
+    assert.equal(argv[0],'inspect-batch');
+    assert.equal(argv[argv.indexOf('--expected-sha256')+1],SHA);
+    const q=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+    assert.deepEqual(q,{requests:[{
+      kind:'authoring_target',domain:'texturing',category:'cubes',name:'Helmet',
+    }]});
+    return {status:'OK',sha256:SHA,summary:{revision:0},results:[{
+      kind:'authoring_target',target:{
+        scope:'saved_model_named_target_orientation',status:'EXACT_MATCH',
+        selected:{identity:{uuid:'cube-helmet',name:'Helmet',index:0}},
+        candidate_operations:['paint_cube_face_regions_guarded'],
+        write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+      },
+    }]};
+  }});
+  const result=await client.inspectBatch({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,requests:[{
+      kind:'authoring_target',domain:'texturing',category:'cubes',name:'Helmet',
+    }],
+  });
+  assert.equal(result.results[0].target.selected.identity.uuid,'cube-helmet');
+  assert.equal(result.results[0].target.write_authority,'NOT_GRANTED');
+  assert.equal(calls,1);
+  for(const invalid of [
+    {domain:'geometry',category:'textures',name:'Helmet'},
+    {domain:'UV',category:'cubes',name:'Helmet'},
+    {domain:'texturing',category:'cubes',name:' Helmet'},
+    {domain:'texturing',category:'cubes',name:'Helmet',unsafe:true},
+    {domain:'texturing',category:'cubes'},
+    {domain:'texturing',category:'cubes',name:'x'.repeat(129)},
+  ]) {
+    await assert.rejects(client.inspectBatch({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,
+      requests:[{kind:'authoring_target',...invalid}],
+    }));
+  }
+  assert.equal(calls,1);
+});
+
 test('Code Mode batches focused read selectors into a single Rust CLI call', async () => {
   const calls = [];
   let queryFile;

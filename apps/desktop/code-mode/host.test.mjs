@@ -185,6 +185,7 @@ test('Code Mode exposes a single host-side code tool, with read-only RPC', () =>
     });
     const tool = createCodeModeTool(host);
     assert.equal(tool.name, 'lazydesigner_code_mode');
+    assert.match(tool.description, /authoring_target/);
     assert.deepEqual(tool.inputSchema.required, ['code']);
     const result = await tool.execute({ code: "return { x: 1 };" });
     assert.equal(result.status, 'OK');

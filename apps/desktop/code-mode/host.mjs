@@ -2262,7 +2262,7 @@ export function createCodeModeTool(host) {
   }
   return Object.freeze({
     name: 'lazydesigner_code_mode',
-    description: 'Execute bounded JavaScript against the approved Rust model via the isolated Code Mode guest. Use codemode.initial, codemode.inspectBatch, codemode.apply and other typed APIs; writes require independent host approval. No filesystem/network/shell access in the guest. After Paint, use a fresh mapped-view review; invoke codemode.texturingReadiness only for end-of-Texturing readiness. Successful Paint and numeric styling hints never certify STYLED. Visual claims stay UNVERIFIED without real independent observation.',
+    description: 'Execute bounded JavaScript against the approved Rust model via the isolated Code Mode guest. For a named part without a UUID, use ONE codemode.inspectBatch with {kind:"authoring_target",domain:"geometry|uv|texturing|animation",category:"cubes|bones|textures|animations",name:"exact saved name"}; it returns source-backed identity, focused evidence and advisory operation candidates. Only EXACT_MATCH may identify a target; substring suggestions and ambiguous matches never authorize edits. Use the correct domain operation in ONE bounded codemode.apply transaction when approved; reuse batch reads rather than speculative catalog/tool calls. Writes always need independent host approval. No guest filesystem/network/shell. Paint requires fresh visual review; numeric receipts never certify artwork.',
     inputSchema: Object.freeze({
       type: 'object',
       additionalProperties: false,

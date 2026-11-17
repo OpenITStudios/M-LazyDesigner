@@ -684,6 +684,52 @@ console.log({
 
 Do not copy this into an unrestricted Node process as a substitute for host isolation. The example's `approvedCubeUuid` is a placeholder: an actual UUID must come from the bounded catalog and the approved asset plan.
 
+### Named-part orientation: one source read, no guessed target
+
+When a user names a part but its UUID is not known, do **not** first
+page the Cube/Bone/Texture/Animation catalog and guess a tool. Use the
+existing `inspectBatch` with `authoring_target`:
+
+```js
+// One Code Mode program / one Rust inspect-batch call for this orientation.
+const result = await codemode.inspectBatch({
+  project: codemode.initial.project,
+  requests: [{
+    kind: 'authoring_target', domain: 'texturing',
+    category: 'cubes', name: 'Helmet',
+  }],
+});
+const target = result.results[0].target;
+if (target.status !== 'EXACT_MATCH') {
+  return { status: target.status, candidates: target.candidates };
+}
+return {
+  cubeUuid: target.selected.identity.uuid,
+  source: target.selected.source.surfaces,
+  candidateOperations: target.candidate_operations,
+  visualVerdict: target.visual_verdict,
+};
+```
+
+Domain/category combinations are strictly limited: Geometry → Cubes/Bones,
+UV → Cubes, Texturing → Cubes/Textures, Animation → Bones/Animations.
+Only an **exact, unique** saved name returns selected source identity;
+duplicate names are `AMBIGUOUS_NAME`, while partial/substring matches
+appear as non-authoritative suggestions. Unsupported/missing UUIDs do not
+silently become a writable target. For a Cube in UV/Texturing, the same
+native read also includes the existing six-face/UV inspector; for Geometry
+it includes focused transforms, and for Texture/Animation assets it returns
+bounded metadata. No raw atlas, extra index or mutable state is created.
+
+`candidate_operations` is an advisory subset of existing Rust edit
+operations, **not** permission, an automatic planner, a guarantee of
+format support or proof of artistic fidelity. Read the returned source
+first; when an exact target and the user's requested change are clear,
+compose one relevant `codemode.apply` operation batch under existing host
+approval and Rust validation. Never rewrite an approved asset from a
+name hint. For known UUIDs, use an existing focused read rather than
+incurring a redundant named-target lookup.
+
 ### Batch inspection: one model load for several focused reads
 
 For Code Mode reasoning across a catalog, Cube UVs, Paint data and audit,

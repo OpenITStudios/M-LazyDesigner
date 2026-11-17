@@ -662,7 +662,33 @@ export interface TextureSourceColorsEvidence {
   visual_verdict:"UNVERIFIED";texture_completion_attested:false;
   note:string;
 }
+/** One source-bound named-part orientation; suggestions are not write targets. */
+export type AuthoringTargetQuery =
+  | {kind:"authoring_target";domain:"geometry";category:"cubes"|"bones";name:string}
+  | {kind:"authoring_target";domain:"uv";category:"cubes";name:string}
+  | {kind:"authoring_target";domain:"texturing";category:"cubes"|"textures";name:string}
+  | {kind:"authoring_target";domain:"animation";category:"bones"|"animations";name:string};
+export interface AuthoringTargetOrientation {
+  scope:"saved_model_named_target_orientation";
+  domain:AuthoringTargetQuery["domain"];
+  category:CatalogPage["kind"];
+  requested_name:string;
+  status:"EXACT_MATCH"|"AMBIGUOUS_NAME"|"IDENTITY_MISSING"|"NO_EXACT_MATCH";
+  candidate_count:number;
+  candidates_truncated:boolean;
+  candidates:Array<{index:number;uuid:string|null;name:string}>;
+  selected:null|{
+    identity:{index:number;uuid:string;name:string};
+    source:{element?:FocusedElement;surfaces?:CubeSurfaceInspection|null;asset?:InspectAsset};
+  };
+  /** Advisory labels only, subject to actual Rust admission and host approval. */
+  candidate_operations:string[];
+  write_authority:"NOT_GRANTED";
+  visual_verdict:"UNVERIFIED";
+  next:string;
+}
 export type InspectBatchQuery =
+  | AuthoringTargetQuery
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
   | { kind: "cube_face_alpha"; uuid: string }
@@ -715,6 +741,7 @@ export interface TimelineMarkerInspection {
   reason?: string;
 }
 export type InspectBatchResult =
+  | { kind: "authoring_target"; target: AuthoringTargetOrientation }
   | { kind: "cube"; element: FocusedElement }
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
   | { kind: "cube_face_alpha"; face_alpha: CubeFaceAlphaInspection }
