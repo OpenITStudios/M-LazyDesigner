@@ -2,10 +2,6 @@
 // content identity from the same epoch; never infer from element count.
 import type { EditorSnapshot } from './rustEditorTypes';
 
-/** A rejected IPC preview shortcut may follow an already-committed Rust edit.
- * It must be reconciled with a fresh, read-only full snapshot; never retry
- * the original mutation on this transport error.
- */
 // These native operations all return the canonical Rust snapshot. A missing
 // optional image identity means a normal full response; never request omitted
 // PNG data for a command that has not opted into this transport contract.
@@ -18,6 +14,10 @@ export function canReusePreviewInCommand(name: string): boolean {
   return REUSE_COMMANDS.has(name);
 }
 
+/** A rejected IPC preview shortcut may follow an already-committed Rust edit.
+ * It must be reconciled with a fresh, read-only full snapshot; never retry
+ * the original mutation on this transport error.
+ */
 export function isPreviewTransportFailure(cause: unknown): boolean {
   return cause instanceof Error && (
     cause.message === 'RUST_EDITOR_PREVIEW_REUSE_STALE' ||

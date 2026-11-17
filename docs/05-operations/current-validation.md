@@ -1,3 +1,7 @@
+## 2026-11-17 — Follow-up Rust efficiency integration (SOURCE ONLY)
+
+Source changes after `f027e42e29bf1dbb9ff2dff33c9210ce6fe15b54`: move the guarded Paint test declaration below its module-level Rust documentation, avoid full-mesh selection traversal by updating at most two indexed GPU Cube highlights, and extend the optional exact preview-image reuse hint to Add/Duplicate Cube, Add Bone and Create Animation. Source review checked the existing Tauri command registration, Svelte callers, PNG/epoch recovery, raycast and renderer disposal owners; positive/negative Node test source was authored. No compiler, Node, TypeScript, WebView, Windows/Blockbench, Golden visual test or timing/RAM benchmark executed. `SOURCE_COMMITTED / TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED`. This is not proof of native correctness, performance gains or artistic acceptance.
+
 ## 2026-11-17 — Rust editor efficiency source integration (NOT_EXECUTED)
 
 Pinned original source HEAD: `7b50668d58657ff95bd0ce02c55864cab9e4bd95`.
