@@ -739,6 +739,11 @@ export async function createCodeModeHost({
   ]);
   // One ephemeral review state per exact model SHA, not a second asset store.
   const visualPreflights = new Map();
+  // Single immutable source/view selection per host. Repeated multi-view
+  // reads do not need six Rust PNG decoders after a successful preflight,
+  // provided Rust re-verifies the model SHA and Node re-hashes EVERY PNG.
+  // Cache never grants review/paint approval or persists between hosts.
+  let verifiedMultiViewRead = null;
   // One coherent reviewed correction per source revision. Do not create
   // multiple variants from a stale, already-rejected capture.
   const completedReviewedCorrections = new Set();
@@ -831,6 +836,22 @@ export async function createCodeModeHost({
       }
       if (model.expectedSha256 !== visualPair.modelSha) {
         throw new Error('CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+      }
+      if (visualViews.length > 1 && verifiedMultiViewRead !== null) {
+        // The first read already completed numeric comparisons and
+        // independently bound review. Never reuse them on path metadata
+        // alone; Rust must prove the current .bbmodel bytes still have
+        // the exact inspected SHA, and all selected PNG bytes are rehashed.
+        const checkedModel=await client.inspect({
+          input:model.input,expectedSha256:model.expectedSha256,
+        });
+        if(checkedModel.sha256!==model.expectedSha256) {
+          throw new Error('CODE_MODE_VISUAL_CAPTURE_MODEL_STALE');
+        }
+        await Promise.all(visualViews.flatMap(view=>[
+          pinnedReviewBytes(view.reference),pinnedReviewBytes(view.capture),
+        ]));
+        return verifiedMultiViewRead;
       }
       const measured=await Promise.all(visualViews.map(selected=>
         client.inspectVisualPair({
@@ -1010,7 +1031,7 @@ export async function createCodeModeHost({
         }
       }
       if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
-      return {
+      const readReceipt = {
         ...evidence,
         view_evidence,
         view_scope:visualPair.requireSixDirections ?
@@ -1026,6 +1047,13 @@ export async function createCodeModeHost({
           image_ingestion:'NOT_VERIFIED',
         },
       };
+      if (visualViews.length > 1) {
+        // Numeric comparison receipts contain no PNG buffers, paths or
+        // new permission authority. The reviewer decision remains the
+        // existing SHA-bound session declaration.
+        verifiedMultiViewRead=Object.freeze(readReceipt);
+      }
+      return readReceipt;
     },
     // Read-only terminal checkpoint. An accepted pixel transaction or empty
     // histogram is NEVER evidence that professional pixel-art Texturing ended.

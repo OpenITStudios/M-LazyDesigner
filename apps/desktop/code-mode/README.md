@@ -1,5 +1,18 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**P0 multi-view preflight reuse (2026-11-17; SOURCE ONLY):**
+For the same selected model SHA and multi-camera PNG set, repeated
+`inspectSelectedVisualPair` reads reuse the already validated numeric
+pair receipt rather than spawning six new Rust PNG comparison requests.
+A fresh Rust source SHA inspection **and** exact re-hash of every
+operator-selected reference/current PNG are required before each reuse.
+The original independent reviewer decision is not called again or
+changed. Mutating Paint still verifies all view bytes and the Rust
+correction scope, and one-view behavior remains unchanged. This is
+only a reduction in redundant source reads, not image comprehension,
+native validation proof, or a measured performance improvement.
+Regression source authored; tests remain NOT_EXECUTED.
+
 **P0 Texturing contract reconciliation (2026-11-17; SOURCE_ONLY):**
 The Code Mode SDK now accepts `editableBeforeRgba` consistently with the
 trusted reviewer host and Rust's canonical correction scope, carries the

@@ -1,3 +1,19 @@
+## 2026-11-17 — Repeated multi-view preflight consolidation (SOURCE ONLY)
+
+At pinned `Rust` source, the reviewed Texturing preflight previously
+spawned one Rust `inspect-visual-pair` per selected camera on every
+repeated guest read, despite the first reviewer decision already
+being immutable for that model SHA. The Host now retains a single
+ephemeral numeric read receipt for a successfully checked multi-view
+source. Repeat reads require a new exact model SHA proof from native
+Rust `inspect` and rehash every selected reference/capture PNG.
+Stale source or changed supporting image refuses rather than
+replaying previous evidence. The same reviewer callback is not
+re-invoked; subsequent Paint still has independent fresh-image,
+source, UV, approval and Rust transaction gates. Source-only Node
+regression fixtures authored NOT_EXECUTED. No native/PC-local tests,
+timing benchmark, image review outcome or artistic PASS observed.
+
 ## 2026-11-17 — Texturing P0 contract reconciliation (SOURCE_ONLY)
 
 Pinned Rust branch source audit found a real SDK–host–Rust mismatch:

@@ -1748,7 +1748,80 @@ test('operator-selected six model camera directions are distinct from six saved 
     });
     assert.equal(result.value.viewCount,6);
     assert.equal(reviewerCalls,1);
-    assert.equal(nativeReads,8); // 1 source inspect + 6 PNG pair comparisons + 1 face read
+    assert.equal(nativeReads,8); // 1 source inspect + 6 PNG comparisons + 1 face batch
+    const repeated=await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    });
+    assert.equal(repeated.value.viewCount,6);
+    assert.equal(reviewerCalls,1); // original reviewer finding remains authoritative
+    assert.equal(nativeReads,9); // second read needs only one pinned Rust model check
+  }));
+
+// Repeated multi-view preflight reuses only source-bound numeric receipts.
+// It MUST recheck both current .bbmodel and every selected image before reuse.
+test('multi-view preflight cache refuses replaced model and supporting PNG without repeated pair decoders', () =>
+  fixture(async input=>{
+    const chosen=await chooseVisualDirections(dirname(input));
+    let compares=0,inspects=0,visualCallbacks=0,staleModel=false,step=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:chosen.options,
+      reviewVisualPair:()=>{
+        visualCallbacks++;
+        return {decision:'UNVERIFIED',issues:[],viewReviews:
+          CAMERA_DIRECTIONS.map(viewId=>({
+            viewId,decision:'UNVERIFIED',
+            observation:'No independent acceptance was determined for this camera.',
+          }))};
+      },
+      runner:async argv=>{
+        if(argv[0]==='inspect'){
+          inspects++;
+          if(argv.includes('--expected-sha256')){
+            assert.equal(argv[argv.indexOf('--expected-sha256')+1],HASH);
+          }
+          return {status:'OK',sha256:staleModel?'b'.repeat(64):HASH,
+            summary:SUMMARY};
+        }
+        assert.equal(argv[0],'inspect-visual-pair');
+        compares++;
+        return mockedSixViews(argv,HASH);
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },response=>{
+        const turn=++step;
+        if(turn===1){
+          assert.equal(response.ok,true);
+          assert.equal(response.result.review_feedback.decision,'UNVERIFIED');
+          return {first:true};
+        }
+        assert.equal(response.ok,false);
+        assert.equal(response.code,turn===2?
+          'CODE_MODE_VISUAL_CAPTURE_MODEL_STALE':
+          'CODE_MODE_VISUAL_REVIEW_INPUT_STALE');
+        return {blocked:true};
+      }),
+    });
+    assert.equal((await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    })).value.first,true);
+    assert.equal(inspects,1);
+    assert.equal(compares,6);
+    assert.equal(visualCallbacks,1);
+    staleModel=true;
+    assert.equal((await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    })).value.blocked,true);
+    staleModel=false;
+    await writeFile(chosen.views[5].capturePngPath,
+      Buffer.concat([chosen.png,Buffer.from([1])]));
+    assert.equal((await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({project:"p0"});',
+    })).value.blocked,true);
+    assert.equal(inspects,3); // each attempted reuse explicitly checks Rust source
+    assert.equal(compares,6); // stale input never returns old pair comparison as fresh
+    assert.equal(visualCallbacks,1); // no replacement reviewer declaration
   }));
 
 test('missing/duplicate/unsupported camera directions cannot create a six-view host', () =>

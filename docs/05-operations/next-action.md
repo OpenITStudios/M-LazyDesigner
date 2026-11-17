@@ -1,3 +1,15 @@
+**Rust P0 multi-view numeric preflight reuse (2026-11-17; SOURCE ONLY):**
+Repeat `inspectSelectedVisualPair` requests for the one pinned
+multi-view model now reuse the completed numeric image comparison
+instead of re-running a separate Rust PNG comparator for each view.
+The Host still checks the source .bbmodel with Rust against the
+exact SHA and re-hashes all original/reference PNG pairs before
+any reuse. Stale images/model block. Reviewer authority and
+fresh image verification before painting are unchanged; single
+view requests remain on the old path. Authored regression cases
+NOT_EXECUTED and no measured speed or visual quality proof; current
+CI/localtest hold remains.
+
 **Rust P0 reviewed Texturing contract reconciliation (2026-11-17; SOURCE ONLY):**
 After the earlier guarded-paint source commits, the SDK normalizer
 was discovered to reject `editableBeforeRgba` even though Host and

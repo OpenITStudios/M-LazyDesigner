@@ -119,6 +119,39 @@ and rollback are authored but NOT_EXECUTED under the current hold.
 
 
 
+## Multi-view preflight reuse (SOURCE ONLY; native tests held)
+
+A multi-view `inspectSelectedVisualPair({project})` previously repeated
+each Rust `inspect-visual-pair` native PNG comparison on every guest
+read, even after the host had frozen the independent reviewer decision
+for the selected source-model SHA. The trusted Host now retains only
+the **successful, numeric read receipt** in a single ephemeral slot
+for the operator-selected model and view set. It is not persistent
+review history, not an approval cache, and contains no image buffers
+or file paths exposed to the sandboxed guest.
+
+The first preflight remains unchanged: all selected PNG pairs are
+checked through Rust, real PNG buffers enter an explicitly configured
+independent reviewer, and reviewer-returned sample/UV/alpha bindings
+must pass the original checks. For a subsequent read on the **same
+pinned model revision with two or more camera view pairs**, the host
+uses one read-only Rust `inspect --expected-sha256` to verify current
+model bytes, and independently reopens/re-hashes **every** selected
+reference and capture PNG before returning the prior numeric report.
+If any source/image is stale or unreadable, the cached response is
+withheld. A new host, model SHA or visual selection requires the
+original full preflight. Single-view preflights are unchanged.
+
+This optimization does **not** bypass fresh image checks before
+`apply`, independently authorized mutation approval, native Rust
+source revision/UV checks, or the full-face terminal readiness scan.
+The old reviewer finding remains immutable for a given SHA; no
+model-written code may supply or downgrade it. Source-only regression
+fixtures cover six-view repeat (six Rust image pair inspections on
+first read versus one Rust source check on a repeat), stale model
+and replaced supporting PNG. These are authored—not executed or
+benchmarked—in the current ChatGPT/GitHub source work surface.
+
 ## Connected pixel-art cluster compiler (SOURCE ONLY)
 
 `FORM_SHADING` packets now require actual `facePlans[].clusters`
