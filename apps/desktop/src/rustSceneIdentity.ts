@@ -28,3 +28,39 @@ export function canRefreshPaintSources(previous: SceneInputs | null, next: Scene
   }
   return replaced;
 }
+
+// Only fields actually read by the current Three.js scene builder belong in
+// this derived fingerprint. Cube/Bone names and Outliner expansion are UI-only;
+// neither may force a full GPU mesh/material rebuild after a Rust rename.
+// Keep full face values to conservatively cover saved UV and face extensions.
+import type { CubeView, BoneView, HierarchyNode } from './rustEditorTypes';
+
+function renderedHierarchy(nodes: readonly HierarchyNode[]): unknown[] {
+  return nodes.map(node => typeof node === 'string'
+    ? node : [node.uuid, renderedHierarchy(node.children)]);
+}
+
+export function sceneRenderStructure(
+  cubes: readonly CubeView[], bones: readonly BoneView[],
+  hierarchy: readonly HierarchyNode[],
+  sides: readonly ('front' | 'double' | null)[],
+  resolutions: readonly ([number, number] | null)[],
+  scoped: boolean, resolution: readonly [number, number],
+  previewIndex: number | null,
+): string {
+  // Preserve source Cube order and every property used by rebuild(). The
+  // no-name view is NOT an alternate model or editable serialization.
+  return JSON.stringify([
+    cubes.map(cube => [
+      cube.uuid, cube.from, cube.to, cube.origin, cube.rotation, cube.inflate,
+      cube.stretch, cube.visible, cube.renderOrder, cube.boxUv,
+      cube.uvOffset, cube.autoUv, cube.color, cube.faces,
+      cube.previewTextureIndex,
+    ]),
+    bones.map(bone => [
+      bone.uuid, bone.origin, bone.rotation, bone.visible,
+    ]),
+    renderedHierarchy(hierarchy),
+    sides, resolutions, scoped, resolution, previewIndex,
+  ]);
+}

@@ -1,7 +1,7 @@
 // SOURCE-AUTHORED_NOT_RUN: repository local/CI test hold remains active.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canRefreshPaintSources, sameSceneInputs } from './rustSceneIdentity.ts';
+import { canRefreshPaintSources, sceneRenderStructure, sameSceneInputs } from './rustSceneIdentity.ts';
 
 test('same geometry and texture bytes reuse derived scene across new IPC object identities', () => {
   const first = { structure:'cube,uv,bones', sources:['data:image/png;base64,A', null] };
@@ -44,4 +44,42 @@ test('material-only refresh keeps native structure and falls back on any other c
   assert.match(text,/material\.needsUpdate = true;/);
   assert.match(text,/material\.side = previewRenderSide\(texture \? texturePreviewSides\[index\] : null\)/);
 
+});
+
+test('render identity ignores Cube/Bone labels and Outliner expansion only', () => {
+  const cube = {
+    uuid:'cube-a', name:'Old name', from:[0,0,0], to:[2,3,4],
+    origin:[0,0,0], rotation:[0,0,0], inflate:0, stretch:[1,1,1],
+    visible:true, renderOrder:0, boxUv:false, uvOffset:[0,0], autoUv:0,
+    color:2, faces:{north:{uv:[0,0,2,2], texture:'atlas-a'}},
+    previewTextureIndex:0,
+  };
+  const bone = {
+    uuid:'bone-a', name:'Body', origin:[0,0,0], rotation:[0,0,0], visible:true,
+  };
+  const hierarchy=[{uuid:'bone-a',isOpen:true,children:['cube-a']}];
+  const options=[['double'],[[16,16]],false,[16,16],0];
+  const key=(cubes,bones,nodes,opts=options)=>
+    sceneRenderStructure(cubes,bones,nodes,...opts);
+  const original=JSON.stringify({cube,bone,hierarchy,options});
+  const saved=key([cube],[bone],hierarchy);
+  assert.equal(saved,key([{...cube,name:'New name'}],[{...bone,name:'Torso'}],[
+    {uuid:'bone-a',isOpen:false,children:['cube-a']},
+  ]));
+  assert.equal(saved,key([{...cube}],[{...bone}],hierarchy));
+  assert.notEqual(saved,key([{...cube,from:[1,0,0]}],[bone],hierarchy));
+  assert.notEqual(saved,key([{...cube,faces:{north:{uv:[1,0,2,2],texture:'atlas-a'}}}],[bone],hierarchy));
+  assert.notEqual(saved,key([cube],[{...bone,origin:[1,0,0]}],hierarchy));
+  assert.notEqual(saved,key([cube],[bone],[{uuid:'bone-a',children:[]}]));
+  assert.notEqual(saved,key([cube],[bone],hierarchy,[['front'],[[16,16]],false,[16,16],0]));
+  assert.notEqual(saved,key([cube],[bone],hierarchy,[['double'],[[16,16]],false,[16,16],1]));
+  assert.equal(JSON.stringify({cube,bone,hierarchy,options}),original);
+});
+
+test('renderer uses the semantic structure key for selection-independent rebuild', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const source = await readFile(new URL('./RustViewport.svelte', import.meta.url),'utf8');
+  assert.match(source,/structure: sceneRenderStructure\(/);
+  assert.doesNotMatch(source,/structure: JSON\.stringify\(\[/);
+  assert.match(source,/if \(sameSceneInputs\(projectedScene, identity\)\) return;/);
 });

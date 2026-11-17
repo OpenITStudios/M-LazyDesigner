@@ -7,7 +7,7 @@
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
   import { cubeSelectionColors, selectionTargetIds } from './rustViewportSelection';
-  import { canRefreshPaintSources, sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
+  import { canRefreshPaintSources, sceneRenderStructure, sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import type { BoneTransformPose } from './rustAnimationPose';
@@ -270,14 +270,15 @@
   ) {
     // Never destroy a manipulated object before its one Rust transaction ends.
     if (!modelRoot || drag || mutationPending) return;
-    // IPC snapshots allocate fresh arrays even for edits limited to a keyframe
-    // or a document label. Compare ONLY renderer dependencies; never stringify
-    // PNG data or use this derived cache as authored model authority.
+    // An editor label, Outliner expansion or animation timeline update
+    // cannot change this renderer projection. Compare only scene dependencies;
+    // never stringify PNG data or treat cache identity as document authority.
     const identity: SceneInputs = {
-      structure: JSON.stringify([
-        currentCubes, currentBones, currentHierarchy, _sides, _resolutions,
-        _scopedTexturePreview, _resolution, _previewTextureIndex,
-      ]),
+      structure: sceneRenderStructure(
+        currentCubes, currentBones, currentHierarchy,
+        _sides, _resolutions, _scopedTexturePreview,
+        _resolution, _previewTextureIndex,
+      ),
       sources: _sources,
     };
     if (sameSceneInputs(projectedScene, identity)) return;
