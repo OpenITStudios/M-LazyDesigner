@@ -684,24 +684,28 @@ fn validate_cube_with_texture_refs(
     Ok(())
 }
 
-fn validate_outliner(
-    nodes: &[OutlinerNode],
-    cube_ids: &HashSet<String>,
-    bone_ids: &HashSet<String>,
-    seen_cubes: &mut HashSet<String>,
-    seen_bones: &mut HashSet<String>,
+// All UUIDs are owned by this immutable AuthoringDocument/Outliner. Repeated
+// canonical serialization and Dirty hashing must not allocate new Strings
+// merely to establish membership and detect duplicate references.
+fn validate_outliner<'a>(
+    nodes: &'a [OutlinerNode],
+    cube_ids: &HashSet<&str>,
+    bone_ids: &HashSet<&str>,
+    seen_cubes: &mut HashSet<&'a str>,
+    seen_bones: &mut HashSet<&'a str>,
     depth: usize,
 ) -> Result<()> {
     if depth > MAX_DEPTH { return Err(fail("OUTLINER_TOO_DEEP")); }
     for node in nodes {
         match node {
             OutlinerNode::Cube(id) => {
-                if !cube_ids.contains(id) || !seen_cubes.insert(id.clone()) {
+                if !cube_ids.contains(id.as_str()) || !seen_cubes.insert(id.as_str()) {
                     return Err(fail("OUTLINER_CUBE_REFERENCE_INVALID"));
                 }
             }
             OutlinerNode::Bone(group) => {
-                if !bone_ids.contains(&group.uuid) || !seen_bones.insert(group.uuid.clone()) {
+                if !bone_ids.contains(group.uuid.as_str()) ||
+                   !seen_bones.insert(group.uuid.as_str()) {
                     return Err(fail("OUTLINER_BONE_REFERENCE_INVALID"));
                 }
                 validate_outliner(&group.children, cube_ids, bone_ids, seen_cubes, seen_bones, depth + 1)?;
@@ -752,13 +756,13 @@ impl AuthoringDocument {
         }
         let texture_refs: HashSet<&str> = self.texture_assets.iter()
             .filter_map(|texture| texture.get("uuid").and_then(Value::as_str)).collect();
-        let mut all_ids = HashSet::new();
-        let mut cube_ids = HashSet::new();
-        let mut bone_ids = HashSet::new();
+        let mut all_ids: HashSet<&str> = HashSet::new();
+        let mut cube_ids: HashSet<&str> = HashSet::new();
+        let mut bone_ids: HashSet<&str> = HashSet::new();
         for cube in &self.cubes {
             validate_cube_with_texture_refs(cube, self.texture_assets.len(), &texture_refs)?;
-            if !all_ids.insert(cube.uuid.clone()) { return Err(fail("DUPLICATE_UUID")); }
-            cube_ids.insert(cube.uuid.clone());
+            if !all_ids.insert(cube.uuid.as_str()) { return Err(fail("DUPLICATE_UUID")); }
+            cube_ids.insert(cube.uuid.as_str());
         }
         for bone in &self.bones {
             if !valid_uuid(&bone.uuid) || bone.name.trim().is_empty() ||
@@ -769,8 +773,8 @@ impl AuthoringDocument {
             if bone.extra.get("children").is_some_and(|v| v.as_array().is_none_or(|children| !children.is_empty())) {
                 return Err(fail("BONE_CHILDREN_MUST_USE_OUTLINER"));
             }
-            if !all_ids.insert(bone.uuid.clone()) { return Err(fail("DUPLICATE_UUID")); }
-            bone_ids.insert(bone.uuid.clone());
+            if !all_ids.insert(bone.uuid.as_str()) { return Err(fail("DUPLICATE_UUID")); }
+            bone_ids.insert(bone.uuid.as_str());
         }
         if self.extensions.contains_key("history") || self.extensions.contains_key("history_index") {
             return Err(fail("BBMODEL_EMBEDDED_HISTORY_UNSUPPORTED"));

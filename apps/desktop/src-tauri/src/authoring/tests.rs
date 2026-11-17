@@ -14,6 +14,50 @@ fn sample_cube(uuid: &str) -> Cube {
     serde_json::from_value(value["elements"][0].clone()).unwrap()
 }
 
+// SOURCE-AUTHORED_NOT_RUN: borrowed UUID membership and Outliner reference
+// sets must preserve acceptance, duplicate/missing/incomplete refusals and
+// nonmutation of the native Rust document and saved .bbmodel wire.
+#[test]
+fn borrowed_uuid_validation_preserves_outliner_error_contracts() {
+    let valid = AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap();
+    let original = valid.clone();
+    valid.validate().unwrap();
+    assert_eq!(AuthoringDocument::import_bbmodel(&valid.export_bbmodel().unwrap()).unwrap(),
+        original);
+    assert_eq!(valid, original);
+
+    let mut duplicate_cube = valid.clone();
+    if let OutlinerNode::Bone(root) = &mut duplicate_cube.hierarchy[0] {
+        root.children.push(OutlinerNode::Cube(CUBE.to_owned()));
+    } else { panic!("fixture root should be a Bone"); }
+    assert_eq!(duplicate_cube.validate().unwrap_err(), "OUTLINER_CUBE_REFERENCE_INVALID");
+
+    let mut unknown_cube = valid.clone();
+    if let OutlinerNode::Bone(root) = &mut unknown_cube.hierarchy[0] {
+        root.children[0] = OutlinerNode::Cube("missing-cube".into());
+    } else { panic!("fixture root should be a Bone"); }
+    assert_eq!(unknown_cube.validate().unwrap_err(), "OUTLINER_CUBE_REFERENCE_INVALID");
+
+    let mut incomplete = valid.clone();
+    if let OutlinerNode::Bone(root) = &mut incomplete.hierarchy[0] {
+        root.children.clear();
+    } else { panic!("fixture root should be a Bone"); }
+    assert_eq!(incomplete.validate().unwrap_err(), "OUTLINER_INCOMPLETE");
+
+    let mut duplicate_bone = valid.clone();
+    duplicate_bone.hierarchy.push(duplicate_bone.hierarchy[0].clone());
+    assert_eq!(duplicate_bone.validate().unwrap_err(), "OUTLINER_BONE_REFERENCE_INVALID");
+
+    let mut collision = valid.clone();
+    collision.bones[0].uuid = CUBE.to_owned();
+    assert_eq!(collision.validate().unwrap_err(), "DUPLICATE_UUID");
+
+    let mut repeated = valid.clone();
+    repeated.cubes.push(valid.cubes[0].clone());
+    assert_eq!(repeated.validate().unwrap_err(), "DUPLICATE_UUID");
+    assert_eq!(valid, original);
+}
+
 // SOURCE-AUTHORED_NOT_RUN: document-wide texture membership has one index,
 // while malformed/duplicate texture metadata keeps its original refusal gate.
 #[test]
