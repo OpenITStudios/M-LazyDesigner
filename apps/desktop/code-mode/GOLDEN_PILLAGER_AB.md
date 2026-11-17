@@ -49,8 +49,9 @@ are in one active Workspace, the Code Mode operator CLI can locate
 `reference/REFERENCE.json` or `references/REFERENCE.json` without transcribing each explicitly
 annotated visible approved surface detail. Only declared
 `SURFACE_DETAIL` source regions and corresponding supported semantic
-parts produce source-image PRESERVE obligations; a currently rejected
-CORRECT part is excluded so its bad current appearance is not frozen.
+parts produce MATCH_REFERENCE checks, not assertions that an existing
+model part was accepted. A currently rejected CORRECT part is excluded;
+true PRESERVE requires separately established approved model state.
 The approved source still cannot disclose Cube/UV atlas coordinates.
 No guessed correction region, accepted user decision or equivalent image
 camera is created automatically. Unannotated/ambiguous references

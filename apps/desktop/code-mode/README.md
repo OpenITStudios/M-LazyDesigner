@@ -141,9 +141,12 @@ source PNGs with explicitly declared camera views. The host pins the
 canonical JSON SHA and selected image identity and checks package freshness
 after review and before later Paint/readiness. Explicit
 `images[].regions` SURFACE_DETAIL/DIRECT declarations for supported
-parts with meaningful `parts[].description` become PRESERVE review
-obligations; the current rejected part, identified by a CORRECT decision,
-is excluded from auto-preservation. Native atlas coordinates are NEVER
+parts with meaningful `parts[].description` become MATCH_REFERENCE
+review obligations, **not** PRESERVE claims. Approval of a source image
+does not mean the current model part was accepted. A currently rejected
+part is handled by an explicit CORRECT decision instead. Only a
+separately established acceptance of the current authored work can
+justify a PRESERVE criterion. Native atlas coordinates are NEVER
 inferred from reference image boxes. Correction scopes remain explicitly
 reviewer/UV-owned. Missing, partial, stale or contradictory source evidence
 fails closed; unannotated packages do not invent decisions. No independent
@@ -153,7 +156,8 @@ Node regressions AUTHORED_NOT_RUN.
 **Approved-reference decision accountability (2026-11-17; SOURCE_ONLY):**
 The operator-selected `--visual-manifest` may now carry a bounded
 `reviewCriteria` projection of current approved Reference/Workspace
-decisions: `PRESERVE` previously accepted appearance, and `CORRECT` a
+decisions: `PRESERVE` previously accepted model appearance,
+`MATCH_REFERENCE` a sourced image expectation, and `CORRECT` a
 specific rejected detail. Each criterion names an actual selected image
 view and exact source PNG SHA; CORRECT also constrains one physical
 texture/atlas patch, while PRESERVE can protect explicit same-atlas

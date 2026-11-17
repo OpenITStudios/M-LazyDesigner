@@ -399,8 +399,10 @@ after reviewer inspection and before subsequent Paint/readiness.
 Eligible explicit `images[].regions` with
 `evidence_role:SURFACE_DETAIL` and `visibility:DIRECT` are bound to
 existing `parts[].id` and `parts[].description` as automatic
-PRESERVE obligations, except parts currently marked CORRECT by the
-operator's existing criteria. Their normalized `box_uv` is returned
+MATCH_REFERENCE comparison obligations, except parts currently marked
+CORRECT by the operator's existing criteria. An APPROVED source PNG
+alone never proves that the working model already met that reference;
+only separately established prior model acceptance merits PRESERVE. Their normalized `box_uv` is returned
 as a source-image `sourceRegion.boxUv` to the image reviewer, and is
 **never** reused as a physical atlas/UV correction rectangle. If
 no structured region and no separately established correction criterion
@@ -455,8 +457,11 @@ The independently image-capable reviewer must return exactly one
 `criteriaReviews` entry for each selected criterion:
 `{id, verdict:"MET"|"VIOLATED"|"UNVERIFIED", observation}`.
 Its summary ACCEPTED/REJECTED/UNVERIFIED must match these statements.
-Any violated approved PRESERVE entry refuses the review. An unknown
-PRESERVE cannot authorize corrective painting. Every violated CORRECT
+Any violated approved PRESERVE entry refuses the review. A
+VIOLATED MATCH_REFERENCE entry requires a separately scoped CORRECT
+decision before Paint; a source-image mismatch cannot silently
+borrow another part's correction scope. Any UNVERIFIED non-target
+requirement blocks corrective Paint. Every violated CORRECT
 entry requires an issue with the exact same part/criterion ID; the
 reviewer-selected and guest Paint regions must stay within the frozen
 editable atlas scope. Final professional Texturing readiness is blocked

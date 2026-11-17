@@ -61,7 +61,7 @@ export function boundReviewCriteria(raw,selectedViews){
       'sourceRegion'],
       'CODE_MODE_REVIEW_CRITERIA_INVALID');
     if(!ID.test(item.id??'') || !ID.test(item.partId??'') ||
-       !['PRESERVE','CORRECT'].includes(item.kind) ||
+       !['PRESERVE','CORRECT','MATCH_REFERENCE'].includes(item.kind) ||
        !statement(item.requirement) || !VIEWS.has(item.viewId) ||
        !SHA.test(item.referencePngSha256??'') ||
        selected.get(item.viewId)!==item.referencePngSha256 ||
@@ -84,6 +84,16 @@ export function boundReviewCriteria(raw,selectedViews){
       return Object.freeze({...common,textureUuid:item.textureUuid,
         allowedRegions:Object.freeze(rectangles(item.textureUuid,item.allowedRegions))});
     }
+    if(item.kind==='MATCH_REFERENCE'){
+      // Source approved image regions have no demonstrated current-model
+      // acceptance or native atlas mapping. They are comparison obligations,
+      // never protected pixels or writable corrections.
+      if(!item.sourceRegion || item.textureUuid!==undefined ||
+         item.allowedRegions!==undefined || item.protectedRegions!==undefined){
+        invalid('CODE_MODE_REVIEW_CRITERIA_INVALID');
+      }
+      return Object.freeze(common);
+    }
     if(item.allowedRegions!==undefined ||
        (item.textureUuid===undefined)!==(item.protectedRegions===undefined)){
       invalid('CODE_MODE_REVIEW_CRITERIA_INVALID');
@@ -94,9 +104,9 @@ export function boundReviewCriteria(raw,selectedViews){
     }:{})});
   });
   if(corrective>6)invalid('CODE_MODE_REVIEW_CRITERIA_INVALID');
-  // A source-only PRESERVE review is valid and can establish whether the
-  // approved reference still matches; it cannot authorize Paint without an
-  // explicit CORRECT criterion and native atlas scope.
+  // Pure source-reference matching and native-preservation-only reviews
+  // cannot authorize painting without an explicit independent CORRECT
+  // criterion mapped to real Rust atlas ownership.
   // A declared correction may not overlap an approved/protected identity
   // on the same physical texture, even if the reviewer overlooks it.
   for(const edit of items.filter(x=>x.kind==='CORRECT')){
@@ -145,11 +155,17 @@ export function checkedCriterionReview(criteria,claims,decision,issues,scope){
   const status=new Map(checked.map(x=>[x.id,x.verdict]));
   if(criteria.some(x=>x.kind==='PRESERVE' && status.get(x.id)==='VIOLATED'))
     invalid('CODE_MODE_REVIEW_APPROVED_IDENTITY_REGRESSED');
+  // The source blueprint is NOT an already-approved current asset. A
+  // mismatched source requirement needs its own reviewer-selected native
+  // correction target; it cannot silently inherit the current Paint scope.
+  if(criteria.some(x=>x.kind==='MATCH_REFERENCE' &&
+      status.get(x.id)==='VIOLATED'))
+    invalid('CODE_MODE_REVIEW_REFERENCE_MISMATCH_UNSCOPED');
   const violated=criteria.filter(x=>x.kind==='CORRECT' &&
     status.get(x.id)==='VIOLATED');
-  if(violated.length && criteria.some(x=>x.kind==='PRESERVE' &&
+  if(violated.length && criteria.some(x=>x.kind!=='CORRECT' &&
       status.get(x.id)!=='MET'))
-    invalid('CODE_MODE_REVIEW_APPROVED_IDENTITY_UNVERIFIED');
+    invalid('CODE_MODE_REVIEW_OTHER_REQUIREMENT_UNVERIFIED');
   const unknown=checked.some(x=>x.verdict==='UNVERIFIED');
   const expected=violated.length?'REJECTED':unknown?'UNVERIFIED':'ACCEPTED';
   if(decision!==expected)invalid('CODE_MODE_REVIEW_CRITERIA_DECISION_CONFLICT');

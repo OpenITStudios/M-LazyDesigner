@@ -1108,8 +1108,8 @@ export async function createCodeModeHost({
                 visualPair.referencePackageBinding.fingerprintSha256,
               matched_images:
                 visualPair.referencePackageBinding.matchedImageCount,
-              automatically_bound_preserve:
-                visualPair.referencePackageBinding.automaticallyBoundPreserveCount,
+              automatically_bound_reference:
+                visualPair.referencePackageBinding.automaticallyBoundReferenceCount,
               visual_verdict:'UNVERIFIED',
             }):null,
         });

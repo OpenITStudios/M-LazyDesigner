@@ -2677,8 +2677,8 @@ test('Rust host imports current workspace Reference decisions into reviewer and 
         criteriaReviews:[
           {id:'fix-helmet',verdict:'VIOLATED',
             observation:'The Tier 2 helmet remains flat in the matched reference.'},
-          {id:'preserve-shield_marks',verdict:'MET',
-            observation:'The approved Tier 1 shield artwork is unchanged.'},
+          {id:'match-shield_marks',verdict:'MET',
+            observation:'The Tier 1 shield now matches the approved source image.'},
         ]};
       },
       runner:async argv=>{
@@ -2698,7 +2698,7 @@ test('Rust host imports current workspace Reference decisions into reviewer and 
           assert.equal(response.result.review_feedback.criteria_review.status,
             'CORRECTIONS_REQUIRED');
           assert.equal(response.result.review_feedback.reference_package_evidence
-            .automatically_bound_preserve,1);
+            .automatically_bound_reference,1);
           return {bound:true};
         }
         assert.equal(response.ok,false);

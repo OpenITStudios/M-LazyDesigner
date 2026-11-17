@@ -98,7 +98,7 @@ export interface CodeModeGuestAPI {
         source:"EXISTING_WORKSPACE_REFERENCE_JSON_DECLARATION";
         fingerprint_sha256:string;
         matched_images:number;
-        automatically_bound_preserve:number;
+        automatically_bound_reference:number;
         visual_verdict:"UNVERIFIED";
       }> | null;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
@@ -228,7 +228,7 @@ export interface CodeModeReviewedMaterialCohort {
  */
 export interface CodeModeReviewCriterion {
   id:string;partId:string;
-  kind:"PRESERVE"|"CORRECT";
+  kind:"PRESERVE"|"CORRECT"|"MATCH_REFERENCE";
   requirement:string;
   viewId:CodeModeVisualViewId;
   referencePngSha256:string;

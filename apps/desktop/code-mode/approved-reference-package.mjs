@@ -205,19 +205,20 @@ export async function bindApprovedWorkspaceReference(
          !goodText(part.description)) {
         fail('CODE_MODE_REFERENCE_REGION_UNSUPPORTED');
       }
-      // A currently rejected target must be CORRECTED to the approved
-      // reference, not falsely declared already-preserved. Preserve only
-      // other approved surface details during that correction.
+      // A source-image's APPROVED status describes the reference, never
+      // prior user acceptance of the *current authored model*. An uncorrected
+      // region must be independently checked for matching that reference,
+      // not automatically frozen as already approved art.
       const partView=JSON.stringify([region.part_id,image.viewId]);
       if(explicitPreserves.has(partView) || correctingParts.has(partView))
         continue;
-      const id='preserve-'+String(region.id).toLowerCase();
+      const id='match-'+String(region.id).toLowerCase();
       if(!ID.test(id) || existing.has(id)){
         fail('CODE_MODE_REFERENCE_REGION_ID_COLLISION');
       }
       existing.add(id);
       auto.push({
-        id,partId:region.part_id,kind:'PRESERVE',
+        id,partId:region.part_id,kind:'MATCH_REFERENCE',
         requirement:part.description,viewId:image.viewId,
         referencePngSha256:image.sha256,
         sourceRegion:{id:region.id,boxUv:[...region.box_uv]},
@@ -233,7 +234,7 @@ export async function bindApprovedWorkspaceReference(
     fingerprintSha256:source.sha256,
     workspaceModelBound:true,
     matchedImageCount:matched.length,
-    automaticallyBoundPreserveCount:auto.length,
+    automaticallyBoundReferenceCount:auto.length,
     criteria:Object.freeze(combined),
     source:'EXISTING_WORKSPACE_REFERENCE_JSON_DECLARATION',
     visual_verdict:'UNVERIFIED',

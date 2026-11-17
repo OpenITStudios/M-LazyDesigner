@@ -64,15 +64,15 @@ test('workspace discovery is limited to the active model and refuses ambiguity',
       /CODE_MODE_REFERENCE_AMBIGUOUS/);
   }));
 
-test('source-approved texture regions automatically bind preserved parts without atlas inference',()=>
+test('source-approved texture regions become reference matches, not already-approved model parts',()=>
   fixture(async ({packagePath,model,views,correction})=>{
     const binding=await bindApprovedWorkspaceReference(
       packagePath,model,views,correction);
     assert.equal(binding.matchedImageCount,1);
-    assert.equal(binding.automaticallyBoundPreserveCount,1);
+    assert.equal(binding.automaticallyBoundReferenceCount,1);
     assert.equal(binding.criteria.length,2);
     const shield=binding.criteria.find(x=>x.partId==='tier1-shield');
-    assert.equal(shield.kind,'PRESERVE');
+    assert.equal(shield.kind,'MATCH_REFERENCE');
     assert.equal(shield.sourceRegion.id,'shield_marks');
     assert.deepEqual(shield.sourceRegion.boxUv,[0.1,0.1,0.3,0.4]);
     assert.equal(shield.textureUuid,undefined); // NOT a native atlas mapping
@@ -82,11 +82,11 @@ test('source-approved texture regions automatically bind preserved parts without
     assert.equal(referencePackageLeaseValid(binding),true);
   }));
 
-test('an already-approved reference can require a PRESERVE-only visual review without authorizing Paint',()=>
+test('an approved blueprint creates reference-match checks, not native model acceptance',()=>
   fixture(async ({packagePath,model,views})=>{
     const binding=await bindApprovedWorkspaceReference(packagePath,model,views);
-    assert.equal(binding.automaticallyBoundPreserveCount,2);
-    assert.ok(binding.criteria.every(x=>x.kind==='PRESERVE'));
+    assert.equal(binding.automaticallyBoundReferenceCount,2);
+    assert.ok(binding.criteria.every(x=>x.kind==='MATCH_REFERENCE'));
     assert.equal(boundReviewCriteria(binding.criteria,views).length,2);
   }));
 

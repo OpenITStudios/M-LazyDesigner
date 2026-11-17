@@ -90,6 +90,40 @@ test('approved source-image regions are review observations, never atlas positio
       boxUv:[1,0,0,0.8]},
   },decisions[1]],selected),/CODE_MODE_REVIEW_CRITERIA_INVALID/);
 });
+test('approved source image must not impersonate prior acceptance of the current model',()=>{
+  const sourceOnly={
+    id:'match-shield',
+    partId:'tier1-shield',kind:'MATCH_REFERENCE',
+    requirement:'The modeled shield must reproduce the approved reference silhouette and marks.',
+    viewId:'front',referencePngSha256:SHA,
+    sourceRegion:{id:'shield_artwork',boxUv:[0.1,0.1,0.4,0.7]},
+  };
+  const criteria=boundReviewCriteria([sourceOnly,decisions[1]],selected);
+  assert.equal(criteria[0].kind,'MATCH_REFERENCE');
+  assert.equal(criteria[0].textureUuid,undefined);
+  assert.equal(criteria[0].protectedRegions,undefined);
+  assert.equal(checkedCriterionReview(criteria,[
+    {id:'match-shield',verdict:'MET',
+      observation:'Shield appearance matches the selected approved blueprint.'},
+    claims[1],
+  ],'REJECTED',issue,scope).status,'CORRECTIONS_REQUIRED');
+  assert.throws(()=>checkedCriterionReview(criteria,[
+    {id:'match-shield',verdict:'VIOLATED',
+      observation:'The modeled shield still differs from the reference image.'},
+    claims[1],
+  ],'REJECTED',issue,scope),/CODE_MODE_REVIEW_REFERENCE_MISMATCH_UNSCOPED/);
+  assert.throws(()=>checkedCriterionReview(criteria,[
+    {id:'match-shield',verdict:'UNVERIFIED',
+      observation:'The shield surface is hidden in the provided camera angle.'},
+    claims[1],
+  ],'REJECTED',issue,scope),/CODE_MODE_REVIEW_OTHER_REQUIREMENT_UNVERIFIED/);
+  assert.throws(()=>boundReviewCriteria([
+    {...sourceOnly,textureUuid:'tier-atlas'},decisions[1],
+  ],selected),/CODE_MODE_REVIEW_CRITERIA_INVALID/);
+  assert.equal(criterionPermitsPaint(criteria,{
+    issueId:'match-shield',partId:'tier1-shield',
+  },{texture_uuid:'tier-atlas',allowed_regions:[crop]}),false);
+});
 test('all criteria must be acknowledged to declare review ready; unresolved is not accepted',()=>{
   const criteria=boundReviewCriteria(decisions,selected);
   const accepted=claims.map(item=>({...item,verdict:'MET'}));
