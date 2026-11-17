@@ -6,7 +6,7 @@
   import { planCubeLocalTranslation, planCubeLocalRotation, planCubeLocalScale } from './rustMoveGizmo';
   import { projectedCubeBounds } from './rustCubeProjection';
   import { isActiveTextureRequest } from './rustTextureCache';
-  import { cubeSelectionColors } from './rustViewportSelection';
+  import { cubeSelectionColors, selectionTargetIds } from './rustViewportSelection';
   import { sameSceneInputs, type SceneInputs } from './rustSceneIdentity';
   import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
@@ -46,6 +46,10 @@
   let gizmo: TransformControls | null = null;
   let modelRoot: THREE.Group | null = null;
   let pickMeshes: THREE.Mesh[] = [];
+  // Selection updates touch only the previously selected and next selected
+  // meshes; raycast still uses the original complete list.
+  let meshesByCube = new Map<string, THREE.Mesh>();
+  let renderedSelection: string | null = null;
   const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
   const failedTextureSources = new Set<string>();
   let projectedScene: SceneInputs | null = null;
@@ -139,10 +143,14 @@
   // Selection is a view-only operation. Never rebuild the scene or dispose
   // geometry/PNG resources merely because a Cube highlight changed.
   function updateSelection(currentSelection: string | null) {
-    for (const mesh of pickMeshes) {
-      const uuid: unknown = mesh.userData.cubeUuid;
+    const targets = selectionTargetIds(renderedSelection, currentSelection);
+    renderedSelection = currentSelection;
+    if (!targets.length) return;
+    for (const uuid of targets) {
+      const mesh = meshesByCube.get(uuid);
+      if (!mesh) continue; // Hidden/unavailable Cubes have no GPU projection.
       const fallback: unknown = mesh.userData.fallbackColor;
-      if (typeof uuid !== 'string' || typeof fallback !== 'number') continue;
+      if (typeof fallback !== 'number') continue;
       const colors = cubeSelectionColors(uuid, currentSelection, fallback);
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const material of materials) {
@@ -238,6 +246,8 @@
       disposeNode(child);
     }
     pickMeshes = [];
+    meshesByCube = new Map();
+    renderedSelection = null;
     pivots = new Map();
     bonePivots = new Map();
     const cubesById = new Map(currentCubes.map((cube) => [cube.uuid, cube] as const));
@@ -313,6 +323,7 @@
           mesh.userData.fallbackColor = COLORS[cube.color % COLORS.length];
           pivot.add(mesh);
           pickMeshes.push(mesh);
+          meshesByCube.set(cube.uuid, mesh);
           const edges = new THREE.LineSegments(
             new THREE.EdgesGeometry(geometry),
             new THREE.LineBasicMaterial({ color: 0x46535f }),
@@ -552,6 +563,8 @@
       camera = null;
       modelRoot = null;
       pickMeshes = [];
+      meshesByCube.clear();
+      renderedSelection = null;
       pivots.clear();
       bonePivots.clear();
     };

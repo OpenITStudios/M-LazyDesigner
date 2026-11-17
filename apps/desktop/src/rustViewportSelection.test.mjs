@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { cubeSelectionColors } from './rustViewportSelection.ts';
+import { cubeSelectionColors, selectionTargetIds } from './rustViewportSelection.ts';
 
 test('selection updates highlight without changing base colors or geometry data', () => {
   const base = { uuid: 'cube-a', color: 0x7b8ca1, from: [0, 0, 0], to: [4, 4, 4] };
@@ -24,4 +24,23 @@ test('viewport selection reaction is separate from geometry and texture rebuild 
   assert.match(source, /\$: if \(ready\) rebuild\(cubes, bones, hierarchy,/);
   assert.match(source, /updateSelection\(selectedId\);/);
   assert.doesNotMatch(source, /\$: if \(ready\) rebuild\(cubes, bones, hierarchy, selectedId/);
+});
+
+test('selection changes touch only previous and current Cube, not every projected Cube', () => {
+  assert.deepEqual(selectionTargetIds(null, 'a'), ['a']);
+  assert.deepEqual(selectionTargetIds('a', 'b'), ['a', 'b']);
+  assert.deepEqual(selectionTargetIds('b', null), ['b']);
+  assert.deepEqual(selectionTargetIds('a', 'a'), []);
+  assert.deepEqual(selectionTargetIds(null, null), []);
+  const base = 0x99aabb;
+  assert.equal(cubeSelectionColors('a', 'b', base).untextured, base);
+  assert.equal(cubeSelectionColors('b', 'b', base).outline, 0xf8fafc);
+});
+
+test('GPU scene reconstructs selection index, while raycast keeps its complete list', async () => {
+  const source = await readFile(new URL('./RustViewport.svelte', import.meta.url), 'utf8');
+  assert.match(source, /meshesByCube\.set\(cube\.uuid, mesh\)/);
+  assert.match(source, /meshesByCube = new Map\(\)/);
+  assert.match(source, /renderedSelection = null/);
+  assert.match(source, /ray\.intersectObjects\(pickMeshes, false\)/);
 });
