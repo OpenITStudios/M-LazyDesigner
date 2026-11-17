@@ -3144,9 +3144,54 @@ impl EditorSession {
         }
         let mut next = self.doc.clone();
         let mut changed = Vec::new();
-        for operation in operations {
-            let id = apply_operation(&mut next, operation)?;
+        let mut index = 0;
+        while index < operations.len() {
+            // Consecutive, same-atlas guarded face operations have immutable
+            // Cube/UV ownership. Plan every operation in order, then apply
+            // up to 64 physical rectangles through ONE PNG decode/encode.
+            // Mixed operations, atlas changes and over-budget groups keep
+            // their original sequential path and independent safety checks.
+            if let EditOperation::PaintCubeFaceRegionsGuarded { texture_uuid, .. } = &operations[index] {
+                let mut end = index;
+                let mut count = 0;
+                while let Some(EditOperation::PaintCubeFaceRegionsGuarded {
+                    texture_uuid: candidate, regions, ..
+                }) = operations.get(end) {
+                    if candidate != texture_uuid ||
+                        count + regions.len() > face_regions::MAX_FACE_REGIONS { break; }
+                    count += regions.len();
+                    end += 1;
+                }
+                if end > index + 1 {
+                    let mut steps = Vec::with_capacity(count);
+                    let mut target_index = None;
+                    for operation in &operations[index..end] {
+                        if let EditOperation::PaintCubeFaceRegionsGuarded {
+                            cube_uuid, texture_uuid, regions,
+                        } = operation {
+                            let (texture_index, planned) =
+                                face_regions::plan_cube_face_regions_guarded(
+                                    &next, cube_uuid, texture_uuid, regions)?;
+                            if target_index.is_some_and(|prior| prior != texture_index) {
+                                return Err(fail("PAINT_TEXTURE_NOT_FOUND"));
+                            }
+                            target_index = Some(texture_index);
+                            steps.extend(planned);
+                        }
+                    }
+                    let texture = next.texture_assets.get_mut(target_index
+                        .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?)
+                        .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
+                    paint::rectangles(texture, next.resolution.width,
+                        next.resolution.height, &steps)?;
+                    if !changed.contains(texture_uuid) { changed.push(texture_uuid.clone()); }
+                    index = end;
+                    continue;
+                }
+            }
+            let id = apply_operation(&mut next, &operations[index])?;
             if !changed.contains(&id) { changed.push(id); }
+            index += 1;
         }
         next.validate()?;
         if let (Some(item), Some(index)) = (scope, scope_index) {

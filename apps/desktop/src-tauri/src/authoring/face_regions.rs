@@ -11,7 +11,7 @@ use super::{
 use serde_json::Value;
 use std::collections::HashSet;
 
-const MAX_FACE_REGIONS: usize = 64;
+pub(super) const MAX_FACE_REGIONS: usize = 64;
 
 /// Map a half-open rectangle in *displayed Cube face pixel coordinates* to
 /// the half-open rectangle in its PNG. Signed UV and 90-degree rotations are
@@ -103,10 +103,13 @@ pub(super) fn face_region_rotation(
 /// Reuse the same exact physical-patch alias guard as the read-only material
 /// preflight. Other face aliases may exist OUTSIDE touched rectangles, but
 /// incomplete/unsupported UV ownership remains blocked.
-pub(super) fn paint_cube_face_regions_guarded(
-    doc: &mut AuthoringDocument, cube_uuid: &str,
+// Read-only plan shared by one-face Paint and contiguous same-atlas
+// transaction batching. Never mutate the PNG until EVERY guarded UV patch
+// in a cohort has been checked against its exact physical atlas footprint.
+pub(super) fn plan_cube_face_regions_guarded(
+    doc: &AuthoringDocument, cube_uuid: &str,
     texture_uuid: &str, regions: &[CubeFaceRegionPaintPatch],
-) -> Result<String> {
+) -> Result<(usize, Vec<PaintRectangleStep>)> {
     if regions.is_empty() || regions.len() > MAX_FACE_REGIONS {
         return Err("PAINT_FACE_REGIONS_SIZE_INVALID".into());
     }
@@ -185,6 +188,15 @@ pub(super) fn paint_cube_face_regions_guarded(
         });
     }
 
+    Ok((texture_index, steps))
+}
+
+pub(super) fn paint_cube_face_regions_guarded(
+    doc: &mut AuthoringDocument, cube_uuid: &str,
+    texture_uuid: &str, regions: &[CubeFaceRegionPaintPatch],
+) -> Result<String> {
+    let (texture_index, steps) =
+        plan_cube_face_regions_guarded(doc, cube_uuid, texture_uuid, regions)?;
     let texture = doc.texture_assets.get_mut(texture_index)
         .ok_or_else(|| "PAINT_TEXTURE_NOT_FOUND".to_string())?;
     paint::rectangles(texture, doc.resolution.width, doc.resolution.height, &steps)?;
