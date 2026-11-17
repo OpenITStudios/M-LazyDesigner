@@ -83,6 +83,10 @@ export interface CodeModeGuestAPI {
         partId:string;material:string;treatment:string;
         failedAttempts:number;observation:string;
       }>;
+      rejectedPaintPlans:Array<{
+        partId:string;textureUuid:string;fingerprintSha256:string;
+        observation:string;
+      }>;
       materialCohort:Readonly<CodeModeReviewedMaterialCohort> | null;
       /** Specific model Cube faces actually reviewed; separate from camera views. */
       reviewedFaces:ReadonlyArray<Readonly<CodeModeReviewedTextureFace>>;
@@ -151,6 +155,8 @@ export interface CodeModeGuestAPI {
     Promise<CodeModeProjectReference & { receipt: ApplyReceipt;
       texturing_workflow?:{
         status:"PAINT_SAVED_NOT_VISUALLY_ACCEPTED";source_model_sha256:string;
+        /** Same ordered operation plan across revisions, NOT visual quality. */
+        operation_plan_fingerprint_sha256:string;
         style_evidence:ApplyReceipt["texture_styling_evidence"];
         source_pixel_guards:{
           protected_regions:number;
@@ -247,6 +253,14 @@ export interface CodeModeVisualReviewerFeedback {
   rejectedTreatments?:Array<{
     partId:string;material:string;treatment:string;
     failedAttempts:number;observation:string;
+  }>;
+  /** Exact previously rejected ordered Paint plan, tied to the part and
+   * physical atlas by a trusted reviewer. The digest comes from an actual
+   * prior Code Mode receipt; it is NOT a source/visual acceptance label.
+   */
+  rejectedPaintPlans?:Array<{
+    partId:string;textureUuid:string;fingerprintSha256:string;
+    observation:string;
   }>;
   /** Stage sample restricts Paint to one bounded atlas patch. Stage
    * propagation requires reviewer-declared accepted sample from the

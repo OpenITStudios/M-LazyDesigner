@@ -214,6 +214,38 @@ export function normalizedMaterialWorkPacket(value){
   return normalized;
 }
 
+/** Stable identity of the exact ordered Paint operations, independent of
+ * JSON object key order, narrative labels or reviewer issue IDs. This is
+ * an operation-replay fingerprint, NOT proof that two rendered results look
+ * alike. Preserve operation order: overlapping Paint is last-writer-wins.
+ * Only a trusted reviewer may classify a past fingerprint as rejected.
+ */
+export function paintOperationsFingerprint(operations){
+  const invalid=()=>{throw new TypeError('CODE_MODE_PAINT_PLAN_FINGERPRINT_INVALID');};
+  const canonical=(value,depth=0)=>{
+    if(depth>16)invalid();
+    if(value===null || typeof value==='string' ||
+       typeof value==='boolean' ||
+       (typeof value==='number' && Number.isFinite(value)))return value;
+    if(Array.isArray(value))return value.map(item=>canonical(item,depth+1));
+    if(value && typeof value==='object' &&
+       Object.getPrototypeOf(value)===Object.prototype) {
+      const result={};
+      for(const key of Object.keys(value).sort()){
+        result[key]=canonical(value[key],depth+1);
+      }
+      return result;
+    }
+    invalid();
+  };
+  if(!Array.isArray(operations) || operations.length<1)invalid();
+  const payload=JSON.stringify(canonical(operations));
+  if(Buffer.byteLength(payload,'utf8')>64*1024)invalid();
+  return createHash('sha256')
+    .update('lazydesigner:paint-operations:v1\n')
+    .update(payload).digest('hex');
+}
+
 export function materialWorkPacketDigest(packet){
   const normalized=normalizedMaterialWorkPacket(packet);
   if(!normalized)throw new TypeError('MATERIAL_WORK_PACKET_REQUIRED');

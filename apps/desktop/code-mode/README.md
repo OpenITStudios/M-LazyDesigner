@@ -200,6 +200,19 @@ bevel edges remain available. It cannot judge real material form, image
 similarity or all unsupported variations of generic stripes. Authored
 negative/positive Node regressions are NOT_EXECUTED.
 
+**Reviewed rejected-operation replay guard (2026-11-17; SOURCE_ONLY):**
+The trusted host now records a SHA-256 fingerprint of the exact ordered,
+key-canonicalized Paint operations in a saved-pixel receipt. An independent
+reviewer can carry a previously *actually rejected* fingerprint with the
+same part and texture UUID in `rejectedPaintPlans` on a later captured
+review. The host then rejects the identical operation plan **before** write
+approval and Rust Paint, even if the guest changes `approachId`, treatment,
+or descriptive prose. Source history is operator/reviewer-owned, not an
+automatic persistent memory. Changed pixels/operation order require fresh
+review and are not claimed visually better; identical operation fingerprints
+do not measure similarity of rendered images. Source regressions are authored
+but NOT_EXECUTED; native/artistic improvement remains UNVERIFIED.
+
 **Artist order, not extra tools:** approved reference/part → Geometry + UV
 approved → one material's value/base/shadow/highlight design → tiny
 face-local pixel clusters → representative visible face and seam review

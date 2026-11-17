@@ -13,7 +13,8 @@ import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
-  materialWorkPacketDigest,compileMaterialClusterPaint} from './material-work-packet.mjs';
+  materialWorkPacketDigest,compileMaterialClusterPaint,
+  paintOperationsFingerprint} from './material-work-packet.mjs';
 
 const WORKER = fileURLToPath(new URL('./sandbox-worker.mjs', import.meta.url));
 const DENO_FLAGS = Object.freeze([
@@ -157,7 +158,8 @@ const MAX_REVIEW_ISSUES = 6;
 function normalizedVisualReview(input, viewIds = []) {
   if (!input || typeof input !== 'object' || Array.isArray(input) ||
       Object.keys(input).some(key =>
-        !['decision','issues','correctionScope','rejectedApproaches','rejectedTreatments','materialCohort','viewReviews','reviewedFaces'].includes(key)) ||
+        !['decision','issues','correctionScope','rejectedApproaches','rejectedTreatments','rejectedPaintPlans',
+          'materialCohort','viewReviews','reviewedFaces'].includes(key)) ||
       !REVIEW_DECISIONS.has(input.decision) ||
       !Array.isArray(input.issues) || input.issues.length > MAX_REVIEW_ISSUES) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
@@ -304,6 +306,39 @@ function normalizedVisualReview(input, viewIds = []) {
       rejectedTreatments.length) {
       throw new Error('CODE_MODE_REJECTED_TREATMENT_HISTORY_INVALID');
     }
+    // The trusted reviewer may carry source-backed rejected operation
+    // fingerprints across revisions. Unlike a model-authored approach name,
+    // these describe the concrete operations that were actually proposed.
+    // No cross-session database is inferred or created by this host.
+    const rejectedPaintPlans=(input.rejectedPaintPlans??[]);
+    if(!Array.isArray(rejectedPaintPlans) ||
+       rejectedPaintPlans.length>12) {
+      throw new Error('CODE_MODE_REJECTED_PAINT_HISTORY_INVALID');
+    }
+    const boundedRejectedPlans=rejectedPaintPlans.map(entry=>{
+      if(!entry || typeof entry!=='object' || Array.isArray(entry) ||
+         Object.keys(entry).some(key=>![
+           'partId','textureUuid','fingerprintSha256','observation',
+         ].includes(key)) ||
+         typeof entry.partId!=='string' ||
+         !/^[a-z][a-z0-9_-]{0,63}$/.test(entry.partId) ||
+         typeof entry.textureUuid!=='string' ||
+         !/^[a-zA-Z0-9_-]{1,128}$/.test(entry.textureUuid) ||
+         typeof entry.fingerprintSha256!=='string' ||
+         !/^[a-f0-9]{64}$/.test(entry.fingerprintSha256) ||
+         typeof entry.observation!=='string' ||
+         entry.observation.length<20 || entry.observation.length>240 ||
+         entry.observation.trim()!==entry.observation ||
+         /[\x00-\x1f\x7f]/.test(entry.observation)) {
+        throw new Error('CODE_MODE_REJECTED_PAINT_HISTORY_INVALID');
+      }
+      return Object.freeze({...entry});
+    });
+    if(new Set(boundedRejectedPlans.map(item=>
+      JSON.stringify([item.partId,item.textureUuid,item.fingerprintSha256])))
+        .size!==boundedRejectedPlans.length) {
+      throw new Error('CODE_MODE_REJECTED_PAINT_HISTORY_INVALID');
+    }
     const materialCohort = normalizedReviewedMaterialCohort(
       input.materialCohort,scope,issues);
     const normalized = Object.freeze({
@@ -339,6 +374,7 @@ function normalizedVisualReview(input, viewIds = []) {
       issues:Object.freeze(issues),correctionScope:normalized,
       rejectedApproaches:Object.freeze(rejectedApproaches),
       rejectedTreatments:Object.freeze(rejectedTreatments),
+      rejectedPaintPlans:Object.freeze(boundedRejectedPlans),
       materialCohort,
       face_source_evidence:null,
       viewReviews:boundedViewReviews,
@@ -350,6 +386,7 @@ function normalizedVisualReview(input, viewIds = []) {
   if (issues.length !== 0 || input.correctionScope !== undefined ||
       input.rejectedApproaches !== undefined ||
       input.rejectedTreatments !== undefined ||
+      input.rejectedPaintPlans !== undefined ||
       input.materialCohort !== undefined) {
     throw new Error('CODE_MODE_VISUAL_REVIEW_INVALID');
   }
@@ -357,6 +394,7 @@ function normalizedVisualReview(input, viewIds = []) {
     status:'RECORDED',decision:input.decision,
     issues:Object.freeze([]),correctionScope:null,
     rejectedApproaches:Object.freeze([]),rejectedTreatments:Object.freeze([]),
+    rejectedPaintPlans:Object.freeze([]),
     materialCohort:null,
     face_source_evidence:null,
     viewReviews:boundedViewReviews,reviewedFaces:boundedFaces,
@@ -904,6 +942,7 @@ export async function createCodeModeHost({
         status:'NOT_RECORDED',decision:'UNVERIFIED',
         issues:Object.freeze([]),correctionScope:null,
         rejectedApproaches:Object.freeze([]),rejectedTreatments:Object.freeze([]),
+        rejectedPaintPlans:Object.freeze([]),
         materialCohort:null,face_source_evidence:null,viewReviews:Object.freeze([]),
         reviewedFaces:Object.freeze([]),
         source:'NONE',visual_verdict:'UNVERIFIED',
@@ -1409,6 +1448,11 @@ export async function createCodeModeHost({
       }
       const pixelEdit = Array.isArray(activeOperations) &&
         activeOperations.some(op => PIXEL_MUTATIONS.has(op?.op));
+      // Domain-separated operation identity allows a real reviewer to
+      // reject an exact replay despite renamed approach or treatment labels.
+      // It is never itself a material/artistic verdict or permission.
+      const paintPlanSha256=pixelEdit ?
+        paintOperationsFingerprint(activeOperations):null;
       if (referenceMaster !== null || visualPair !== null) {
         if (pixelEdit && args.correctionScope === undefined) {
           throw new Error('CODE_MODE_MATERIAL_CORRECTION_SCOPE_REQUIRED');
@@ -1469,6 +1513,12 @@ export async function createCodeModeHost({
             item.treatment===materialIntent.treatment &&
             item.failedAttempts>=2)) {
           throw new Error('CODE_MODE_MATERIAL_TREATMENT_FAMILY_REPEAT_BLOCKED');
+        }
+        if (feedback.rejectedPaintPlans.some(item=>
+            item.partId===materialIntent.partId &&
+            item.textureUuid===requested.texture_uuid &&
+            item.fingerprintSha256===paintPlanSha256)) {
+          throw new Error('CODE_MODE_MATERIAL_REJECTED_OPERATION_REPLAY');
         }
         // Reviewer-backed material work is sample-first. An explicitly
         // specified exact-RGBA edit outside this visual-review workflow
@@ -1633,6 +1683,7 @@ export async function createCodeModeHost({
         ...(pixelEdit?{texturing_workflow:{
           status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED',
           source_model_sha256:next.sha256,
+          operation_plan_fingerprint_sha256:paintPlanSha256,
           style_evidence:receipt.texture_styling_evidence??null,
           source_pixel_guards:{
             protected_regions:effectiveCorrectionScope?.protectedRegions?.length??0,

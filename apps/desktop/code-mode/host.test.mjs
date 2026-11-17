@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
 import { createCodeModeHost, createCodeModeTool } from './host.mjs';
+import { paintOperationsFingerprint } from './material-work-packet.mjs';
 
 const HASH = 'a'.repeat(64);
 const SUMMARY = { revision: 0, cubes: 1, bones: 1, textures: 0, animations: 0 };
@@ -884,6 +885,19 @@ test('invalid or stale reviewer evidence fails before it can permit Paint', () =
       ],correctionScope:{textureUuid:'tier2',
         allowedRegions:[{from:[1,1],to:[2,2]}]}},
       'CODE_MODE_VISUAL_REVIEW_INVALID'],
+      [{decision:'REJECTED',
+        issues:[{id:'helmet',kind:'FLAT_SHADING',
+          observation:'Flat metal helmet remains.'}],
+        correctionScope:{textureUuid:'tier2',
+          allowedRegions:[{from:[1,1],to:[2,2]}]},
+        rejectedPaintPlans:[{partId:'tier2-helmet',textureUuid:'tier2',
+          fingerprintSha256:'wrong',observation:'This exact paint plan already failed the review.'}],
+      },'CODE_MODE_REJECTED_PAINT_HISTORY_INVALID'],
+      [{decision:'ACCEPTED',issues:[],
+        rejectedPaintPlans:[{partId:'tier2-helmet',textureUuid:'tier2',
+          fingerprintSha256:'a'.repeat(64),
+          observation:'Reviewer claimed old failure on accepted image.'}],
+      },'CODE_MODE_VISUAL_REVIEW_INVALID'],
     ]){
       const host=await createCodeModeHost({
         rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
@@ -1092,6 +1106,8 @@ test('reviewed material correction blocks missing, unrelated and previously reje
       treatment:'form_value_masses',
       expectedChange:'Build form-following base, highlight and shadow masses on the helmet.',
     };
+    const repeatedPaint={op:'paint_texture_pixel',texture_index:1,
+      x:2,y:2,rgba:[80,90,120,255]};
     const cases=[
       {intent:undefined,expected:'CODE_MODE_MATERIAL_INTENT_REQUIRED'},
       {intent:{...baseIntent,issueId:'unreviewed-shield'},
@@ -1103,6 +1119,10 @@ test('reviewed material correction blocks missing, unrelated and previously reje
         expected:'CODE_MODE_MATERIAL_TREATMENT_FAMILY_REPEAT_BLOCKED'},
       {intent:{...baseIntent,approachId:'new-contact',
         treatment:'contact_shadows'},
+        expected:'CODE_MODE_MATERIAL_REJECTED_OPERATION_REPLAY'},
+      {intent:{...baseIntent,approachId:'new-contact-different',
+        treatment:'contact_shadows'},
+        operations:[{...repeatedPaint,rgba:[81,90,120,255]}],
         expected:'CODE_MODE_MATERIAL_SAMPLE_REQUIRED'},
     ];
     const host=await createCodeModeHost({
@@ -1125,6 +1145,11 @@ test('reviewed material correction blocks missing, unrelated and previously reje
           partId:'tier2-helmet',material:'metal',
           treatment:'form_value_masses',failedAttempts:2,
           observation:'Two independent reference reviews rejected repeating horizontal-value stripes.',
+        }],
+        rejectedPaintPlans:[{
+          partId:'tier2-helmet',textureUuid:'tier2-atlas',
+          fingerprintSha256:paintOperationsFingerprint([repeatedPaint]),
+          observation:'This exact native Paint operation was visually rejected despite a new label.',
         }],
       }),
       authorizeMutation:()=>{approvals++;return true;},
@@ -1149,13 +1174,14 @@ test('reviewed material correction blocks missing, unrelated and previously reje
           assert.deepEqual(response.result.review_feedback.rejectedApproaches,
             [{issueId:'helmet-flat',approachId:'helmet-flat-stripe'}]);
           assert.equal(response.result.review_feedback.rejectedTreatments[0].failedAttempts,2);
+          assert.equal(response.result.review_feedback.rejectedPaintPlans[0].fingerprintSha256,
+            paintOperationsFingerprint([repeatedPaint]));
           return {reviewed:true};
         });
         const item=cases[current-1];
         return fakeGuest({method:'apply',args:{
           project:'p0',output:'negative-'+current+'.bbmodel',
-          operations:[{op:'paint_texture_pixel',texture_index:1,
-            x:2,y:2,rgba:[80,90,120,255]}],
+          operations:item.operations??[repeatedPaint],
           correctionScope:{textureUuid:'tier2-atlas',
             allowedRegions:[{from:[2,2],to:[4,4]}],
             preserveAlpha:true},

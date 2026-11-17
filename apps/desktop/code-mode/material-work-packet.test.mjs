@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createRustCodeModeClient} from './client.mjs';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest,
-  validateMaterialWorkPacketOperations,compileMaterialClusterPaint}
+  validateMaterialWorkPacketOperations,compileMaterialClusterPaint,
+  paintOperationsFingerprint}
   from './material-work-packet.mjs';
 
 const CUBE='00000000-0000-4000-8000-000000000002';
@@ -124,6 +125,31 @@ test('form-shading cannot disguise full-width shadow/highlight bars as modeled s
       spans:[{y:3,x0:3,x1:4}]},
   ];
   assert.equal(normalizedMaterialWorkPacket(edge).facePlans.length,1);
+});
+test('paint operation identity survives renamed reviewer plans but distinguishes changed pixels',()=>{
+  const original=ops();
+  const cosmetic=original.map(op=>({
+    regions:op.regions.map(region=>({
+      rgba:region.rgba,to:region.to,face:region.face,
+      erase:region.erase,from:region.from,
+    })),
+    texture_uuid:op.texture_uuid,op:op.op,cube_uuid:op.cube_uuid,
+  }));
+  assert.equal(paintOperationsFingerprint(original),
+    paintOperationsFingerprint(cosmetic));
+  assert.equal(paintOperationsFingerprint(original).length,64);
+  const changed=structuredClone(original);
+  changed[0].regions[0].rgba=[56,65,80,255];
+  assert.notEqual(paintOperationsFingerprint(original),
+    paintOperationsFingerprint(changed));
+  const changedOrder=structuredClone(original);
+  changedOrder[0].regions.reverse();
+  assert.notEqual(paintOperationsFingerprint(original),
+    paintOperationsFingerprint(changedOrder));
+  assert.throws(()=>paintOperationsFingerprint([]),
+    /CODE_MODE_PAINT_PLAN_FINGERPRINT_INVALID/);
+  assert.throws(()=>paintOperationsFingerprint([{op:'paint_texture_pixel',
+    invalid:undefined}]),/CODE_MODE_PAINT_PLAN_FINGERPRINT_INVALID/);
 });
 test('compiled shading refuses arbitrary guest mutations or off-scope paint',()=>{
   const p=normalizedMaterialWorkPacket(packet());
