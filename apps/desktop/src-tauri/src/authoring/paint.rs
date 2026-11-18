@@ -3,7 +3,7 @@
 //! and only a narrowly validated embedded RGBA8 PNG can be adopted.
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::io::Cursor;
 use super::{MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, PaintRectangleStep};
 
@@ -20,42 +20,56 @@ const ALLOWED_FIELDS: [&str; 10] = [
     "render_mode", "render_sides", "paint_owner", "uv_width", "uv_height",
 ];
 
-pub(super) fn editable(texture: &Value) -> bool {
-    let Some(fields) = texture.as_object() else { return false; };
+// One metadata owner for the three Paint eligibility bits. Never interpret
+// external files, layers or unknown fields as a supported embedded PNG.
+fn supported_paint_metadata(fields: &Map<String, Value>) -> bool {
     fields.keys().all(|key| ALLOWED_FIELDS.contains(&key.as_str())) &&
-        fields.get("paint_owner").and_then(Value::as_str) == Some(OWNER) &&
         fields.get("internal") == Some(&Value::Bool(true)) &&
         fields.get("wrap_mode").and_then(Value::as_str) == Some("limited") &&
         fields.get("render_mode").and_then(Value::as_str) == Some("default") &&
         fields.get("render_sides").and_then(Value::as_str) == Some("double")
 }
 
-// Metadata-only eligibility for an explicit Enable Painting UI action.
-// The Rust operation always decodes and validates the complete PNG before
-// admitting it. Never touch external paths, layers, frames or unknown fields.
-pub(super) fn adoptable(texture: &Value, width: u32, height: u32) -> bool {
-    if size(width, height).is_err() { return false; }
-    let Some(fields) = texture.as_object() else { return false; };
-    fields.keys().all(|key| ALLOWED_FIELDS.contains(&key.as_str())) &&
-        !fields.contains_key("paint_owner") &&
-        fields.get("internal") == Some(&Value::Bool(true)) &&
-        fields.get("wrap_mode").and_then(Value::as_str) == Some("limited") &&
-        fields.get("render_mode").and_then(Value::as_str) == Some("default") &&
-        fields.get("render_sides").and_then(Value::as_str) == Some("double") &&
+pub(super) fn editable(texture: &Value) -> bool {
+    texture.as_object().is_some_and(|fields|
+        supported_paint_metadata(fields) &&
+        fields.get("paint_owner").and_then(Value::as_str) == Some(OWNER))
+}
+
+// Compute the existing independent editable/adoptable/exportable predicates
+// together when projecting a UI snapshot. This is metadata-only: real Paint
+// adoption and export still run the full native PNG decoder and safety gates.
+pub(super) fn snapshot_eligibility(
+    texture: &Value, width: u32, height: u32,
+) -> (bool, bool, bool) {
+    let Some(fields) = texture.as_object() else { return (false, false, false) };
+    let supported = supported_paint_metadata(fields);
+    let owned = supported &&
+        fields.get("paint_owner").and_then(Value::as_str) == Some(OWNER);
+    let eligible_import = supported && !fields.contains_key("paint_owner");
+    // Only candidates admitted by the owner/field policy need their image
+    // metadata inspected. A wrong/unknown paint_owner fails closed.
+    let image_matches = (owned || eligible_import) &&
+        size(width, height).is_ok() &&
         fields.get("source").and_then(Value::as_str)
             .is_some_and(|source| source.starts_with(PREFIX)) &&
         fields.get("uv_width").is_none_or(|v| v.as_u64() == Some(u64::from(width))) &&
-        fields.get("uv_height").is_none_or(|v| v.as_u64() == Some(u64::from(height)))
+        fields.get("uv_height").is_none_or(|v| v.as_u64() == Some(u64::from(height)));
+    let adoptable = eligible_import && image_matches;
+    let exportable = (owned || adoptable) && image_matches;
+    (owned, adoptable, exportable)
+}
+
+// Metadata-only eligibility for an explicit Enable Painting UI action.
+// The Rust operation still decodes and validates complete PNG bytes before
+// admitting imported Paint. Opaque fields cannot be silently normalized.
+pub(super) fn adoptable(texture: &Value, width: u32, height: u32) -> bool {
+    snapshot_eligibility(texture, width, height).1
 }
 
 /// Metadata-only eligibility; the actual export decodes the PNG.
 pub(super) fn exportable(texture: &Value, width: u32, height: u32) -> bool {
-    size(width, height).is_ok() &&
-        (editable(texture) || adoptable(texture, width, height)) &&
-        texture.get("source").and_then(Value::as_str)
-            .is_some_and(|source| source.starts_with(PREFIX)) &&
-        texture.get("uv_width").is_none_or(|v| v.as_u64() == Some(u64::from(width))) &&
-        texture.get("uv_height").is_none_or(|v| v.as_u64() == Some(u64::from(height)))
+    snapshot_eligibility(texture, width, height).2
 }
 
 /// Preserve the original compressed PNG bytes and existing metadata.

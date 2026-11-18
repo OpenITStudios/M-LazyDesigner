@@ -1,3 +1,22 @@
+**Single-pass Rust Paint eligibility projection — 2026-11-18 (SOURCE ONLY):**
+At `Rust@077a3851b983ab9376005e3f071568c3fe4a6652`, the same Tauri snapshot
+evaluated each Texture separately for editable, adoptable and exportable
+metadata; exportable rescanned the owner/import whitelist and project
+per-texture UV rules were checked inside each Texture loop. The Rust
+Paint metadata owner now computes all three predicates from one admitted
+field set and bounded source/UV checks. The Tauri snapshot uses one pass
+over the Texture array with the project ruleset evaluated once, while
+preview UV mode is resolved once for the PNG admission pass and Cube
+projection. Public scalar read/operation predicates still use the same
+owner. Unsupported/external/opaque imports still refuse; native PNG
+decoding, saved data, Undo/Redo and `.bbmodel` exports are unchanged.
+A source-authored mixed owned/imported/opaque/UUID-less/invalid-source
+and unsupported-ruleset regression checks the expected three UI arrays
+against the canonical scalar guards. Test/Cargo, real WebView2, RAM/CPU
+and Blockbench proof remain NOT_EXECUTED under the active hold.
+Earlier checkpoints below are historical and not authorization to
+expand scope or request localtest.
+
 **Rust COW target preflight — 2026-11-18 (SOURCE ONLY):**
 Follow-up source inspection of `Rust@39ecf99f03d60b0c539497945fb4dfff89a5e500`
 found that `RenameNode` and `SetNodeVisibility` used mutable Cube scans

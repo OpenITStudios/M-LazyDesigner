@@ -1564,6 +1564,33 @@ pub fn paint_texture_exportable(doc: &AuthoringDocument, index: usize) -> bool {
     })
 }
 
+/// Batch the three metadata-only Paint flags for one immutable Tauri
+/// projection. The same Rust Paint predicates still guard actual edits and
+/// exports; project-wide UV rules are checked once, never per texture.
+pub fn paint_texture_snapshot_flags(
+    doc: &AuthoringDocument,
+) -> (Vec<bool>, Vec<bool>, Vec<bool>) {
+    let mut editable = Vec::with_capacity(doc.texture_assets.len());
+    let mut adoptable = Vec::with_capacity(doc.texture_assets.len());
+    let mut exportable = Vec::with_capacity(doc.texture_assets.len());
+    let per_texture_uv_rules = has_per_texture_uv_rules(doc);
+    for texture in &doc.texture_assets {
+        if per_texture_uv_rules {
+            editable.push(paint::editable(texture));
+            adoptable.push(false);
+            exportable.push(false);
+            continue;
+        }
+        let (owned, candidate, can_export) =
+            paint::snapshot_eligibility(texture, doc.resolution.width, doc.resolution.height);
+        editable.push(owned);
+        adoptable.push(candidate);
+        exportable.push(can_export &&
+            texture.get("uuid").and_then(Value::as_str).is_some_and(valid_uuid));
+    }
+    (editable, adoptable, exportable)
+}
+
 /// Read-only export of a UUID-addressed supported embedded PNG.
 pub fn export_paint_png(doc: &AuthoringDocument, texture_uuid: &str) -> Result<Vec<u8>> {
     if has_per_texture_uv_rules(doc) {

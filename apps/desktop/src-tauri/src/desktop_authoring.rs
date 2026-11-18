@@ -13,6 +13,7 @@
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
+    paint_texture_snapshot_flags,
     export_paint_png, export_bedrock_geometry, export_bedrock_animations,
     bedrock_animation_curve_fidelity,
     has_per_texture_uv_rules, can_set_empty_atlas_resolution,
@@ -364,9 +365,15 @@ fn preview_uv_axis(texture: &Value, name: &str, project_default: u32) -> Option<
 
 /// Each admitted source carries its actual UV grid separately from PNG pixel
 /// dimensions. The latter only controls decoding and GPU memory budgets.
+#[cfg(test)]
 fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(&str, [u32; 2])>> {
+    texture_preview_assets_in_mode(doc, preview_uv_mode(doc))
+}
+
+fn texture_preview_assets_in_mode(
+    doc: &AuthoringDocument, mode: PreviewUvMode,
+) -> Vec<Option<(&str, [u32; 2])>> {
     const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
-    let mode = preview_uv_mode(doc);
     let mut remaining_source_bytes = 4 * 1024 * 1024;
     let mut remaining_pixels = MAX_PROJECTED_PIXELS;
     let mut admitted = 0usize;
@@ -721,10 +728,12 @@ fn project_frozen(
 ) -> EditorSnapshot {
         let doc = model.document.as_ref();
         let default_box_uv = doc.meta.box_uv.unwrap_or(false);
-        let preview_assets = texture_preview_assets(doc);
+        let uv_mode = preview_uv_mode(doc);
+        let preview_assets = texture_preview_assets_in_mode(doc, uv_mode);
         let preview_source_key = preview_source_key(model.epoch, &preview_assets);
         let preview_sources_reused = reuse.preview == Some(preview_source_key.as_str());
-        let uv_mode = preview_uv_mode(doc);
+        let (paint_editable_textures, paint_adoptable_textures,
+             paint_exportable_textures) = paint_texture_snapshot_flags(doc);
         let scope_indices = (uv_mode == PreviewUvMode::ScopedAttachable)
             .then(|| texture_scope_indices(doc));
         let mut snapshot = EditorSnapshot {
@@ -790,14 +799,9 @@ fn project_frozen(
             texture_preview_resolutions: preview_assets.iter().map(|asset|
                 asset.as_ref().map(|(_, resolution)| *resolution)).collect(),
             scoped_texture_preview: uv_mode == PreviewUvMode::ScopedAttachable,
-            paint_editable_textures: doc.texture_assets.iter()
-                .map(paint_texture_editable).collect(),
-            paint_adoptable_textures: doc.texture_assets.iter().map(|texture|
-                !has_per_texture_uv_rules(doc) &&
-                paint_texture_adoptable(texture, doc.resolution.width, doc.resolution.height)
-            ).collect(),
-            paint_exportable_textures: doc.texture_assets.iter().enumerate()
-                .map(|(index, _)| paint_texture_exportable(doc, index)).collect(),
+            paint_editable_textures,
+            paint_adoptable_textures,
+            paint_exportable_textures,
             texture_resolution: [doc.resolution.width, doc.resolution.height],
             atlas_resolution_editable: can_set_empty_atlas_resolution(doc),
             paint_texture_addable: can_add_paint_texture(doc),
@@ -3173,6 +3177,70 @@ mod tests {
             }),
         };
         assert_eq!(project(&store).unwrap().paint_exportable_textures, vec![false]);
+    }
+
+    // SOURCE-AUTHORED_NOT_RUN: combining eligibility evaluation must preserve
+    // scalar Core gates and all three independent GUI flags for mixed saved
+    // Texture metadata, including missing UUIDs and unsupported UV rules.
+    #[test]
+    fn paint_eligibility_batch_matches_scalar_gates_and_fail_closed_rules() {
+        let mut doc = AuthoringDocument::new_bedrock("Eligibility", "eligibility").unwrap();
+        doc.resolution.width = 16;
+        doc.resolution.height = 16;
+        let png = png_candidate(16, 16);
+        let owned = json!({
+            "uuid":"00000000-0000-4000-8000-000000000851",
+            "name":"owned.png", "source":png, "internal":true,
+            "wrap_mode":"limited", "render_mode":"default",
+            "render_sides":"double", "paint_owner":"lazydesigner-rgba8-v1",
+        });
+        let mut imported = owned.clone();
+        imported["uuid"] = json!("00000000-0000-4000-8000-000000000852");
+        imported.as_object_mut().unwrap().remove("paint_owner");
+        let mut uuidless = imported.clone();
+        uuidless.as_object_mut().unwrap().remove("uuid");
+        let mut opaque = imported.clone();
+        opaque["uuid"] = json!("00000000-0000-4000-8000-000000000853");
+        opaque["layers"] = json!([{"name":"retain"}]);
+        let mut invalid_png = owned.clone();
+        invalid_png["uuid"] = json!("00000000-0000-4000-8000-000000000854");
+        invalid_png["source"] = json!("not-an-embedded-png");
+        doc.texture_assets = vec![owned, imported, uuidless, opaque, invalid_png].into();
+        let original = doc.clone();
+        let make_snapshot = |doc: &AuthoringDocument| {
+            let store = EditorStore {
+                epoch: 37, active: Some(ActiveModel {
+                    session: EditorSession::from_document(doc.clone()).unwrap(),
+                    source_path: None, source_sha: None,
+                    saved_canonical_sha: None, dirty: false,
+                }),
+            };
+            project(&store).unwrap()
+        };
+        let view = make_snapshot(&doc);
+        assert_eq!(view.paint_editable_textures, vec![true, false, false, false, true]);
+        assert_eq!(view.paint_adoptable_textures, vec![false, true, true, false, false]);
+        assert_eq!(view.paint_exportable_textures, vec![true, true, false, false, false]);
+        for (index, texture) in doc.texture_assets.iter().enumerate() {
+            assert_eq!(view.paint_editable_textures[index],
+                paint_texture_editable(texture));
+            assert_eq!(view.paint_adoptable_textures[index],
+                paint_texture_adoptable(texture, 16, 16));
+            assert_eq!(view.paint_exportable_textures[index],
+                paint_texture_exportable(&doc, index));
+        }
+        assert_eq!(doc, original);
+
+        doc.extensions.insert("multi_file_ruleset".into(),
+            json!("unreviewed_ruleset"));
+        let unsupported = make_snapshot(&doc);
+        assert_eq!(unsupported.paint_editable_textures, view.paint_editable_textures);
+        assert!(unsupported.paint_adoptable_textures.iter().all(|v| !v));
+        assert!(unsupported.paint_exportable_textures.iter().all(|v| !v));
+        assert!(unsupported.texture_preview_sources.iter().all(Option::is_none));
+        for index in 0..doc.texture_assets.len() {
+            assert!(!paint_texture_exportable(&doc, index));
+        }
     }
 
     #[test]
