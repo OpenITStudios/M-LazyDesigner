@@ -1,3 +1,13 @@
+**Rust read-only semantic map and preflight (2026-11-18; SOURCE ONLY):**
+The standalone Rust editor exposes two in-process Tauri commands that
+read a frozen canonical editor revision: semantic identity map and
+disposable typed-edit preflight. The headless Code Mode host also
+exposes corresponding SHA-bound CLI reads; it is not connected to the
+active GUI session and cannot mutate it. Preflight does not save or
+change an Undo entry; all actual editing requires the existing Rust
+transaction, host approval and user visual review where applicable.
+Tests/native behavior remain NOT_EXECUTED under hold.
+
 **Rust private recovery source slice (2026-11-18; SOURCE ONLY):**
 The Rust editor now exposes File > Recover Checkpoint for selecting
 private, hash-identified app-local snapshots; the UI also schedules

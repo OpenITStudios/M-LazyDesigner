@@ -774,6 +774,42 @@ fn execute() -> Result<Value> {
                 Ok(json!({"status":"OK","sha256":digest,"summary":session.summary()}))
             }
         }
+        "semantic-map" => {
+            option_set(&options, &[
+                "--input", "--expected-sha256", "--category", "--offset", "--limit",
+            ])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let (bytes, actual_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let session = EditorSession::open(&bytes)?;
+            let category = option(&options, "--category")?;
+            let offset = options.get("--offset").map(|s|s.parse::<usize>())
+                .transpose().map_err(|_| fail("SEMANTIC_MAP_PAGE_INVALID"))?.unwrap_or(0);
+            let limit = options.get("--limit").map(|s|s.parse::<usize>())
+                .transpose().map_err(|_| fail("SEMANTIC_MAP_PAGE_INVALID"))?.unwrap_or(16);
+            let map = session.semantic_map(category, offset, limit)?;
+            Ok(json!({"status":"OK","sha256":actual_sha,
+                "summary":session.summary(),"map":map}))
+        }
+        "preflight" => {
+            // Read-only dry-run: no output filename, file publisher, native
+            // Save, model state commit or implicit mutation authorization.
+            option_set(&options, &["--input", "--plan", "--expected-sha256"])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let (bytes, actual_sha) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let plan_bytes = read_bounded(
+                Path::new(option(&options, "--plan")?), MAX_PLAN_BYTES
+            )?;
+            let plan: EditPlan = serde_json::from_slice(&plan_bytes)
+                .map_err(|_| fail("PREFLIGHT_PLAN_INVALID"))?;
+            let session = EditorSession::open(&bytes)?;
+            let preflight = session.preflight(&plan)?;
+            Ok(json!({"status":"OK","sha256":actual_sha,
+                "summary":session.summary(),"preflight":preflight}))
+        }
         "inspect-batch" => {
             option_set(&options, &["--input", "--queries", "--expected-sha256"])?;
             let input = PathBuf::from(option(&options, "--input")?);

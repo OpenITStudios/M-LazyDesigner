@@ -50,6 +50,37 @@ UNVERIFIED. No alternate model store or GPU scene diff was added.
 
 Non-goals: reproducing every unrelated Blockbench plugin, every model format, a Java Minecraft world builder, Bedrock gameplay packs, cloud-hosted inference, a duplicate scene database, new agent Skills, a parallel MCP control plane, or changing the user's selected Low Thinking configuration. Do not port the old Windows native-window composition into the new independent editor as its rendering strategy.
 
+### Shared semantic Rust reads and preflight (2026-11-18; SOURCE ONLY)
+
+The single Rust `EditorSession` now supplies two read-only capabilities
+to the native Tauri editor and first-party headless CLI:
+
+- `semantic_map` is a small bounded projection of validated source
+  identities, Outliner parent relationships, and limited declared
+  Texture/Animation metadata. Labels are truncated and never treated as
+  exact target selection or human approval. Geometry/UV/Texture inspectors
+  remain the canonical owners for detailed evidence.
+- `preflight` validates exactly the existing `EditPlan` on a disposable
+  copy-on-write `EditorSession`, including full Rust model validation
+  and optional pixel correction scope. It returns the tentative
+  revision, affected IDs, a deterministic candidate canonical hash and
+  explicit `VALIDATED_NOT_APPLIED / NOT_GRANTED / UNVERIFIED`. The
+  original state, Undo/Redo, source path, dirty checkpoint and files
+  remain unchanged. Actual Apply must independently check permission,
+  revision/source SHA, reviewed Paint requirements and publisher rules.
+
+Tauri provides two WebView-facing `rust_editor_semantic_map` and
+`rust_editor_preflight` commands under exact epoch/revision admission;
+the validated session is cloned under a brief lock and read outside it.
+The CLI provides `semantic-map` and `preflight` under existing
+disk-source SHA admission. Code Mode's typed SDK and Deno guest expose
+only the SHA-bound *headless* read calls. No Named Pipe, local HTTP
+endpoint, live Node-to-Tauri session access or AI live mutation has
+been enabled. The same Rust Core code is shared by both routes, but
+their active documents are not automatically synchronized.
+The active test/CI/local-PC hold remains: SOURCE_REVIEWED,
+TEST_AUTHORED_NOT_RUN, NATIVE_NOT_VERIFIED.
+
 ## 2. Grounded baseline and ownership conflict resolution
 
 **Observed source, not execution:**

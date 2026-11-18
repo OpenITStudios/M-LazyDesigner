@@ -3801,3 +3801,67 @@ test('Code Mode PNG model import cannot register an unverified mutation output',
     assert.equal(result.value.blocked, true);
     assert.deepEqual(calls, ['inspect', 'import-png']);
   }));
+
+test('guest can inspect a semantic map and preflight one plan without acquiring write authority', () =>
+  fixture(async input => {
+    let calls = [], approvals = 0, guestCount = 0;
+    const host = await createCodeModeHost({
+      rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+      authorizeMutation: async () => { approvals++; return false; },
+      runner: async argv => {
+        calls.push(argv[0]);
+        if (argv[0] === 'inspect') {
+          return { status: 'OK', sha256: HASH, summary: SUMMARY };
+        }
+        if (argv[0] === 'semantic-map') {
+          return { status: 'OK', sha256: HASH, summary: SUMMARY, map: {
+            scope: 'validated_rust_semantic_identity_map',
+            revision: 0, category: 'cubes', total: 1, offset: 0,
+            next_offset: null,
+            counts: { cubes: 1, bones: 1, textures: 0, animations: 0 },
+            entries: [{ kind: 'cube', index: 0, uuid: 'cube-1',
+              name: 'Helmet', parent_uuid: null }],
+            write_authority: 'NOT_GRANTED', visual_verdict: 'UNVERIFIED',
+            effective_material: 'UNVERIFIED',
+          } };
+        }
+        assert.equal(argv[0], 'preflight');
+        const plan = JSON.parse(await readFile(
+          argv[argv.indexOf('--plan') + 1], 'utf8'));
+        assert.deepEqual(plan.operations, [
+          { op: 'translate_cube', uuid: 'cube-1', delta: [1, 0, 0] },
+        ]);
+        assert.equal(argv.includes('--output'), false);
+        return { status: 'OK', sha256: HASH, summary: SUMMARY, preflight: {
+          status: 'VALIDATED_NOT_APPLIED', base_revision: 0,
+          mutation: { revision: 1, operation_count: 1,
+            changed_uuids: ['cube-1'] },
+          candidate_sha256: 'b'.repeat(64),
+          candidate_summary: { ...SUMMARY, revision: 1 },
+          write_authority: 'NOT_GRANTED', visual_verdict: 'UNVERIFIED',
+        } };
+      },
+      spawnImpl: () => {
+        const method = guestCount++ === 0 ? 'semanticMap' : 'preflight';
+        const args = method === 'semanticMap' ?
+          { project: 'p0', category: 'cubes', limit: 2 } :
+          { project: 'p0', operations: [
+            { op: 'translate_cube', uuid: 'cube-1', delta: [1, 0, 0] },
+          ] };
+        return fakeGuest({ method, args }, response => {
+          assert.equal(response.ok, true);
+          assert.equal(
+            method === 'semanticMap' ? response.result.map.write_authority :
+              response.result.preflight.write_authority,
+            'NOT_GRANTED');
+          return { readOnly: true };
+        });
+      },
+    });
+    const first = await host.execute({ code: 'return codemode.semanticMap({});' });
+    const second = await host.execute({ code: 'return codemode.preflight({});' });
+    assert.equal(first.value.readOnly, true);
+    assert.equal(second.value.readOnly, true);
+    assert.deepEqual(calls, ['inspect', 'semantic-map', 'preflight']);
+    assert.equal(approvals, 0);
+  }));

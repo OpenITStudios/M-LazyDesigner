@@ -532,6 +532,55 @@ export interface AssetHandoffInspection {
   };
   blockers: string[];
 }
+/** Read-only, bounded identity/parent projection from one validated Rust revision.
+ * Labels may be ambiguous; declared texture references are not visual proof.
+ */
+export interface SemanticModelMap {
+  scope: "validated_rust_semantic_identity_map";
+  revision: number;
+  category: CatalogPage["kind"];
+  total: number;
+  offset: number;
+  next_offset: number | null;
+  counts: { cubes: number; bones: number; textures: number; animations: number };
+  entries: Array<{
+    kind: "cube" | "bone" | "texture" | "animation";
+    index: number;
+    uuid: string | null;
+    name: string | null;
+    parent_uuid?: string | null;
+    declared_textured_faces?: number;
+    source_kind?: "embedded_png_declared" | "relative_path_declared" | "unavailable_or_other";
+    declared_animator_tracks?: number | null;
+  }>;
+  write_authority: "NOT_GRANTED";
+  visual_verdict: "UNVERIFIED";
+  effective_material: "UNVERIFIED";
+}
+export interface SemanticMapReceipt {
+  status: "OK";
+  sha256: string;
+  summary: DocumentSummary;
+  map: SemanticModelMap;
+}
+/** A disposable Rust EditorSession accepted these typed operations for one
+ * source revision. No file was published, Undo modified, permission granted,
+ * visual art reviewed or future successful Apply promised.
+ */
+export interface PreflightReceipt {
+  status: "OK";
+  sha256: string;
+  summary: DocumentSummary;
+  preflight: {
+    status: "VALIDATED_NOT_APPLIED";
+    base_revision: number;
+    mutation: MutationReceipt;
+    candidate_sha256: string;
+    candidate_summary: DocumentSummary;
+    write_authority: "NOT_GRANTED";
+    visual_verdict: "UNVERIFIED";
+  };
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
@@ -851,6 +900,14 @@ export interface RustCodeModeClient {
     input: string; expectedSha256: string; requests: InspectBatchQuery[];
   }): Promise<InspectBatchReceipt>;
   catalog(input: { input: string; kind: CatalogPage["kind"]; offset?: number; limit?: number; expectedSha256?: string }): Promise<InspectReceipt & { catalog: CatalogPage }>;
+  semanticMap(input: {
+    input: string; expectedSha256: string; category: CatalogPage["kind"];
+    offset?: number; limit?: number;
+  }): Promise<SemanticMapReceipt>;
+  preflight(input: {
+    input: string; expectedSha256: string;
+    operations: EditOperation[]; correctionScope?: TextureCorrectionScope;
+  }): Promise<PreflightReceipt>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectTextureAlpha(input: {
     input: string; textureUuid: string; expectedSha256?: string;
@@ -939,6 +996,8 @@ export interface RustCodeModeProject {
   inspectCubeFaceAlpha(cubeUuid: string): Promise<InspectReceipt & {face_alpha: CubeFaceAlphaInspection}>;
   inspectBatch(requests: InspectBatchQuery[]): Promise<InspectBatchReceipt>;
   catalog(kind: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<InspectReceipt & {catalog: CatalogPage}>;
+  semanticMap(category: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<SemanticMapReceipt>;
+  preflight(input: {operations: EditOperation[]; correctionScope?: TextureCorrectionScope}): Promise<PreflightReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
   inspectTextureAlpha(textureUuid: string): Promise<InspectReceipt & {alpha: TextureAlphaInspection}>;

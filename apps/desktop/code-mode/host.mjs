@@ -970,6 +970,12 @@ export async function createCodeModeHost({
     catalog: async (args) => selected(args).catalog(args.kind, {
       offset: args.offset, limit: args.limit,
     }),
+    semanticMap: async (args) => selected(args).semanticMap(args.category, {
+      offset: args.offset, limit: args.limit,
+    }),
+    preflight: async (args) => selected(args).preflight({
+      operations: args.operations, correctionScope: args.correctionScope,
+    }),
     inspectBatch: async (args) => {
       // Generic guest reads must never masquerade as the operator-selected
       // approved master. The trust-bound method below injects that identity.
@@ -2301,6 +2307,7 @@ export function createCodeModeTool(host) {
       'Use one bounded, isolated Code Mode script to run typed Rust reads, process results in code and return only decision-relevant JSON; never dump whole native receipts into model context.',
       'For a named target with unknown UUID, use authoring_target inside inspectBatch. Read-only example: const r=await codemode.inspectBatch({project:codemode.initial.project,requests:[{kind:"authoring_target",domain:"texturing",category:"cubes",name:"Helmet"}]}); const t=r.results[0].target; return {status:t.status,uuid:t.selected?.identity.uuid??null,ops:t.candidate_operations,blockers:t.source_blockers,candidates:t.status==="EXACT_MATCH"?undefined:t.candidates.slice(0,4)};',
       'Known UUID: skip name discovery. Group independent source questions in one inspectBatch; filter/aggregate in JavaScript, then return only the answer, source SHA and meaningful blockers. A null/absent face is not automatically an artistic defect.',
+      'Use semanticMap only for a small, paged identity/parent inventory. A preflight dry-run validates an exact typed Rust plan without writing or obtaining authority; a later apply still needs separate trusted approval, current source SHA and real visual review.',
       'Do not select substring/ambiguous matches, ignore source blockers or treat source/visual hints as accepted art. For explicitly specified deterministic edits only, conditionally read and perform ONE host-approved apply in the SAME Code Mode script. Do not auto-retry unknown outcomes; Paint still needs real matched-view review. Guest cannot access shell, files or network.',
     ].join(' '),
     inputSchema: Object.freeze({

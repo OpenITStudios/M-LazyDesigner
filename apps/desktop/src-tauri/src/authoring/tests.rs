@@ -7058,3 +7058,87 @@ fn empty_atlas_resize_and_matching_png_import_can_commit_atomically() {
     session.redo(2).unwrap();
     assert_eq!(session.document().texture_assets.len(), 1);
 }
+
+// SOURCE ONLY / TEST_AUTHORED_NOT_RUN: one canonical Rust session supports
+// Tauri's frozen in-memory reader and the headless CLI's source-SHA reader.
+#[test]
+fn semantic_model_map_is_bounded_source_identity_not_artistic_authority() {
+    let session = EditorSession::open(TEXTURED.as_bytes()).unwrap();
+    let before = session.document().clone();
+    let cubes = session.semantic_map("cubes", 0, 1).unwrap();
+    assert_eq!(cubes["scope"], "validated_rust_semantic_identity_map");
+    assert_eq!(cubes["category"], "cubes");
+    assert_eq!(cubes["revision"], 0);
+    assert_eq!(cubes["write_authority"], "NOT_GRANTED");
+    assert_eq!(cubes["visual_verdict"], "UNVERIFIED");
+    assert_eq!(cubes["effective_material"], "UNVERIFIED");
+    assert_eq!(cubes["entries"][0]["uuid"], session.document().cubes[0].uuid);
+    assert!(cubes["entries"][0]["parent_uuid"].is_string() ||
+            cubes["entries"][0]["parent_uuid"].is_null());
+    assert!(cubes["entries"][0].get("faces").is_none());
+    let textures = session.semantic_map("textures", 0, 2).unwrap();
+    assert_eq!(textures["category"], "textures");
+    assert!(textures["entries"][0].get("source").is_none());
+    assert!(textures["entries"][0].get("opaque").is_none());
+    let beyond = session.semantic_map("cubes", 100, 2).unwrap();
+    assert!(beyond["entries"].as_array().unwrap().is_empty());
+    assert_eq!(beyond["next_offset"], Value::Null);
+    assert_eq!(session.semantic_map("cubes", 0, 0).unwrap_err(),
+        "SEMANTIC_MAP_PAGE_INVALID");
+    assert_eq!(session.semantic_map("cubes", 0, 25).unwrap_err(),
+        "SEMANTIC_MAP_PAGE_INVALID");
+    assert_eq!(session.semantic_map("other", 0, 2).unwrap_err(),
+        "SEMANTIC_MAP_CATEGORY_INVALID");
+    assert_eq!(session.document(), &before);
+    assert!(!session.can_undo());
+}
+
+#[test]
+fn disposable_preflight_matches_real_rust_candidate_without_commit() {
+    let session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let source_sha = session.canonical_sha256().unwrap();
+    let cube = session.document().cubes[0].uuid.clone();
+    let plan = EditPlan {
+        expected_revision: 0,
+        operations: vec![EditOperation::TranslateCube {
+            uuid: cube.clone(), delta: [1.0, 0.0, 0.0],
+        }],
+        correction_scope: None,
+    };
+    let result = session.preflight(&plan).unwrap();
+    assert_eq!(result["status"], "VALIDATED_NOT_APPLIED");
+    assert_eq!(result["write_authority"], "NOT_GRANTED");
+    assert_eq!(result["visual_verdict"], "UNVERIFIED");
+    assert_eq!(result["mutation"]["revision"], 1);
+    assert_eq!(result["mutation"]["operation_count"], 1);
+    assert_eq!(result["candidate_summary"]["revision"], 1);
+    let mut independent = session.clone();
+    independent.apply(0, &plan.operations).unwrap();
+    assert_eq!(result["candidate_sha256"],
+        independent.canonical_sha256().unwrap());
+    assert_eq!(session.summary().revision, 0);
+    assert_eq!(session.canonical_sha256().unwrap(), source_sha);
+    assert!(!session.can_undo() && !session.can_redo());
+    assert_ne!(result["candidate_sha256"], Value::String(source_sha));
+
+    let stale = EditPlan { expected_revision: 1, ..plan.clone() };
+    assert_eq!(session.preflight(&stale).unwrap_err(), "DOCUMENT_REVISION_STALE");
+    let empty = EditPlan { operations: vec![], ..plan.clone() };
+    assert_eq!(session.preflight(&empty).unwrap_err(), "EDIT_BATCH_SIZE_INVALID");
+    let missing = EditPlan {
+        operations: vec![EditOperation::TranslateCube {
+            uuid: "missing-cube".into(), delta: [1.0, 0.0, 0.0],
+        }],
+        ..plan.clone()
+    };
+    assert_eq!(session.preflight(&missing).unwrap_err(),
+        independent.clone().apply(1, &missing.operations).unwrap_err());
+    let oversized = EditPlan {
+        operations: vec![EditOperation::RenameNode {
+            uuid: cube, name: "A".repeat(MAX_PLAN_BYTES),
+        }],
+        ..plan
+    };
+    assert_eq!(session.preflight(&oversized).unwrap_err(), "PREFLIGHT_PLAN_TOO_LARGE");
+    assert_eq!(session.summary().revision, 0);
+}

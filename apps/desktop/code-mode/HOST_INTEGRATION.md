@@ -1,3 +1,19 @@
+**Bounded semantic and preflight reads (2026-11-18; SOURCE ONLY):**
+The trusted Code Mode host has two additional Deno RPC methods:
+`codemode.semanticMap({project,category,offset,limit})` and
+`codemode.preflight({project,operations,correctionScope})`.
+Both bind the existing project handle and verified source SHA, call
+the first-party CLI and refuse missing/mismatched native read receipts.
+Preflight reuses the same serialized Rust EditPlan as Apply but writes
+only a private temporary plan transport (which is removed); the Rust
+session candidate is discarded and no destination .bbmodel is written.
+`VALIDATED_NOT_APPLIED` does not grant mutation authority. The
+existing reviewed Paint requirements and real authorizing callback remain
+enforced only at independently requested actual Apply. The UI's live
+Tauri session has its own read-only IPC commands; there is still NO
+Node-to-Tauri bridge, Named Pipe listener or permission to mutate active
+GUI state. SOURCE_ONLY / TEST_AUTHORED_NOT_RUN.
+
 # Rust Code Mode — first-party local host integration
 
 ## Native scoped Paint receipt reconciliation (SOURCE ONLY)

@@ -10,6 +10,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 mod bbmodel;
+mod semantic_map;
 mod geometry;
 mod paint;
 mod correction_scope;
@@ -363,7 +364,7 @@ pub enum EditOperation {
     PaintTextureFill { texture_index: usize, at: [u32; 2], rgba: [u8; 4], erase: bool },
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EditPlan {
     pub expected_revision: u64,
@@ -3321,6 +3322,41 @@ impl EditorSession {
     pub fn snapshot_document(&self) -> Arc<AuthoringDocument> {
         Arc::clone(&self.doc)
     }
+    /// Read-only semantic projection from this admitted immutable revision.
+    /// Tauri and headless CLI consume the same bounded Rust-owned map.
+    pub fn semantic_map(&self, category: &str, offset: usize, limit: usize) -> Result<Value> {
+        semantic_map::from_validated(&self.doc, self.revision, category, offset, limit)
+    }
+
+    /// Dry-run exactly the canonical mutation path on a disposable COW clone.
+    /// No model revision, history, dirty flag, file, or host approval changes.
+    /// A valid preflight is not permission to write or evidence of visual quality.
+    pub fn preflight(&self, plan: &EditPlan) -> Result<Value> {
+        if serde_json::to_vec(plan)
+            .map_err(|_| fail("PREFLIGHT_PLAN_INVALID"))?.len() > MAX_PLAN_BYTES {
+            return Err(fail("PREFLIGHT_PLAN_TOO_LARGE"));
+        }
+        let mut candidate = self.clone();
+        let mutation = candidate.apply_with_correction_scope(
+            plan.expected_revision, &plan.operations, plan.correction_scope.as_ref(),
+        )?;
+        let candidate_sha256 = candidate.canonical_sha256()?;
+        let result = json!({
+            "status":"VALIDATED_NOT_APPLIED",
+            "base_revision":self.revision,
+            "mutation":mutation,
+            "candidate_sha256":candidate_sha256,
+            "candidate_summary":candidate.summary(),
+            "write_authority":"NOT_GRANTED",
+            "visual_verdict":"UNVERIFIED",
+        });
+        if serde_json::to_vec(&result)
+            .map_err(|_| fail("PREFLIGHT_RESULT_INVALID"))?.len() > 32 * 1024 {
+            return Err(fail("PREFLIGHT_RESULT_TOO_LARGE"));
+        }
+        Ok(result)
+    }
+
     pub fn inspections(&self) -> ValidatedInspection<'_> {
         ValidatedInspection {
             doc: self.doc.as_ref(),

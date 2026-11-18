@@ -576,6 +576,80 @@ export function createRustCodeModeClient({
         await rm(directory, { recursive: true, force: true });
       }
     },
+    async semanticMap({ input, expectedSha256, category, offset = 0, limit = 16 }) {
+      const allowed = ['cubes', 'bones', 'textures', 'animations'];
+      if (!allowed.includes(category) ||
+          !Number.isSafeInteger(offset) || offset < 0 || offset > 65536 ||
+          !Number.isSafeInteger(limit) || limit < 1 || limit > 24) {
+        throw new TypeError('CODE_MODE_SEMANTIC_MAP_QUERY_INVALID');
+      }
+      const digest = hash(expectedSha256).toLowerCase();
+      const receipt = await call('semantic-map', {
+        input: absolute(input, 'input'), 'expected-sha256': digest,
+        category, offset: wholeNumber(offset, 'offset', 0, 65536),
+        limit: wholeNumber(limit, 'limit', 1, 24),
+      });
+      const map = receipt.map;
+      const expectedKind = category.slice(0, -1);
+      if (typeof receipt.sha256 !== 'string' ||
+          receipt.sha256.toLowerCase() !== digest ||
+          receipt.summary?.revision !== 0 ||
+          map?.scope !== 'validated_rust_semantic_identity_map' ||
+          map?.revision !== 0 || map?.category !== category ||
+          map?.offset !== offset ||
+          !Number.isSafeInteger(map?.total) || map.total < 0 ||
+          !Array.isArray(map?.entries) || map.entries.length > limit ||
+          map?.visual_verdict !== 'UNVERIFIED' ||
+          map?.write_authority !== 'NOT_GRANTED' ||
+          map.entries.some((entry, i) => !entry ||
+            entry.kind !== expectedKind || entry.index !== offset + i ||
+            !(typeof entry.uuid === 'string' || entry.uuid === null) ||
+            !(typeof entry.name === 'string' || entry.name === null)) ||
+          (map.next_offset !== null &&
+            (!Number.isSafeInteger(map.next_offset) ||
+             map.next_offset !== offset + map.entries.length ||
+             map.next_offset >= map.total)) ||
+          (offset < map.total &&
+            map.entries.length !== Math.min(limit, map.total - offset))) {
+        throw new Error('CODE_MODE_SEMANTIC_MAP_RECEIPT_INVALID');
+      }
+      return receipt;
+    },
+    async preflight({ input, expectedSha256, operations, correctionScope }) {
+      const digest = hash(expectedSha256).toLowerCase();
+      const payload = serializePlan(
+        operations, normalizedCorrectionScope(correctionScope));
+      // Temporary plan files are only a bounded transport to the existing
+      // CLI reader. Preflight never requests approval or publishes a model.
+      const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-preflight-'));
+      const file = join(directory, 'edit.plan.json');
+      try {
+        await writeFile(file, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        const receipt = await call('preflight', {
+          input: absolute(input, 'input'), 'expected-sha256': digest,
+          plan: file,
+        });
+        const result = receipt.preflight;
+        if (typeof receipt.sha256 !== 'string' ||
+            receipt.sha256.toLowerCase() !== digest ||
+            receipt.summary?.revision !== 0 ||
+            result?.status !== 'VALIDATED_NOT_APPLIED' ||
+            result?.base_revision !== 0 ||
+            result?.mutation?.revision !== 1 ||
+            result.mutation.operation_count !== operations.length ||
+            !Array.isArray(result.mutation.changed_uuids) ||
+            result?.candidate_summary?.revision !== 1 ||
+            typeof result?.candidate_sha256 !== 'string' ||
+            !SHA256.test(result.candidate_sha256) ||
+            result?.visual_verdict !== 'UNVERIFIED' ||
+            result?.write_authority !== 'NOT_GRANTED') {
+          throw new Error('CODE_MODE_PREFLIGHT_RECEIPT_INVALID');
+        }
+        return receipt;
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
     async catalog({ input, kind, offset = 0, limit = 32, expectedSha256 }) {
       if (!['cubes', 'bones', 'textures', 'animations'].includes(kind)) {
         throw new TypeError('Unknown catalog kind');
@@ -792,6 +866,10 @@ export async function openRustCodeModeProject(client, input) {
       client.inspectCubeFaceAlpha({ input: path, cubeUuid, expectedSha256 }),
     inspectBatch: (requests) =>
       client.inspectBatch({ input: path, expectedSha256, requests }),
+    semanticMap: (category, { offset = 0, limit = 16 } = {}) =>
+      client.semanticMap({ input: path, expectedSha256, category, offset, limit }),
+    preflight: ({ operations, correctionScope }) =>
+      client.preflight({ input: path, expectedSha256, operations, correctionScope }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),

@@ -1,3 +1,20 @@
+**Shared immutable semantic read and disposable preflight (2026-11-18; SOURCE ONLY):**
+`EditorSession::semantic_map` and `EditorSession::preflight` are
+single Rust-native read owners used by both the headless CLI and
+Tauri's in-memory `EditorState`. Semantic map is a bounded page of
+typed Cube/Bone/Texture/Animation identities and declared metadata;
+names are not unique and no raw PNG, arbitrary extension or full
+document is returned. Preflight clones the already validated
+`EditorSession`, invokes the existing atomic `apply_with_correction_scope`
+path, obtains a candidate canonical SHA, then discards the clone.
+It cannot commit an edit, alter live history, save a file, bypass a
+visual reviewer, or grant a future write. Tauri uses
+`rust_editor_semantic_map` / `rust_editor_preflight` with epoch/revision
+checks before and after the read, without installing any AI live bridge.
+Rust CLI equivalents `semantic-map` and `preflight` are SHA-pinned.
+Positive/stale/oversize/negative source regressions AUTHORED_NOT_RUN;
+Cargo/Windows/Blockbench and measured speed/memory NOT_EXECUTED.
+
 **Private Rust editor recovery (2026-11-18; SOURCE ONLY):**
 The standalone Rust Desktop now has a private app-local recovery area,
 readable through a native File > Recover Checkpoint dialog. An idle

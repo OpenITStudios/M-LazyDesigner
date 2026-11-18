@@ -1,3 +1,21 @@
+**Shared Rust semantic-map and disposable preflight (2026-11-18; SOURCE ONLY):**
+Code Mode now exposes two additional read-only, SHA-guarded headless
+operations: `semanticMap(category,{offset,limit})` returns only bounded
+source identities, parent UUIDs, and limited texture/animation metadata
+(up to 24 entries); `preflight({operations,correctionScope})` applies
+the exact existing Rust validation and correction-scope rules on a
+discarded `EditorSession` clone, returning a candidate hash/revision
+without publishing any model, modifying Undo or requesting write approval.
+The Deno guest can only call these through the trusted Node host. A
+successful preview explicitly reports `VALIDATED_NOT_APPLIED`,
+`NOT_GRANTED` and `UNVERIFIED`. It is not permission, visual review,
+native acceptance or a promise that a later Apply will succeed. Every
+actual Apply retains its independent approval, source-SHA and no-overwrite
+publisher checks. CLI read-only commands `semantic-map` and `preflight`
+reuse the same Rust Core as the Tauri in-memory read commands. There is
+no new live AI transport or in-memory JS model. Positive/negative Rust
+and Node regressions are AUTHORED_NOT_RUN under the active hold.
+
 **Uniform Rust model-output receipt verification (2026-11-18; SOURCE ONLY):**
 The trusted Code Mode host now requires a matching source-model SHA,
 output-model SHA, native mutation count/revision and summary revision for

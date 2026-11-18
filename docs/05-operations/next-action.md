@@ -1,3 +1,20 @@
+**Rust semantic read + disposable edit preflight — 2026-11-18 (SOURCE ONLY):**
+The Rust Core now owns one bounded `EditorSession::semantic_map` and a
+read-only `EditorSession::preflight` built on the existing atomic
+operation/correction-scope validator. The headless Rust CLI adds
+SHA-bound `semantic-map` and `preflight`; the trusted Code Mode SDK
+and Deno guest expose the same two small, read-only operations without
+new write permission. Tauri provides in-memory `rust_editor_semantic_map`
+and `rust_editor_preflight` with exact epoch/revision admission and
+a stale-result recheck. Neither path commits a model or changes Undo.
+A valid preflight is NOT_GRANTED and UNVERIFIED; later Apply keeps
+independent human/host permission and source/revision checks. No
+agent-to-live-GUI transport, local server, new authoring authority or
+second model store is added. Rust and Node positive/negative regressions
+are AUTHORED_NOT_RUN; Cargo, Deno, Windows, Blockbench, cost and latency
+NOT_EXECUTED. Earlier checkpoints remain historical and their
+native validation holds are unchanged.
+
 **Rust active-session recovery foundation — 2026-11-18 (SOURCE ONLY):**
 The selected Rust source adds a Tauri-owned private recovery checkpoint
 store using the existing immutable EditorSession and .bbmodel encoder,

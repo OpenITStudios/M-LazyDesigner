@@ -21,7 +21,7 @@ use lazydesigner::authoring::{
     can_add_paint_texture, parse_saved_bezier_handles, valid_track_segments,
     saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
     BezierKeyframeHandles,
-    AuthoringDocument, Bone, Cube, EditOperation, EditorSession,
+    AuthoringDocument, Bone, Cube, EditOperation, EditPlan, EditorSession,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -1028,6 +1028,54 @@ fn create_uuid() -> String {
     )
 }
 
+// One read admission for both semantic orientation and dry-run validation.
+// Freeze a COW EditorSession under the short store mutex; expensive reads
+// happen outside it. A completion check never authorizes subsequent writes.
+fn frozen_read_session(
+    store: &Mutex<EditorStore>, expected_epoch: u64, expected_revision: u64,
+) -> Result<EditorSession, DesktopError> {
+    let guard = lock_store(store)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_ref().ok_or_else(||
+        failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE",
+            "The model changed. Refresh before inspecting or planning."));
+    }
+    Ok(active.session.clone())
+}
+
+/// Native read-only semantic inventory of the currently open Rust model.
+/// No external IPC listener or Code Mode live-write access is installed.
+#[tauri::command(async)]
+pub fn rust_editor_semantic_map(
+    state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
+    category: String, offset: usize, limit: usize,
+) -> Result<Value, DesktopError> {
+    let session = frozen_read_session(&state.store, expected_epoch, expected_revision)?;
+    let map = session.semantic_map(&category, offset, limit).map_err(model_failure)?;
+    // Invalidate an answer prepared from a revision replaced during its read.
+    let _ = frozen_read_session(&state.store, expected_epoch, expected_revision)?;
+    Ok(json!({"status":"OK","epoch":expected_epoch,
+        "revision":expected_revision,"summary":session.summary(),"map":map}))
+}
+
+/// Dry-run on a disposable validated session. This command cannot commit an
+/// operation, change Undo/Redo or write disk. Any later Apply must still pass
+/// the normal revision and user/host authorization checks.
+#[tauri::command(async)]
+pub fn rust_editor_preflight(
+    state: State<'_, EditorState>, expected_epoch: u64, plan: EditPlan,
+) -> Result<Value, DesktopError> {
+    let session = frozen_read_session(
+        &state.store, expected_epoch, plan.expected_revision)?;
+    let preflight = session.preflight(&plan).map_err(model_failure)?;
+    let _ = frozen_read_session(
+        &state.store, expected_epoch, plan.expected_revision)?;
+    Ok(json!({"status":"OK","epoch":expected_epoch,
+        "revision":plan.expected_revision,"preflight":preflight}))
+}
+
 #[tauri::command(async)]
 pub fn rust_editor_snapshot(state: State<'_, EditorState>) -> Result<Option<EditorSnapshot>, DesktopError> {
     Ok(project_detached(lock(&state)?, ProjectionReuse::default()))
@@ -1830,6 +1878,46 @@ pub async fn rust_editor_recovery_restore(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE ONLY: frozen read consumes the same authoritative session as
+    // the GUI; an older candidate is not a live edit or a stale success.
+    #[test]
+    fn frozen_semantic_read_and_preflight_refuse_stale_gui_revision() {
+        let session = EditorSession::open(
+            include_bytes!("../fixtures/bedrock-basic.bbmodel")).unwrap();
+        let cube = session.document().cubes[0].uuid.clone();
+        let store = Mutex::new(EditorStore {
+            epoch: 41,
+            active: Some(ActiveModel {
+                session, source_path: None, source_sha: None,
+                saved_canonical_sha: None, dirty: true,
+            }),
+        });
+        let pinned = frozen_read_session(&store, 41, 0).unwrap();
+        let map = pinned.semantic_map("cubes", 0, 4).unwrap();
+        assert_eq!(map["revision"], 0);
+        let plan = EditPlan {
+            expected_revision: 0,
+            operations: vec![EditOperation::TranslateCube {
+                uuid: cube.clone(), delta: [1.0, 0.0, 0.0],
+            }],
+            correction_scope: None,
+        };
+        let preview = pinned.preflight(&plan).unwrap();
+        assert_eq!(preview["status"], "VALIDATED_NOT_APPLIED");
+        {
+            let mut guard = store.lock().unwrap();
+            let active = guard.active.as_mut().unwrap();
+            active.session.apply(0, &plan.operations).unwrap();
+            assert_eq!(active.session.summary().revision, 1);
+        }
+        assert_eq!(pinned.summary().revision, 0);
+        assert_eq!(frozen_read_session(&store, 41, 0).err().unwrap().code,
+            "RUST_EDITOR_REVISION_STALE");
+        assert_eq!(frozen_read_session(&store, 40, 1).err().unwrap().code,
+            "RUST_EDITOR_SESSION_STALE");
+        assert_eq!(frozen_read_session(&store, 41, 1).unwrap().summary().revision, 1);
+    }
 
     // Source-authored only: the single publication lease excludes edits/model
     // replacement, while read-only snapshots can still acquire the store.

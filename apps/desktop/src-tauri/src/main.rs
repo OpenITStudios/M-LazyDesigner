@@ -328,6 +328,8 @@ fn main() {
             analytics_overview,
             export_analytics,
             desktop_authoring::rust_editor_snapshot,
+            desktop_authoring::rust_editor_semantic_map,
+            desktop_authoring::rust_editor_preflight,
             desktop_authoring::rust_editor_new,
             desktop_authoring::rust_editor_open,
             desktop_authoring::rust_editor_apply,

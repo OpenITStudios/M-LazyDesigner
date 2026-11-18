@@ -1729,3 +1729,110 @@ test('scoped Rust Paint never reports success from missing or mismatched native 
     assert.equal(calls,1); // no automatic retry after possible publication
   }
 });
+
+test('semanticMap accepts only exact SHA-bound small Rust identity pages', async () => {
+  const calls = [];
+  const semantic = {
+    scope: 'validated_rust_semantic_identity_map', revision: 0,
+    category: 'cubes', offset: 0, total: 1, next_offset: null,
+    counts: { cubes: 1, bones: 0, textures: 0, animations: 0 },
+    entries: [{ kind: 'cube', index: 0, uuid: 'cube-1', name: 'Helmet',
+      parent_uuid: null, declared_textured_faces: 4 }],
+    write_authority: 'NOT_GRANTED',
+    visual_verdict: 'UNVERIFIED', effective_material: 'UNVERIFIED',
+  };
+  const client = createRustCodeModeClient({
+    binary: BIN, runner: async (argv) => {
+      calls.push(argv);
+      return { status: 'OK', sha256: SHA, summary: { revision: 0 }, map: semantic };
+    },
+  });
+  const response = await client.semanticMap({
+    input: '/abs/model.bbmodel', expectedSha256: SHA, category: 'cubes',
+    offset: 0, limit: 2,
+  });
+  assert.equal(response.map.entries[0].parent_uuid, null);
+  assert.deepEqual(calls[0], [
+    'semantic-map', '--input', '/abs/model.bbmodel',
+    '--expected-sha256', SHA, '--category', 'cubes',
+    '--offset', '0', '--limit', '2',
+  ]);
+  await assert.rejects(client.semanticMap({
+    input: '/abs/model.bbmodel', expectedSha256: SHA,
+    category: 'invalid', limit: 2,
+  }), /CODE_MODE_SEMANTIC_MAP_QUERY_INVALID/);
+  await assert.rejects(client.semanticMap({
+    input: '/abs/model.bbmodel', expectedSha256: SHA,
+    category: 'cubes', limit: 25,
+  }), /CODE_MODE_SEMANTIC_MAP_QUERY_INVALID/);
+  assert.equal(calls.length, 1);
+
+  for (const invalid of [
+    { sha256: 'b'.repeat(64) },
+    { map: { ...semantic, write_authority: 'GRANTED' } },
+    { map: { ...semantic, entries: [{ ...semantic.entries[0], index: 8 }] } },
+    { map: { ...semantic, revision: 1 } },
+    { map: { ...semantic, category: 'textures' } },
+  ]) {
+    const bad = createRustCodeModeClient({ binary: BIN, runner: async () => ({
+      status: 'OK', sha256: SHA, summary: { revision: 0 },
+      map: semantic, ...invalid,
+    }) });
+    await assert.rejects(bad.semanticMap({
+      input: '/abs/model.bbmodel', expectedSha256: SHA, category: 'cubes',
+    }), /CODE_MODE_SEMANTIC_MAP_RECEIPT_INVALID/);
+  }
+});
+
+test('Code Mode preflight uses exact Rust edit plan but never requests write approval', async () => {
+  const operations = [{ op: 'translate_cube', uuid: 'cube-1', delta: [1, 0, 0] }];
+  const calls = [];
+  let tempFile = null;
+  const client = createRustCodeModeClient({
+    binary: BIN,
+    runner: async argv => {
+      calls.push(argv[0]);
+      assert.equal(argv[0], 'preflight');
+      assert.equal(argv[argv.indexOf('--expected-sha256') + 1], SHA);
+      assert.equal(argv.includes('--output'), false);
+      tempFile = argv[argv.indexOf('--plan') + 1];
+      const plan = JSON.parse(await readFile(tempFile, 'utf8'));
+      assert.deepEqual(plan, { expected_revision: 0, operations });
+      return {
+        status: 'OK', sha256: SHA, summary: { revision: 0 },
+        preflight: {
+          status: 'VALIDATED_NOT_APPLIED', base_revision: 0,
+          mutation: { revision: 1, operation_count: 1, changed_uuids: ['cube-1'] },
+          candidate_sha256: 'b'.repeat(64),
+          candidate_summary: { revision: 1 },
+          write_authority: 'NOT_GRANTED', visual_verdict: 'UNVERIFIED',
+        },
+      };
+    },
+  });
+  // No authorizeMutation callback: preflight is NOT a mutation capability.
+  const receipt = await client.preflight({
+    input: '/abs/model.bbmodel', expectedSha256: SHA, operations,
+  });
+  assert.equal(receipt.preflight.status, 'VALIDATED_NOT_APPLIED');
+  assert.deepEqual(calls, ['preflight']);
+  await assert.rejects(readFile(tempFile, 'utf8'), { code: 'ENOENT' });
+  await assert.rejects(client.preflight({
+    input: '/abs/model.bbmodel', expectedSha256: SHA, operations: [],
+  }), /operations must contain/);
+  assert.deepEqual(calls, ['preflight']);
+  for (const bad of [
+    { sha256: 'c'.repeat(64) },
+    { preflight: { ...receipt.preflight, write_authority: 'GRANTED' } },
+    { preflight: { ...receipt.preflight, candidate_sha256: 'invalid' } },
+    { preflight: { ...receipt.preflight, mutation: { revision: 1,
+      operation_count: 2, changed_uuids: [] } } },
+  ]) {
+    const invalid = createRustCodeModeClient({ binary: BIN, runner: async () => ({
+      ...receipt, ...bad,
+    }) });
+    await assert.rejects(invalid.preflight({
+      input: '/abs/model.bbmodel', expectedSha256: SHA, operations,
+    }), /CODE_MODE_PREFLIGHT_RECEIPT_INVALID/);
+  }
+});
