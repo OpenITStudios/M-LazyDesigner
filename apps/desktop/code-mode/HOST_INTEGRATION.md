@@ -2,7 +2,13 @@
 
 The Rust Desktop has an **opt-in Windows Named Pipe read-only bridge**
 behind Cargo feature `live-read-bridge` (disabled in default builds).
-Only the human action File > Pair Code Mode (read-only) can start it.
+The File > Pair Code Mode (read-only) action requests permission, but the
+Tauri IPC command is also callable by WebView code. For that reason,
+Rust now requires a separate **native Windows Yes/No confirmation**
+before creating a listener. A missing/declined confirmation fails closed.
+Only one confirmation may be pending, and Stop/Exit invalidates a pending
+approval. The pairing also expires after 15 minutes on a monotonic
+Rust deadline (the UI attempts an earlier disconnect).
 The user receives a random local pipe name and 256-bit pairing secret;
 they must supply both to a separately trusted Node agent host. Never
 paste the capability into model-authored Deno code, source files,
@@ -12,10 +18,10 @@ trusted host memory.
 An operator may initialize Code Mode with:
 ```js
 const host = await createCodeModeHost({
-  rustBinary: '/trusted/local/lazydesigner-authoring',
   denoBinary: '/trusted/local/deno',
   liveReadPairing: { pipe: operatorSelectedPipe, token: operatorSelectedSecret },
-  // No input or outputDirectory is required for read-only live-only mode.
+  // Pure live read-only mode needs no separate Rust CLI executable,
+  // input model or output directory. No mutation callback is permitted.
 });
 ```
 The Deno guest sees only `codemode.liveSessionInfo({})` and
@@ -28,7 +34,13 @@ the exact epoch/revision when reading the map. New/Open/Restore changes
 the epoch; that binding is refused. No disk output is available in
 live-only mode. Disk-mode Code Mode remains independent and unchanged.
 
-Security: the server uses a protected Owner Rights/LocalSystem pipe ACL,
+Security: the server requires the native Windows confirmation and
+single pending admission; it rechecks model epoch before returning the
+pairing, and enforces a 15-minute monotonic expiration. The Node reader
+uses a fixed wall-clock deadline and rejects unexpected socket close
+without leaving an unresolved guest RPC. Pure live-only hosts reject
+write-approval, PNG import and reference-review configuration. The
+server uses a protected Owner Rights/LocalSystem pipe ACL,
 `PIPE_REJECT_REMOTE_CLIENTS`, a unique first pipe instance, a random
 256-bit capability, one bounded message/response per connection, and
 four-second I/O timeouts. It closes on explicit stop, app exit or main

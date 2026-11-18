@@ -109,6 +109,16 @@ Live writes stay disallowed until the separate recovery/security/visual
 acceptance gate has genuine native proof. Headless file Code Mode and
 its SHA-bound writer remain the supported path.
 
+**Live read-only bridge admission refinement (2026-11-18; SOURCE ONLY):**
+The experimental Windows bridge remains off by default and read-only.
+Native Rust now requires an independent affirmative OS dialog (not just
+a WebView menu action), serializes pending pairing requests, revokes
+late approvals, rechecks epoch and expires capabilities after 15 minutes.
+Node's live-only host does not need a CLI binary, rejects disk-writer
+configuration and bounds overall reply time. The GUI attempts an
+earlier voluntary disconnect. These are source controls, not evidence
+that Windows ACL/dialog/lifecycle or native rendering passed.
+
 ## 2. Grounded baseline and ownership conflict resolution
 
 **Observed source, not execution:**

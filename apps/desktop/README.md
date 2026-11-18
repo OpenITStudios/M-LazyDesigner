@@ -1,3 +1,12 @@
+**Optional Code Mode live-read admission hardening (2026-11-18; SOURCE ONLY):**
+The feature-gated Windows read-only pairing now requires a native
+Yes/No approval in addition to the File menu request. Pending prompts,
+session epoch, revocation, 15-minute expiry and the client wall-clock
+reply limit are handled independently of the Deno guest. A live-only
+Node host no longer requires a separate Rust CLI binary, and it cannot
+request disk writer/reviewer settings. All local Windows/Node execution
+remains held and NOT_EXECUTED; normal builds still contain no listener.
+
 **Optional Code Mode live read pairing (2026-11-18; SOURCE ONLY):**
 The Rust native editor now has an experimental opt-in File menu pairing
 control for live *read-only* semantic information. The protected Windows

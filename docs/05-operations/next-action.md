@@ -1,3 +1,22 @@
+**Rust live read-only bridge admission and timeout hardening — 2026-11-18 (SOURCE ONLY):**
+Read-only Windows pairing now checks a separately presented native
+Yes/No decision, permits at most one pending prompt, and revokes
+decisions arriving after Stop/Exit. Rust rechecks active model epoch
+immediately before admitting the pipe and limits a pairing to 15
+minutes using a monotonic deadline. The GUI attempts to disconnect
+at 14 minutes; a delayed GUI timer cannot extend native permission.
+The trusted Node client refuses incomplete socket close, synchronous
+write failure and responses exceeding a fixed 4-second wall clock.
+Pure live-only Code Mode no longer requires a headless Rust CLI
+binary, and excludes writer, PNG import and reviewer configuration.
+The existing disk-mode CLI, GUI model, user authoring permissions and
+live-write denial remain unchanged. Rust/Node regressions are
+TEST_AUTHORED_NOT_RUN, with local Windows ACL/dialog/pipe/Cargo and
+actual efficiency NOT_EXECUTED. Leave the optional live-read-bridge
+feature disabled in default builds until explicit PC-local
+security/lifecycle acceptance.
+Prior source checkpoints below remain historical.
+
 **Rust opt-in live read-only session bridge — 2026-11-18 (SOURCE ONLY):**
 The same validated Rust semantic-map reader may now be reached through
 an explicitly user-paired Windows Named Pipe, compiled only with

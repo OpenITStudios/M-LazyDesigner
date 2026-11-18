@@ -348,7 +348,11 @@ export interface CodeModeVisualReviewerFeedback {
   };
 }
 export interface CodeModeHostOptions {
-  rustBinary: string;
+  /** Required for disk-source/headless operations; not needed when the
+   * operator selects liveReadPairing/liveReadClient with no disk project.
+   * The live-only host cannot accept mutation callbacks or saved inputs.
+   */
+  rustBinary?: string;
   denoBinary: string;
   /** Existing model. Exclusive with outputDirectory. Neither is required
    * for a separately paired read-only live session.

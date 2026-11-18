@@ -55,8 +55,15 @@ Runtime and Gateway connections are intentionally loopback-only. The managed nat
 
 ## Optional Windows read-only Code Mode pipe (source-only)
 
-Only an explicitly enabled `live-read-bridge` feature and direct user
-pairing may create the local Windows Named Pipe. Native responses are
+Only an explicitly enabled `live-read-bridge` feature and fresh native
+Windows confirmation may create the local Named Pipe. The File menu
+button is a user-facing entry, not independent security authority:
+permitted WebView code can invoke a Tauri command. A native Yes/No
+dialog must explicitly approve each new pairing, and only one dialog
+may remain pending at a time. Stop/Exit revoke decisions that arrive
+late. The active epoch is rechecked before the listener is admitted.
+Every capability expires after 15 minutes in native Rust even when
+the frontend timer is delayed. Native responses are
 restricted to current session identity and bounded semantic map pages,
 with an exact revision admission and NO live mutation method. The
 pairing secret is 256 random bits and must stay in trusted process memory;
@@ -68,8 +75,12 @@ and LocalSystem, `PIPE_REJECT_REMOTE_CLIENTS`, a random name, and a
 single reused instance. This denies unrestricted default Everyone
 read access but is NOT protection against same-user malware,
 administrative processes, token disclosure or Windows OS bugs.
-Native ACL behavior, cancellation, connect/disconnect, permissions
-and resource exhaustion remain NOT_EXECUTED. Do not enable this
+Native ACL behavior, confirmation visibility, cancellation,
+connect/disconnect, permissions and resource exhaustion remain
+NOT_EXECUTED. A compromised WebView can still attempt to show native
+prompts, and can read the token if the user approves: the native
+dialog is an additional boundary, not a complete defense against
+same-user malware or a compromised renderer. Do not enable this
 experimental feature in a release before user-approved PC-local
 security/negative tests and all model-quality holds are cleared.
 

@@ -3927,3 +3927,41 @@ test('live-only trusted pairing exposes reads, never creates disk projects or wr
   assert.deepEqual(seen, ['status','map']);
   assert.equal(calls.length, 0);
 });
+
+test('pure live read does not require a separate Rust CLI binary or allow write configuration', async () => {
+  let reads = 0;
+  const liveReadClient = {
+    sessionInfo: async () => {
+      reads++;
+      return {
+        status: 'OK', epoch: 7, revision: 0, dirty: false,
+        summary: SUMMARY, write_authority: 'NOT_GRANTED',
+        visual_verdict: 'UNVERIFIED',
+      };
+    },
+    semanticMap: async () => { throw Error('NOT_CALLED'); },
+  };
+  const host = await createCodeModeHost({
+    // No rustBinary, input, outputDirectory or trusted mutation callback.
+    denoBinary: '/trusted/deno', liveReadClient,
+    spawnImpl: () => fakeGuest({method:'liveSessionInfo',args:{}}, result => {
+      assert.equal(result.ok,true);
+      assert.equal(result.result.write_authority,'NOT_GRANTED');
+      return {onlyLiveRead:true};
+    },null),
+  });
+  assert.equal(host.initial.liveReadOnly,true);
+  const result = await host.execute({code:'return codemode.liveSessionInfo({});'});
+  assert.equal(result.value.onlyLiveRead,true);
+  assert.equal(reads,1);
+  await assert.rejects(createCodeModeHost({
+    denoBinary:'/trusted/deno',liveReadClient,
+    authorizeMutation: async()=>true,
+    spawnImpl:()=>{throw Error('NOT_CALLED');},
+  }),/CODE_MODE_LIVE_READ_ONLY_CONFIG_INVALID/);
+  await assert.rejects(createCodeModeHost({
+    denoBinary:'/trusted/deno',liveReadClient,
+    preselectedPngPath:'/tmp/secret.png',
+    spawnImpl:()=>{throw Error('NOT_CALLED');},
+  }),/CODE_MODE_LIVE_READ_ONLY_CONFIG_INVALID/);
+});

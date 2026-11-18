@@ -79,6 +79,10 @@
   let liveReadAvailable = false;
   let livePairingDialog = false;
   let showLiveSecret = false;
+  let livePairingTimer: ReturnType<typeof setTimeout> | null = null;
+  // Best-effort frontend cleanup slightly ahead of Rust's immutable
+  // 15-minute server deadline; background timer throttling cannot extend it.
+  const LIVE_READ_UI_LIFETIME_MS = 14 * 60 * 1000;
   let recoveryEntries: RecoveryEntry[] = [];
   let recoverySelectedId = '';
   let recoveryDiscardApproved = false;
@@ -374,6 +378,11 @@
       livePairing = pairing;
       showLiveSecret = false;
       livePairingDialog = true;
+      if (livePairingTimer !== null) clearTimeout(livePairingTimer);
+      livePairingTimer = setTimeout(() => {
+        livePairingTimer = null;
+        void stopLiveRead();
+      }, LIVE_READ_UI_LIFETIME_MS);
     } catch (cause) { showError(cause); }
     finally { busy = false; }
   }
@@ -384,6 +393,10 @@
     livePairing = null;
     showLiveSecret = false;
     livePairingDialog = false;
+    if (livePairingTimer !== null) {
+      clearTimeout(livePairingTimer);
+      livePairingTimer = null;
+    }
     try {
       if (isTauri()) await invoke('rust_live_read_stop');
     } catch (cause) { showError(cause); }
@@ -2616,9 +2629,10 @@
         readonly value={livePairing.token} autocomplete="off" spellcheck="false"/>
       <label class="live-read-reveal"><input type="checkbox" bind:checked={showLiveSecret}/>
         Show pairing capability</label>
-      <p class="hint">Bound to editor epoch {livePairing.epoch}. Disconnect
-        when finished. New/Open/Restore invalidates the old model binding.
-        The standard build does not provide this experimental bridge.</p>
+      <p class="hint">Bound to editor epoch {livePairing.epoch}. Read access
+        expires after at most 15 minutes; the UI attempts to disconnect
+        earlier. New/Open/Restore invalidates the old binding. The standard
+        build does not provide this experimental bridge.</p>
       <div class="dialog-buttons">
         <button type="button" onclick={() => livePairingDialog = false}>Keep paired</button>
         <button type="button" class="danger" onclick={() => void stopLiveRead()}>

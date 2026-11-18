@@ -114,3 +114,72 @@ test('remote code cannot request write through the live reader API', async () =>
   assert.equal(reader.apply, undefined);
   assert.equal(reader.preflight, undefined);
 });
+
+test('unexpected socket close refuses instead of leaving a pending host RPC', async () => {
+  const reader = createLiveReadClient({
+    pipe, token,
+    connectImpl: () => {
+      const socket = new EventEmitter();
+      socket.destroy = () => {};
+      socket.setTimeout = () => {};
+      socket.write = () => {
+        queueMicrotask(() => socket.emit('close', true));
+        return true;
+      };
+      queueMicrotask(() => socket.emit('connect'));
+      return socket;
+    },
+  });
+  await assert.rejects(reader.sessionInfo(), /LIVE_READ_REPLY_INCOMPLETE/);
+});
+
+test('a synchronous pipe write failure is returned as a bounded refusal', async () => {
+  const reader = createLiveReadClient({
+    pipe, token,
+    connectImpl: () => {
+      const socket = new EventEmitter();
+      socket.destroy = () => {};
+      socket.setTimeout = () => {};
+      socket.write = () => {
+        throw new Error('closed before write');
+      };
+      queueMicrotask(() => socket.emit('connect'));
+      return socket;
+    },
+  });
+  await assert.rejects(reader.sessionInfo(), /LIVE_READ_PIPE_WRITE_FAILED/);
+});
+
+test('UTF-8 split between pipe chunks preserves source identity bytes', async () => {
+  const requests = [];
+  const response = {
+    ...identity, map: {
+      ...map, entries: [{...map.entries[0], name: 'Hélm'}],
+    },
+  };
+  const reader = createLiveReadClient({
+    pipe, token,
+    connectImpl: () => {
+      const socket = new EventEmitter();
+      socket.destroy = () => {};
+      socket.setTimeout = () => {};
+      socket.write = bytes => {
+        requests.push(JSON.parse(bytes));
+        const frame = Buffer.from(JSON.stringify(response) + '\n');
+        const e = frame.indexOf(Buffer.from('é'));
+        queueMicrotask(() => {
+          socket.emit('data', frame.subarray(0, e + 1));
+          socket.emit('data', frame.subarray(e + 1));
+        });
+        return true;
+      };
+      queueMicrotask(() => socket.emit('connect'));
+      return socket;
+    },
+  });
+  const result = await reader.semanticMap({
+    expectedEpoch: 5, expectedRevision: 9, category: 'cubes',
+  });
+  assert.equal(result.map.entries[0].name, 'Hélm');
+  assert.equal(requests[0].operation, 'semantic_map');
+});

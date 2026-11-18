@@ -783,7 +783,22 @@ export async function createCodeModeHost({
   preselectedVisualPair, approvedReferencePackagePath,
   reviewVisualPair, runner, spawnImpl, liveReadPairing, liveReadClient,
 } = {}) {
-  requireAbsolute(rustBinary, 'rustBinary');
+  // A pure live read-only session has no disk model, no file publisher and
+  // does not use the CLI. Requiring a separate Rust binary in that mode
+  // would defeat the session bridge's purpose.
+  const pureLiveRead = input === undefined && outputDirectory === undefined;
+  if (pureLiveRead && [
+    authorizeMutation, preselectedPngPath, approvedMaterialReferenceUuid,
+    preselectedVisualPair, approvedReferencePackagePath, reviewVisualPair,
+  ].some(value => value !== undefined)) {
+    // A live-only host cannot contain any disk-writer, texture-import or
+    // reference-pair declaration. Those require an independent saved source
+    // SHA and separate trusted operator authority.
+    throw new Error('CODE_MODE_LIVE_READ_ONLY_CONFIG_INVALID');
+  }
+  if (!pureLiveRead || rustBinary !== undefined) {
+    requireAbsolute(rustBinary, 'rustBinary');
+  }
   requireAbsolute(denoBinary, 'denoBinary');
   if ((input !== undefined && outputDirectory !== undefined) ||
       (input === undefined && outputDirectory === undefined &&
@@ -844,7 +859,9 @@ export async function createCodeModeHost({
     // Pure live read pairing: no disk project, no output directory, no write.
     folder = null;
   }
-  if (!runner) await regularFile(rustBinary, 'CODE_MODE_RUST_BINARY');
+  if (!pureLiveRead && !runner) {
+    await regularFile(rustBinary, 'CODE_MODE_RUST_BINARY');
+  }
   if (!spawnImpl) {
     await regularFile(denoBinary, 'CODE_MODE_DENO_BINARY');
     await regularFile(WORKER, 'CODE_MODE_SANDBOX_ENTRY');
@@ -870,7 +887,7 @@ export async function createCodeModeHost({
   // This prevents an old approval from being consumed by a later guest when
   // Rust plan-file creation yields to the event loop before CLI launch.
   const approvedGuest = new WeakMap();
-  const client = createRustCodeModeClient({
+  const client = pureLiveRead ? null : createRustCodeModeClient({
     binary: rustBinary,
     ...(runner ? { runner } : {}),
     authorizeMutation: async (request) => {

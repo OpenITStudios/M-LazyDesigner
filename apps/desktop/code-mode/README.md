@@ -1,3 +1,15 @@
+**Live read-only bridge security and footprint correction (2026-11-18; SOURCE ONLY):**
+An experimental Windows pairing now requires an independent native
+Yes/No dialog, forbids overlapping approval prompts, invalidates late
+approval after Stop/Exit, rechecks model epoch, and expires after
+15 minutes on a monotonic Rust clock. The UI attempts early cleanup;
+Node bounds total response time and refuses sockets that close without
+a full frame. A live-only host no longer requires the separate Rust
+CLI binary and explicitly rejects disk mutation/PNG/reviewer settings.
+Default build remains listener-free. Tests are AUTHORED_NOT_RUN;
+Windows UI, ACL, Tauri/Node/Deno and efficiency NOT_EXECUTED.
+See HOST_INTEGRATION.md.
+
 **Opt-in live Rust semantic reads (2026-11-18; SOURCE ONLY):**
 A Windows-only Cargo feature `live-read-bridge` exposes a local
 Named Pipe that the user must explicitly start from the Rust editor.

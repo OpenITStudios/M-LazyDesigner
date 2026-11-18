@@ -44,20 +44,30 @@ export function createLiveReadClient({
     return new Promise((resolve, reject) => {
       const stream = connectImpl(pipe);
       let complete = false, length = 0, data = '';
+      let deadline = null;
       const decoder = new StringDecoder('utf8');
       function finish(error, result) {
         if (complete) return;
         complete = true;
+        if (deadline !== null) clearTimeout(deadline);
         stream.destroy();
         if (error) reject(error);
         else resolve(result);
       }
+      // A socket inactivity timeout alone permits an indefinitely trickled
+      // response. Bound total time from connect to complete validated frame.
+      deadline = setTimeout(() => finish(
+        new Error('LIVE_READ_OUTCOME_UNKNOWN_TIMEOUT')), TIMEOUT_MS);
       stream.setTimeout(TIMEOUT_MS, () => finish(
         new Error('LIVE_READ_OUTCOME_UNKNOWN_TIMEOUT')));
       stream.once('error', () => finish(new Error('LIVE_READ_PIPE_UNAVAILABLE')));
       stream.once('connect', () => {
-        if (!stream.write(bytes, 'utf8')) {
-          // Backpressure is handled internally by net.Socket.
+        try {
+          if (!stream.write(bytes, 'utf8')) {
+            // Backpressure is handled internally by net.Socket.
+          }
+        } catch {
+          finish(new Error('LIVE_READ_PIPE_WRITE_FAILED'));
         }
       });
       stream.on('data', chunk => {
@@ -89,6 +99,10 @@ export function createLiveReadClient({
         finish(null, response);
       });
       stream.once('end', () => finish(
+        new Error('LIVE_READ_REPLY_INCOMPLETE')));
+      // Named pipes may emit close without end/error; that must not strand
+      // a guest RPC or a trusted host promise indefinitely.
+      stream.once('close', () => finish(
         new Error('LIVE_READ_REPLY_INCOMPLETE')));
     });
   }
