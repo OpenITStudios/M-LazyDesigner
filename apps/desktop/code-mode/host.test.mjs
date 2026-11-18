@@ -3865,3 +3865,65 @@ test('guest can inspect a semantic map and preflight one plan without acquiring 
     assert.deepEqual(calls, ['inspect', 'semantic-map', 'preflight']);
     assert.equal(approvals, 0);
   }));
+
+test('live-only trusted pairing exposes reads, never creates disk projects or writes', async () => {
+  const calls = [], seen = [];
+  const info = {
+    status: 'OK', epoch: 3, revision: 7,
+    summary: { ...SUMMARY, revision: 7 },
+    dirty: true, write_authority: 'NOT_GRANTED',
+    visual_verdict: 'UNVERIFIED',
+  };
+  const liveReader = {
+    sessionInfo: async () => {
+      seen.push('status');
+      return info;
+    },
+    semanticMap: async query => {
+      seen.push('map');
+      assert.deepEqual(query, {
+        expectedEpoch: 3, expectedRevision: 7,
+        category: 'cubes', offset: 0, limit: 2,
+      });
+      return { status: 'OK', epoch: 3, revision: 7,
+        summary: info.summary,
+        map: {
+          scope: 'validated_rust_semantic_identity_map',
+          revision: 7, category: 'cubes', offset: 0, total: 0,
+          next_offset: null, counts: { cubes: 0, bones: 0, textures: 0, animations: 0 },
+          entries: [], write_authority: 'NOT_GRANTED',
+          visual_verdict: 'UNVERIFIED', effective_material: 'UNVERIFIED',
+        },
+      };
+    },
+  };
+  const host = await createCodeModeHost({
+    rustBinary: '/trusted/rust', denoBinary: '/trusted/deno',
+    liveReadClient: liveReader,
+    runner: async argv => { calls.push(argv); throw Error('DISK_NOT_ALLOWED'); },
+    spawnImpl: () => {
+      const method = ['liveSessionInfo', 'liveSemanticMap', 'newModel'][seen.length];
+      return fakeGuest({ method, args: method === 'liveSemanticMap' ?
+        { expectedEpoch: 3, expectedRevision: 7, category: 'cubes', offset: 0, limit: 2 } :
+        method === 'newModel' ?
+          { output: 'forbidden.bbmodel', name: 'Forbidden', modelIdentifier: 'forbidden' } : {},
+      }, response => {
+        if (method === 'newModel') {
+          assert.equal(response.ok, false);
+          assert.equal(response.code, 'CODE_MODE_DISK_OUTPUT_UNAVAILABLE');
+        } else {
+          assert.equal(response.ok, true);
+        }
+        return { method, allowed: response.ok };
+      }, null);
+    },
+  });
+  assert.deepEqual(host.initial, {
+    project: null, sha256: null, summary: null, liveReadOnly: true,
+  });
+  assert.equal((await host.execute({code:'return codemode.liveSessionInfo({});'})).value.allowed, true);
+  assert.equal((await host.execute({code:'return codemode.liveSemanticMap({});'})).value.allowed, true);
+  assert.equal((await host.execute({code:'return codemode.newModel({});'})).value.allowed, false);
+  assert.deepEqual(seen, ['status','map']);
+  assert.equal(calls.length, 0);
+});

@@ -1,3 +1,15 @@
+**Optional Code Mode live read pairing (2026-11-18; SOURCE ONLY):**
+The Rust native editor now has an experimental opt-in File menu pairing
+control for live *read-only* semantic information. The protected Windows
+Named Pipe exists only in builds explicitly compiled with the
+`live-read-bridge` feature; ordinary builds expose no listener and
+disable the UI action. Trusted Node hosts can access `status` and
+`semantic_map` with an exact, user-provided private pairing capability;
+there is no live AI edit or file overwrite path. Editing still uses the
+canonical Rust `EditorSession`, and Code Mode headless still uses
+the first-party CLI. All native Windows, OS ACL and performance proof
+remain NOT_EXECUTED under the active hold.
+
 **Rust read-only semantic map and preflight (2026-11-18; SOURCE ONLY):**
 The standalone Rust editor exposes two in-process Tauri commands that
 read a frozen canonical editor revision: semantic identity map and

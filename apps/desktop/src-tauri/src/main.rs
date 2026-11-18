@@ -12,6 +12,7 @@ mod blockbench_surface;
 mod desktop_error;
 mod desktop_instance;
 mod desktop_authoring;
+mod live_read_bridge;
 mod editor_recovery;
 mod diagnostics;
 mod operation_log;
@@ -25,7 +26,7 @@ mod readiness;
 mod system_status;
 
 use desktop_error::DesktopError;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use diagnostics::DiagnosticExportResult;
 use blockbench::{BlockbenchActionResult, ModelBrowseResult};
 use system_status::{BootstrapActionResult, ConnectionStatus, EnsureReadyResult, ManagedActionResult, ManagedUpdateCheck, PluginFileActionResult, ProjectNavigationActionResult, ProjectPathResult, SystemStatus};
@@ -303,6 +304,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(desktop_authoring::EditorState::default())
+        .manage(live_read_bridge::LiveReadBridgeState::default())
         .invoke_handler(tauri::generate_handler![
             system_status,
             connection_status,
@@ -330,6 +332,9 @@ fn main() {
             desktop_authoring::rust_editor_snapshot,
             desktop_authoring::rust_editor_semantic_map,
             desktop_authoring::rust_editor_preflight,
+            live_read_bridge::rust_live_read_available,
+            live_read_bridge::rust_live_read_start,
+            live_read_bridge::rust_live_read_stop,
             desktop_authoring::rust_editor_new,
             desktop_authoring::rust_editor_open,
             desktop_authoring::rust_editor_apply,
@@ -369,10 +374,16 @@ fn main() {
                 }
                 tauri::RunEvent::Ready => "desktop:ready",
                 tauri::RunEvent::ExitRequested { .. } => {
+                    if let Some(state) = app.try_state::<live_read_bridge::LiveReadBridgeState>() {
+                        live_read_bridge::revoke(&state);
+                    }
                     blockbench_surface::restore_on_exit();
                     "desktop:exit-requested"
                 },
                 tauri::RunEvent::Exit => {
+                    if let Some(state) = app.try_state::<live_read_bridge::LiveReadBridgeState>() {
+                        live_read_bridge::revoke(&state);
+                    }
                     blockbench_surface::restore_on_exit();
                     "desktop:exit"
                 },
@@ -382,7 +393,12 @@ fn main() {
                         "desktop:close-requested"
                     },
                 tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. }
-                    if label == "main" => "desktop:destroyed",
+                    if label == "main" => {
+                        if let Some(state) = app.try_state::<live_read_bridge::LiveReadBridgeState>() {
+                            live_read_bridge::revoke(&state);
+                        }
+                        "desktop:destroyed"
+                    },
                 _ => return,
             };
             operation_log::record(name, &pid);

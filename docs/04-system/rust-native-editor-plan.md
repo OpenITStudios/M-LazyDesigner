@@ -81,6 +81,34 @@ their active documents are not automatically synchronized.
 The active test/CI/local-PC hold remains: SOURCE_REVIEWED,
 TEST_AUTHORED_NOT_RUN, NATIVE_NOT_VERIFIED.
 
+### Experimental read-only live Rust bridge (2026-11-18; SOURCE ONLY)
+
+The native Rust editor and Code Mode now have a *feature-gated source*
+transport for active read-only sessions. It is Windows-only, compiled
+only when `live-read-bridge` is explicitly enabled, and never starts
+without the user's File menu pairing action. A private Named Pipe and
+256-bit in-memory pairing capability are managed by the Tauri process.
+A trusted Node Code Mode host may connect and offer only `status` and
+the existing bounded `semantic_map` from the active `EditorSession`.
+The model is never serialized to the bridge; only semantic projections
+and counts leave Rust. A second epoch/revision read guard keeps stale
+results from being accepted. Changing models invalidates the pairing;
+stop and application exit revoke it. No new shared JS scene, external
+HTTP listener, Node-to-Tauri mutation route, MCP server or tool runner
+has been installed. Default Windows and all other platform builds
+remain unpaired.
+
+The experimental listener uses an explicit owner-only/System DACL
+(Owner Rights `OW`, LocalSystem `SY`), remote-client rejection, a
+single pipe instance, a random process-local capability, bounded frame
+sizes and timeout. It does not protect against a malicious process
+running as the same user, an elevated local process, copied secrets,
+or unverified Windows-specific failures. Build/ACL/protocol/teardown
+proof, real Deno-host connections and model quality remain NOT_EXECUTED.
+Live writes stay disallowed until the separate recovery/security/visual
+acceptance gate has genuine native proof. Headless file Code Mode and
+its SHA-bound writer remain the supported path.
+
 ## 2. Grounded baseline and ownership conflict resolution
 
 **Observed source, not execution:**

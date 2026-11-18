@@ -1,3 +1,45 @@
+## Experimental read-only live editor pairing (2026-11-18; SOURCE ONLY)
+
+The Rust Desktop has an **opt-in Windows Named Pipe read-only bridge**
+behind Cargo feature `live-read-bridge` (disabled in default builds).
+Only the human action File > Pair Code Mode (read-only) can start it.
+The user receives a random local pipe name and 256-bit pairing secret;
+they must supply both to a separately trusted Node agent host. Never
+paste the capability into model-authored Deno code, source files,
+prompts, telemetry or command-line arguments. Node retains it only in
+trusted host memory.
+
+An operator may initialize Code Mode with:
+```js
+const host = await createCodeModeHost({
+  rustBinary: '/trusted/local/lazydesigner-authoring',
+  denoBinary: '/trusted/local/deno',
+  liveReadPairing: { pipe: operatorSelectedPipe, token: operatorSelectedSecret },
+  // No input or outputDirectory is required for read-only live-only mode.
+});
+```
+The Deno guest sees only `codemode.liveSessionInfo({})` and
+`codemode.liveSemanticMap({expectedEpoch,expectedRevision,category,offset,limit})`.
+It cannot choose a pipe/token, call a generic native command, or use
+`liveApply`. Read-only replies contain bounded Rust model summary and
+semantic identities, never model source path, raw PNG or opaque data.
+To avoid stale results, request the current session identity, then bind
+the exact epoch/revision when reading the map. New/Open/Restore changes
+the epoch; that binding is refused. No disk output is available in
+live-only mode. Disk-mode Code Mode remains independent and unchanged.
+
+Security: the server uses a protected Owner Rights/LocalSystem pipe ACL,
+`PIPE_REJECT_REMOTE_CLIENTS`, a unique first pipe instance, a random
+256-bit capability, one bounded message/response per connection, and
+four-second I/O timeouts. It closes on explicit stop, app exit or main
+window destruction. An OW ACL does not isolate malicious processes
+running as the same Windows owner; capability compromise also defeats
+the read-only data boundary. This is a defense-in-depth design, NOT
+Windows ACL/OS-sandbox verification. Native Windows, Node/Deno and
+WebView execution remain NOT_EXECUTED under the project hold. Do not
+enable this feature in a release without independent security and
+lifecycle testing and privacy review.
+
 **Bounded semantic and preflight reads (2026-11-18; SOURCE ONLY):**
 The trusted Code Mode host has two additional Deno RPC methods:
 `codemode.semanticMap({project,category,offset,limit})` and

@@ -13,6 +13,7 @@ import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
+import { createLiveReadClient } from './live-read-client.mjs';
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
   materialWorkPacketDigest,compileMaterialClusterPaint,
   paintOperationsFingerprint} from './material-work-packet.mjs';
@@ -780,12 +781,27 @@ export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
   preselectedPngPath, approvedMaterialReferenceUuid,
   preselectedVisualPair, approvedReferencePackagePath,
-  reviewVisualPair, runner, spawnImpl,
+  reviewVisualPair, runner, spawnImpl, liveReadPairing, liveReadClient,
 } = {}) {
   requireAbsolute(rustBinary, 'rustBinary');
   requireAbsolute(denoBinary, 'denoBinary');
-  if ((input === undefined) === (outputDirectory === undefined)) {
+  if ((input !== undefined && outputDirectory !== undefined) ||
+      (input === undefined && outputDirectory === undefined &&
+       liveReadPairing === undefined && liveReadClient === undefined)) {
     throw new Error('CODE_MODE_SOURCE_OR_OUTPUT_DIRECTORY_REQUIRED');
+  }
+  if (liveReadPairing !== undefined && liveReadClient !== undefined) {
+    throw new Error('LIVE_READ_DUPLICATE_PROVIDER');
+  }
+  // The paired Windows capability exists only in trusted Node memory. It
+  // never appears in guest code, a tool schema, the initial project ref,
+  // process arguments or an environment variable.
+  const liveReader = liveReadPairing !== undefined ?
+    createLiveReadClient(liveReadPairing) : liveReadClient ?? null;
+  if (liveReader !== null &&
+      (typeof liveReader.sessionInfo !== 'function' ||
+       typeof liveReader.semanticMap !== 'function')) {
+    throw new TypeError('LIVE_READ_TRUSTED_PROVIDER_INVALID');
   }
   if (input !== undefined) requireAbsolute(input, 'input');
   if (outputDirectory !== undefined) {
@@ -816,14 +832,17 @@ export async function createCodeModeHost({
     throw new Error('CODE_MODE_SOURCE_EXTENSION_INVALID');
   }
   let folder;
-  if (source === null) {
+  if (source === null && outputDirectory !== undefined) {
     const dir = await lstat(outputDirectory);
     if (!dir.isDirectory() || dir.isSymbolicLink()) {
       throw new Error('CODE_MODE_OUTPUT_DIRECTORY_INVALID');
     }
     folder = await realpath(outputDirectory);
-  } else {
+  } else if (source !== null) {
     folder = await realpath(dirname(source));
+  } else {
+    // Pure live read pairing: no disk project, no output directory, no write.
+    folder = null;
   }
   if (!runner) await regularFile(rustBinary, 'CODE_MODE_RUST_BINARY');
   if (!spawnImpl) {
@@ -927,7 +946,11 @@ export async function createCodeModeHost({
   const initialRef = Object.freeze(initialProject ? {
     project: 'p0', sha256: initialProject.expectedSha256,
     summary: initialProject.summary,
-  } : { project: null, sha256: null, summary: null });
+    ...(liveReader ? { liveReadOnly: true } : {}),
+  } : {
+    project: null, sha256: null, summary: null,
+    ...(liveReader ? { liveReadOnly: true } : {}),
+  });
 
   function selected(args) {
     const id = requireObject(args).project;
@@ -937,6 +960,7 @@ export async function createCodeModeHost({
     return projects.get(id);
   }
   async function outputPath(name, suffix) {
+    if (folder === null) throw new Error('CODE_MODE_DISK_OUTPUT_UNAVAILABLE');
     const path = join(folder, outputName(name, suffix));
     await checkFreshSibling(path, folder);
     return path;
@@ -961,6 +985,20 @@ export async function createCodeModeHost({
   // The fixed capability boundary is intentionally much smaller than shell,
   // filesystem or generic Rust CLI access. Only owned methods are dispatched.
   const actions = Object.freeze({
+    // New live-read functions are independent of disk project handles.
+    // There is deliberately NO liveApply/liveImport/liveSave operation.
+    liveSessionInfo: async () => {
+      if (!liveReader) throw new Error('LIVE_READ_NOT_PAIRED');
+      return liveReader.sessionInfo();
+    },
+    liveSemanticMap: async (args) => {
+      if (!liveReader) throw new Error('LIVE_READ_NOT_PAIRED');
+      return liveReader.semanticMap({
+        expectedEpoch: args.expectedEpoch,
+        expectedRevision: args.expectedRevision,
+        category: args.category, offset: args.offset, limit: args.limit,
+      });
+    },
     projectInfo: async (args) => {
       const p = selected(args);
       return { project: args.project, sha256: p.expectedSha256,
@@ -2308,6 +2346,9 @@ export function createCodeModeTool(host) {
       'For a named target with unknown UUID, use authoring_target inside inspectBatch. Read-only example: const r=await codemode.inspectBatch({project:codemode.initial.project,requests:[{kind:"authoring_target",domain:"texturing",category:"cubes",name:"Helmet"}]}); const t=r.results[0].target; return {status:t.status,uuid:t.selected?.identity.uuid??null,ops:t.candidate_operations,blockers:t.source_blockers,candidates:t.status==="EXACT_MATCH"?undefined:t.candidates.slice(0,4)};',
       'Known UUID: skip name discovery. Group independent source questions in one inspectBatch; filter/aggregate in JavaScript, then return only the answer, source SHA and meaningful blockers. A null/absent face is not automatically an artistic defect.',
       'Use semanticMap only for a small, paged identity/parent inventory. A preflight dry-run validates an exact typed Rust plan without writing or obtaining authority; a later apply still needs separate trusted approval, current source SHA and real visual review.',
+      ...(host.initial?.liveReadOnly ? [
+        'For a user-paired live editor, call liveSessionInfo then liveSemanticMap with its exact expectedEpoch and expectedRevision. These are read-only. Do not confuse live state with headless disk project handles or attempt live writes.'
+      ] : []),
       'Do not select substring/ambiguous matches, ignore source blockers or treat source/visual hints as accepted art. For explicitly specified deterministic edits only, conditionally read and perform ONE host-approved apply in the SAME Code Mode script. Do not auto-retry unknown outcomes; Paint still needs real matched-view review. Guest cannot access shell, files or network.',
     ].join(' '),
     inputSchema: Object.freeze({

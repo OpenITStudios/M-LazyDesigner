@@ -1,3 +1,17 @@
+**Opt-in live Rust semantic reads (2026-11-18; SOURCE ONLY):**
+A Windows-only Cargo feature `live-read-bridge` exposes a local
+Named Pipe that the user must explicitly start from the Rust editor.
+A trusted Node host may receive the private pipe/token pairing and
+offer `liveSessionInfo` / `liveSemanticMap` to the existing Deno
+guest. These are **read-only** views of the currently admitted
+in-memory Rust `EditorSession`, not a saved .bbmodel or a JS model store.
+Model edits, preflight and export remain separate bounded Rust commands;
+there is NO live AI write. Default builds disable the listener.
+Headless SHA-bound file Code Mode is unchanged, and a live-only host
+has no output directory or model publication access. No OS/Node/native
+test has been run; see HOST_INTEGRATION.md for the trust boundary and
+pairing contract.
+
 **Shared Rust semantic-map and disposable preflight (2026-11-18; SOURCE ONLY):**
 Code Mode now exposes two additional read-only, SHA-guarded headless
 operations: `semanticMap(category,{offset,limit})` returns only bounded

@@ -6,7 +6,7 @@ import type {
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
   MutationRequest, OutputReceipt, TextureCorrectionScope,
   MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
-  MaterialCorrectionIntent, MaterialFacePatchBinding, CubeFaceSurface,
+  MaterialCorrectionIntent, MaterialFacePatchBinding, CubeFaceSurface, SemanticModelMap,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -18,6 +18,8 @@ export interface CodeModeInitialReference {
   project: string | null;
   sha256: string | null;
   summary: DocumentSummary | null;
+  /** Indicates a trusted read-only local bridge, not a mutable project handle. */
+  liveReadOnly?: true;
 }
 export interface CodeModeRunReceipt {
   status: "OK";
@@ -59,6 +61,19 @@ export interface CodeModeTexturingReadinessReceipt {
 export interface CodeModeGuestAPI {
   /** Null project indicates a New-model bootstrap in a trusted directory. */
   initial: CodeModeInitialReference;
+  liveSessionInfo(args: Record<string, never>): Promise<{
+    status: "OK"; epoch: number; revision: number;
+    summary: DocumentSummary; dirty: boolean;
+    write_authority: "NOT_GRANTED"; visual_verdict: "UNVERIFIED";
+  }>;
+  liveSemanticMap(args: {
+    expectedEpoch: number; expectedRevision: number;
+    category: "cubes" | "bones" | "textures" | "animations";
+    offset?: number; limit?: number;
+  }): Promise<{
+    status: "OK"; epoch: number; revision: number;
+    summary: DocumentSummary; map: SemanticModelMap;
+  }>;
   projectInfo(args: { project: string }): Promise<CodeModeProjectReference>;
   inspect(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   catalog(args: { project: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt>;
@@ -335,7 +350,9 @@ export interface CodeModeVisualReviewerFeedback {
 export interface CodeModeHostOptions {
   rustBinary: string;
   denoBinary: string;
-  /** Existing model; supply exactly one of input or outputDirectory. */
+  /** Existing model. Exclusive with outputDirectory. Neither is required
+   * for a separately paired read-only live session.
+   */
   input?: string;
   /** Authorized, existing directory for New-model bootstrap. */
   outputDirectory?: string;
@@ -410,6 +427,18 @@ export interface CodeModeHostOptions {
     }> | null;
   }>) => CodeModeVisualReviewerFeedback | Promise<CodeModeVisualReviewerFeedback>) &
     {requiresSourceFaceInventory?:true;supportsPagedSourceFaceReview?:true};
+  /** Host-owned GUI pairing, never part of model-written Deno source.
+   * Only on a deliberately paired experimental Windows build.
+   */
+  liveReadPairing?: { pipe: string; token: string };
+  /** Trusted test/integration seam. It is NOT a user-supplied JSON payload. */
+  liveReadClient?: {
+    sessionInfo(): Promise<Record<string, unknown>>;
+    semanticMap(input: {
+      expectedEpoch: number; expectedRevision: number;
+      category: string; offset?: number; limit?: number;
+    }): Promise<Record<string, unknown>>;
+  };
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;

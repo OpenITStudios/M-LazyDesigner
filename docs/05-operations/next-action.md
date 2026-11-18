@@ -1,3 +1,20 @@
+**Rust opt-in live read-only session bridge — 2026-11-18 (SOURCE ONLY):**
+The same validated Rust semantic-map reader may now be reached through
+an explicitly user-paired Windows Named Pipe, compiled only with
+`live-read-bridge`. Tauri owns the pairing, ACL and bounded read-only
+protocol; trusted Node retains the in-memory pairing, and the Deno
+guest sees only `liveSessionInfo` and `liveSemanticMap` (no new
+write ability). Live-only hosts cannot publish .bbmodel files; headless
+Code Mode continues its exact SHA-bound CLI route. Model epoch/revision,
+token and pairing lifecycle are checked; default builds create no
+listener. Source regressions cover bounded parsing/receipt rejection,
+unknown writes and live-only read admission. Tests, Cargo/Windows
+security, WebView, native Blockbench, throughput and confidentiality
+under real threat conditions are NOT_EXECUTED. Leave the feature
+disabled in ordinary/release builds until separately permitted native
+validation resolves the security gate. Earlier evidence and holds
+remain unchanged.
+
 **Rust semantic read + disposable edit preflight — 2026-11-18 (SOURCE ONLY):**
 The Rust Core now owns one bounded `EditorSession::semantic_map` and a
 read-only `EditorSession::preflight` built on the existing atomic

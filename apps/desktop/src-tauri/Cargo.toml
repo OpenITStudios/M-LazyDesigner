@@ -23,7 +23,15 @@ sha2 = "0.11.1"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 tauri = { version = "2.12.4", features = [] }
 
+[target.'cfg(windows)'.dependencies]
+tokio = { version = "=1.54.0", features = ["net", "io-util", "time"], optional = true }
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization",
+], optional = true }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 native-acceptance = []
+# User-opt-in only, not enabled by default. Read-only Windows local bridge.
+live-read-bridge = ["dep:tokio", "dep:windows-sys"]

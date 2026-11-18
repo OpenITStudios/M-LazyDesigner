@@ -74,6 +74,11 @@
   };
   type RecoveryReceipt = RecoveryEntry & { retentionComplete: boolean };
   let recoveryDialog = false;
+  type LiveReadPairing = {pipe: string; token: string; epoch: number; protocol: number};
+  let livePairing: LiveReadPairing | null = null;
+  let liveReadAvailable = false;
+  let livePairingDialog = false;
+  let showLiveSecret = false;
   let recoveryEntries: RecoveryEntry[] = [];
   let recoverySelectedId = '';
   let recoveryDiscardApproved = false;
@@ -280,6 +285,9 @@
       snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
     );
     if (snapshot && snapshot.epoch !== next.epoch) {
+      // Old read-only pairing is bound to the previous model epoch; revoke
+      // before another model is exposed. Never carry a capability forward.
+      if (livePairing) void stopLiveRead();
       selectedAnimationId = null;
       selectedKeyframeUuid = null;
       animationTime = 0;
@@ -346,6 +354,39 @@
         scheduleRecoveryCheckpoint(snapshot);
       }
     }
+  }
+
+  async function openLiveReadDialog() {
+    if (busy || loading || !snapshot || paintStroke || !liveReadAvailable) return;
+    closeMenus(); error = '';
+    if (livePairing) { livePairingDialog = true; return; }
+    busy = true;
+    try {
+      const pairing = await invoke<LiveReadPairing>('rust_live_read_start', {
+        expectedEpoch: snapshot.epoch,
+      });
+      if (pairing.epoch !== snapshot.epoch || pairing.protocol !== 1) {
+        // The snapshot changed during async pairing; refuse to display an
+        // uncertain/stale capability and close the native listener.
+        await invoke('rust_live_read_stop');
+        throw new Error('LIVE_READ_PAIRING_STALE');
+      }
+      livePairing = pairing;
+      showLiveSecret = false;
+      livePairingDialog = true;
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
+
+  async function stopLiveRead() {
+    // Erase the UI capability before waiting for Rust. The native bridge
+    // denies stale epochs even if its close request cannot complete.
+    livePairing = null;
+    showLiveSecret = false;
+    livePairingDialog = false;
+    try {
+      if (isTauri()) await invoke('rust_live_read_stop');
+    } catch (cause) { showError(cause); }
   }
 
   async function openRecoveryDialog() {
@@ -1181,11 +1222,12 @@
     }
     if (event.key === 'Escape') {
       if (confirmDiscard) confirmDiscard = null;
+      else if (livePairingDialog) livePairingDialog = false;
       else if (recoveryDialog) recoveryDialog = false;
       else if (newDialog) newDialog = false;
       closeMenus(); return;
     }
-    if (newDialog || confirmDiscard || recoveryDialog) {
+    if (newDialog || confirmDiscard || recoveryDialog || livePairingDialog) {
       if (event.key === 'Tab') {
         const container = document.querySelector<HTMLElement>('.rust-modal-backdrop');
         const focusables = Array.from(container?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? []);
@@ -1552,11 +1594,17 @@
         error = 'Close protection is unavailable. Save a model copy before exiting.';
       });
     }
+    if (isTauri()) {
+      void invoke<boolean>('rust_live_read_available')
+        .then((available) => { if (!disposed) liveReadAvailable = available; })
+        .catch(() => { liveReadAvailable = false; });
+    }
     void load();
     return () => {
       disposed = true;
       unlistenClose?.();
       if (recoveryTimer !== null) clearTimeout(recoveryTimer);
+      if (livePairing) void stopLiveRead();
       pauseAnimationPlayback();
       document.removeEventListener('visibilitychange', onAnimationVisibilityChanged);
       window.removeEventListener('blur', pauseAnimationPlayback);
@@ -2228,6 +2276,15 @@
                 <button role="menuitem" onclick={requestOpen} disabled={busy || loading}>Open Model… <kbd>Ctrl+O</kbd></button>
                 <button role="menuitem" onclick={() => void saveCopy()} disabled={!snapshot || busy}>Save Copy… <kbd>Ctrl+Shift+S</kbd></button>
                 <button role="menuitem" onclick={() => void openRecoveryDialog()} disabled={busy || loading || !!paintStroke}>Recover Checkpoint…</button>
+                <button role="menuitem" onclick={() => void openLiveReadDialog()}
+                  disabled={!liveReadAvailable || !snapshot || busy || loading || !!paintStroke}
+                  title="Optional Windows read-only pairing, requiring an explicitly built feature. No live AI edits.">
+                  {livePairing ? 'Read-only Code Mode pairing…' : 'Pair Code Mode (read-only)…'}
+                </button>
+                {#if liveReadAvailable}
+                  <button role="menuitem" onclick={() => void stopLiveRead()}
+                    disabled={busy || loading}>Disconnect Code Mode read</button>
+                {/if}
                 <button role="menuitem" onclick={() => void exportGeometry()}
                   disabled={!snapshot || busy || loading || !!paintStroke}
                   title="Export a separate Minecraft Bedrock geometry JSON. This does not replace your editable .bbmodel.">
@@ -2400,7 +2457,7 @@
           previewBoneTransforms={previewBoneTransforms}
           {selectedId} onSelect={selectCube}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
-          canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard && !recoveryDialog}
+          canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard && !recoveryDialog && !livePairingDialog}
           onTranslate={moveFromViewport} onRotate={rotateFromViewport}
           onScale={scaleFromViewport}/>
       {:else}
@@ -2542,7 +2599,39 @@
   </div>
 {/if}
 
+
+{#if livePairingDialog && livePairing}
+  <div class="rust-modal-backdrop" role="presentation">
+    <section class="rust-editor-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="live-read-title">
+      <h2 id="live-read-title">Read-only Code Mode pairing</h2>
+      <p>This pairing reads only the active Rust model's identity and small
+        semantic pages. It cannot edit the model or grant authoring permission.
+        Pass these values only to your trusted local agent host.</p>
+      <label for="live-read-pipe">Local Windows pipe</label>
+      <input id="live-read-pipe" type="text" readonly value={livePairing.pipe}
+        autocomplete="off" spellcheck="false"/>
+      <label for="live-read-token">Private pairing capability</label>
+      <input id="live-read-token" type={showLiveSecret ? 'text' : 'password'}
+        readonly value={livePairing.token} autocomplete="off" spellcheck="false"/>
+      <label class="live-read-reveal"><input type="checkbox" bind:checked={showLiveSecret}/>
+        Show pairing capability</label>
+      <p class="hint">Bound to editor epoch {livePairing.epoch}. Disconnect
+        when finished. New/Open/Restore invalidates the old model binding.
+        The standard build does not provide this experimental bridge.</p>
+      <div class="dialog-buttons">
+        <button type="button" onclick={() => livePairingDialog = false}>Keep paired</button>
+        <button type="button" class="danger" onclick={() => void stopLiveRead()}>
+          Disconnect
+        </button>
+      </div>
+    </section>
+  </div>
+{/if}
+
 <style>
+  .live-read-reveal { display: flex; align-items: center; gap: 8px; }
+  #live-read-pipe, #live-read-token { width: 100%; font-family: monospace; }
   .recovery-discard { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
   .recovery-discard input { flex: none; }
   #recovery-select { width: 100%; min-width: 0; }

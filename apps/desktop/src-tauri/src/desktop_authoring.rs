@@ -1045,6 +1045,38 @@ fn frozen_read_session(
     Ok(active.session.clone())
 }
 
+/// Trusted local adapter read only. Never includes the source path,
+/// unbounded model/PNG bytes, external secrets or an edit capability.
+pub(crate) fn live_read_identity(state: &EditorState) -> Result<Value, DesktopError> {
+    let store = lock_store(&state.store)?;
+    let active = store.active.as_ref().ok_or_else(||
+        failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    Ok(json!({
+        "status":"OK",
+        "epoch":store.epoch,
+        "revision":active.session.summary().revision,
+        "summary":active.session.summary(),
+        "dirty":active.dirty,
+        "write_authority":"NOT_GRANTED",
+        "visual_verdict":"UNVERIFIED",
+    }))
+}
+
+/// Same frozen admission used by rust_editor_semantic_map, with a final
+/// stale-result check. Readers never hold EditorStore during projection.
+pub(crate) fn live_read_semantic_map(
+    state: &EditorState, epoch: u64, revision: u64,
+    category: &str, offset: usize, limit: usize,
+) -> Result<Value, DesktopError> {
+    let session = frozen_read_session(&state.store, epoch, revision)?;
+    let map = session.semantic_map(category, offset, limit).map_err(model_failure)?;
+    let _ = frozen_read_session(&state.store, epoch, revision)?;
+    Ok(json!({
+        "status":"OK", "epoch":epoch, "revision":revision,
+        "summary":session.summary(), "map":map,
+    }))
+}
+
 /// Native read-only semantic inventory of the currently open Rust model.
 /// No external IPC listener or Code Mode live-write access is installed.
 #[tauri::command(async)]
@@ -1052,12 +1084,9 @@ pub fn rust_editor_semantic_map(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     category: String, offset: usize, limit: usize,
 ) -> Result<Value, DesktopError> {
-    let session = frozen_read_session(&state.store, expected_epoch, expected_revision)?;
-    let map = session.semantic_map(&category, offset, limit).map_err(model_failure)?;
-    // Invalidate an answer prepared from a revision replaced during its read.
-    let _ = frozen_read_session(&state.store, expected_epoch, expected_revision)?;
-    Ok(json!({"status":"OK","epoch":expected_epoch,
-        "revision":expected_revision,"summary":session.summary(),"map":map}))
+    live_read_semantic_map(
+        &state, expected_epoch, expected_revision, &category, offset, limit,
+    )
 }
 
 /// Dry-run on a disposable validated session. This command cannot commit an

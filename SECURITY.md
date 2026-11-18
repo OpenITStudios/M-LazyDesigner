@@ -53,6 +53,26 @@ Runtime and Gateway connections are intentionally loopback-only. The managed nat
 - Secrets, access tokens, credentials, and private user data must not be committed to the repository or emitted in normal structured results/logging.
 - Generated documentation is not an authority for security behavior; executable source and regression tests are.
 
+## Optional Windows read-only Code Mode pipe (source-only)
+
+Only an explicitly enabled `live-read-bridge` feature and direct user
+pairing may create the local Windows Named Pipe. Native responses are
+restricted to current session identity and bounded semantic map pages,
+with an exact revision admission and NO live mutation method. The
+pairing secret is 256 random bits and must stay in trusted process memory;
+it never belongs in a command line, Deno guest, log or saved model.
+Default builds compile the disabled implementation and do not listen.
+
+The pipe uses an explicit protected DACL for the creating object owner
+and LocalSystem, `PIPE_REJECT_REMOTE_CLIENTS`, a random name, and a
+single reused instance. This denies unrestricted default Everyone
+read access but is NOT protection against same-user malware,
+administrative processes, token disclosure or Windows OS bugs.
+Native ACL behavior, cancellation, connect/disconnect, permissions
+and resource exhaustion remain NOT_EXECUTED. Do not enable this
+experimental feature in a release before user-approved PC-local
+security/negative tests and all model-quality holds are cleared.
+
 ## Rust-native private recovery data (source boundary)
 
 On the Rust development branch, optional native recovery checkpoints
