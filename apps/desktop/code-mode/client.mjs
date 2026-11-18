@@ -280,6 +280,26 @@ function serializeGeometryAttachment(attachment) {
   return payload;
 }
 
+/** Transport-only gate. Rust validates every semantic and numeric constraint. */
+function serializeGeometryPropagation(request) {
+  if (!request || typeof request !== 'object' || Array.isArray(request) ||
+      request.expected_revision !== 0 ||
+      !Array.isArray(request.links) || request.links.length < 1 ||
+      request.links.length > 32) {
+    throw new TypeError('CODE_MODE_GEOMETRY_PROPAGATION_INPUT_INVALID');
+  }
+  const payload = JSON.stringify(request, (_key, value) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw new TypeError('CODE_MODE_GEOMETRY_PROPAGATION_INPUT_INVALID');
+    }
+    return value;
+  });
+  if (!payload || Buffer.byteLength(payload, 'utf8') > PLAN_LIMIT) {
+    throw new TypeError('CODE_MODE_GEOMETRY_PROPAGATION_INPUT_TOO_LARGE');
+  }
+  return payload;
+}
+
 // Require a native *matched* correction receipt before any scoped Paint
 // call can be reported as successful to Code Mode. Rust may already have
 // published its no-overwrite sibling when a malformed success is observed:
@@ -679,6 +699,94 @@ export function createRustCodeModeClient({
       }
       return receipt;
     },
+    async planGeometryResizePropagation({ input, expectedSha256, propagation }) {
+      const digest = hash(expectedSha256).toLowerCase();
+      const source = absolute(input, 'input');
+      const payload = serializeGeometryPropagation(propagation);
+      const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-propagation-'));
+      const file = join(directory, 'propagation.json');
+      try {
+        await writeFile(file, payload, { encoding:'utf8', mode:0o600, flag:'wx' });
+        const receipt = await call('plan-geometry-resize-propagation', {
+          input:source, 'expected-sha256':digest, propagation:file,
+        });
+        const plan = receipt.plan, preview = receipt.preflight;
+        const diagnostic = receipt.diagnostic;
+        const first = plan?.operations?.[0];
+        const remainder = Array.isArray(plan?.operations) ?
+          plan.operations.slice(1) : [];
+        const targets = new Set(propagation.links.map(link=>link.moving_cube_uuid));
+        const declaredParents = new Map(propagation.links.map(link=>[
+          link.moving_cube_uuid, link.anchor_cube_uuid,
+        ]));
+        const rows = diagnostic?.ordered_links;
+        const rowTargets = Array.isArray(rows) ?
+          new Set(rows.map(row=>row?.moving_cube_uuid)) : new Set();
+        const changedRows = Array.isArray(rows) ?
+          rows.filter(row=>row?.status === 'translation_planned') : [];
+        if (typeof receipt.sha256 !== 'string' ||
+            receipt.sha256.toLowerCase() !== digest ||
+            receipt.summary?.revision !== 0 ||
+            !plan || plan.expected_revision !== 0 ||
+            plan.correction_scope !== null ||
+            !Array.isArray(plan.operations) ||
+            plan.operations.length < 1 || plan.operations.length > 33 ||
+            first?.op !== 'reframe_cube' ||
+            first.uuid !== propagation.resize_cube_uuid ||
+            first.uv_policy !== propagation.uv_policy ||
+            !Array.isArray(first.from) || !Array.isArray(first.to) ||
+            first.from.length !== 3 || first.to.length !== 3 ||
+            !first.from.every((v,i)=>v === propagation.from?.[i]) ||
+            !first.to.every((v,i)=>v === propagation.to?.[i]) ||
+            remainder.some(op=>op?.op !== 'translate_cube' ||
+              !targets.has(op.uuid) ||
+              !Array.isArray(op.delta) || op.delta.length !== 3 ||
+              !op.delta.every(Number.isFinite)) ||
+            new Set(remainder.map(op=>op.uuid)).size !== remainder.length ||
+            preview?.status !== 'VALIDATED_NOT_APPLIED' ||
+            preview.base_revision !== 0 ||
+            preview.mutation?.revision !== 1 ||
+            preview.mutation.operation_count !== plan.operations.length ||
+            !Array.isArray(preview.mutation.changed_uuids) ||
+            preview.mutation.changed_uuids.length !== plan.operations.length ||
+            preview.mutation.changed_uuids.some((uuid,i)=>
+              uuid !== plan.operations[i].uuid) ||
+            preview.candidate_summary?.revision !== 1 ||
+            typeof preview.candidate_sha256 !== 'string' ||
+            !SHA256.test(preview.candidate_sha256) ||
+            preview.write_authority !== 'NOT_GRANTED' ||
+            preview.visual_verdict !== 'UNVERIFIED' ||
+            diagnostic?.scope !== 'one_shot_same_bone_resize_propagation' ||
+            diagnostic.resize_cube_uuid !== propagation.resize_cube_uuid ||
+            typeof diagnostic.parent_bone_uuid !== 'string' ||
+            diagnostic.dependency_count !== propagation.links.length ||
+            diagnostic.translated_count !== remainder.length ||
+            diagnostic.unchanged_count !== propagation.links.length - remainder.length ||
+            !Array.isArray(rows) || rows.length !== propagation.links.length ||
+            rowTargets.size !== targets.size ||
+            [...rowTargets].some(uuid=>!targets.has(uuid)) ||
+            rows.some(row=>!row ||
+              declaredParents.get(row.moving_cube_uuid) !== row.anchor_cube_uuid ||
+              !Array.isArray(row.delta) || row.delta.length !== 3 ||
+              !row.delta.every(Number.isFinite) ||
+              !['translation_planned','already_aligned'].includes(row.status) ||
+              (row.status === 'already_aligned' &&
+                row.delta.some(v=>v !== 0))) ||
+            changedRows.length !== remainder.length ||
+            changedRows.some((row,i)=>row.moving_cube_uuid !== remainder[i].uuid ||
+              row.delta.some((value,j)=>value !== remainder[i].delta[j])) ||
+            diagnostic.persistent_constraints !== false ||
+            diagnostic.collision_verdict !== 'NOT_EVALUATED' ||
+            diagnostic.visual_verdict !== 'UNVERIFIED' ||
+            receipt.write_authority !== 'NOT_GRANTED' ||
+            receipt.visual_verdict !== 'UNVERIFIED') {
+          throw new Error('CODE_MODE_GEOMETRY_PROPAGATION_RECEIPT_INVALID');
+        }
+        return receipt;
+      } finally {
+        await rm(directory, { recursive:true, force:true });
+      }
+    },
     async planGeometryAttachment({ input, expectedSha256, attachment }) {
       const digest = hash(expectedSha256).toLowerCase();
       const source = absolute(input, 'input');
@@ -1039,6 +1147,8 @@ export async function openRustCodeModeProject(client, input) {
       client.planGeometryAssembly({ input:path, expectedSha256, assembly }),
     planGeometryAttachment: (attachment) =>
       client.planGeometryAttachment({ input:path, expectedSha256, attachment }),
+    planGeometryResizePropagation: (propagation) =>
+      client.planGeometryResizePropagation({ input:path, expectedSha256, propagation }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),

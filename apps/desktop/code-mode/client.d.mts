@@ -119,6 +119,23 @@ export interface GeometryFaceAttachmentRequest {
   clearance: number;
   tangent_offset: Vec2;
 }
+/** G2.2 explicit, one-shot directed attachment. No saved constraint graph. */
+export interface GeometryPropagationLink {
+  anchor_cube_uuid: string;
+  moving_cube_uuid: string;
+  anchor_face: CubeFaceSurface["side"];
+  moving_face: CubeFaceSurface["side"];
+  clearance: number;
+  tangent_offset: Vec2;
+}
+export interface GeometryResizePropagationRequest {
+  expected_revision: 0;
+  resize_cube_uuid: string;
+  from: Vec3;
+  to: Vec3;
+  uv_policy: "manual_preserve" | "box_repack";
+  links: GeometryPropagationLink[];
+}
 /** Native .bbmodel sound/particle keyframe metadata. No local file, script or playback. */
 export interface AnimationEffectPoint {
   effect: string;
@@ -648,6 +665,38 @@ export interface GeometryFaceAttachmentReceipt {
   write_authority: "NOT_GRANTED";
   visual_verdict: "UNVERIFIED";
 }
+/** Read-only G2.2 Rust proposal; never a persistent or collision solver. */
+export interface GeometryResizePropagationReceipt {
+  status: "OK";
+  sha256: string;
+  summary: DocumentSummary;
+  plan: {
+    expected_revision: 0;
+    operations: EditOperation[];
+    correction_scope: null;
+  };
+  preflight: PreflightReceipt["preflight"];
+  diagnostic: {
+    scope: "one_shot_same_bone_resize_propagation";
+    resize_cube_uuid: string;
+    parent_bone_uuid: string;
+    dependency_count: number;
+    translated_count: number;
+    unchanged_count: number;
+    ordered_links: Array<{
+      anchor_cube_uuid: string;
+      moving_cube_uuid: string;
+      delta: Vec3;
+      tangent_axes: [number, number];
+      status: "translation_planned" | "already_aligned";
+    }>;
+    persistent_constraints: false;
+    collision_verdict: "NOT_EVALUATED";
+    visual_verdict: "UNVERIFIED";
+  };
+  write_authority: "NOT_GRANTED";
+  visual_verdict: "UNVERIFIED";
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
@@ -981,6 +1030,9 @@ export interface RustCodeModeClient {
   planGeometryAttachment(input: {
     input: string; expectedSha256: string; attachment: GeometryFaceAttachmentRequest;
   }): Promise<GeometryFaceAttachmentReceipt>;
+  planGeometryResizePropagation(input: {
+    input: string; expectedSha256: string; propagation: GeometryResizePropagationRequest;
+  }): Promise<GeometryResizePropagationReceipt>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectTextureAlpha(input: {
     input: string; textureUuid: string; expectedSha256?: string;
@@ -1079,6 +1131,7 @@ export interface RustCodeModeProject {
   preflight(input: {operations: EditOperation[]; correctionScope?: TextureCorrectionScope}): Promise<PreflightReceipt>;
   planGeometryAssembly(assembly: GeometryAssemblyRequest): Promise<GeometryAssemblyReceipt>;
   planGeometryAttachment(attachment: GeometryFaceAttachmentRequest): Promise<GeometryFaceAttachmentReceipt>;
+  planGeometryResizePropagation(propagation: GeometryResizePropagationRequest): Promise<GeometryResizePropagationReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
   inspectTextureAlpha(textureUuid: string): Promise<InspectReceipt & {alpha: TextureAlphaInspection}>;

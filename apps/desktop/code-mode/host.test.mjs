@@ -294,6 +294,61 @@ test('G2 face attachment Code Mode RPC keeps write approval separate',()=>
     assert.equal(approvals.length,0);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: unprivileged Deno can request a G2.2 plan
+// but may not mutate the source model or claim native acceptance.
+test('G2.2 Code Mode guest gets only read-only resize proposal',()=>
+  fixture(async input=>{
+    const propagation={expected_revision:0,resize_cube_uuid:'base',
+      from:[0,0,0],to:[6,4,4],uv_policy:'manual_preserve',
+      links:[{anchor_cube_uuid:'base',moving_cube_uuid:'arm',
+        anchor_face:'east',moving_face:'west',clearance:1,
+        tangent_offset:[0,0]}]};
+    const ops=[
+      {op:'reframe_cube',uuid:'base',from:[0,0,0],to:[6,4,4],
+        uv_policy:'manual_preserve'},
+      {op:'translate_cube',uuid:'arm',delta:[-3,0,0]},
+    ];
+    const calls=[],approvals=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:request=>{approvals.push(request);return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'plan-geometry-resize-propagation');
+        assert.deepEqual(JSON.parse(
+          await readFile(argv[argv.indexOf('--propagation')+1],'utf8')
+        ),propagation);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          plan:{expected_revision:0,operations:ops,correction_scope:null},
+          preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+            mutation:{revision:1,operation_count:2,changed_uuids:['base','arm']},
+            candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          diagnostic:{scope:'one_shot_same_bone_resize_propagation',
+            resize_cube_uuid:'base',parent_bone_uuid:'root',
+            dependency_count:1,translated_count:1,unchanged_count:0,
+            ordered_links:[{anchor_cube_uuid:'base',moving_cube_uuid:'arm',
+              delta:[-3,0,0],tangent_axes:[1,2],status:'translation_planned'}],
+            persistent_constraints:false,collision_verdict:'NOT_EVALUATED',
+            visual_verdict:'UNVERIFIED'},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+      },
+      spawnImpl:()=>fakeGuest({method:'planGeometryResizePropagation',args:{
+        project:'p0',propagation,
+      }},response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.plan.operations.length,2);
+        assert.equal(response.result.write_authority,'NOT_GRANTED');
+        return {result:response.result.preflight.status};
+      }),
+    });
+    const result=await host.execute({code:'return codemode.planGeometryResizePropagation({});'});
+    assert.equal(result.value.result,'VALIDATED_NOT_APPLIED');
+    assert.deepEqual(calls,['inspect','plan-geometry-resize-propagation']);
+    assert.equal(approvals.length,0);
+  }));
+
 test('Code Mode host denies writes without operator approval or a safe output name', () =>
   fixture(async (input) => {
     for (const requestedOutput of ['candidate.bbmodel', '../escape.bbmodel']) {

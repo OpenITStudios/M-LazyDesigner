@@ -52,6 +52,18 @@ persistent parametric constraints, cross-Bone solver, new process
 service or parallel geometry engine is introduced. Node/Deno/Cargo,
 Windows and native Blockbench behavior are NOT_EXECUTED.
 
+**G2.2 Code Mode resize-propagation planning (2026-11-18; SOURCE ONLY):**
+`codemode.planGeometryResizePropagation({project,propagation})`
+forwards an explicit Cube resize and up to 32 same-Bone
+attachment links to the SHA-bound Rust
+`plan-geometry-resize-propagation` CLI. The first-party SDK checks the
+ordered `ReframeCube` / `TranslateCube` plan, dependency targets,
+diagnostic deltas, and read-only `NOT_GRANTED/UNVERIFIED` receipt.
+Neither Node nor Deno contains an independent geometry solver.
+No constraints are saved or applied automatically; an operator-
+approved `codemode.apply` is still separately required.
+Node/Cargo/native/Blockbench execution remains NOT_EXECUTED.
+
 ## Dated source history (preserved)
 
 **P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**

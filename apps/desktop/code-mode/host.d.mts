@@ -9,6 +9,7 @@ import type {
   MaterialCorrectionIntent, MaterialFacePatchBinding, CubeFaceSurface, SemanticModelMap,
   GeometryAssemblyRequest, GeometryAssemblyReceipt,
   GeometryFaceAttachmentRequest, GeometryFaceAttachmentReceipt,
+  GeometryResizePropagationRequest, GeometryResizePropagationReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -138,6 +139,10 @@ export interface CodeModeGuestAPI {
   planGeometryAttachment(args: {
     project:string; attachment:GeometryFaceAttachmentRequest;
   }): Promise<GeometryFaceAttachmentReceipt>;
+  /** Read-only one-shot resize propagation, not a persisted relation graph. */
+  planGeometryResizePropagation(args: {
+    project:string; propagation:GeometryResizePropagationRequest;
+  }): Promise<GeometryResizePropagationReceipt>;
   /** One authoritative authoring_target inspection, compacted by trusted host. */
   taskContext(args: {
     project:string; domain:"geometry"|"uv"|"texturing"|"animation";

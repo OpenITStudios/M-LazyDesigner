@@ -179,6 +179,95 @@ test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',
   assert.equal(approvals,0);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: G2.2 is exactly one read-only Rust resize
+// and dependency batch, with no implicit apply or persistent relation.
+test('Code Mode G2.2 sends explicit dependencies and refuses forged approvals',async()=>{
+  const propagation={
+    expected_revision:0,resize_cube_uuid:'base',
+    from:[0,0,0],to:[6,4,4],uv_policy:'manual_preserve',
+    links:[{anchor_cube_uuid:'base',moving_cube_uuid:'arm',
+      anchor_face:'east',moving_face:'west',
+      clearance:1,tangent_offset:[0,0]}],
+  };
+  const operations=[
+    {op:'reframe_cube',uuid:'base',
+      from:[0,0,0],to:[6,4,4],uv_policy:'manual_preserve'},
+    {op:'translate_cube',uuid:'arm',delta:[-3,0,0]},
+  ];
+  const valid={
+    status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:2,changed_uuids:['base','arm']},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    diagnostic:{scope:'one_shot_same_bone_resize_propagation',
+      resize_cube_uuid:'base',parent_bone_uuid:'root',dependency_count:1,
+      translated_count:1,unchanged_count:0,ordered_links:[{
+        anchor_cube_uuid:'base',moving_cube_uuid:'arm',
+        delta:[-3,0,0],tangent_axes:[1,2],status:'translation_planned',
+      }],persistent_constraints:false,collision_verdict:'NOT_EVALUATED',
+      visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+  };
+  let reads=0,approvals=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:async()=>{approvals++;return true;},
+    runner:async argv=>{
+      reads++;
+      assert.equal(argv[0],'plan-geometry-resize-propagation');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1],SHA);
+      const src=JSON.parse(await readFile(argv[argv.indexOf('--propagation')+1],'utf8'));
+      assert.deepEqual(src,propagation);
+      return valid;
+    },
+  });
+  const proposed=await client.planGeometryResizePropagation({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,propagation,
+  });
+  assert.deepEqual(proposed.plan.operations,operations);
+  assert.equal(proposed.diagnostic.persistent_constraints,false);
+  assert.equal(approvals,0);
+  for(const invalid of [
+    {...propagation,expected_revision:1},
+    {...propagation,links:[]},
+    {...propagation,links:Array.from({length:33},()=>propagation.links[0])},
+    {...propagation,links:[{...propagation.links[0],clearance:Infinity}]},
+  ]){
+    await assert.rejects(client.planGeometryResizePropagation({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,propagation:invalid,
+    }),/CODE_MODE_GEOMETRY_PROPAGATION_INPUT_INVALID/);
+  }
+  assert.equal(reads,1);
+  for(const wrong of [
+    {...valid,write_authority:'GRANTED'},
+    {...valid,preflight:{...valid.preflight,write_authority:'GRANTED'}},
+    {...valid,plan:{...valid.plan,operations:[operations[0],{
+      op:'translate_cube',uuid:'unrequested',delta:[-3,0,0],
+    }]}},
+    {...valid,diagnostic:{...valid.diagnostic,persistent_constraints:true}},
+    {...valid,diagnostic:{...valid.diagnostic,ordered_links:[{
+      ...valid.diagnostic.ordered_links[0],anchor_cube_uuid:'wrong_parent',
+    }]}},
+    {...valid,preflight:{...valid.preflight,mutation:{
+      ...valid.preflight.mutation,changed_uuids:['base','wrong_child'],
+    }}},
+    {...valid,diagnostic:{...valid.diagnostic,collision_verdict:'CLEAR'}},
+    {...valid,diagnostic:{...valid.diagnostic,ordered_links:[{
+      ...valid.diagnostic.ordered_links[0],delta:[-5,0,0],
+    }]}}
+  ]){
+    const forged=createRustCodeModeClient({
+      binary:BIN,runner:async()=>wrong,
+    });
+    await assert.rejects(forged.planGeometryResizePropagation({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,propagation,
+    }),/CODE_MODE_GEOMETRY_PROPAGATION_RECEIPT_INVALID/);
+  }
+  assert.equal(approvals,0);
+});
+
 test('Code Mode routes focused read directly without model echo', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

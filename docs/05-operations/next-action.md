@@ -1,3 +1,14 @@
+**G2.2 Code Mode read-only propagation bridge — 2026-11-18 (SOURCE ONLY):**
+Exposed `planGeometryResizePropagation` via the existing typed
+Code Mode SDK, trusted Node host and Deno allowlist. The input
+is SHA-pinned, explicit and bounded; Rust alone compiles the
+one-shot root resize and ordered same-Bone child translations.
+The client rejects forged approval/collision states, mismatched
+targets and invalid preflight envelopes. Actual `apply` still
+requires an independent host approval and no-overwrite output.
+No persistent graph, new engine or writer. Node regression source
+AUTHORED_NOT_RUN; native, tests and quality evidence held.
+
 **G2.2 Rust one-shot resize dependency propagation — 2026-11-18 (SOURCE ONLY):**
 The `geometry_propagation.rs` compiler builds one revision/SHA-bound
 `ReframeCube` plus dependency-ordered `TranslateCube` operations from
