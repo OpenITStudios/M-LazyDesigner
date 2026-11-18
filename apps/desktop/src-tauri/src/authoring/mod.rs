@@ -3161,6 +3161,7 @@ impl ValidatedInspection<'_> {
 
 /// The only mutable authoring state. Each GUI/CLI caller must supply the
 /// expected in-process revision; CLI also checks exact source SHA-256.
+#[derive(Clone)]
 pub struct EditorSession {
     // Immutable published versions are shared by Tauri read projections and
     // history. The transaction candidate remains an independent full copy.

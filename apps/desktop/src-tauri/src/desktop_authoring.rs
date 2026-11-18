@@ -6,6 +6,9 @@
 //! and snapshot projection on the main UI thread. The existing EditorStore
 //! mutex and expected epoch/revision still serialize source edits. This
 //! does not prove runtime responsiveness or remove the clone/Undo cost.
+//! Hot editor edits stage a temporary Rust session without the store lock and
+//! publish only if epoch + revision remain current. A stale attempt is denied,
+//! never automatically retried or written to an original model.
 
 use crate::desktop_error::DesktopError;
 use lazydesigner::authoring::{
@@ -209,8 +212,11 @@ fn failure(code: &'static str, detail: impl Into<String>) -> DesktopError {
 fn model_failure(message: String) -> DesktopError {
     failure("RUST_MODEL_REJECTED", message)
 }
+fn lock_store(store: &Mutex<EditorStore>) -> Result<MutexGuard<'_, EditorStore>, DesktopError> {
+    store.lock().map_err(|_| failure("RUST_EDITOR_UNAVAILABLE", "Authoring session lock is unavailable."))
+}
 fn lock(state: &State<'_, EditorState>) -> Result<MutexGuard<'_, EditorStore>, DesktopError> {
-    state.store.lock().map_err(|_| failure("RUST_EDITOR_UNAVAILABLE", "Authoring session lock is unavailable."))
+    lock_store(&state.store)
 }
 fn check_epoch(store: &EditorStore, expected: u64) -> Result<(), DesktopError> {
     if store.epoch != expected {
@@ -794,6 +800,61 @@ fn current_detached(
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))
 }
 
+/// Stage a Rust-native transaction without holding the editor's global lock.
+/// The provisional session shares immutable Arc snapshots/history; its apply()
+/// still clones, validates and atomically replaces a complete document. Only
+/// the guarded commit below may install it as authoritative editor state.
+fn detached_edit<F>(
+    store: &Mutex<EditorStore>, expected_epoch: u64, expected_revision: u64,
+    known_preview_source_key: Option<&str>,
+    stale_message: Option<&'static str>, edit: F,
+) -> Result<EditorSnapshot, DesktopError>
+where F: FnOnce(&mut EditorSession) -> Result<(), DesktopError> {
+    let stale = || match stale_message {
+        Some(message) => failure("RUST_EDITOR_REVISION_STALE", message),
+        None => model_failure("DOCUMENT_REVISION_STALE".to_owned()),
+    };
+    let (mut pending, had_saved_source) = {
+        let guard = lock_store(store)?;
+        check_epoch(&guard, expected_epoch)?;
+        let active = guard.active.as_ref().ok_or_else(||
+            failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+        if active.session.summary().revision != expected_revision {
+            return Err(stale());
+        }
+        // Arc-based EditorSession clone is cheap; real document cloning
+        // happens later on the temporary session outside the mutex.
+        (active.session.clone(), active.saved_canonical_sha.is_some())
+    };
+    edit(&mut pending)?;
+    // Dirty SHA used to serialize the entire canonical model while locked.
+    // Compute before reacquiring the lock if a saved baseline exists.
+    let canonical = had_saved_source.then(|| pending.canonical_sha256().ok());
+    let mut guard = lock_store(store)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_mut().ok_or_else(||
+        failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(stale());
+    }
+    // Saving a copy is allowed to update source identity without a revision
+    // increment. Compare with the baseline currently owned by the store.
+    let dirty = match active.saved_canonical_sha.as_ref() {
+        Some(saved) => match canonical {
+            Some(Some(ref digest)) => digest != saved,
+            Some(None) => true,
+            // Rare concurrent Save Copy from a previously unsaved model.
+            // Do not report an incorrect clean/dirty state to save CPU.
+            None => pending.canonical_sha256().map_or(true, |digest| digest != *saved),
+        },
+        None => true,
+    };
+    active.session = pending;
+    active.dirty = dirty;
+    // Free the lock before expensive, immutable Svelte snapshot projection.
+    current_detached(guard, known_preview_source_key)
+}
+
 fn create_uuid() -> String {
     let mut bytes = [0u8; 16];
     rand::rng().fill_bytes(&mut bytes);
@@ -882,13 +943,14 @@ pub fn rust_editor_apply(
     operations: Vec<EditOperation>,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    active.session.apply(expected_revision, &operations).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(), None,
+        move |session| {
+            session.apply(expected_revision, &operations).map_err(model_failure)?;
+            Ok(())
+        },
+    )
 }
 
 /// Read a user-selected PNG entirely inside the native Rust host and
@@ -920,15 +982,15 @@ pub async fn rust_editor_import_paint_png(
     // The source path is not persisted to the Blockbench model.
     let bytes = storage::read_bounded(&path, MAX_IMPORT_PNG_BYTES).map_err(model_failure)?;
     let source = format!("data:image/png;base64,{}", STANDARD.encode(bytes));
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    active.session.apply(expected_revision, &[EditOperation::ImportPaintTexture {
-        uuid: create_uuid(), name: filename, source,
-    }]).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, None).map(Some)
+    detached_edit(
+        &state.store, expected_epoch, expected_revision, None, None,
+        move |session| {
+            session.apply(expected_revision, &[EditOperation::ImportPaintTexture {
+                uuid: create_uuid(), name: filename, source,
+            }]).map_err(model_failure)?;
+            Ok(())
+        },
+    ).map(Some)
 }
 
 /// Verify a bounded encoded WebGL PNG. The browser canvas is a *preview*,
@@ -1130,44 +1192,44 @@ pub fn rust_editor_add_cube(
     parent_uuid: Option<String>,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "Refresh the model before adding a Cube."));
-    }
-    let mut operations = Vec::new();
-    let parent = match parent_uuid {
-        Some(id) => id,
-        None => match active.session.document().bones.first() {
-            Some(bone) => bone.uuid.clone(),
-            None => {
-                let id = create_uuid();
-                operations.push(EditOperation::AddBone {
-                    bone: Bone {
-                        uuid: id.clone(), name: "root".into(),
-                        origin: Some([0.0, 0.0, 0.0]), extra: Map::new(),
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(),
+        Some("Refresh the model before adding a Cube."),
+        move |session| {
+            let mut operations = Vec::new();
+            let parent = match parent_uuid {
+                Some(id) => id,
+                None => match session.document().bones.first() {
+                    Some(bone) => bone.uuid.clone(),
+                    None => {
+                        let id = create_uuid();
+                        operations.push(EditOperation::AddBone {
+                            bone: Bone {
+                                uuid: id.clone(), name: "root".into(),
+                                origin: Some([0.0, 0.0, 0.0]), extra: Map::new(),
+                            },
+                            parent_uuid: None,
+                        });
+                        id
                     },
-                    parent_uuid: None,
-                });
-                id
-            }
-        }
-    };
-    let faces = new_cube_faces(&active.session.document().texture_assets);
-    operations.push(EditOperation::AddCube {
-        cube: Cube {
-            uuid: create_uuid(), kind: "cube".into(), name: Some("cube".into()),
-            from: [-1.0, 0.0, -1.0], to: [1.0, 2.0, 1.0],
-            origin: Some([0.0, 0.0, 0.0]), uv_offset: None,
-            faces, extra: Map::new(),
+                },
+            };
+            let faces = new_cube_faces(&session.document().texture_assets);
+            operations.push(EditOperation::AddCube {
+                cube: Cube {
+                    uuid: create_uuid(), kind: "cube".into(),
+                    name: Some("cube".into()),
+                    from: [-1.0, 0.0, -1.0], to: [1.0, 2.0, 1.0],
+                    origin: Some([0.0, 0.0, 0.0]), uv_offset: None,
+                    faces, extra: Map::new(),
+                },
+                bone_uuid: parent,
+            });
+            session.apply(expected_revision, &operations).map_err(model_failure)?;
+            Ok(())
         },
-        bone_uuid: parent,
-    });
-    active.session.apply(expected_revision, &operations).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    )
 }
 
 
@@ -1178,16 +1240,16 @@ pub fn rust_editor_duplicate_cube(
     expected_epoch: u64, expected_revision: u64, source_uuid: String,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut store = lock(&state)?;
-    check_epoch(&store, expected_epoch)?;
-    let active = store.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    // This is the same atomic, revision-checked Rust operation exposed to CLI.
-    active.session.apply(expected_revision, &[EditOperation::DuplicateCube {
-        source_uuid, new_uuid: create_uuid(),
-    }]).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(store, known_preview_source_key.as_deref())
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(), None,
+        move |session| {
+            session.apply(expected_revision, &[EditOperation::DuplicateCube {
+                source_uuid, new_uuid: create_uuid(),
+            }]).map_err(model_failure)?;
+            Ok(())
+        },
+    )
 }
 
 #[tauri::command(async)]
@@ -1198,27 +1260,27 @@ pub fn rust_editor_add_bone(
     parent_uuid: Option<String>,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "Refresh the model before adding a Bone."));
-    }
-    let origin = if let Some(ref id) = parent_uuid {
-        active.session.document().bones.iter().find(|bone| bone.uuid == *id)
-            .ok_or_else(|| failure("BONE_PARENT_NOT_FOUND", "Select an existing parent Bone."))?
-            .origin.unwrap_or([0.0, 0.0, 0.0])
-    } else { [0.0, 0.0, 0.0] };
-    active.session.apply(expected_revision, &[EditOperation::AddBone {
-        bone: Bone {
-            uuid: create_uuid(), name: "bone".into(),
-            origin: Some(origin), extra: Map::new(),
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(),
+        Some("Refresh the model before adding a Bone."),
+        move |session| {
+            let origin = if let Some(ref id) = parent_uuid {
+                session.document().bones.iter().find(|bone| bone.uuid == *id)
+                    .ok_or_else(|| failure(
+                        "BONE_PARENT_NOT_FOUND", "Select an existing parent Bone."))?
+                    .origin.unwrap_or([0.0, 0.0, 0.0])
+            } else { [0.0, 0.0, 0.0] };
+            session.apply(expected_revision, &[EditOperation::AddBone {
+                bone: Bone {
+                    uuid: create_uuid(), name: "bone".into(),
+                    origin: Some(origin), extra: Map::new(),
+                },
+                parent_uuid,
+            }]).map_err(model_failure)?;
+            Ok(())
         },
-        parent_uuid,
-    }]).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    )
 }
 
 
@@ -1228,15 +1290,16 @@ pub fn rust_editor_create_animation(
     name: String, length: f64,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    active.session.apply(expected_revision, &[EditOperation::CreateAnimation {
-        uuid: create_uuid(), name, length,
-    }]).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(), None,
+        move |session| {
+            session.apply(expected_revision, &[EditOperation::CreateAnimation {
+                uuid: create_uuid(), name, length,
+            }]).map_err(model_failure)?;
+            Ok(())
+        },
+    )
 }
 
 #[tauri::command(async)]
@@ -1245,15 +1308,16 @@ pub fn rust_editor_add_rotation_keyframe(
     animation_uuid: String, bone_uuid: String, time: f64, rotation: [f64; 3],
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    active.session.apply(expected_revision, &[EditOperation::AddBoneRotationKeyframe {
-        animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
-    }]).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(), None,
+        move |session| {
+            session.apply(expected_revision, &[EditOperation::AddBoneRotationKeyframe {
+                animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
+            }]).map_err(model_failure)?;
+            Ok(())
+        },
+    )
 }
 
 #[tauri::command(async)]
@@ -1261,13 +1325,14 @@ pub fn rust_editor_undo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    active.session.undo(expected_revision).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(), None,
+        move |session| {
+            session.undo(expected_revision).map_err(model_failure)?;
+            Ok(())
+        },
+    )
 }
 
 #[tauri::command(async)]
@@ -1275,13 +1340,14 @@ pub fn rust_editor_redo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    active.session.redo(expected_revision).map_err(model_failure)?;
-    refresh_dirty(active);
-    current_detached(guard, known_preview_source_key.as_deref())
+    detached_edit(
+        &state.store, expected_epoch, expected_revision,
+        known_preview_source_key.as_deref(), None,
+        move |session| {
+            session.redo(expected_revision).map_err(model_failure)?;
+            Ok(())
+        },
+    )
 }
 
 /// Export a separate Minecraft Bedrock Geometry JSON without modifying the
@@ -1473,6 +1539,97 @@ pub async fn rust_editor_save_copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE-AUTHORED_NOT_RUN: prepared transactions never hold the store
+    // lock across cloning, validation or canonical hashing, and a competing
+    // authoring revision cannot be overwritten by a late provisional edit.
+    #[test]
+    fn detached_transactions_are_revision_guarded_and_retain_history() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Native", "native").unwrap()
+        ).unwrap();
+        let store = Mutex::new(EditorStore {
+            epoch: 7, active: Some(ActiveModel {
+                session, source_path: None, source_sha: None,
+                saved_canonical_sha: None, dirty: true,
+            }),
+        });
+        let accepted = detached_edit(&store, 7, 0, None, None, |pending| {
+            assert!(store.try_lock().is_ok());
+            pending.apply(0, &[EditOperation::CreateAnimation {
+                uuid:"00000000-0000-4000-8000-000000000915".into(),
+                name:"first".into(), length:1.0,
+            }]).map_err(model_failure)?;
+            Ok(())
+        }).unwrap();
+        assert_eq!(accepted.revision, 1);
+        assert_eq!(accepted.animation_count, 1);
+        assert!(accepted.can_undo);
+        let stale = detached_edit(&store, 7, 1, None, None, |pending| {
+            pending.apply(1, &[EditOperation::CreateAnimation {
+                uuid:"00000000-0000-4000-8000-000000000916".into(),
+                name:"uncommitted".into(), length:1.0,
+            }]).map_err(model_failure)?;
+            let mut guard = store.lock().unwrap();
+            guard.active.as_mut().unwrap().session.apply(1, &[
+                EditOperation::CreateAnimation {
+                    uuid:"00000000-0000-4000-8000-000000000917".into(),
+                    name:"other".into(), length:1.0,
+                },
+            ]).map_err(model_failure)?;
+            Ok(())
+        }).unwrap_err();
+        assert_eq!(stale.code, "RUST_MODEL_REJECTED");
+        assert_eq!(stale.message, "DOCUMENT_REVISION_STALE");
+        {
+            let guard = store.lock().unwrap();
+            let active = guard.active.as_ref().unwrap();
+            assert_eq!(active.session.summary().revision, 2);
+            assert_eq!(active.session.document().animation_assets.len(), 2);
+            assert!(!active.session.document().animation_assets.iter().any(|asset|
+                asset["name"] == "uncommitted"));
+        }
+        let after = detached_edit(&store, 7, 2, None, None, |pending| {
+            assert!(store.try_lock().is_ok());
+            pending.undo(2).map_err(model_failure)?;
+            Ok(())
+        }).unwrap();
+        assert_eq!(after.revision, 3);
+        assert_eq!(after.animation_count, 1);
+        assert!(after.can_redo);
+        let restored = detached_edit(&store, 7, 3, None, None, |pending| {
+            pending.redo(3).map_err(model_failure)?;
+            Ok(())
+        }).unwrap();
+        assert_eq!(restored.revision, 4);
+        assert_eq!(restored.animation_count, 2);
+    }
+
+    #[test]
+    fn detached_transaction_refuses_replaced_model_epoch() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Native", "native").unwrap()
+        ).unwrap();
+        let store = Mutex::new(EditorStore {
+            epoch: 3, active: Some(ActiveModel {
+                session, source_path: None, source_sha: None,
+                saved_canonical_sha: None, dirty: true,
+            }),
+        });
+        let error = detached_edit(&store, 3, 0, None, None, |pending| {
+            pending.apply(0, &[EditOperation::CreateAnimation {
+                uuid:"00000000-0000-4000-8000-000000000918".into(),
+                name:"abandoned".into(), length:1.0,
+            }]).map_err(model_failure)?;
+            store.lock().unwrap().epoch = 4;
+            Ok(())
+        }).unwrap_err();
+        assert_eq!(error.code, "RUST_EDITOR_SESSION_STALE");
+        let guard = store.lock().unwrap();
+        assert!(guard.active.as_ref().unwrap().session.document()
+            .animation_assets.is_empty());
+        assert_eq!(guard.active.as_ref().unwrap().session.summary().revision, 0);
+    }
 
     // SOURCE-AUTHORED_NOT_RUN: expensive projection must hold an immutable
     // document revision even after another writer commits; the store lock
