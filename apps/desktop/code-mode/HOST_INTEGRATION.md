@@ -54,7 +54,7 @@ nor the recorder can grant permissions, read model data or maintain
 authoring state. The module does not measure host setup or native asset
 quality. Positive/negative pure Node tests are authored but NOT_EXECUTED.
 The proposed live write contract is owned solely by
-[the Rust-native editor architecture](../../docs/04-system/rust-native-editor-plan.md);
+[the Rust-native editor architecture](../../../docs/04-system/rust-native-editor-plan.md);
 current `live-read-bridge` remains read-only and off by default.
 
 ## Experimental read-only live editor pairing (2026-11-18; SOURCE ONLY)
