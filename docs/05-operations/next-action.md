@@ -1,3 +1,21 @@
+**Rust Code Mode task context and measured runtime counters — 2026-11-18 (SOURCE ONLY):**
+The trusted Node Code Mode host now compacts the existing SHA-bound
+authoring_target inspector into an exact revision-bound taskContext
+with limited Geometry/UV/Texture metadata and explicit ambiguity/source
+blockers. It does not store an alternative model or confer write
+authority. preflightGuidance is a read-only, zero-Rust-call advisory:
+only a fully shaped singular rename may skip EXTRA dry-run; the actual
+Rust Apply always validates, checks SHA and respects independent host
+approval and reviewer-bound Paint gates. After Apply, exact changed
+UUIDs can guide focused inspection on the NEW source handle, with
+full fallback where Texture/UV/Animation effects are unknown.
+Successful host runs now report numeric timing/call aggregates.
+An optional trusted observer receives only anonymized aggregate
+counters for failed runs, not private data; failures never imply a
+successful model write. Source-only Node regressions AUTHORED_NOT_RUN.
+Native cost, token, latency and accepted-art improvements NOT_EXECUTED.
+Earlier entries preserve their proof limits and active holds.
+
 **Rust live read-only bridge admission and timeout hardening — 2026-11-18 (SOURCE ONLY):**
 Read-only Windows pairing now checks a separately presented native
 Yes/No decision, permits at most one pending prompt, and revokes

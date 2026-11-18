@@ -21,6 +21,54 @@ export interface CodeModeInitialReference {
   /** Indicates a trusted read-only local bridge, not a mutable project handle. */
   liveReadOnly?: true;
 }
+/** Observational counters from trusted host only. Millisecond measures
+ * overlap: never sum wall, RPC, adapter or approval wait as independent
+ * time. Model/code/pixel/secret content is never included. */
+export interface CodeModePerformance {
+  wall_ms: number;
+  /** First complete Deno output frame, NOT isolated V8 startup time. */
+  guest_first_frame_ms: number | null;
+  host_rpc_ms: number;
+  rust_adapter_ms: number;
+  rust_adapter_calls: number;
+  rust_adapter_failures: number;
+  approval_wait_ms: number;
+  rpc_failures: number;
+  rust_adapter_kind: "NO_DISK_RUST" | "CLI_EXECFILE" | "INJECTED_RUNNER";
+}
+export interface CodeModeTaskContext {
+  scope: "sha_bound_semantic_task_context";
+  source_model_sha256: string; source_revision: number;
+  project: string; domain: string; category: string; requested_name: string;
+  status: "EXACT_MATCH"|"AMBIGUOUS_NAME"|"IDENTITY_MISSING"|"NO_EXACT_MATCH";
+  candidate_count: number; candidates_truncated: boolean;
+  candidates: Array<{uuid: string|null; name: string|null; index: number}>;
+  target: null | {
+    uuid: string; index: number; name: string;
+    parent_uuid?: string|null;
+    geometry?: {from: number[]|null; to: number[]|null; origin: number[]|null};
+    uv?: {box_uv:boolean|null; auto_uv:number|null; per_texture_rules:boolean|null};
+    face_links?: Array<{side:string; reference_kind:string;
+      texture_uuid:string|null; uv_zero_span:boolean}>;
+    asset_kind?: string; source_kind?: string|null;
+  };
+  candidate_operations: string[];
+  source_blockers: string[];
+  write_authority: "NOT_GRANTED";
+  visual_verdict: "UNVERIFIED";
+  next: string;
+}
+export interface PreflightGuidance {
+  source_model_sha256: string; source_revision: number;
+  scope: "advisory_typed_plan_preflight";
+  recommendation: "OPTIONAL"|"RECOMMENDED";
+  reasons: string[];
+  operation_count: number; operation_kinds: string[];
+  operation_kinds_truncated: boolean;
+  validation_authority: "RUST_APPLY_ALWAYS_REQUIRED";
+  write_authority: "NOT_GRANTED";
+  visual_verdict: "UNVERIFIED";
+}
 export interface CodeModeRunReceipt {
   status: "OK";
   value: unknown;
@@ -33,6 +81,8 @@ export interface CodeModeRunReceipt {
   /** UTF-8 JSON bytes in the final value returned for model consumption,
    * excluding tool envelope/logs. Not a quality/efficiency PASS claim. */
   model_result_bytes: number;
+  /** Observed time and call counters, not an accepted quality result. */
+  performance: CodeModePerformance;
 }
 export interface CodeModeTexturingReadinessReceipt {
   scope:"saved_model_texture_workflow_review";
@@ -78,6 +128,16 @@ export interface CodeModeGuestAPI {
   inspect(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   catalog(args: { project: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt>;
   inspectBatch(args: { project: string; requests: InspectBatchQuery[] }): Promise<InspectBatchReceipt>;
+  /** One authoritative authoring_target inspection, compacted by trusted host. */
+  taskContext(args: {
+    project:string; domain:"geometry"|"uv"|"texturing"|"animation";
+    category:"cubes"|"bones"|"textures"|"animations"; name:string;
+  }): Promise<CodeModeTaskContext>;
+  /** Advisory only; this does not execute native preflight or Apply. */
+  preflightGuidance(args: {
+    project:string; operations:EditOperation[];
+    correctionScope?:TextureCorrectionScope;
+  }): Promise<PreflightGuidance>;
   /** Host injects the operator-selected master UUID; the guest cannot supply it. */
   inspectApprovedMaterial(args: {
     project: string; candidateTextureUuid: string;
@@ -446,6 +506,13 @@ export interface CodeModeHostOptions {
   /** Trusted fixture seams only; never pass untrusted model data as functions. */
   runner?: (args: string[]) => Promise<Readonly<Record<string, unknown>>>;
   spawnImpl?: (bin: string, args: string[], options: Record<string, unknown>) => any;
+  /** Host-only, optional aggregate counters for success AND failure.
+   * Never receives paths, script text, source buffers or error details.
+   * Throwing cannot alter the actual execution result.
+   */
+  observeExecutionMetrics?: (observation: Readonly<{
+    outcome: "OK"|"ERROR"; performance: CodeModePerformance;
+  }>) => void;
 }
 export declare function createCodeModeHost(options: CodeModeHostOptions): Promise<CodeModeHost>;
 export interface CodeModeToolDescriptor {

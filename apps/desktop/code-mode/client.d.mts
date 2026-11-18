@@ -985,6 +985,12 @@ export declare function createRustCodeModeClient(options: {
    * not invoked. Must not be model-authored or asynchronously resolved.
    */
   permitWriteLaunch?: (request: Readonly<MutationRequest>) => boolean;
+  /** Trusted-only timing observer, not model script output. Arguments/paths
+   * and source model bytes are never supplied.
+   */
+  onNativeCall?: (sample: Readonly<{
+    command:string; duration_ms:number; success:boolean;
+  }>) => void;
 }): RustCodeModeClient;
 /** A path and SHA-bound read-only view plus guarded output operations. */
 export interface RustCodeModeProject {

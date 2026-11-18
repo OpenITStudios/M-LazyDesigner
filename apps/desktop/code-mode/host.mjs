@@ -5,15 +5,18 @@
  * SOURCE_ONLY: no native runtime or sandbox proof has been executed.
  */
 import { spawn } from 'node:child_process';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { lstat, realpath, readFile } from 'node:fs/promises';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
 import { createLiveReadClient } from './live-read-client.mjs';
+import { compactTaskContext, preflightGuidance } from './task-context.mjs';
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
   materialWorkPacketDigest,compileMaterialClusterPaint,
   paintOperationsFingerprint} from './material-work-packet.mjs';
@@ -782,6 +785,7 @@ export async function createCodeModeHost({
   preselectedPngPath, approvedMaterialReferenceUuid,
   preselectedVisualPair, approvedReferencePackagePath,
   reviewVisualPair, runner, spawnImpl, liveReadPairing, liveReadClient,
+  observeExecutionMetrics,
 } = {}) {
   // A pure live read-only session has no disk model, no file publisher and
   // does not use the CLI. Requiring a separate Rust binary in that mode
@@ -827,6 +831,10 @@ export async function createCodeModeHost({
   }
   if (spawnImpl !== undefined && typeof spawnImpl !== 'function') {
     throw new TypeError('spawnImpl must be a trusted host function');
+  }
+  if (observeExecutionMetrics !== undefined &&
+      typeof observeExecutionMetrics !== 'function') {
+    throw new TypeError('observeExecutionMetrics must be a trusted-host function');
   }
   if (authorizeMutation !== undefined &&
       typeof authorizeMutation !== 'function') {
@@ -883,6 +891,10 @@ export async function createCodeModeHost({
   // Only one code session may be active per host. Operator approval is
   // invalidated when that session exits or times out.
   let activeExecution = null;
+  // Native adapter calls can complete after their Deno guest has exited.
+  // Scope each observation to the originating RPC rather than whichever
+  // later guest currently occupies the host slot.
+  const metricScope = new AsyncLocalStorage();
   // Every approval descriptor is linked to the exact guest that received it.
   // This prevents an old approval from being consumed by a later guest when
   // Rust plan-file creation yields to the event loop before CLI launch.
@@ -890,6 +902,13 @@ export async function createCodeModeHost({
   const client = pureLiveRead ? null : createRustCodeModeClient({
     binary: rustBinary,
     ...(runner ? { runner } : {}),
+    onNativeCall: (sample) => {
+      const run = metricScope.getStore();
+      if (!run) return;
+      run.metrics.rustAdapterCalls++;
+      run.metrics.rustAdapterMs += sample.duration_ms;
+      if (!sample.success) run.metrics.rustAdapterFailures++;
+    },
     authorizeMutation: async (request) => {
       const execution = activeExecution;
       if (!execution || execution.closed ||
@@ -899,6 +918,7 @@ export async function createCodeModeHost({
       if (typeof authorizeMutation !== 'function' ||
           execution.closed || activeExecution !== execution) return false;
       execution.pause();
+      const approvalStarted = performance.now();
       let approved;
       try {
         approved = await authorizeMutation(Object.freeze({
@@ -911,6 +931,8 @@ export async function createCodeModeHost({
           }:{}),
         }));
       } finally {
+        execution.metrics.approvalWaitMs +=
+          Math.max(0, performance.now() - approvalStarted);
         execution.resume();
       }
       // Prevent a delayed approval from reviving a timed-out guest.
@@ -1031,6 +1053,31 @@ export async function createCodeModeHost({
     preflight: async (args) => selected(args).preflight({
       operations: args.operations, correctionScope: args.correctionScope,
     }),
+    // One existing native authoring_target query, then a small host-only
+    // projection. No unbounded scene/PNG/opaque payload reaches Deno.
+    taskContext: async (args) => {
+      const p = selected(args);
+      const response = await p.inspectBatch([{
+        kind: 'authoring_target',
+        domain: args.domain, category: args.category, name: args.name,
+      }]);
+      return compactTaskContext(response, {
+        project: args.project, domain: args.domain, category: args.category,
+        name: args.name, expectedSha256: p.expectedSha256,
+      });
+    },
+    // Advisory for deciding whether to call native dry-run. Never changes
+    // real Apply validation, host approval, reviewed Paint or publication.
+    preflightGuidance: async (args) => {
+      const p = selected(args);
+      return Object.freeze({
+        source_model_sha256: p.expectedSha256,
+        source_revision: p.summary.revision,
+        ...preflightGuidance({
+          operations: args.operations, correctionScope: args.correctionScope,
+        }),
+      });
+    },
     inspectBatch: async (args) => {
       // Generic guest reads must never masquerade as the operator-selected
       // approved master. The trust-bound method below injects that identity.
@@ -2116,7 +2163,30 @@ export async function createCodeModeHost({
     if (activeExecution) {
       throw new Error('CODE_MODE_HOST_BUSY');
     }
-    const execution = { closed: false, pendingApproval: false, pause: () => {}, resume: () => {} };
+    const execution = {
+      closed: false, pendingApproval: false, pause: () => {}, resume: () => {},
+      startedAt: performance.now(),
+      metrics: {
+        guestFirstFrameMs: null, hostRpcMs: 0, approvalWaitMs: 0,
+        rustAdapterMs: 0, rustAdapterCalls: 0, rustAdapterFailures: 0,
+        rpcFailures: 0,
+      },
+    };
+    const duration = (value) => Math.max(0, Math.round(value));
+    const metrics = () => Object.freeze({
+      wall_ms: duration(performance.now() - execution.startedAt),
+      // Includes Deno startup, guest compilation and work until the first
+      // output frame; this is NOT isolated process cold-start time.
+      guest_first_frame_ms: execution.metrics.guestFirstFrameMs,
+      host_rpc_ms: duration(execution.metrics.hostRpcMs),
+      rust_adapter_ms: duration(execution.metrics.rustAdapterMs),
+      rust_adapter_calls: execution.metrics.rustAdapterCalls,
+      rust_adapter_failures: execution.metrics.rustAdapterFailures,
+      approval_wait_ms: duration(execution.metrics.approvalWaitMs),
+      rpc_failures: execution.metrics.rpcFailures,
+      rust_adapter_kind: pureLiveRead ? 'NO_DISK_RUST' :
+        (runner ? 'INJECTED_RUNNER' : 'CLI_EXECFILE'),
+    });
     activeExecution = execution;
     try {
     const start = JSON.stringify({
@@ -2139,7 +2209,9 @@ export async function createCodeModeHost({
             WINDIR: process.env.WINDIR ?? '' } : {}),
       },
     });
-    return await new Promise((resolve, reject) => {
+    let outcome = 'ERROR';
+    try {
+    const result = await new Promise((resolve, reject) => {
       let closed = false;
       let concluded = null;
       let failure = null;
@@ -2243,16 +2315,20 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_RPC_BUDGET_EXCEEDED');
         }
         pendingRpc++;
+        const rpcStarted = performance.now();
         try {
           try {
-            const value = await actions[message.method](
-              requireObject(message.args[0]));
+            const value = await metricScope.run(execution, () =>
+              actions[message.method](requireObject(message.args[0])));
             send({ type: 'rpc_result', id: message.id, ok: true, result: value });
           } catch (error) {
+            execution.metrics.rpcFailures++;
             send({ type: 'rpc_result', id: message.id, ok: false,
               code: shortError(error) });
           }
         } finally {
+          execution.metrics.hostRpcMs +=
+            Math.max(0, performance.now() - rpcStarted);
           pendingRpc--;
         }
       }
@@ -2273,6 +2349,10 @@ export async function createCodeModeHost({
             failure = new Error('CODE_MODE_RPC_LINE_TOO_LARGE');
             child.kill();
             return;
+          }
+          if (execution.metrics.guestFirstFrameMs === null) {
+            execution.metrics.guestFirstFrameMs =
+              duration(performance.now() - execution.startedAt);
           }
           chain = chain.then(() => processMessage(line)).catch((error) => {
             failure = error;
@@ -2330,11 +2410,25 @@ export async function createCodeModeHost({
             rpc_calls: calls,
             rpc_response_bytes: rpcResponseBytes,
             model_result_bytes: modelResultBytes,
+            performance: metrics(),
           }));
         }).catch(reject);
       });
       child.stdin.write(start);
     });
+    outcome = 'OK';
+    return result;
+    } finally {
+      // The optional trusted observer is the sole failure-sample outlet.
+      // Never log model/source strings, guest scripts, selected names,
+      // paths, PNGs, pairing tokens or raw errors. It cannot change the
+      // tool's real execution result.
+      if (observeExecutionMetrics) {
+        try { observeExecutionMetrics(Object.freeze({
+          outcome, performance: metrics(),
+        })); } catch {}
+      }
+    }
     } finally {
       execution.closed = true;
       if (activeExecution === execution) activeExecution = null;
@@ -2363,6 +2457,7 @@ export function createCodeModeTool(host) {
       'For a named target with unknown UUID, use authoring_target inside inspectBatch. Read-only example: const r=await codemode.inspectBatch({project:codemode.initial.project,requests:[{kind:"authoring_target",domain:"texturing",category:"cubes",name:"Helmet"}]}); const t=r.results[0].target; return {status:t.status,uuid:t.selected?.identity.uuid??null,ops:t.candidate_operations,blockers:t.source_blockers,candidates:t.status==="EXACT_MATCH"?undefined:t.candidates.slice(0,4)};',
       'Known UUID: skip name discovery. Group independent source questions in one inspectBatch; filter/aggregate in JavaScript, then return only the answer, source SHA and meaningful blockers. A null/absent face is not automatically an artistic defect.',
       'Use semanticMap only for a small, paged identity/parent inventory. A preflight dry-run validates an exact typed Rust plan without writing or obtaining authority; a later apply still needs separate trusted approval, current source SHA and real visual review.',
+      'Use taskContext for one exact named target when the UUID is unknown; it compacts a single verified authoring_target read, not artistic evidence. Use preflightGuidance for advisory risk orientation; call native preflight for risky plans when appropriate. Neither grants permission nor changes the required Rust Apply validation.',
       ...(host.initial?.liveReadOnly ? [
         'For a user-paired live editor, call liveSessionInfo then liveSemanticMap with its exact expectedEpoch and expectedRevision. These are read-only. Do not confuse live state with headless disk project handles or attempt live writes.'
       ] : []),

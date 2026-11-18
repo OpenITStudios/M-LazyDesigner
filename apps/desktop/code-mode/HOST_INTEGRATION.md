@@ -1,3 +1,51 @@
+## SHA-bound task context, advisory preflight, and anonymous host metrics
+
+The existing Deno guest may call taskContext({project,domain,category,name})
+for a named part only when its UUID is unknown. This is one existing Rust
+authoring_target inspectBatch read, followed by a bounded trusted-Node
+projection of the exact object identity, parent, relevant UV/face links,
+source blockers and candidate operations. It never sends opaque model
+extensions, raw PNG or a second model store into Deno. Ambiguous saved names
+produce target:null, not a selected object. The result remains UNVERIFIED
+for artistic correctness and NOT_GRANTED for mutation authority.
+
+preflightGuidance({project,operations,correctionScope}) is advice computed
+without a Rust invocation. Only one fully formed rename_node is OPTIONAL;
+multi-operation, Geometry/UV/Texturing/Animation, unknown and other edits
+are RECOMMENDED for existing native preflight. This does not run preflight
+or waive any actual Rust Apply validation or operator approval. If
+recommended and the task warrants it, call the current source-SHA-pinned
+preflight before requesting a separately authorized Apply.
+
+After Apply succeeds, inspect the NEW output project handle using
+mutation.changed_uuids as hints for focused inspectBatch selectors.
+Changed Texture pixels can affect multiple mapped Cubes, and Animation
+and UV edits can propagate beyond a single UUID. When the impact is
+not proven, use the existing complete source/visual review rather than
+assuming a focused read proves global quality.
+
+host.execute successful receipts include performance.wall_ms,
+guest_first_frame_ms, host_rpc_ms, rust_adapter_ms, rust_adapter_calls,
+rust_adapter_failures, approval_wait_ms, rpc_failures and
+rust_adapter_kind. These are overlapping observational counters; they
+are neither billed tokens, pure Deno startup time nor visual performance.
+INJECTED_RUNNER observations from regression fixtures do NOT measure the
+Rust CLI. Rust-adapter timing is bound to the originating RPC with Node AsyncLocalStorage;
+a late, canceled or orphaned native operation cannot be counted as the
+next guest's work. The observer remains optional, in-memory and isolated
+from permission decisions.
+
+A trusted optional observeExecutionMetrics callback receives
+outcome and numeric aggregates on both guest success and failure. It is
+best-effort, never receives private scripts/paths/PNG/model data/tokens,
+does not persist measurements, and cannot change authorization or result.
+Host setup before execute, GPU rendering, and native QA are excluded.
+
+Compare the old and new workflows using the repository's existing
+six-category authoring benchmark, identical source/reference and actual
+accepted visual outcomes. Reduced RPCs alone are not quality evidence.
+All regressions are SOURCE AUTHORED / NOT_EXECUTED under the active hold.
+
 ## Experimental read-only live editor pairing (2026-11-18; SOURCE ONLY)
 
 The Rust Desktop has an **opt-in Windows Named Pipe read-only bridge**

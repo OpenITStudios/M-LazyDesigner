@@ -1836,3 +1836,37 @@ test('Code Mode preflight uses exact Rust edit plan but never requests write app
     }), /CODE_MODE_PREFLIGHT_RECEIPT_INVALID/);
   }
 });
+
+test('Rust adapter timing observer reports only allowed command, duration and success', async () => {
+  const samples = [];
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    onNativeCall: sample => samples.push(sample),
+    runner:async argv=>({
+      status:argv[0]==='inspect'?'OK':'ERROR',
+      ...(argv[0]==='inspect'?{sha256:SHA,summary:{revision:0}}:
+        {code:'SOURCE_SHA256_STALE'}),
+    }),
+  });
+  await client.inspect({input:'/abs/source.bbmodel'});
+  await assert.rejects(client.audit({
+    input:'/abs/source.bbmodel',expectedSha256:SHA,
+  }),/SOURCE_SHA256_STALE/);
+  assert.deepEqual(samples.map(s=>s.command),['inspect','inspect']);
+  assert.deepEqual(samples.map(s=>s.success),[true,false]);
+  assert.ok(samples.every(s=>Number.isSafeInteger(s.duration_ms)&&s.duration_ms>=0));
+  assert.ok(samples.every(s=>Object.keys(s).sort().join(',')===
+    'command,duration_ms,success'));
+  assert.equal(JSON.stringify(samples).includes('/abs/source.bbmodel'),false);
+  assert.equal(JSON.stringify(samples).includes(SHA),false);
+});
+
+test('failing native observer cannot change Rust command results', async () => {
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    onNativeCall:()=>{throw Error('BROKEN_METRICS');},
+    runner:async()=>({status:'OK',sha256:SHA,summary:{revision:0}}),
+  });
+  const result=await client.inspect({input:'/abs/source.bbmodel'});
+  assert.equal(result.status,'OK');
+});

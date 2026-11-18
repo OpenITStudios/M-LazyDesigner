@@ -7,6 +7,7 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
+import { performance } from 'node:perf_hooks';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
@@ -436,7 +437,7 @@ function serializeInspectionQueries(requests) {
  * the binary directly. The host must isolate the code and supply a fixed SDK.
  */
 export function createRustCodeModeClient({
-  binary, runner, authorizeMutation, permitWriteLaunch,
+  binary, runner, authorizeMutation, permitWriteLaunch, onNativeCall,
 } = {}) {
   absolute(binary, 'binary');
   if (runner !== undefined && typeof runner !== 'function') {
@@ -447,6 +448,9 @@ export function createRustCodeModeClient({
   }
   if (permitWriteLaunch !== undefined && typeof permitWriteLaunch !== 'function') {
     throw new TypeError('permitWriteLaunch must be a synchronous trusted-host function');
+  }
+  if (onNativeCall !== undefined && typeof onNativeCall !== 'function') {
+    throw new TypeError('onNativeCall must be a trusted-host function');
   }
   const invoke = runner ?? ((args) => runBinary(binary, args));
   async function requestWrite(operation, details) {
@@ -473,13 +477,34 @@ export function createRustCodeModeClient({
         throw new Error('CODE_MODE_MUTATION_SESSION_STALE');
       }
     }
-    const result = await invoke(args);
-    // The default process runner validates JSON on success and on error.
-    // Trusted test runners return objects directly.
-    if (!result || result.status !== 'OK') {
-      throw new Error(typeof result?.code === 'string' ? result.code : 'CODE_MODE_CLI_FAILURE');
+    // Measure only the admitted first-party Rust transport call; plan-file
+    // preparation, approval, inspection processing and UI wait are separate.
+    // Never pass arguments, paths, model bytes or approval descriptors to
+    // the metric observer. A broken observer cannot change actual behavior.
+    const began = performance.now();
+    let ok = false;
+    try {
+      const result = await invoke(args);
+      // The default process runner validates JSON on success and on error.
+      // Trusted test runners return objects directly.
+      if (!result || result.status !== 'OK') {
+        throw new Error(typeof result?.code === 'string' ? result.code : 'CODE_MODE_CLI_FAILURE');
+      }
+      ok = true;
+      return result;
+    } finally {
+      if (onNativeCall) {
+        try {
+          onNativeCall(Object.freeze({
+            command,
+            duration_ms: Math.max(0, Math.round(performance.now() - began)),
+            success: ok,
+          }));
+        } catch {
+          // Telemetry is strictly non-authoritative and best-effort.
+        }
+      }
     }
-    return result;
   }
   return Object.freeze({
     async newModel({ output, name, modelIdentifier }) {

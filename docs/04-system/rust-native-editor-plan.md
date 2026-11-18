@@ -119,6 +119,26 @@ configuration and bounds overall reply time. The GUI attempts an
 earlier voluntary disconnect. These are source controls, not evidence
 that Windows ACL/dialog/lifecycle or native rendering passed.
 
+### Bounded agent task context and selective preflight advisory (2026-11-18; SOURCE ONLY)
+
+The Code Mode host exposes a single read-only facade over the existing
+first-party Rust authoring_target inspector. A bounded taskContext
+preserves the exact model SHA, source revision, UUID/parent, relevant
+model metadata and source blockers without echoing a complete .bbmodel.
+Ambiguous names remain unselected; source inspection does not certify
+artistic correctness or permission to mutate. A separate zero-native
+preflightGuidance advises existing dry-run for any nontrivial plan.
+Only one well-formed rename may omit extra preflight; all real Apply
+still rechecks native Rust constraints, source SHA, host authorization,
+and relevant visual-review gates. The host retains the existing Deno
+isolation and no-overwrite publication.
+
+Trusted host performance counters report observed wall time, time to
+first Deno frame, native adapter and RPC/approval timing. Values overlap
+and have no quality or CPU/RAM proof without local measurement.
+Accepted model quality still requires the existing Golden tasks and
+matched reference/current visual evidence. No runtime tests were run.
+
 ## 2. Grounded baseline and ownership conflict resolution
 
 **Observed source, not execution:**

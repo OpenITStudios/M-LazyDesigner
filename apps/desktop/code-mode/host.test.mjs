@@ -3965,3 +3965,116 @@ test('pure live read does not require a separate Rust CLI binary or allow write 
     spawnImpl:()=>{throw Error('NOT_CALLED');},
   }),/CODE_MODE_LIVE_READ_ONLY_CONFIG_INVALID/);
 });
+
+test('task context makes one SHA-bound authoring_target query and does not echo full source', () =>
+  fixture(async input => {
+    const nativeCalls = [], observations = [];
+    let step = 0;
+    const host = await createCodeModeHost({
+      rustBinary:'/trusted/rust', denoBinary:'/trusted/deno', input,
+      observeExecutionMetrics: report => {
+        observations.push(report);
+        assert.ok(['OK','ERROR'].includes(report.outcome));
+        assert.equal(typeof report.performance.wall_ms,'number');
+        assert.equal(JSON.stringify(report).includes('Helmet'),false);
+        assert.equal(JSON.stringify(report).includes(input),false);
+      },
+      runner: async argv => {
+        nativeCalls.push(argv[0]);
+        if (argv[0] === 'inspect') return {
+          status:'OK',sha256:HASH,summary:SUMMARY,
+        };
+        assert.equal(argv[0],'inspect-batch');
+        const file=argv[argv.indexOf('--queries')+1];
+        const plan=JSON.parse(await readFile(file,'utf8'));
+        assert.deepEqual(plan.requests,[{
+          kind:'authoring_target',domain:'geometry',category:'cubes',
+          name:'Helmet',
+        }]);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,results:[{
+          kind:'authoring_target',target:{
+            scope:'saved_model_named_target_orientation',
+            domain:'geometry',category:'cubes',requested_name:'Helmet',
+            status:'EXACT_MATCH',candidate_count:1,
+            candidates_truncated:false,
+            candidates:[{uuid:'cube-1',name:'Helmet',index:0}],
+            selected:{identity:{uuid:'cube-1',name:'Helmet',index:0},
+              source:{element:{kind:'cube',uuid:'cube-1',name:'Helmet',
+                parent_uuid:'bone-1',from:[0,0,0],to:[2,2,2],
+                faces:{north:{uv:[0,0,2,2]}}}}},
+            candidate_operations:['translate_cube'],
+            source_blockers:[],write_authority:'NOT_GRANTED',
+            visual_verdict:'UNVERIFIED',
+          },
+        }]};
+      },
+      spawnImpl: () => {
+        const method = step++ === 0 ? 'taskContext' : 'preflightGuidance';
+        const args = method === 'taskContext' ? {
+          project:'p0',domain:'geometry',category:'cubes',name:'Helmet',
+        } : {project:'p0',operations:[
+          {op:'rename_node',uuid:'cube-1',name:'Better Helmet'},
+        ]};
+        return fakeGuest({method,args}, reply => {
+          assert.equal(reply.ok,true);
+          assert.equal(reply.result.write_authority,'NOT_GRANTED');
+          if(method==='taskContext'){
+            assert.equal(reply.result.target.uuid,'cube-1');
+            assert.equal(reply.result.target.parent_uuid,'bone-1');
+            assert.equal(reply.result.visual_verdict,'UNVERIFIED');
+            assert.equal(reply.result.target.faces,undefined);
+          }else{
+            assert.equal(reply.result.recommendation,'OPTIONAL');
+            assert.equal(reply.result.validation_authority,
+              'RUST_APPLY_ALWAYS_REQUIRED');
+          }
+          return {method};
+        });
+      },
+    });
+    const first=await host.execute({code:'return codemode.taskContext({});'});
+    const second=await host.execute({code:'return codemode.preflightGuidance({});'});
+    assert.equal(first.value.method,'taskContext');
+    assert.equal(second.value.method,'preflightGuidance');
+    assert.deepEqual(nativeCalls,['inspect','inspect-batch']);
+    assert.equal(observations.length,2);
+    assert.equal(first.performance.rust_adapter_calls,1);
+    assert.equal(first.performance.rust_adapter_kind,'INJECTED_RUNNER');
+    assert.equal(second.performance.rust_adapter_calls,0);
+    assert.ok(first.performance.host_rpc_ms>=0);
+    assert.ok(first.performance.wall_ms>=0);
+    assert.ok(first.performance.guest_first_frame_ms>=0);
+  }));
+
+test('broken trusted metrics observer never changes a successful Code Mode result', () =>
+  fixture(async input => {
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      runner:async()=>({status:'OK',sha256:HASH,summary:SUMMARY}),
+      observeExecutionMetrics:()=>{throw Error('TELEMETRY_FAULT');},
+      spawnImpl:()=>fakeGuest({method:'projectInfo',args:{project:'p0'}},
+        value=>({verified:value.ok})),
+    });
+    const outcome=await host.execute({code:'return codemode.projectInfo({});'});
+    assert.equal(outcome.value.verified,true);
+    assert.equal(typeof outcome.performance.wall_ms,'number');
+  }));
+
+test('trusted observer records a refused guest without exposing guest source or model names', () =>
+  fixture(async input => {
+    const samples = [];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      runner:async()=>({status:'OK',sha256:HASH,summary:SUMMARY}),
+      observeExecutionMetrics: report => samples.push(report),
+      spawnImpl:()=>fakeGuest({method:'NOT_A_CODE_MODE_METHOD',args:{secret:'never logged'}},
+        ()=>{throw Error('UNREACHABLE');}),
+    });
+    await assert.rejects(host.execute({code:'return codemode.missing();'}),
+      /CODE_MODE_RPC_NOT_ALLOWED|CODE_MODE_OUTCOME_UNKNOWN/);
+    assert.equal(samples.length,1);
+    assert.equal(samples[0].outcome,'ERROR');
+    assert.equal(typeof samples[0].performance.wall_ms,'number');
+    assert.equal(JSON.stringify(samples).includes('never logged'),false);
+    assert.equal(JSON.stringify(samples).includes(input),false);
+  }));

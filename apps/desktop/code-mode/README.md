@@ -1,3 +1,23 @@
+**Bounded Code Mode task context and timing (2026-11-18; SOURCE ONLY):**
+The trusted Node host offers taskContext(project,domain,category,name) by
+compacting ONE SHA-pinned Rust inspectBatch authoring_target read. Exact
+UUID, parent and relevant geometry/face-link metadata remain; unknown and
+ambiguous target names never become mutation identities. The new
+preflightGuidance(project,operations,correctionScope) is a zero-Rust-call
+ADVISORY: only a precisely formed single rename may omit extra preflight;
+all real Apply calls retain Rust validation, revision/SHA admission, reviewed
+Paint authority, explicit host approval and no-overwrite publication.
+No visual PASS is inferred.
+
+Successful host execution receipts now include anonymous performance
+aggregates (wall, first Deno frame, host RPC, Rust adapter, approval wait,
+errors and call counts). A trusted observer can also collect the aggregates
+for failed runs without receiving code, paths, model names, image bytes,
+source hashes or credentials. Timings overlap and cannot be summed;
+first-frame time includes guest startup and work, not pure Deno startup.
+Source regressions AUTHORED_NOT_RUN. Native speed, model quality, token
+savings and Windows runtime remain NOT_EXECUTED.
+
 **Live read-only bridge security and footprint correction (2026-11-18; SOURCE ONLY):**
 An experimental Windows pairing now requires an independent native
 Yes/No dialog, forbids overlapping approval prompts, invalidates late
