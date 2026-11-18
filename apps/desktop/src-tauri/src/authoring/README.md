@@ -1,3 +1,18 @@
+**Private Rust editor recovery (2026-11-18; SOURCE ONLY):**
+The standalone Rust Desktop now has a private app-local recovery area,
+readable through a native File > Recover Checkpoint dialog. An idle
+Svelte timer requests immutable snapshots from the existing Rust
+EditorSession (30-second idle, bounded 2-minute pending window).
+Checkpoints are exclusive no-overwrite .bbmodel files inside the private
+recovery directory, with content SHA identity and limited verified
+retention per run/epoch. Restore validates the checkpoint and reopens it
+as a new dirty document, never rewrites the original or inherits the
+previous source file identity/Undo history. Listing is UNVERIFIED until
+actual native file validation. This is not a general autosave replacing
+Save Copy, nor an active AI live bridge. Source regressions authored
+NOT_EXECUTED. Windows security, interruption and native Blockbench parity
+remain UNVERIFIED. See docs/04-system/rust-native-editor-plan.md.
+
 **Rust Open fingerprint allocation reduction (2026-11-18; SOURCE ONLY):**
 The native Open command now computes its initial canonical document SHA with
 the validated EditorSession streaming sink instead of exporting a second

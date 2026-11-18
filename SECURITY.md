@@ -53,6 +53,21 @@ Runtime and Gateway connections are intentionally loopback-only. The managed nat
 - Secrets, access tokens, credentials, and private user data must not be committed to the repository or emitted in normal structured results/logging.
 - Generated documentation is not an authority for security behavior; executable source and regression tests are.
 
+## Rust-native private recovery data (source boundary)
+
+On the Rust development branch, optional native recovery checkpoints
+store complete potentially confidential .bbmodel model bytes under
+Tauri app-local-data rust-recovery directory. They are not Git-backed
+assets, telemetry, public exports, or Code Mode guest-readable paths.
+Only the trusted Rust Desktop owns the directory. A selected checkpoint
+must pass strict identifier, bounded regular-file read, SHA-256 and
+canonical Rust document validation before it can replace a dirty editor
+session with explicit user consent. Recovery never overwrites the source
+file and does not grant an AI mutation authority. Existing backups from
+other process runs may persist; app removal or OS data policies can erase
+them. Windows ACL/junction/adversarial same-user safety and crash
+durability are NOT_EXECUTED and must not be inferred from source.
+
 ## Filesystem / artifact threat surface
 
 Import, export, Reference Package, workspace, persistence, and generated-artifact paths are security-sensitive. Changes affecting path handling must explicitly consider:

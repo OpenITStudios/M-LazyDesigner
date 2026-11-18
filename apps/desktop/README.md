@@ -1,3 +1,14 @@
+**Rust private recovery source slice (2026-11-18; SOURCE ONLY):**
+The Rust editor now exposes File > Recover Checkpoint for selecting
+private, hash-identified app-local snapshots; the UI also schedules
+snapshots while an open model has unsaved edits. Recovery never modifies
+the original .bbmodel; opening a checkpoint creates a separate unsaved
+session that requires Save Copy. The same Rust model, transactions and
+UI viewport remain canonical; Code Mode headless is unchanged and live
+AI/GUI IPC is not enabled. Tests and actual Windows/WebView/Blockbench
+behavior are NOT_EXECUTED under the active hold. See the Rust authoring
+README and architecture acceptance contract.
+
 # LazyDesigner Desktop
 
 **Streaming Base64 PNG preview admission (2026-11-17; SOURCE ONLY):** The read-only Rust/Tauri embedded-PNG gate now parses the 33-byte PNG header and validates the remainder of the bounded Base64 source through the pinned `base64 0.22.1` `DecoderReader`, rather than allocating a decoded copy of the entire PNG on every snapshot. The same strict Base64 syntax, 2 MiB encoded-source cap, IHDR dimensions, 2048px/max 4M-pixel preview limits, mode/scope restrictions and browser-native PNG integrity gate remain. Source tests cover valid PNGs, malformed mid/tail Base64, header-only legacy admission and nonmutation. Actual Rust/Windows execution and RAM/CPU savings NOT_EXECUTED.

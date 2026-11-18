@@ -3,6 +3,7 @@
   import { invoke, isTauri } from '@tauri-apps/api/core';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { onMount, tick } from 'svelte';
+  import { recoveryCheckpointDelay, recoveryCheckpointNeeded } from './rustRecoverySchedule';
   import RustViewport from './RustViewport.svelte';
   import type { ReviewViewId } from './rustReviewCapture';
   import { prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
@@ -67,6 +68,20 @@
   let newName = 'New Model';
   let allowDiscard = false;
   let confirmDiscard: 'new' | 'open' | null = null;
+  type RecoveryEntry = {
+    id: string; epoch: number; revision: number; sizeBytes: number;
+    modifiedUnixMs: number; integrity: 'UNVERIFIED_UNTIL_OPEN';
+  };
+  type RecoveryReceipt = RecoveryEntry & { retentionComplete: boolean };
+  let recoveryDialog = false;
+  let recoveryEntries: RecoveryEntry[] = [];
+  let recoverySelectedId = '';
+  let recoveryDiscardApproved = false;
+  let recoveryWarning = '';
+  let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  let recoveryStartedAt: number | null = null;
+  let recoveryWriting = false;
+  let savedRecovery: { epoch: number; revision: number } | null = null;
   let collapsed = new Set<string>();
   let nameInput: HTMLInputElement;
   let discardCancel: HTMLButtonElement;
@@ -272,6 +287,7 @@
       animationValue = [0, 0, 0];
     }
     snapshot = next;
+    scheduleRecoveryCheckpoint(next);
     // Only an empty source model can change atlas dimensions; discard stale
     // UI drafts after any authoritative Rust snapshot or Undo receipt.
     requestedAtlasWidth = next.textureResolution[0];
@@ -284,6 +300,88 @@
     notice = '';
     return next;
   }
+  // UI schedules recovery; Rust owns the actual file and document state.
+  function scheduleRecoveryCheckpoint(current: EditorSnapshot) {
+    if (recoveryTimer !== null) {
+      clearTimeout(recoveryTimer);
+      recoveryTimer = null;
+    }
+    if (!current.dirty || !isTauri()) {
+      recoveryStartedAt = null;
+      if (!current.dirty) recoveryWarning = '';
+      return;
+    }
+    if (!recoveryCheckpointNeeded(current, savedRecovery)) return;
+    const now = Date.now();
+    if (recoveryStartedAt === null) recoveryStartedAt = now;
+    recoveryTimer = setTimeout(() => {
+      recoveryTimer = null;
+      void writeRecoveryCheckpoint();
+    }, recoveryCheckpointDelay(now, recoveryStartedAt));
+  }
+
+  async function writeRecoveryCheckpoint() {
+    const current = snapshot;
+    if (!current?.dirty || !isTauri() || recoveryWriting ||
+        !recoveryCheckpointNeeded(current, savedRecovery)) return;
+    recoveryWriting = true;
+    try {
+      const receipt = await invoke<RecoveryReceipt>(
+        'rust_editor_recovery_checkpoint', {
+          expectedEpoch: current.epoch, expectedRevision: current.revision,
+        });
+      if (snapshot?.epoch === receipt.epoch &&
+          snapshot?.revision === receipt.revision) {
+        savedRecovery = { epoch: receipt.epoch, revision: receipt.revision };
+        recoveryStartedAt = null;
+      }
+      recoveryWarning = receipt.retentionComplete ? '' :
+        'Recovery checkpoint saved; some older private snapshots could not be cleaned up.';
+    } catch {
+      recoveryWarning = 'Automatic recovery is unavailable. Use Save Copy to protect your edits.';
+      recoveryStartedAt = Date.now();
+    } finally {
+      recoveryWriting = false;
+      if (snapshot?.dirty && recoveryCheckpointNeeded(snapshot, savedRecovery)) {
+        scheduleRecoveryCheckpoint(snapshot);
+      }
+    }
+  }
+
+  async function openRecoveryDialog() {
+    if (busy || loading || paintStroke) return;
+    busy = true; closeMenus(); error = '';
+    try {
+      recoveryEntries = await invoke<RecoveryEntry[]>('rust_editor_recovery_list');
+      recoverySelectedId = recoveryEntries[0]?.id ?? '';
+      recoveryDiscardApproved = false;
+      recoveryDialog = true;
+      await tick();
+      document.getElementById('recovery-select')?.focus();
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
+
+  async function restoreRecovery() {
+    if (busy || !recoverySelectedId || (snapshot?.dirty && !recoveryDiscardApproved)) return;
+    busy = true; error = '';
+    try {
+      const recovered = await invoke<EditorSnapshot>(
+        'rust_editor_recovery_restore', {
+          id: recoverySelectedId, expectedEpoch: snapshot?.epoch ?? 0,
+          expectedRevision: snapshot?.revision ?? 0,
+          discard: recoveryDiscardApproved,
+        });
+      selectedId = null; selectedBoneId = null;
+      accept(recovered);
+      recoveryDialog = false;
+      recoveryDiscardApproved = false;
+      notice = 'Recovered a private checkpoint as an unsaved model. Use Save Copy to keep it.';
+      await tick(); viewport?.frameModel();
+    } catch (cause) { showError(cause); }
+    finally { busy = false; }
+  }
+
   async function command(name: string, args: Record<string, unknown>): Promise<EditorSnapshot | null> {
     if (busy) return null;
     busy = true; closeMenus(); error = '';
@@ -1083,10 +1181,11 @@
     }
     if (event.key === 'Escape') {
       if (confirmDiscard) confirmDiscard = null;
+      else if (recoveryDialog) recoveryDialog = false;
       else if (newDialog) newDialog = false;
       closeMenus(); return;
     }
-    if (newDialog || confirmDiscard) {
+    if (newDialog || confirmDiscard || recoveryDialog) {
       if (event.key === 'Tab') {
         const container = document.querySelector<HTMLElement>('.rust-modal-backdrop');
         const focusables = Array.from(container?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? []);
@@ -1457,6 +1556,7 @@
     return () => {
       disposed = true;
       unlistenClose?.();
+      if (recoveryTimer !== null) clearTimeout(recoveryTimer);
       pauseAnimationPlayback();
       document.removeEventListener('visibilitychange', onAnimationVisibilityChanged);
       window.removeEventListener('blur', pauseAnimationPlayback);
@@ -2127,6 +2227,7 @@
                 <button role="menuitem" onclick={requestNew} disabled={busy || loading}>New Model <kbd>Ctrl+N</kbd></button>
                 <button role="menuitem" onclick={requestOpen} disabled={busy || loading}>Open Model… <kbd>Ctrl+O</kbd></button>
                 <button role="menuitem" onclick={() => void saveCopy()} disabled={!snapshot || busy}>Save Copy… <kbd>Ctrl+Shift+S</kbd></button>
+                <button role="menuitem" onclick={() => void openRecoveryDialog()} disabled={busy || loading || !!paintStroke}>Recover Checkpoint…</button>
                 <button role="menuitem" onclick={() => void exportGeometry()}
                   disabled={!snapshot || busy || loading || !!paintStroke}
                   title="Export a separate Minecraft Bedrock geometry JSON. This does not replace your editable .bbmodel.">
@@ -2299,7 +2400,7 @@
           previewBoneTransforms={previewBoneTransforms}
           {selectedId} onSelect={selectCube}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
-          canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard}
+          canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard && !recoveryDialog}
           onTranslate={moveFromViewport} onRotate={rotateFromViewport}
           onScale={scaleFromViewport}/>
       {:else}
@@ -2346,7 +2447,7 @@
 
   <footer class="editor-statusbar" aria-live="polite">
     <span>{snapshot ? snapshot.cubes.length + ' Cubes · ' + snapshot.bones.length + ' Bones' : 'No model'}</span>
-    <span class="status-middle">{notice || (dockPersistenceError
+    <span class="status-middle">{recoveryWarning || notice || (dockPersistenceError
       ? 'Dock layout is session-only; preferences cannot be saved'
       : snapshot ? (
       workspaceMode === 'paint'
@@ -2404,7 +2505,47 @@
   </div>
 {/if}
 
+
+{#if recoveryDialog}
+  <div class="rust-modal-backdrop" role="presentation">
+    <section class="rust-editor-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="recovery-title">
+      <h2 id="recovery-title">Recover unsaved Rust model</h2>
+      <p>Private checkpoints are recovery candidates, not verified saves.
+        Recovery opens a separate unsaved model. Save Copy afterward.</p>
+      {#if recoveryEntries.length}
+        <label for="recovery-select">Available checkpoint</label>
+        <select id="recovery-select" bind:value={recoverySelectedId}
+          disabled={busy}>
+          {#each recoveryEntries as entry (entry.id)}
+            <option value={entry.id}>
+              {new Date(entry.modifiedUnixMs).toLocaleString()} · revision {entry.revision} · {Math.ceil(entry.sizeBytes / 1024)} KiB
+            </option>
+          {/each}
+        </select>
+        {#if snapshot?.dirty}
+          <label class="recovery-discard">
+            <input type="checkbox" bind:checked={recoveryDiscardApproved}/>
+            Discard current unsaved edits to open the selected checkpoint
+          </label>
+        {/if}
+      {:else}
+        <p>No private recovery checkpoints were found.</p>
+      {/if}
+      <div class="dialog-buttons">
+        <button type="button" onclick={() => recoveryDialog = false}>Cancel</button>
+        <button type="button" class="primary"
+          disabled={busy || !recoverySelectedId || (Boolean(snapshot?.dirty) && !recoveryDiscardApproved)}
+          onclick={() => void restoreRecovery()}>Recover as unsaved</button>
+      </div>
+    </section>
+  </div>
+{/if}
+
 <style>
+  .recovery-discard { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
+  .recovery-discard input { flex: none; }
+  #recovery-select { width: 100%; min-width: 0; }
   .paint-starter { display: grid; gap: 8px; padding: 10px; border-top: 1px solid #374151; }
   .paint-starter label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
   .paint-starter select { min-width: 0; max-width: 100%; flex: 1; }

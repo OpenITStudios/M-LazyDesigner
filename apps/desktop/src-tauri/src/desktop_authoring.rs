@@ -11,6 +11,7 @@
 //! never automatically retried or written to an original model.
 
 use crate::desktop_error::DesktopError;
+use crate::editor_recovery;
 use lazydesigner::authoring::{
     storage, sha256, paint_texture_editable, paint_texture_adoptable, paint_texture_exportable,
     paint_texture_snapshot_flags,
@@ -33,13 +34,25 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
-use tauri::State;
+use tauri::{Manager, State};
 
-#[derive(Default)]
 pub struct EditorState {
     store: Mutex<EditorStore>,
     // Independent edit gate: one provisional document transaction per editor.
     pending_edit: Mutex<()>,
+    // Not a capability or authentication credential. It only separates
+    // private recovery checkpoints written by separate desktop processes.
+    recovery_run_id: String,
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        Self {
+            store: Mutex::new(EditorStore::default()),
+            pending_edit: Mutex::new(()),
+            recovery_run_id: create_uuid().replace('-', ""),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1710,6 +1723,110 @@ pub async fn rust_editor_save_copy(
     current_detached(guard, ProjectionReuse::default()).map(Some)
 }
 
+// A recovery picker can be open while a newer GUI edit is committed.
+// Epoch protects model replacement; revision additionally protects changes
+// made to the same model before the user chooses to discard them.
+fn check_restore_revision(store: &EditorStore, expected_revision: u64)
+    -> Result<(), DesktopError> {
+    let actual = store.active.as_ref()
+        .map(|model| model.session.summary().revision)
+        .unwrap_or(0);
+    if actual != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE",
+            "The active model was edited while recovery was selected."));
+    }
+    Ok(())
+}
+
+// Trusted Tauri app-local data path; never take a recovery directory from
+// model content, UI input, guest JavaScript, or the headless CLI.
+fn recovery_directory(app: &tauri::AppHandle) -> Result<PathBuf, DesktopError> {
+    app.path().app_local_data_dir()
+        .map(|root| root.join("rust-recovery"))
+        .map_err(|_| failure("RUST_RECOVERY_DIRECTORY_UNAVAILABLE",
+            "The private recovery directory is unavailable."))
+}
+
+/// Immutable checkpoint of the exact requested Rust revision. It is NOT a
+/// user Save and never sets dirty=false, changes source_path or rewrites an
+/// original .bbmodel. App-side idle scheduling may call this read-only owner.
+#[tauri::command]
+pub async fn rust_editor_recovery_checkpoint(
+    app: tauri::AppHandle,
+    state: State<'_, EditorState>,
+    expected_epoch: u64,
+    expected_revision: u64,
+) -> Result<editor_recovery::RecoveryCheckpointReceipt, DesktopError> {
+    let frozen = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "Refresh before creating a recovery checkpoint.",
+    )?;
+    if !frozen.dirty {
+        return Err(failure("RUST_RECOVERY_MODEL_CLEAN",
+            "Recovery checkpoints are for unsaved edits only."));
+    }
+    let directory = recovery_directory(&app)?;
+    let run_id = state.recovery_run_id.clone();
+    tauri::async_runtime::spawn_blocking(move ||
+        editor_recovery::checkpoint(
+            &directory, &run_id, expected_epoch, &frozen.session,
+        )
+    ).await.map_err(|_| failure("RUST_RECOVERY_TASK_FAILED",
+        "The recovery checkpoint operation did not complete."))?
+     .map_err(|code| failure("RUST_RECOVERY_CHECKPOINT_FAILED", code))
+}
+
+/// Read-only discovery; filenames are potential candidates, not proof of
+/// readable contents. Each chosen candidate is rehashed/revalidated by Rust.
+#[tauri::command]
+pub async fn rust_editor_recovery_list(
+    app: tauri::AppHandle,
+) -> Result<Vec<editor_recovery::RecoveryEntry>, DesktopError> {
+    let directory = recovery_directory(&app)?;
+    tauri::async_runtime::spawn_blocking(move ||
+        editor_recovery::list(&directory)
+    ).await.map_err(|_| failure("RUST_RECOVERY_TASK_FAILED",
+        "Recovery listing did not complete."))?
+     .map_err(|code| failure("RUST_RECOVERY_LIST_FAILED", code))
+}
+
+/// Explicit user-initiated recovery opens the private snapshot as a *new
+/// unsaved* editor session. It never restores its old source path, replaces
+/// the user's original, or silently assumes the older Undo history.
+#[tauri::command]
+pub async fn rust_editor_recovery_restore(
+    app: tauri::AppHandle,
+    state: State<'_, EditorState>,
+    id: String,
+    expected_epoch: u64,
+    expected_revision: u64,
+    discard: bool,
+) -> Result<EditorSnapshot, DesktopError> {
+    {
+        let guard = lock(&state)?;
+        check_epoch(&guard, expected_epoch)?;
+        check_restore_revision(&guard, expected_revision)?;
+        check_discard(&guard, discard)?;
+    }
+    let directory = recovery_directory(&app)?;
+    let session = tauri::async_runtime::spawn_blocking(move ||
+        editor_recovery::open(&directory, &id)
+    ).await.map_err(|_| failure("RUST_RECOVERY_TASK_FAILED",
+        "Recovery read did not complete."))?
+     .map_err(|code| failure("RUST_RECOVERY_MODEL_REJECTED", code))?;
+    let _lease = write_lease(&state.pending_edit)?;
+    let mut guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    check_restore_revision(&guard, expected_revision)?;
+    check_discard(&guard, discard)?;
+    guard.epoch += 1;
+    guard.active = Some(ActiveModel {
+        session, source_path: None, source_sha: None,
+        saved_canonical_sha: None, dirty: true,
+    });
+    current_detached(guard, ProjectionReuse::default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2115,6 +2232,26 @@ mod tests {
         assert_eq!(active.source_sha.as_deref(), Some(raw_sha.as_str()));
         assert_eq!(active.saved_canonical_sha.as_deref(),
             Some(canonical_sha.as_str()));
+    }
+
+    // A stale restore decision cannot silently replace a newer native edit.
+    #[test]
+    fn restore_revision_gate_rejects_stale_active_document() {
+        let mut store = EditorStore::default();
+        assert!(check_restore_revision(&store, 0).is_ok());
+        assert_eq!(check_restore_revision(&store, 1).err().unwrap().code,
+            "RUST_EDITOR_REVISION_STALE");
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Recover", "recover").unwrap()
+        ).unwrap();
+        store.active = Some(ActiveModel {
+            session, source_path: None, source_sha: None,
+            saved_canonical_sha: None, dirty: true,
+        });
+        assert!(check_restore_revision(&store, 0).is_ok());
+        assert_eq!(check_restore_revision(&store, 2).err().unwrap().code,
+            "RUST_EDITOR_REVISION_STALE");
+        assert!(check_discard(&store, false).is_err());
     }
 
     // SOURCE AUTHORED; NOT_EXECUTED under the Rust branch's localtest hold.

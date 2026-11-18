@@ -1,3 +1,22 @@
+**Rust active-session recovery foundation — 2026-11-18 (SOURCE ONLY):**
+The selected Rust source adds a Tauri-owned private recovery checkpoint
+store using the existing immutable EditorSession and .bbmodel encoder,
+with app-local-data storage and source-SHA-bound no-overwrite publication.
+Svelte requests checkpoints after idle / bounded continuous edit intervals;
+File > Recover Checkpoint allows explicit selection and opens restored bytes
+as a dirty new document with no source-path inheritance. Recoverable
+files are never saved automatically over an original. Three newest valid
+snapshots are retained per process run/epoch; older runs can remain. A
+candidate filename is not trusted as valid until Rust rehashes and
+reopens its bytes. Authored regression sources cover tampering, unknown
+IDs, no-overwrite, retention, stale revision and scheduling boundaries.
+Live Code Mode named-pipe transport is NOT IMPLEMENTED; existing headless
+Code Mode and all reviews/approvals are unchanged. Rust/Svelte/Node tests,
+Windows path/ACL/crash experiments, Blockbench reopen and latency/size
+measurements remain NOT_EXECUTED under hold. Next user-selected phase can
+evaluate native recovery behavior before enabling any live AI writer.
+Earlier entries retain their original proof limits.
+
 **Rust native Open canonical fingerprint — 2026-11-18 (SOURCE ONLY):**
 The Tauri Open path was still calling a full, allocating .bbmodel export
 just to obtain the admitted session's initial canonical SHA. It now uses

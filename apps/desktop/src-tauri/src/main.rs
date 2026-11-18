@@ -12,6 +12,7 @@ mod blockbench_surface;
 mod desktop_error;
 mod desktop_instance;
 mod desktop_authoring;
+mod editor_recovery;
 mod diagnostics;
 mod operation_log;
 mod metadata_io;
@@ -342,7 +343,10 @@ fn main() {
             desktop_authoring::rust_editor_add_rotation_keyframe,
             desktop_authoring::rust_editor_undo,
             desktop_authoring::rust_editor_redo,
-            desktop_authoring::rust_editor_save_copy
+            desktop_authoring::rust_editor_save_copy,
+            desktop_authoring::rust_editor_recovery_checkpoint,
+            desktop_authoring::rust_editor_recovery_list,
+            desktop_authoring::rust_editor_recovery_restore
         ])
         .build(tauri::generate_context!())
         .expect("error while building LazyDesigner Desktop")

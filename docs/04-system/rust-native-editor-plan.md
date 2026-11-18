@@ -62,6 +62,55 @@ Non-goals: reproducing every unrelated Blockbench plugin, every model format, a 
 
 Primary upstream comparison owners at the pinned Blockbench revision: `themes/dark.bbtheme`, `css/window.css`, `css/panels.css`, `js/interface/panels.ts`, `js/formats/bbmodel.js` and associated mode/menu/toolbar/animation source. These are **reference data**. A review of GPL-3.0-or-later obligations, compatibility with LazyDesigner's GPL-3.0-only source and rights to individual icons/fonts/brands/assets is mandatory **before copying protected implementation or resources**. A visually equivalent independently implemented UI is not proof of a legal right to use upstream branding.
 
+### Active Rust session and private recovery contract (2026-11-18; SOURCE ONLY)
+
+**Implementation boundary:** The GUI in-process Tauri EditorState
+still owns one active EditorSession, epoch/revision guards, the pending
+edit/publication lease, source SHA, dirty baseline and Undo/Redo.
+No Named Pipe, HTTP endpoint or other AI live-mutation transport has
+been installed or enabled. The current Code Mode Deno guest to trusted
+Node host to Rust CLI continues to use independent, SHA-bound files.
+Proposed live transport is NOT IMPLEMENTED and may only advance after
+a separately audited same-user Windows ACL, trusted host approval,
+immutable read lease, stale transaction rejection and lifecycle protections.
+
+**Source-authored recovery:** Rust Desktop now has private
+app-local-data rust-recovery checkpoints, separate from workspace, Git,
+model files and the headless CLI. An idle UI timer requests a
+checkpoint after 30 seconds of inactivity or at a maximum pending interval
+of 120 seconds while edits continue. It passes the exact epoch/revision;
+Rust freezes the existing validated session, serializes ordinary editable
+.bbmodel, verifies its SHA-256, and publishes a new file exclusively
+without overwriting any original. The identifier contains only a random
+process run ID, epoch, revision and content digest. It is NOT an
+authentication token. Up to three verified checkpoints per run/epoch are
+retained, with best-effort cleanup only after a valid new checkpoint.
+Candidates from prior runs may remain; no global storage limit or automatic
+cleanup across sessions is claimed. The catalog is bounded, filename-only
+and UNVERIFIED_UNTIL_OPEN; a user-selected recovery must recheck
+file identity and fully validate the Rust document before admission.
+A successful recovery resets file/path provenance and opens a new dirty
+Rust editor session (no retained old Undo), requiring a deliberate
+Save Copy to produce a saved artifact.
+
+**Safety and failure:** Checkpoints never clear dirty, mutate the active
+document, replace source files, inherit a trusted reference approval, or
+grant a live AI session. Failed writes leave earlier checkpoints alone;
+late/out-of-order immutable versions cannot overwrite newer versions.
+The OS/app-data storage boundary and retention are not proof against a
+malicious same-user process or arbitrary Windows junction races. A
+checkpoint is not equivalent to durable Save Copy, a visual review, or a
+Blockbench acceptance PASS.
+
+**Required proof after hold release:** Cargo check/tests for the exact
+Rust revision and correct Tauri command registration; Windows app-local
+path and private-permission observation; forced interruption before/after
+publication; tampered/oversized/malformed checkpoint refusal; source
+external-change and no-overwrite tests; GUI idle and active-edit timing;
+crash/restart discovery and user-confirmed restore; original-file identity,
+dirty state, Undo and .bbmodel editable reopening in real Blockbench.
+No such tests ran in the ChatGPT GitHub source surface.
+
 ## 3. Single-authority runtime contract
 
 ~~~text
