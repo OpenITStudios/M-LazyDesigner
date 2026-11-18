@@ -1,3 +1,16 @@
+**Rust repository navigation cleanup — 2026-11-18 (SOURCE ONLY):**
+The physical Rust authoring domains were already split into Geometry/UV,
+Paint/Texture, Animation, format and Code Mode modules. Root and local
+README entrypoints plus existing system implementation map/module-boundary
+owners now distinguish `Rust` from retained `Local`, name the single Rust
+model authority and route the three future engine jobdesks to their
+actual source/consumer/test owners. No production module was moved, no
+API/feature/permission changed, and no new architecture/Skill/router
+was introduced. Source/links reviewed; tests/CI/native remain NOT_EXECUTED.
+Next: Geometri is the first separately scoped engine-quality workstream;
+do not infer quality improvement, performance gains or native
+Blockbench acceptance from documentation navigation changes alone.
+
 **Rust P0 cross-domain editable-project provenance — 2026-11-18 (SOURCE ONLY):**
 Extended the existing read-only Rust asset handoff with exact streaming
 canonical .bbmodel SHA and byte length, using the same validated document

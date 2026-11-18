@@ -2,10 +2,12 @@
 
 Owns LazyDesigner system architecture details that are neither product policy nor asset-authoring policy.
 
-For the user-approved `Rust` branch native-editor architecture and Phase 0 gates, start with [rust-native-editor-plan.md](rust-native-editor-plan.md). The newer [Code Mode migration](code-mode-migration.md) describes the Rust-only AI interface target, source adapter and cutover gates. It is a target plan only; existing Blockbench Runtime ownership remains in [implementation-map.md](implementation-map.md) until implemented.
+For the user-approved `Rust` standalone editor, first locate the real module in [the implementation map](implementation-map.md#rust-source-ownership-and-entrypoints), then check [module boundaries](module-boundaries.md#rust-branch-authoring-authority) and [the Rust acceptance contract](rust-native-editor-plan.md). [Code Mode migration](code-mode-migration.md) owns the AI host integration and cutover criteria. The legacy Blockbench Gateway/Runtime remains a different implementation on `Local`, not an implicit dependency of Rust authoring.
 
 ```text
 canonical-vocabulary.md
+rust-native-editor-plan.md
+code-mode-migration.md
 ai-context-loading.md
 authoring-knowledge-maturity.md
 authoring-stage-context.md
@@ -32,6 +34,15 @@ zero-waste-token-efficiency-plan.md
 ## Read order by question
 
 ```text
+Where is each Rust Geometri/Texture/Animasi module, its CLI/GUI consumer and test owner?
+→ implementation-map.md#rust-source-ownership-and-entrypoints
+
+Which dependencies are allowed between Rust Core, Svelte/Three.js, Tauri and Code Mode?
+→ module-boundaries.md#rust-branch-authoring-authority
+
+What must a Rust .bbmodel / Geometry / PNG / Animation export preserve?
+→ rust-native-editor-plan.md
+
 Which exact term owns a concept, and which legacy names are compatibility-only?
 → canonical-vocabulary.md
 

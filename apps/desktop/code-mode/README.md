@@ -1,3 +1,31 @@
+# LazyDesigner Rust Code Mode — source-only agent bridge
+
+## First-read map
+
+Code Mode is the AI **client** for the canonical Rust authoring library,
+not another authoring engine or a source of GUI model state.
+
+```text
+sandbox-worker.mjs (Deno: restricted model-authored code)
+  → host.mjs (trusted Node RPC/approval, bounded observations)
+  → client.mjs (typed project handles + SHA-bound Rust adapter)
+  → src-tauri/src/bin/lazydesigner-authoring.rs (first-party CLI)
+  → src-tauri/src/authoring/mod.rs (Rust document and transactions)
+```
+
+- `client.d.mts`, `host.d.mts`: public TypeScript contracts.
+- `task-context.mjs`: bounded source-derived task guidance; not model truth.
+- `live-read-client.mjs`: optional Windows read-only pairing only;
+  **no live AI write** and no implicit GUI/CLI session synchronization.
+- `*.test.mjs`: regression source; actual execution remains on hold.
+
+For the exact domain owner, use [the system map](../../../docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints).
+Only trusted host approval may authorize a separately saved file mutation;
+Deno itself cannot grant rights. Source tests, native sandbox and
+Blockbench quality remain NOT_EXECUTED.
+
+## Dated source history (preserved)
+
 **P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**
 The existing `inspectBatch([{kind:'asset_handoff', texture_uuid:'...'}])`
 now returns `handoff.bbmodel` with a streaming canonical SHA-256 and
@@ -99,7 +127,6 @@ and 96 KiB reply budgets, agent permissions and visual review requirements
 are unchanged. Native regression source is AUTHORED_NOT_RUN; no throughput
 or memory measurements were executed.
 
-# LazyDesigner Rust Code Mode — source-only agent bridge
 
 **SHA-bound inspectBatch duplicate-selector reduction (2026-11-17; SOURCE ONLY):** Within one bounded Rust `inspect-batch` call, the first-party SDK now sends each normalized identical read-only selector only once and restores the original positional results from the returned immutable source SHA. A later call always re-reads and rechecks the current model SHA; no persistent cache, new runner, loss of caller order, host reference-binding bypass or Rust validation shortcut is introduced. It rejects mismatched source/selector-count/kind receipts and enforces the existing Rust 96 KiB result-array budget after expanding duplicate entries; each duplicate result is independently cloned to prevent accidental guest-side aliasing. Source-only regression cases authored for repeated/reordered selectors, stale source, malformed/oversized receipts and temp-file cleanup. No real Node/Rust/PC-local tests or measured timing were executed.
 

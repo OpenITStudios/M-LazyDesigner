@@ -1,3 +1,28 @@
+# LazyDesigner Desktop
+
+## Start here — Rust editor and retained legacy Desktop
+
+**Branch `Rust` source only.** `src/main.ts` mounts the standalone
+`RustEditorRoot.svelte`, using `RustEditorPage.svelte` (Edit/Paint/
+Animate) and a read-only `RustViewport.svelte`. The canonical
+`AuthoringDocument` and mutations are Rust-owned; legacy Blockbench
+machine-control code in this directory is **retained** but not the
+Rust authoring engine. Native build/visual acceptance remains held.
+
+| Question | Direct source owner |
+| --- | --- |
+| Model document, Geometry/Texture/Animation operations | [Rust authoring core](src-tauri/src/authoring/README.md) |
+| Active GUI session, epoch, IPC, recovery | `src-tauri/src/desktop_authoring.rs`, `src-tauri/src/editor_recovery.rs` |
+| Editor controls / derived 3D viewport | `src/RustEditorPage.svelte`, `src/RustViewport.svelte` |
+| AI script execution over the same Rust core | [Code Mode host](code-mode/README.md) and `src-tauri/src/bin/lazydesigner-authoring.rs` |
+| Legacy Blockbench Desktop controls | Retained `src-tauri/src/main.rs` Blockbench modules; **not** the Rust model owner |
+
+For the complete, single path map and Geometri → Texture → Animasi
+routing, read [the canonical implementation map](../../docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints).
+Do not infer native feature completion from the historical source notes below.
+
+## Historical source notes (retained)
+
 **Optional Code Mode live-read admission hardening (2026-11-18; SOURCE ONLY):**
 The feature-gated Windows read-only pairing now requires a native
 Yes/No approval in addition to the File menu request. Pending prompts,
@@ -40,7 +65,6 @@ AI/GUI IPC is not enabled. Tests and actual Windows/WebView/Blockbench
 behavior are NOT_EXECUTED under the active hold. See the Rust authoring
 README and architecture acceptance contract.
 
-# LazyDesigner Desktop
 
 **Streaming Base64 PNG preview admission (2026-11-17; SOURCE ONLY):** The read-only Rust/Tauri embedded-PNG gate now parses the 33-byte PNG header and validates the remainder of the bounded Base64 source through the pinned `base64 0.22.1` `DecoderReader`, rather than allocating a decoded copy of the entire PNG on every snapshot. The same strict Base64 syntax, 2 MiB encoded-source cap, IHDR dimensions, 2048px/max 4M-pixel preview limits, mode/scope restrictions and browser-native PNG integrity gate remain. Source tests cover valid PNGs, malformed mid/tail Base64, header-only legacy admission and nonmutation. Actual Rust/Windows execution and RAM/CPU savings NOT_EXECUTED.
 

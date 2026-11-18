@@ -2,7 +2,70 @@
 
 Updated: 2026-10-20
 
-This file maps **current source ownership only**. The trusted Code Mode host-owned task-context presenter compacts the existing Rust authoring_target inspector; advisory preflight classification and numeric timing observations reside only in Code Mode host/SDK modules, not in a new Rust model, QA engine, or permission authority. On Windows only, `live_read_bridge.rs` is an optional, user-paired, read-only transport to the existing `EditorSession`; Node's `code-mode/live-read-client.mjs` is a trusted read-only consumer. The Cargo feature is off by default and no live mutation has been added. The Rust `authoring/semantic_map.rs` and `EditorSession::preflight` are shared read-only Core owners; `desktop_authoring.rs` freezes and verifies the GUI session revision, while the headless CLI uses source-SHA-verified file admission. Code Mode exposes those reads through its existing trusted host; no live Node-to-Tauri transport or second model store has been introduced. On `Rust`, `apps/desktop/src-tauri/src/editor_recovery.rs` owns only the private app-local checkpoint files and integrity/retention checks; `desktop_authoring.rs` remains the sole active-session authority and exposes the user-initiated recovery commands. Svelte owns only idle scheduling and the selection dialog. No AI live transport is installed, and checkpoint bytes cannot grant edit permission or model approval. The user-approved standalone Rust editor now has a **source-authored Rust Geometry/UV + Tauri/Svelte Edit slice**, not a native-accepted or complete Blockbench replacement. `apps/desktop/src-tauri/src/authoring/mod.rs` owns the typed Rust model and transactions, `src/authoring/bbmodel.rs` the pinned editable format adapter, `src/lib.rs` the shared library entry, and `src/bin/lazydesigner-authoring.rs` the direct CLI. `src/desktop_authoring.rs` now bridges the shared Rust Core to the Svelte Edit UI and `RustViewport.svelte` Three.js projection. The Rust branch selects the new editor at startup while keeping the legacy companion route. MCP and the managed distribution have NOT been migrated. On the Rust branch, `apps/desktop/src/rustDockLayout.ts` owns only UI docking, in-window floating and the limited two-panel attached-tab state; `RustEditorPage.svelte` reuses existing panel content in the active slot. This is source-authored/not native-executed and never owns authored model data. The target ownership and acceptance gates remain in [rust-native-editor-plan.md](rust-native-editor-plan.md). Existing Blockbench Runtime owners below remain the legacy implementation authority until replaced with evidence. Product workflow belongs in `docs/01-product/flow.md`; AI context loading in `docs/04-system/ai-context-loading.md`; continuation/proof in `docs/05-operations/`.
+This document is the **source-ownership map**, not a second engine or
+runtime capability registry. It separates the two independent branch
+implementations: `Rust` (standalone Rust editor/CLI + Code Mode) and
+`Local` (Blockbench Gateway/Runtime). The same repository contains retained
+legacy files on `Rust`; their presence does not make them the active Rust
+authoring path. Use the table below to find the first responsible source,
+then inspect only its callers and tests. Feature acceptance/proof is owned
+by [Rust editor contract](rust-native-editor-plan.md) and
+[current operations](../05-operations/); current code and branch HEAD are
+always the factual implementation authority.
+
+## Rust source ownership and entrypoints
+
+The `Rust` branch has **one authoritative `AuthoringDocument` /
+`EditorSession`** for each open Rust session. Desktop UI and headless AI
+reuse the same Rust types/operations, but **do not automatically share an
+in-memory session**.
+
+```text
+apps/desktop/src/main.ts → RustEditorRoot.svelte → RustEditorPage.svelte
+  └─ RustViewport.svelte / rustAnimationPose.ts (derived UI/viewport)
+          ↓ Tauri IPC
+apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
+          ↓
+apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
+          ├─ Geometry/Rig/UV      → geometry.rs, subtree.rs, uv_sharing.rs
+          ├─ Texture/Paint        → paint.rs, face_regions.rs, material_*.rs
+          ├─ Animation            → animation_clip.rs, bezier.rs,
+          │                         effects.rs, timeline_markers.rs,
+          │                         animation_export.rs
+          ├─ Cross-domain QA      → asset_handoff.rs, texture_coverage.rs
+          └─ Formats/Persistence  → bbmodel.rs, storage.rs
+
+apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
+   → host.mjs (trusted Node permissions/RPC) → client.mjs
+   → apps/desktop/src-tauri/src/bin/lazydesigner-authoring.rs
+   → SAME Rust authoring core, independent SHA-bound saved-file session
+```
+
+| Change requested | First semantic owner | Adjacent consumers/checks |
+| --- | --- | --- |
+| Document identity, edit batch, Undo/Redo | `apps/desktop/src-tauri/src/authoring/mod.rs` | `authoring/tests.rs`, Tauri + CLI apply contracts |
+| **Geometri**: Cube/Bone hierarchy, pivot, bounds, UV-aware edits | `authoring/mod.rs` (`EditOperation`), `subtree.rs`, `geometry.rs`, `uv_sharing.rs` | `authoring/tests.rs`, `.bbmodel` + `.geo.json`, `RustViewport.svelte` |
+| **Texture**: RGBA8 Paint, face-local edits, atlas/material evidence | `authoring/paint.rs`, `face_regions.rs`, `palette.rs`, `material_styling.rs` | `correction_scope.rs`, `texture_coverage.rs`, `asset_handoff.rs`, Paint UI + PNG export |
+| **Animasi**: clips, keyframes, curves, effects | `authoring/mod.rs`, `animation_clip.rs`, `bezier.rs`, `animation_export.rs` | `effects.rs`, `timeline_markers.rs`, `rustAnimationPose.ts` (view-only), .animation.json |
+| Editable Blockbench file and source provenance | `authoring/bbmodel.rs`, `storage.rs`, `asset_handoff.rs` | `EditorSession::export`, `authoring/tests.rs`, CLI `asset_handoff` inspector |
+| Desktop active model, recovery, optional live reads | `desktop_authoring.rs`, `editor_recovery.rs`, `live_read_bridge.rs` | `RustEditorPage.svelte` and snapshot/epoch guards; live-read default-off |
+| AI scripting, authorization and compact inspection | `code-mode/host.mjs`, `client.mjs`, `task-context.mjs` | `sandbox-worker.mjs`, CLI, `code-mode/*.test.mjs` |
+
+**Stage order for further work:** Geometri → Texture → Animasi. Reuse
+the existing shared `EditPlan`, `asset_handoff`, `bbmodel` codec and
+current source regressions; do not add a second authoring database, router,
+shared JS asset engine, or parallel test runner. Read cross-domain contracts
+only for an actual dependency. The existing Rust [module boundaries](module-boundaries.md#rust-branch-authoring-authority)
+set the allowed dependency direction, while the [Rust architecture](rust-native-editor-plan.md)
+sets acceptance.
+
+**Proof boundary:** Current `Rust` work is SOURCE_ONLY. Rust
+Edit/Paint/Animate source exists, including a read-only Three.js projection
+and four-artifact asset handoff; actual Rust/Node/Windows execution,
+Blockbench re-open/edit/animation/visual fidelity, efficiency and release
+are **NOT_EXECUTED/UNVERIFIED** under the active hold. The optional
+Windows Named Pipe remains disabled by default and read-only; headless
+Code Mode writes only separately authorized new saved-file siblings.
 
 ## Architecture
 

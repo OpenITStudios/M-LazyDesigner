@@ -1,6 +1,6 @@
 # LazyDesigner
 
-LazyDesigner is an AI-assisted **Minecraft Bedrock Entity** authoring workspace built around a local Blockbench MCP Runtime, a stable AI-client-facing Gateway, and a lightweight Control front line for context-efficient Codex work.
+LazyDesigner is an AI-assisted **Minecraft Bedrock Entity** authoring workspace with two independent development paths: a standalone Rust-first authoring editor on `Rust`, and the existing Blockbench-hosted Gateway/Runtime on `Local`. The Rust engine owns the model, transactions, validation and export; Svelte/Three.js provide presentation and Deno Code Mode composes authorized Rust operations. This does **not** imply that the Rust editor is installed, tested, or replacing the `Local` runtime.
 
 **Former project name:** BlockIT. New source/build, managed installer, plugin and Gateway identities are canonical LazyDesigner; old BlockIT machine state is detected only for safe explicit migration and is never selected as the active Runtime.
 
@@ -10,13 +10,36 @@ LazyDesigner is an AI-assisted **Minecraft Bedrock Entity** authoring workspace 
 
 ```text
 Local  → existing Blockbench-hosted development line
-Rust   → native-editor source development (Edit slice; native QA pending)
+Rust   → standalone Rust editor (Edit/Paint/Animate source; native QA pending)
 main   → stable / release authority; changes only by explicit promotion
 ```
 
-Legacy Blockbench-hosted development uses `Local`; the standalone Rust-native editor is developed on `Rust` under its own branch-local profile and [Phase 0 contract](docs/04-system/rust-native-editor-plan.md). The 2026-11-15 priority is **Geometry → Texturing → Animation**, UI/UX last; editable export to Blockbench, not pixel-identical UI or unrestricted reverse imports, is the product gate. The [Code Mode migration](docs/04-system/code-mode-migration.md) is now the user-selected **Rust AI interface target**, using host-run JS/TS and the existing Rust CLI; legacy MCP remains separately preserved. The Rust branch now contains source-authored Rust Core, direct CLI and a Tauri/Svelte Edit-mode editor; none is an installed or native-accepted replacement. The established Blockbench-hosted product remains separately on `Local`. Repository behavior is routed by `AGENTS.md`; GitHub execution/history/CI rules are owned by `GITHUB_RULES.md`.
+Legacy Blockbench-hosted development uses `Local`; the standalone Rust-native editor is developed on `Rust` under its own branch-local profile and [Phase 0 contract](docs/04-system/rust-native-editor-plan.md). The 2026-11-15 priority is **Geometry → Texturing → Animation**, UI/UX last; editable export to Blockbench, not pixel-identical UI or unrestricted reverse imports, is the product gate. The [Code Mode migration](docs/04-system/code-mode-migration.md) is now the user-selected **Rust AI interface target**, using host-run JS/TS and the existing Rust CLI; legacy MCP remains separately preserved. The Rust branch contains source-authored Rust Core, direct CLI, and Tauri/Svelte Edit, Paint and Animate slices; none is an installed or native-accepted replacement. The established Blockbench-hosted product remains separately on `Local`. Repository behavior is routed by `AGENTS.md`; GitHub execution/history/CI rules are owned by `GITHUB_RULES.md`.
 
 For a new ChatGPT repository chat, provide the selected `Local` or `Rust` URL and intended task. ChatGPT follows current root rules, works GitHub/cloud-first without requiring the user's PC, and treats `amati` as read-only. Continuity comes from current source and relevant work commits, not chat titles.
+
+## Rust source map — start here
+
+Work on the `Rust` branch uses one Rust authoring engine, not the legacy
+Blockbench plugin. The [canonical source-owner map](docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints)
+is the first lookup when choosing which module to change.
+
+| Task | Start with | Responsibility |
+| --- | --- | --- |
+| Rust model/transactions | [`authoring/mod.rs`](apps/desktop/src-tauri/src/authoring/mod.rs) | `AuthoringDocument`, `EditorSession`, typed `EditOperation`, Undo/Redo |
+| Geometri / Rig / UV | [`authoring/geometry.rs`](apps/desktop/src-tauri/src/authoring/geometry.rs) + [`subtree.rs`](apps/desktop/src-tauri/src/authoring/subtree.rs) | Geometry/Bedrock export and Bone hierarchy helpers; shared mutation definitions remain in `mod.rs` |
+| Texture / Paint | [`authoring/paint.rs`](apps/desktop/src-tauri/src/authoring/paint.rs) + [`face_regions.rs`](apps/desktop/src-tauri/src/authoring/face_regions.rs) | Rust-owned RGBA8 pixel edits and UV-bound patch admission |
+| Animasi | [`authoring/animation_export.rs`](apps/desktop/src-tauri/src/authoring/animation_export.rs) + [`animation_clip.rs`](apps/desktop/src-tauri/src/authoring/animation_clip.rs) | Supported animation data, curves and Bedrock resource export |
+| Export/interop/quality | [`bbmodel.rs`](apps/desktop/src-tauri/src/authoring/bbmodel.rs) + [`asset_handoff.rs`](apps/desktop/src-tauri/src/authoring/asset_handoff.rs) | Editable .bbmodel and cross-domain source checks |
+| Desktop UI | [`RustEditorPage.svelte`](apps/desktop/src/RustEditorPage.svelte) + [`RustViewport.svelte`](apps/desktop/src/RustViewport.svelte) | Read-only projections and user input requests; never a second model |
+| AI Code Mode | [`code-mode/`](apps/desktop/code-mode/README.md) | Deno guest → trusted Node host → Rust CLI; separate saved-file session |
+
+To understand allowed dependencies, read
+[module boundaries](docs/04-system/module-boundaries.md). For actual
+interoperability targets and held evidence, read
+[the Rust architecture contract](docs/04-system/rust-native-editor-plan.md).
+`mcp/`, the old Desktop machine-control route and existing 12 project
+Skills are retained; they are **not** proof of an active Rust runtime.
 
 ## Rust-native Code Mode development surface
 
@@ -95,6 +118,9 @@ Historical audits, retired product paths, obsolete continuation, and old roadmap
 
 ## Current Product Surface
 
+The Gateway/catalog counts below describe the **legacy Blockbench-hosted `Local` implementation**, not the Rust CLI or Deno Code Mode surface. Live installations require separate runtime evidence.
+
+
 ```text
 Control                     front-line context/readiness/routing
 Gateway client surface      4 fixed tools
@@ -124,7 +150,7 @@ Static source/CI proof can establish routing, contracts, schemas, deterministic 
 
 ## Repository Map
 
-One repository contains two distinct responsibilities. Choose the relevant owner before reading or writing.
+The repository retains both the Rust-first editor and the legacy Blockbench-hosted implementation. Choose the branch and its canonical owner before reading or writing; a directory shared by both lines does not imply shared running state.
 
 | Responsibility | Canonical owner | Contents |
 | --- | --- | --- |

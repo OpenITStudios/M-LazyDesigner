@@ -1,3 +1,27 @@
+# Rust-native authoring core — Phase 1/2 source integration
+
+## Entry and domain ownership
+
+This directory is the **single Rust model/transaction implementation**
+shared by the Tauri GUI and headless Rust CLI. `mod.rs` owns
+`AuthoringDocument`, `EditorSession`, `EditOperation`, validation and
+Undo/Redo; domain modules own their specialized semantics.
+
+| Jobdesk | Read these implementations first |
+| --- | --- |
+| Geometri | `mod.rs` (EditOperation), `geometry.rs`, `subtree.rs`, `uv_sharing.rs` |
+| Texture | `paint.rs`, `face_regions.rs`, `material_styling.rs`, `texture_coverage.rs` |
+| Animasi | `animation_clip.rs`, `bezier.rs`, `animation_export.rs`, `effects.rs` |
+| Cross-domain export/validation | `bbmodel.rs`, `asset_handoff.rs`, `storage.rs`, `tests.rs` |
+
+UI/Tauri lifecycle remains in `../desktop_authoring.rs`; Deno/Node
+permission and script composition remain under `../../../code-mode/`.
+No new Rust package or duplicate document store is needed. Source
+status is NOT_EXECUTED; see [system owner map](../../../../../docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints)
+and [architecture/acceptance](../../../../../docs/04-system/rust-native-editor-plan.md).
+
+## Dated source history (preserved)
+
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**
 The existing read-only Bedrock `asset_handoff` now includes the
 canonical editable `.bbmodel` SHA-256 and exact serialized byte count
@@ -67,7 +91,6 @@ original-file protections, .bbmodel format and visual review gates remain
 unchanged. Source regressions are AUTHORED_NOT_RUN and native behavior is
 UNVERIFIED.
 
-# Rust-native authoring core — Phase 1/2 source integration
 
 **Source-bound user-initiated camera PNG capture (2026-11-17; SOURCE ONLY):**
 Rust desktop now offers a six-direction fixed-camera `Capture PNG` action for the

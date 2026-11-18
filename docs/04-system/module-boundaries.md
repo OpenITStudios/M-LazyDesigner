@@ -10,6 +10,52 @@ This document defines the maintainability boundary for active LazyDesigner sourc
 - compatibility aliases are temporary migration surfaces;
 - refactors preserve Runtime behavior, MCP public surface, schemas, validation and native Blockbench semantics.
 
+## Rust branch authoring authority
+
+This section applies to the independent `Rust` editor, **not** the
+existing `Local` Gateway/Blockbench runtime. The [Implementation Map](implementation-map.md#rust-source-ownership-and-entrypoints)
+owns the exact path inventory; this file owns only dependency direction.
+
+```text
+Human: Svelte controls / Three.js derived viewport
+    → Tauri desktop_authoring.rs (session + epoch/revision)
+    → Rust authoring/mod.rs (document + transaction + validation)
+    → geometry / paint / animation / bbmodel / asset_handoff / storage
+
+AI: Deno permission-denied guest → trusted Node host + approval
+    → Rust CLI (saved-file SHA + no-overwrite publication)
+    → SAME Rust authoring/mod.rs implementation, DIFFERENT session
+
+Legacy Local: Control → Gateway → Blockbench Runtime (preserved)
+```
+
+- **Rust Core is authoritative:** `AuthoringDocument`, typed edits,
+  preflight, transaction/Undo/Redo, validation and file serialization
+  belong to the shared Rust library. Domain modules own Geometry/UV,
+  RGBA8 Paint and Animation semantics; they do not gain separate
+  document stores. `bbmodel.rs` is a format adapter, not a second schema.
+- **Presentation is derived:** Svelte/Three.js may hold UI selection,
+  playback preview, layout and transient gesture values. A rendered
+  mesh/pose or WebView cache is never saved authoring truth or a native
+  visual-quality verdict; mutations always go through Rust.
+- **Code Mode is a client, not an engine:** Deno never receives
+  unrestricted Node/file/pipe access. The trusted Node host owns
+  authorization; the CLI enforces SHA-bound operations and fresh-output
+  publication. Live GUI and headless file sessions remain separate.
+- **Cross-domain checks remain independent:** `asset_handoff.rs`
+  reads the actual Rust Geometry/PNG/Animation exporters and canonical
+  `.bbmodel` fingerprint. It may report defects but cannot grant
+  approval, mutate model data or certify Blockbench native quality.
+- **Legacy stays isolated:** `mcp/`, old Desktop machine-control
+  modules and the 12 domain Skills remain intact for `Local`. No
+  retirement, API cutover, migration or test-hold release follows from
+  adding navigation or reorganizing a Rust module.
+
+Do not split `authoring/mod.rs`, `desktop_authoring.rs`, the large
+Svelte page or Code Mode host merely for file size. Split only when an
+actual independent semantic owner and its affected callers can be
+moved coherently while preserving the current contracts and proof gates.
+
 ## Layer direction
 
 ```text
