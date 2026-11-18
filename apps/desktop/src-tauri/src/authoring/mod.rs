@@ -132,54 +132,67 @@ pub enum OutlinerNode {
     Bone(OutlinerBone),
 }
 
-/// Large JSON asset collections share their immutable allocations between
-/// document revisions. Geometry edits no longer clone embedded Base64 PNGs
-/// or Animation keyframes just to construct the next atomic candidate.
-/// Mutation stays Rust-owned: the first mutable access clones that collection
-/// if another revision (Undo, snapshot, or provisional edit) still holds it.
-/// Wire format remains a plain JSON array, not a reference or external file.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SharedJsonAssets(Arc<Vec<Value>>);
+/// Large source-owned JSON collections (Texture/Animation) and opaque
+/// project extensions share immutable allocations between Rust revisions.
+/// Mutation uses Arc::make_mut on the affected collection, preserving the
+/// previously admitted Undo, read-only viewport and provisional versions.
+/// The on-disk .bbmodel schema remains ordinary JSON arrays and fields.
+#[derive(Debug, Clone)]
+pub struct SharedJson<T: Clone>(Arc<T>);
+pub type SharedJsonAssets = SharedJson<Vec<Value>>;
+pub type SharedJsonExtensions = SharedJson<Map<String, Value>>;
 
-impl From<Vec<Value>> for SharedJsonAssets {
-    fn from(items: Vec<Value>) -> Self { Self(Arc::new(items)) }
+impl<T: Clone> From<T> for SharedJson<T> {
+    fn from(value: T) -> Self { Self(Arc::new(value)) }
 }
-impl std::iter::FromIterator<Value> for SharedJsonAssets {
-    fn from_iter<I: IntoIterator<Item = Value>>(items: I) -> Self {
-        Self::from(items.into_iter().collect::<Vec<_>>())
+impl<T: Clone + PartialEq> PartialEq for SharedJson<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // This path is important when EditorSession checks whether a
+        // candidate is a no-op. Unchanged shared PNG/Animation/opaque data
+        // should not be recursively compared after every Geometry edit.
+        Arc::ptr_eq(&self.0, &other.0) ||
+            self.0.as_ref() == other.0.as_ref()
     }
 }
-impl Deref for SharedJsonAssets {
-    type Target = Vec<Value>;
+impl<T: Clone> Deref for SharedJson<T> {
+    type Target = T;
     fn deref(&self) -> &Self::Target { self.0.as_ref() }
 }
-impl DerefMut for SharedJsonAssets {
+impl<T: Clone> DerefMut for SharedJson<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         Arc::make_mut(&mut self.0)
     }
 }
-impl<'a> IntoIterator for &'a SharedJsonAssets {
-    type Item = &'a Value;
-    type IntoIter = std::slice::Iter<'a, Value>;
+impl<T: Clone> AsRef<T> for SharedJson<T> {
+    fn as_ref(&self) -> &T { self.0.as_ref() }
+}
+impl<T: Clone> std::iter::FromIterator<T> for SharedJson<Vec<T>> {
+    fn from_iter<I: IntoIterator<Item = T>>(items: I) -> Self {
+        Self::from(items.into_iter().collect::<Vec<_>>())
+    }
+}
+impl<'a, T: Clone> IntoIterator for &'a SharedJson<Vec<T>> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
     fn into_iter(self) -> Self::IntoIter { self.iter() }
 }
-impl<'a> IntoIterator for &'a mut SharedJsonAssets {
-    type Item = &'a mut Value;
-    type IntoIter = std::slice::IterMut<'a, Value>;
+impl<'a, T: Clone> IntoIterator for &'a mut SharedJson<Vec<T>> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
         Arc::make_mut(&mut self.0).iter_mut()
     }
 }
-impl Serialize for SharedJsonAssets {
+impl<T: Clone + Serialize> Serialize for SharedJson<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S)
         -> std::result::Result<S::Ok, S::Error> {
         self.0.as_ref().serialize(serializer)
     }
 }
-impl<'de> Deserialize<'de> for SharedJsonAssets {
+impl<'de, T: Clone + Deserialize<'de>> Deserialize<'de> for SharedJson<T> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D)
         -> std::result::Result<Self, D::Error> {
-        Vec::<Value>::deserialize(deserializer).map(Self::from)
+        T::deserialize(deserializer).map(Self::from)
     }
 }
 
@@ -194,7 +207,7 @@ pub struct AuthoringDocument {
     pub hierarchy: Vec<OutlinerNode>,
     pub texture_assets: SharedJsonAssets,
     pub animation_assets: SharedJsonAssets,
-    pub extensions: Map<String, Value>,
+    pub extensions: SharedJsonExtensions,
 }
 
 /// An ordered, bounded rectangle instruction on one RGBA8 texture atlas.
@@ -787,7 +800,7 @@ impl AuthoringDocument {
             resolution: TextureResolution { width: 128, height: 128, extra: Map::new() },
             cubes: Vec::new(), bones: Vec::new(), hierarchy: Vec::new(),
             texture_assets: Vec::new().into(), animation_assets: Vec::new().into(),
-            extensions: extra,
+            extensions: extra.into(),
         };
         document.validate()?;
         Ok(document)

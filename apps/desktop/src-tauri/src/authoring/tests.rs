@@ -139,6 +139,67 @@ fn shared_json_assets_preserve_undo_and_opaque_serialization() {
     assert_eq!(session.document().animation_assets[0]["name"], "idle");
 }
 
+// SOURCE-AUTHORED_NOT_RUN: opaque .bbmodel extensions also share immutable
+// allocations between Geometry/Animation edits; an actual project-level
+// metadata change detaches only that map. No new JSON wrapping is exported.
+#[test]
+fn opaque_extensions_share_until_write_without_changing_bbmodel_wire() {
+    let mut doc = AuthoringDocument::new_bedrock("Opaque", "opaque").unwrap();
+    doc.extensions.insert("vendor_extension".into(),
+        json!({"nested":{"owner":"preserve"},"payload":[1,2,3]}));
+    let baseline = doc.clone();
+    assert!(Arc::ptr_eq(&doc.extensions.0, &baseline.extensions.0));
+    assert_eq!(doc.extensions, baseline.extensions);
+
+    let mut direct = baseline.clone();
+    direct.extensions.insert("visible_box".into(), json!([6.0,6.0,1.0]));
+    assert!(!Arc::ptr_eq(&baseline.extensions.0, &direct.extensions.0));
+    assert_eq!(baseline.extensions.get("visible_box"), None);
+    assert_eq!(direct.extensions["vendor_extension"],
+        baseline.extensions["vendor_extension"]);
+
+    let mut session = EditorSession::from_document(doc).unwrap();
+    let original = session.snapshot_document();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid: "00000000-0000-4000-8000-000000000948".into(),
+        name: "idle".into(), length: 1.0,
+    }]).unwrap();
+    let animated = session.snapshot_document();
+    assert!(Arc::ptr_eq(&original.extensions.0,
+        &animated.extensions.0));
+    session.apply(1, &[EditOperation::SetVisibleBox {
+        bounds: [6.0,6.0,1.0],
+    }]).unwrap();
+    let edited = session.snapshot_document();
+    assert!(!Arc::ptr_eq(&animated.extensions.0,
+        &edited.extensions.0));
+    assert_eq!(animated.extensions.get("visible_box"), None);
+    assert_eq!(edited.extensions["vendor_extension"],
+        original.extensions["vendor_extension"]);
+
+    let bytes = session.export().unwrap();
+    let wire: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(wire.get("vendor_extension").is_some());
+    assert!(wire.get("visible_box").is_some());
+    assert!(wire.get("extensions").is_none());
+    assert_eq!(AuthoringDocument::import_bbmodel(&bytes).unwrap(), *edited);
+
+    session.undo(2).unwrap();
+    assert!(Arc::ptr_eq(&animated.extensions.0,
+        &session.document().extensions.0));
+    session.undo(3).unwrap();
+    assert!(Arc::ptr_eq(&original.extensions.0,
+        &session.document().extensions.0));
+    session.redo(4).unwrap();
+    session.redo(5).unwrap();
+    assert_eq!(session.document(), edited.as_ref());
+
+    let mut malformed = baseline;
+    malformed.extensions.insert("history".into(), json!([]));
+    assert!(malformed.validate().is_err());
+    assert!(EditorSession::from_document(malformed).is_err());
+}
+
 fn sample_cube(uuid: &str) -> Cube {
     let mut value: Value = serde_json::from_str(SAMPLE).unwrap();
     value["elements"][0]["uuid"] = json!(uuid);

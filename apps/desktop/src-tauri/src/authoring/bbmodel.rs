@@ -30,7 +30,7 @@ impl From<BlockbenchV5> for AuthoringDocument {
             meta: wire.meta, resolution: wire.resolution,
             cubes: wire.elements, bones: wire.groups, hierarchy: wire.outliner,
             texture_assets: wire.textures.into(), animation_assets: wire.animations.into(),
-            extensions: wire.extra,
+            extensions: wire.extra.into(),
         }
     }
 }
@@ -60,7 +60,8 @@ impl<'a> From<&'a AuthoringDocument> for BorrowedBlockbenchV5<'a> {
             elements: &doc.cubes, groups: &doc.bones,
             outliner: &doc.hierarchy,
             textures: doc.texture_assets.as_slice(),
-            animations: doc.animation_assets.as_slice(), extra: &doc.extensions,
+            animations: doc.animation_assets.as_slice(),
+            extra: doc.extensions.as_ref(),
         }
     }
 }
@@ -76,7 +77,7 @@ impl From<&AuthoringDocument> for BlockbenchV5 {
             outliner: doc.hierarchy.clone(),
             textures: doc.texture_assets.as_slice().to_vec(),
             animations: doc.animation_assets.as_slice().to_vec(),
-            extra: doc.extensions.clone(),
+            extra: doc.extensions.as_ref().clone(),
         }
     }
 }

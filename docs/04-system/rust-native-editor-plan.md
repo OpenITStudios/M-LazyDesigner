@@ -16,6 +16,21 @@ Blockbench .bbmodel round trip, no-overwrite writes and visual proof gates
 remain unchanged. See
 [Code Mode host implementation](../../apps/desktop/code-mode/HOST_INTEGRATION.md).
 
+**Opaque-extension COW refinement (2026-11-18; SOURCE ONLY):**
+The existing immutable asset sharing is now implemented through one
+small generic `SharedJson<T>` owner for Texture and Animation arrays
+and opaque top-level project extension maps. Unchanged project vendor
+metadata can share source allocation across provisional edits and Undo;
+the first `visible_box` or other actual metadata write detaches that
+map through `Arc::make_mut`. Equality first checks shared allocation
+identity, then falls back to value equality for independent identical
+documents. Borrowed `.bbmodel` export and the original cloning oracle
+still serialize ordinary flattened top-level keys, with no new
+`extensions` wrapper field. Tests are AUTHORED_NOT_RUN and runtime
+memory savings, CLI/native editability and Blockbench fidelity are
+UNVERIFIED. No per-Cube/Bone or per-Texture structural-sharing rewrite
+is claimed.
+
 **Rust source memory hot path (2026-11-18; SOURCE ONLY):** The one
 `AuthoringDocument` now uses immutable `Arc<Vec<Value>>` copy-on-write
 ownership for Texture and Animation JSON collections. Ordinary document
