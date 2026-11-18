@@ -1,3 +1,18 @@
+**G2.2 Rust one-shot resize dependency propagation — 2026-11-18 (SOURCE ONLY):**
+The `geometry_propagation.rs` compiler builds one revision/SHA-bound
+`ReframeCube` plus dependency-ordered `TranslateCube` operations from
+explicit same-Bone face attachments, using the existing G2.1 numeric
+helper and `EditorSession::preflight`. It does not persist relations,
+guess dimensions, evaluate collisions, or bypass file authorization.
+Rust authored regressions cover chain/branch propagation, correct UV
+preservation, one Undo/Redo, .bbmodel reopened identity, missing and
+cyclic links, stale versions, unsupported transformations and unsafe
+Auto UV. `plan-geometry-resize-propagation` is read-only and consumes
+the same SHA-pinned CLI admission. Proof: SOURCE_REVIEWED /
+TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED. Runtime and native
+geometry acceptance remain UNVERIFIED; full persistent parametric
+constraints are not part of this bounded source slice.
+
 **G2 Code Mode attachment read-only integration — 2026-11-18 (SOURCE ONLY):**
 Exposed the existing Rust `plan-geometry-attachment` via typed
 `planGeometryAttachment` in the Code Mode SDK, trusted Node host and

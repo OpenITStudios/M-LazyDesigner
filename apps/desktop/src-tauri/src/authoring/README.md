@@ -48,6 +48,20 @@ Authored regressions cover all six facing directions, exact offset,
 Undo/Redo, .bbmodel reopen, unsuitable parents/transforms and invalid
 input. Tests/native Blockbench remain NOT_EXECUTED.
 
+**G2.2 explicit resize propagation (2026-11-18; SOURCE ONLY):**
+The Rust `geometry_propagation.rs` compiler takes one exact root Cube
+`ReframeCube` and a bounded acyclic attachment set, constrained to
+the same Bone. Every dependent Cube has one incoming attachment;
+links are evaluated parent-first, even when supplied out of order.
+The same G2.1 face delta helper is reused for `TranslateCube`, and
+disposable `EditorSession::preflight` verifies the whole batch with
+existing UV/Undo guards. No constraint is persisted in `.bbmodel`;
+subsequent resizes require a new explicit request. Unknown targets,
+cycles/disconnected links, duplicate targets, unsafe transforms/UV,
+overflow and stale revisions are refused. The SHA-pinned CLI
+`plan-geometry-resize-propagation` is read-only; a separate approved
+`apply` remains necessary. Rust regressions authored NOT_EXECUTED.
+
 ## Dated source history (preserved)
 
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**

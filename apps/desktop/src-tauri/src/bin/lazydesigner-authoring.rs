@@ -7,6 +7,7 @@ use lazydesigner::authoring::{
     inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession, ValidatedInspection,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
     GeometryAssemblyRequest, GeometryFaceAttachmentRequest,
+    GeometryResizePropagationRequest,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use lazydesigner::authoring::storage::{bbmodel, png, geometry_json, animation_json, publish_new, publish_new_png, publish_new_geometry, publish_new_animation, read_bounded, same_directory};
@@ -792,6 +793,29 @@ fn execute() -> Result<Value> {
             let map = session.semantic_map(category, offset, limit)?;
             Ok(json!({"status":"OK","sha256":actual_sha,
                 "summary":session.summary(),"map":map}))
+        }
+        "plan-geometry-resize-propagation" => {
+            // Read-only SHA-bound G2.2 plan. Explicit attachments do not
+            // persist as constraints and never acquire mutation authority.
+            option_set(&options, &["--input", "--propagation", "--expected-sha256"])?;
+            let input = PathBuf::from(option(&options, "--input")?);
+            let (bytes, source_sha256) = read_verified_source(
+                &input, option(&options, "--expected-sha256")?
+            )?;
+            let request_bytes = read_bounded(
+                Path::new(option(&options, "--propagation")?), MAX_PLAN_BYTES
+            )?;
+            let request: GeometryResizePropagationRequest =
+                serde_json::from_slice(&request_bytes)
+                    .map_err(|_| fail("GEOMETRY_PROPAGATION_INPUT_INVALID"))?;
+            let session = EditorSession::open(&bytes)?;
+            let proposal = session.plan_geometry_resize_propagation(&request)?;
+            Ok(json!({
+                "status":"OK","sha256":source_sha256,"summary":session.summary(),
+                "plan":proposal.plan,"preflight":proposal.preflight,
+                "diagnostic":proposal.diagnostic,
+                "write_authority":"NOT_GRANTED","visual_verdict":"UNVERIFIED"
+            }))
         }
         "plan-geometry-attachment" => {
             // Read-only G2: one source-local face pair, no persistent

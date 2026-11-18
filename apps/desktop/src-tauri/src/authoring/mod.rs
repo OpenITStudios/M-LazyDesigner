@@ -16,6 +16,10 @@ mod geometry_assembly;
 pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest};
 mod geometry_attachment;
 pub use geometry_attachment::{GeometryFaceAttachmentRequest, GeometryFaceAttachmentProposal};
+mod geometry_propagation;
+pub use geometry_propagation::{
+    GeometryPropagationLink, GeometryResizePropagationRequest, GeometryResizePropagationProposal,
+};
 mod paint;
 mod correction_scope;
 pub use correction_scope::TextureCorrectionScope;
@@ -3346,6 +3350,14 @@ impl EditorSession {
         &self, request: &GeometryFaceAttachmentRequest,
     ) -> Result<GeometryFaceAttachmentProposal> {
         geometry_attachment::compile(self, request)
+    }
+
+    /// G2.2: one-shot root resize and explicit dependency propagation
+    /// through the canonical Rust EditPlan. No persistent constraint graph.
+    pub fn plan_geometry_resize_propagation(
+        &self, request: &GeometryResizePropagationRequest,
+    ) -> Result<GeometryResizePropagationProposal> {
+        geometry_propagation::compile(self, request)
     }
 
     /// Dry-run exactly the canonical mutation path on a disposable COW clone.

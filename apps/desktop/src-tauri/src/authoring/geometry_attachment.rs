@@ -47,7 +47,7 @@ fn face_axis_sign(name: &str) -> Result<(usize, f64)> {
     }
 }
 
-fn bounded_unrotated_box(cube: &Cube) -> Result<()> {
+pub(super) fn bounded_unrotated_box(cube: &Cube) -> Result<()> {
     // A zero-span plane or rotated/inflated/stretched Box does not have
     // these simple axis-aligned face planes. Never pretend its envelope
     // equals raw saved Cube bounds.
@@ -71,6 +71,46 @@ fn bounded_unrotated_box(cube: &Cube) -> Result<()> {
     Ok(())
 }
 
+/// Canonical local face translation shared by G2 one-shot attachment and
+/// G2.2 explicit resize propagation. Caller validates source Cube transforms,
+/// positive spans, and a common Bone frame before this numeric calculation.
+pub(super) fn delta_for_faces(
+    anchor_from: [f64; 3], anchor_to: [f64; 3],
+    moving_from: [f64; 3], moving_to: [f64; 3],
+    anchor_face: &str, moving_face: &str,
+    clearance: f64, tangent_offset: [f64; 2],
+) -> Result<([f64; 3], [usize; 2])> {
+    let (axis, normal) = face_axis_sign(anchor_face)?;
+    let (moving_axis, opposite) = face_axis_sign(moving_face)?;
+    if moving_axis != axis || opposite != -normal {
+        return Err(fail("GEOMETRY_ATTACHMENT_FACE_PAIR_INVALID"));
+    }
+    if !clearance.is_finite() || clearance < 0.0 || clearance > super::LIMIT ||
+       !tangent_offset.iter().all(|v|v.is_finite() && v.abs() <= super::LIMIT) {
+        return Err(fail("GEOMETRY_ATTACHMENT_OFFSET_INVALID"));
+    }
+    let fixed_plane = if normal > 0.0 { anchor_to[axis] } else { anchor_from[axis] };
+    let moving_plane = if normal > 0.0 { moving_from[axis] } else { moving_to[axis] };
+    let mut delta = [0.0; 3];
+    delta[axis] = (fixed_plane + normal * clearance) - moving_plane;
+    let tangents = match axis {
+        0 => [1, 2], 1 => [0, 2], 2 => [0, 1], _ => unreachable!(),
+    };
+    for (i, tangent) in tangents.into_iter().enumerate() {
+        delta[tangent] = (anchor_from[tangent] + anchor_to[tangent]) / 2.0
+            - (moving_from[tangent] + moving_to[tangent]) / 2.0
+            + tangent_offset[i];
+    }
+    if !valid_vec3(delta) ||
+       !valid_bounds(
+           std::array::from_fn(|i|moving_from[i] + delta[i]),
+           std::array::from_fn(|i|moving_to[i] + delta[i]),
+       ) {
+        return Err(fail("GEOMETRY_ATTACHMENT_RESULT_OUT_OF_BOUNDS"));
+    }
+    Ok((delta, tangents))
+}
+
 pub(super) fn compile(
     session: &EditorSession, req: &GeometryFaceAttachmentRequest,
 ) -> Result<GeometryFaceAttachmentProposal> {
@@ -85,17 +125,6 @@ pub(super) fn compile(
     }
     if req.anchor_cube_uuid == req.moving_cube_uuid {
         return Err(fail("GEOMETRY_ATTACHMENT_SELF_TARGET"));
-    }
-    let (axis, normal) = face_axis_sign(&req.anchor_face)?;
-    let (moving_axis, moving_normal) = face_axis_sign(&req.moving_face)?;
-    if moving_axis != axis || moving_normal != -normal {
-        return Err(fail("GEOMETRY_ATTACHMENT_FACE_PAIR_INVALID"));
-    }
-    if !req.clearance.is_finite() || req.clearance < 0.0 ||
-       req.clearance > super::LIMIT ||
-       !req.tangent_offset.iter().all(|v|
-           v.is_finite() && v.abs() <= super::LIMIT) {
-        return Err(fail("GEOMETRY_ATTACHMENT_OFFSET_INVALID"));
     }
     let doc = session.document();
     let anchor = doc.cubes.iter().find(|cube| cube.uuid == req.anchor_cube_uuid)
@@ -117,28 +146,10 @@ pub(super) fn compile(
         return Err(fail("GEOMETRY_ATTACHMENT_FRAME_UNSUPPORTED"));
     }
 
-    let anchor_plane = if normal > 0.0 { anchor.to[axis] } else { anchor.from[axis] };
-    let moving_plane = if normal > 0.0 { moving.from[axis] } else { moving.to[axis] };
-    let mut delta = [0.0; 3];
-    delta[axis] = (anchor_plane + normal * req.clearance) - moving_plane;
-    let tangent_axes = match axis {
-        0 => [1, 2],
-        1 => [0, 2],
-        2 => [0, 1],
-        _ => unreachable!(),
-    };
-    for (i, tangent) in tangent_axes.into_iter().enumerate() {
-        let anchor_center = (anchor.from[tangent] + anchor.to[tangent]) / 2.0;
-        let moving_center = (moving.from[tangent] + moving.to[tangent]) / 2.0;
-        delta[tangent] = anchor_center - moving_center + req.tangent_offset[i];
-    }
-    if !valid_vec3(delta) ||
-       !valid_bounds(
-           std::array::from_fn(|i| moving.from[i] + delta[i]),
-           std::array::from_fn(|i| moving.to[i] + delta[i]),
-       ) {
-        return Err(fail("GEOMETRY_ATTACHMENT_RESULT_OUT_OF_BOUNDS"));
-    }
+    let (delta, tangent_axes) = delta_for_faces(
+        anchor.from, anchor.to, moving.from, moving.to,
+        &req.anchor_face, &req.moving_face, req.clearance, req.tangent_offset,
+    )?;
     if delta.iter().all(|value| *value == 0.0) {
         return Err(fail("GEOMETRY_ATTACHMENT_ALREADY_SATISFIED"));
     }
