@@ -46,6 +46,17 @@ six-category authoring benchmark, identical source/reference and actual
 accepted visual outcomes. Reduced RPCs alone are not quality evidence.
 All regressions are SOURCE AUTHORED / NOT_EXECUTED under the active hold.
 
+**Execution observation module (2026-11-18; SOURCE ONLY):** The same
+nine numeric receipt fields are now recorded by the one trusted-only
+`code-mode/execution-metrics.mjs` per-`execute` recorder. Node's
+`AsyncLocalStorage` still chooses the originating request; neither Deno
+nor the recorder can grant permissions, read model data or maintain
+authoring state. The module does not measure host setup or native asset
+quality. Positive/negative pure Node tests are authored but NOT_EXECUTED.
+The proposed live write contract is owned solely by
+[the Rust-native editor architecture](../../docs/04-system/rust-native-editor-plan.md);
+current `live-read-bridge` remains read-only and off by default.
+
 ## Experimental read-only live editor pairing (2026-11-18; SOURCE ONLY)
 
 The Rust Desktop has an **opt-in Windows Named Pipe read-only bridge**

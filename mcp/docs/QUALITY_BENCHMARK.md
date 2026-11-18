@@ -174,6 +174,47 @@ and comparable quality, assess the already-owned cost-to-accepted-result,
 tool calls, image delivery bytes, correction rounds and elapsed time.
 Do not create another benchmark engine or claim a synthetic percentage.
 
+### Rust/Code Mode latency and accepted-asset comparison (DESIGN ONLY)
+
+Use the **existing** Golden task and canonical six-profile quality cases;
+this is a measurement matrix, not a second harness or standalone scorer.
+Run only after the explicit `LOCAL_PC_AGENT` phase/hold release.
+
+| Case | Identical input and workload | Compare without changing quality gates |
+| --- | --- | --- |
+| R1 — headless inspect | Same `.bbmodel` + SHA; one exact read vs a bounded `inspectBatch` | Setup, Rust spawn count, open/validate/inspect p50/p95, response bytes |
+| R2 — headless edit | Same source/plan, fresh output name, identical approval | Total time including publish/reopen, Rust calls, corrections, resulting SHA |
+| R3 — GUI edit | Same model and edit action on pinned native build | Tauri IPC latency, revision/Undo, renderer frame time, CPU/RSS |
+| R4 — live AI edit | **Future only**; same approved operation on active GUI revision | Host/native permission time, commit latency, conflicts, recovery/Undo; currently `NOT_IMPLEMENTED` |
+| R5 — Golden accepted asset | Same approved Reference Package and asset task | Accepted quality, six views, animation playback, human corrections, elapsed time, actual agent cost |
+
+**Measurement protocol:**
+- Record branch/commit, exact native binaries, OS/CPU/GPU/RAM, model and
+  reference SHA, toolchain versions, cold/warm state, sample count,
+  environment and acceptance result. Compare equivalent baseline/candidate
+  workloads; do not reuse a mutated file as an input.
+- Measure full setup time **outside** the Code Mode `host.execute` window:
+  host creation, initial `openRustCodeModeProject`, guest startup, per-command
+  Rust CLI spawn/open/validation, UI IPC and final accepted result are
+  separate phases. Measure p50/p95 and peak RSS/CPU only from actual
+  instrumented local execution. The existing `performance.wall_ms` starts
+  inside `execute` and excludes host initialization; `guest_first_frame_ms`
+  includes work until first output and is not pure Deno cold-start.
+- Current host `host_rpc_ms`, `rust_adapter_ms` and `approval_wait_ms` may
+  overlap. Never sum overlapping timers as total duration; do not call
+  JSON bytes token usage or `INJECTED_RUNNER` timing a real Rust benchmark.
+- Record successful/failed/unknown writes separately. Do not replay a
+  timed-out mutating operation to increase throughput; reconcile its
+  actual saved or GUI revision first. Exclude human approval waiting from
+  *machine-only* timing only when reporting it separately, but retain it
+  in end-to-end accepted-result elapsed time.
+- A candidate can be called faster **only** for a matched operation with
+  equivalent output and no weakened validation/security. Product-level
+  efficiency requires *accepted* Geometry, UV, hand-painted Texture,
+  Animation and editable Blockbench output, with no added critical defects.
+  Absent visual or actual token/billing evidence remains `UNVERIFIED` or
+  `NOT_MEASURED`, not zero.
+
 ## Future Local Benchmark Run
 
 When a matching live environment is available, run **one full-asset Golden Task** (`golden-full-asset-authoring`) using its isolated fixture; retain these quality dimensions as a review rubric rather than running six unrelated Golden assets:

@@ -12,7 +12,7 @@ import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
-import { performance } from 'node:perf_hooks';
+import { createExecutionMetrics } from './execution-metrics.mjs';
 import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
 import { createLiveReadClient } from './live-read-client.mjs';
@@ -905,9 +905,7 @@ export async function createCodeModeHost({
     onNativeCall: (sample) => {
       const run = metricScope.getStore();
       if (!run) return;
-      run.metrics.rustAdapterCalls++;
-      run.metrics.rustAdapterMs += sample.duration_ms;
-      if (!sample.success) run.metrics.rustAdapterFailures++;
+      run.metrics.recordNativeCall(sample);
     },
     authorizeMutation: async (request) => {
       const execution = activeExecution;
@@ -918,7 +916,7 @@ export async function createCodeModeHost({
       if (typeof authorizeMutation !== 'function' ||
           execution.closed || activeExecution !== execution) return false;
       execution.pause();
-      const approvalStarted = performance.now();
+      const approvalStarted = execution.metrics.mark();
       let approved;
       try {
         approved = await authorizeMutation(Object.freeze({
@@ -931,8 +929,7 @@ export async function createCodeModeHost({
           }:{}),
         }));
       } finally {
-        execution.metrics.approvalWaitMs +=
-          Math.max(0, performance.now() - approvalStarted);
+        execution.metrics.recordApprovalSince(approvalStarted);
         execution.resume();
       }
       // Prevent a delayed approval from reviving a timed-out guest.
@@ -2165,28 +2162,10 @@ export async function createCodeModeHost({
     }
     const execution = {
       closed: false, pendingApproval: false, pause: () => {}, resume: () => {},
-      startedAt: performance.now(),
-      metrics: {
-        guestFirstFrameMs: null, hostRpcMs: 0, approvalWaitMs: 0,
-        rustAdapterMs: 0, rustAdapterCalls: 0, rustAdapterFailures: 0,
-        rpcFailures: 0,
-      },
+      metrics: createExecutionMetrics(pureLiveRead ? 'NO_DISK_RUST' :
+        (runner ? 'INJECTED_RUNNER' : 'CLI_EXECFILE')),
     };
-    const duration = (value) => Math.max(0, Math.round(value));
-    const metrics = () => Object.freeze({
-      wall_ms: duration(performance.now() - execution.startedAt),
-      // Includes Deno startup, guest compilation and work until the first
-      // output frame; this is NOT isolated process cold-start time.
-      guest_first_frame_ms: execution.metrics.guestFirstFrameMs,
-      host_rpc_ms: duration(execution.metrics.hostRpcMs),
-      rust_adapter_ms: duration(execution.metrics.rustAdapterMs),
-      rust_adapter_calls: execution.metrics.rustAdapterCalls,
-      rust_adapter_failures: execution.metrics.rustAdapterFailures,
-      approval_wait_ms: duration(execution.metrics.approvalWaitMs),
-      rpc_failures: execution.metrics.rpcFailures,
-      rust_adapter_kind: pureLiveRead ? 'NO_DISK_RUST' :
-        (runner ? 'INJECTED_RUNNER' : 'CLI_EXECFILE'),
-    });
+    const metrics = () => execution.metrics.snapshot();
     activeExecution = execution;
     try {
     const start = JSON.stringify({
@@ -2315,20 +2294,19 @@ export async function createCodeModeHost({
           throw new Error('CODE_MODE_RPC_BUDGET_EXCEEDED');
         }
         pendingRpc++;
-        const rpcStarted = performance.now();
+        const rpcStarted = execution.metrics.mark();
         try {
           try {
             const value = await metricScope.run(execution, () =>
               actions[message.method](requireObject(message.args[0])));
             send({ type: 'rpc_result', id: message.id, ok: true, result: value });
           } catch (error) {
-            execution.metrics.rpcFailures++;
+            execution.metrics.recordRpcFailure();
             send({ type: 'rpc_result', id: message.id, ok: false,
               code: shortError(error) });
           }
         } finally {
-          execution.metrics.hostRpcMs +=
-            Math.max(0, performance.now() - rpcStarted);
+          execution.metrics.recordRpcSince(rpcStarted);
           pendingRpc--;
         }
       }
@@ -2350,10 +2328,7 @@ export async function createCodeModeHost({
             child.kill();
             return;
           }
-          if (execution.metrics.guestFirstFrameMs === null) {
-            execution.metrics.guestFirstFrameMs =
-              duration(performance.now() - execution.startedAt);
-          }
+          execution.metrics.recordFirstGuestFrame();
           chain = chain.then(() => processMessage(line)).catch((error) => {
             failure = error;
             child.kill();

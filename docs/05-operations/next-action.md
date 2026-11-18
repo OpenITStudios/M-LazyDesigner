@@ -1,3 +1,20 @@
+**Rust Code Mode modularity and live-transaction/benchmark design — 2026-11-18 (SOURCE ONLY):**
+Extracted the trusted per-`execute` anonymous timing recorder from the
+large Node `host.mjs` into a small `execution-metrics.mjs` module while
+preserving the existing receipt keys, AsyncLocalStorage attribution,
+per-run isolation, approval semantics, and guest/Rust command behavior.
+Pure focused regression source is AUTHORED_NOT_RUN. The canonical Rust
+architecture now specifies a future operator-approved live transaction
+boundary over the **existing** GUI `EditorSession`, explicitly DESIGN_ONLY;
+no write pipe, new engine, service or privilege has been introduced.
+The existing Golden benchmark contract now distinguishes host setup,
+cold/warm subprocess, UI render and cost-to-accepted-result measurement.
+`live-read-bridge` stays default-off/read-only, and GUI versus CLI
+sessions remain distinct. Windows, Deno/Node/Cargo, Blockbench and measured
+performance/quality are NOT_EXECUTED; test/CI/local holds are unchanged.
+Next: STOP at source ceiling for this scoped modularity slice; no automatic
+persistent process, new daemon or live writer without actual native proof.
+
 **Rust Code Mode task context and measured runtime counters — 2026-11-18 (SOURCE ONLY):**
 The trusted Node Code Mode host now compacts the existing SHA-bound
 authoring_target inspector into an exact revision-bound taskContext

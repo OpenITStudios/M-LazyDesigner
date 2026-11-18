@@ -139,6 +139,72 @@ and have no quality or CPU/RAM proof without local measurement.
 Accepted model quality still requires the existing Golden tasks and
 matched reference/current visual evidence. No runtime tests were run.
 
+### Rust Code Mode live-transaction contract — DESIGN ONLY (2026-11-18)
+
+This section specifies a future **single-session** writer; it is NOT an
+implemented API, enabled pipe method, or permission to bypass the active
+PC-local validation hold. The current Windows `live-read-bridge` remains
+optional, disabled by default, and **read-only**; headless Code Mode
+continues to use an independently SHA-pinned Rust CLI file session.
+
+| Responsibility | Existing owner to reuse | Must not migrate to |
+| --- | --- | --- |
+| Canonical Geometry/UV/Texture/Animation, Undo, validation | Rust `EditorSession` and `EditPlan` (`authoring/mod.rs`) | Node, Deno, Three.js |
+| GUI session, epoch/revision, write lease, dirty state | Tauri `desktop_authoring.rs` / `EditorState` | Headless CLI document or JS cache |
+| Recovery checkpoint / file publisher | Existing Rust recovery and storage owners | Guest filesystem, implicit autosave |
+| Authorize exact proposal and observe outcome | Trusted Node Code Mode host + native user confirmation | Model-authored program |
+| Compose typed proposal and inspect compact receipts | Permission-denied Deno guest | Process-level authentication |
+| Preview and display only | Svelte + Three.js | Independent authoring state |
+
+**Proposed sequence (not executable):**
+
+1. The operator deliberately pairs a trusted local host for an *explicit
+   write scope*, separately from the existing read-only pairing. Native
+   consent, process capability lifetime, stop/exit revocation and Windows
+   ACL/reparse-point threat handling must be proven before activation.
+2. Rust issues an immutable bounded semantic projection tagged with the
+   active `epoch` and `revision`. A dirty GUI document MUST NOT be replaced by
+   a stale file-path/SHA handle; saved headless and live GUI identities stay
+   distinct.
+3. Deno submits a typed bounded `EditPlan` and exact target UUIDs to trusted
+   Node. Native confirmation and host approval bind the permitted operation,
+   active session identity, plan digest and any required reviewed Paint
+   reference/scope. The guest receives no pipe token or open file capability.
+4. Rust checks the live epoch/revision, authorization lease and the existing
+   GUI transaction gate; optionally preflights a disposable COW candidate.
+   Preflight never grants write permission. Commit rechecks all revision,
+   correction-scope, validation and approval conditions **atomically**;
+   failure cannot change the active session or Undo/Redo.
+5. Only the existing `EditorSession` commits one revision/Undo step. Its
+   trusted receipt carries the new epoch/revision and affected UUIDs.
+   The UI derives a fresh snapshot; the AI receives only bounded readback.
+   Neither an Apply receipt nor a preview may imply artistic acceptance or
+   automatic overwrite of the source file.
+
+**Required failure outcomes:** stale epoch/revision or lost approval =>
+`REFUSED_NO_COMMIT`; interrupted writer or broken response after launch =>
+`OUTCOME_UNKNOWN` requiring fresh authoritative inspection, never automatic
+replay; stop/exit/recovery/model-switch => revoke the capability. These
+labels are proposed decision classes, **not** current wire error codes.
+No silent fallback to headless publication is allowed for an unsuccessful
+live edit. The trusted host must not claim exact-once delivery from a
+request ID alone; reconcile ambiguous native commit before any retry.
+
+**Activation gates:** current native recovery and read-pairing security
+tests, OS/process containment, negative stale/timeout/disconnect cases,
+concurrent artist/AI writes, Tauri crash/restart/Undo integrity, identical
+Rust API outcomes across GUI/headless where applicable, editable Blockbench
+round-trip, and independently reviewed six-view/animation fidelity.
+The read-only feature stays off by default and no live writer is added by
+this source design. No new model engine, document registry, Gateway, or
+background daemon is justified by the contract.
+
+**Modularity rule:** Extract a Rust transport adapter only when the trusted
+session/permission contracts above have native evidence. Keep the
+existing `EditorState` and Rust transaction implementation as first
+owners; a transport module must not also implement session state,
+validation, file publishing, or Undo history.
+
 ## 2. Grounded baseline and ownership conflict resolution
 
 **Observed source, not execution:**
