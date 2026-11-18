@@ -96,10 +96,24 @@ export interface Bone {
 }
 /** Source-bound G1 assembly; geometry, pivots and parent UUIDs are
  * explicit. This is NOT a user image interpretation or write authority. */
+/** G3 blockout-only rectangular through-frame in one G1 assembly.
+ * Emits four disjoint Box-UV Cubes inside the declared Bone, with an
+ * unpainted atlas and no new Geometry writer or inferred reference size.
+ * UUID order: left, right, bottom, top (other axes in ascending order).
+ */
+export interface GeometryRectangularFrame {
+  name: string;
+  center: Vec3;
+  size: [number,number,number];
+  normal_axis: "X"|"Y"|"Z";
+  border: number;
+  cube_uuids: [string,string,string,string];
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
   cubes: Array<Cube & { name: string }>;
+  frames?: GeometryRectangularFrame[];
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */

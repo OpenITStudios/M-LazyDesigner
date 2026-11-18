@@ -119,6 +119,78 @@ test('G1 Geometry assembly composes an exact Rust plan without mutation permissi
   }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: the G3 rectangular-frame shortcut stays within
+// the existing SHA-bound G1 plan. Guest and SDK never generate geometry.
+test('G3 frame G1 contract binds all four explicitly declared panel IDs',async()=>{
+  const ids=['left','right','bottom','top'].map(side=>'portal-'+side);
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'bone-portal',name:'portal_bone',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],frames:[{
+      name:'portal',center:[0,0,0],size:[10,8,2],
+      border:1,normal_axis:'Z',cube_uuids:ids,
+    }],
+  }]};
+  const bounds=[
+    [[-5,-4,-1],[-4,4,1]],[[4,-4,-1],[5,4,1]],
+    [[-4,-4,-1],[4,-3,1]],[[-4,3,-1],[4,4,1]],
+  ];
+  const operations=[
+    {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+    ...ids.map((uuid,i)=>({op:'add_cube',bone_uuid:'bone-portal',cube:{
+      uuid,name:'portal_'+['left','right','bottom','top'][i],
+      from:bounds[i][0],to:bounds[i][1],box_uv:true,
+    }})),
+  ];
+  const receipt={status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:5,
+        changed_uuids:['bone-portal',...ids]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+  let calls=0,approvals=0;
+  const build=runner=>createRustCodeModeClient({
+    binary:BIN, runner,
+    authorizeMutation:async()=>{approvals++;return true;},
+  });
+  const client=build(async argv=>{
+    calls++;
+    assert.equal(argv[0],'plan-geometry-assembly');
+    assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+    assert.deepEqual(JSON.parse(await readFile(
+      argv[argv.indexOf('--assembly')+1],'utf8')),assembly);
+    return receipt;
+  });
+  const result=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.deepEqual(result.plan.operations.map(op=>
+    op.op==='add_bone'?op.bone.uuid:op.cube.uuid),['bone-portal',...ids]);
+  assert.equal(result.write_authority,'NOT_GRANTED');
+  assert.equal(calls,1);
+  for(const forged of [
+    {...receipt,write_authority:'GRANTED'},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],cube:{...operations[1].cube,uuid:'extra'}},
+      ...operations.slice(2),
+    ]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],bone_uuid:'foreign-bone'},
+      ...operations.slice(2),
+    ]}},
+    {...receipt,preflight:{...receipt.preflight,mutation:{
+      ...receipt.preflight.mutation,
+      changed_uuids:['bone-portal','other',...ids.slice(1)],
+    }}},
+  ]){
+    await assert.rejects(build(async()=>forged).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  assert.equal(approvals,0);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: G2 face alignment uses only a read-only Rust
 // plan. No host write approval is requested, and fabricated grants refuse.
 test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',async()=>{

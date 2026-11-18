@@ -912,22 +912,70 @@ export function createRustCodeModeClient({
           input:source, 'expected-sha256':digest, assembly:file,
         });
         const plan = receipt.plan, preview = receipt.preflight;
-        const expected = assembly.parts.reduce(
-          (sum, part) => sum + 1 + (Array.isArray(part?.cubes) ? part.cubes.length : 0), 0);
-        if (typeof receipt.sha256 !== 'string' ||
+        // Bind every proposed output UUID to a declared Bone, Cube, or G3
+        // four-panel frame. Keep all actual geometry calculations in Rust.
+        const declared = new Map();
+        let declarationValid = true;
+        for (const part of assembly.parts) {
+          if (!part || typeof part !== 'object' || !part.bone ||
+              !Array.isArray(part.cubes) ||
+              (part.frames !== undefined && !Array.isArray(part.frames))) {
+            declarationValid = false;
+            break;
+          }
+          const declare = (uuid, op, parent, name, frame = false) => {
+            if (typeof uuid !== 'string' || !uuid.length || declared.has(uuid)) {
+              declarationValid = false;
+            } else { declared.set(uuid, {op,parent,name,frame}); }
+          };
+          declare(part.bone.uuid, 'add_bone', part.parent_uuid, part.bone.name);
+          for (const cube of part.cubes) {
+            declare(cube?.uuid, 'add_cube', part.bone.uuid, cube?.name);
+          }
+          for (const frame of part.frames ?? []) {
+            if (!frame || !Array.isArray(frame.cube_uuids) ||
+                frame.cube_uuids.length !== 4 || typeof frame.name !== 'string') {
+              declarationValid = false;
+              break;
+            }
+            ['left','right','bottom','top'].forEach((side,i) =>
+              declare(frame.cube_uuids[i], 'add_cube', part.bone.uuid,
+                frame.name+'_'+side,true));
+          }
+        }
+        const used = new Set();
+        const operationIdentityValid = Array.isArray(plan?.operations) &&
+          plan.operations.every(op => {
+            const uuid = op?.op === 'add_bone' ? op.bone?.uuid : op?.cube?.uuid;
+            const claim = declared.get(uuid);
+            if (!claim || claim.op !== op.op || used.has(uuid)) return false;
+            used.add(uuid);
+            return op.op === 'add_bone' ?
+              op.parent_uuid === claim.parent && op.bone?.name === claim.name :
+              op.bone_uuid === claim.parent && op.cube?.name === claim.name &&
+                (!claim.frame || op.cube?.box_uv === true);
+          });
+        const expected = declared.size;
+        if (!declarationValid || expected < 1 || expected > 128 ||
+            typeof receipt.sha256 !== 'string' ||
             receipt.sha256.toLowerCase() !== digest ||
             receipt.summary?.revision !== 0 ||
             !plan || plan.expected_revision !== 0 ||
             plan.correction_scope !== null ||
             !Array.isArray(plan.operations) ||
             plan.operations.length < 1 || plan.operations.length !== expected ||
-            plan.operations.length > 128 ||
+            plan.operations.length > 128 || !operationIdentityValid ||
+            used.size !== expected ||
             plan.operations.some(op => !op ||
               !['add_bone','add_cube'].includes(op.op)) ||
             preview?.status !== 'VALIDATED_NOT_APPLIED' ||
             preview.base_revision !== 0 || preview.mutation?.revision !== 1 ||
             preview.mutation?.operation_count !== plan.operations.length ||
             !Array.isArray(preview.mutation?.changed_uuids) ||
+            preview.mutation.changed_uuids.length !== plan.operations.length ||
+            preview.mutation.changed_uuids.some((uuid,i) =>
+              uuid !== (plan.operations[i].op === 'add_bone' ?
+                plan.operations[i].bone.uuid : plan.operations[i].cube.uuid)) ||
             preview.candidate_summary?.revision !== 1 ||
             typeof preview.candidate_sha256 !== 'string' ||
             !SHA256.test(preview.candidate_sha256) ||

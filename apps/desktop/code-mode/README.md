@@ -39,6 +39,17 @@ verified on every native plan call. SDK and host guest-RPC positive/
 negative regressions AUTHORED_NOT_RUN, native execution/visual
 quality NOT_EXECUTED.
 
+**G3 Geometry frame in the existing G1 read-only Code Mode (2026-11-19; SOURCE ONLY):**
+Use `planGeometryAssembly` with optional `parts[].frames` for rectangular
+through-openings in untextured blockouts; specify center, integer size
+(1-32 model units), normal_axis X/Y/Z, positive border, and four explicit
+panel UUIDs in left/right/bottom/top order. Rust constructs the disjoint
+Box UV Cubes under one declared Bone in the same G1 plan/preflight.
+The SDK verifies output identities/parent binding and rejects undeclared
+operations or forged mutation authority. No image inference, UV packing,
+Texture painting, automatic Apply or native/visual quality claim.
+Rust/Node/Windows/Blockbench tests NOT_EXECUTED.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

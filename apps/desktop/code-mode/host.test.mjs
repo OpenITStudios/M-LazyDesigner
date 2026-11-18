@@ -254,6 +254,60 @@ test('G1 assembly guest RPC is read-only and keeps apply authorization distinct'
     assert.equal(approvals.length,0);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: G3 frames reuse G1's single Deno -> Node ->
+// Rust read-only route. Shape generation and native Apply stay out of Deno.
+test('G3 through-frame reaches the G1 Rust adapter without write approval',()=>
+  fixture(async input=>{
+    const ids=['left','right','bottom','top'].map(s=>'frame-'+s);
+    const assembly={expected_revision:0,parts:[{
+      bone:{uuid:'frame-bone',name:'frame_bone',origin:[0,0,0]},
+      parent_uuid:null,cubes:[],frames:[{
+        name:'frame',center:[0,0,0],size:[10,8,2],
+        normal_axis:'Z',border:1,cube_uuids:ids,
+      }],
+    }]};
+    const ops=[
+      {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+      ...ids.map((uuid,i)=>({op:'add_cube',bone_uuid:'frame-bone',cube:{
+        uuid,name:'frame_'+['left','right','bottom','top'][i],
+        box_uv:true,
+      }})),
+    ];
+    const calls=[],approvals=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:args=>{approvals.push(args);return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'plan-geometry-assembly');
+        assert.deepEqual(JSON.parse(
+          await readFile(argv[argv.indexOf('--assembly')+1],'utf8')
+        ),assembly);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          plan:{expected_revision:0,operations:ops,correction_scope:null},
+          preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+            mutation:{revision:1,operation_count:5,
+              changed_uuids:['frame-bone',...ids]},
+            candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+      },
+      spawnImpl:()=>fakeGuest({method:'planGeometryAssembly',args:{
+        project:'p0',assembly,
+      }},response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.plan.operations.length,5);
+        assert.equal(response.result.write_authority,'NOT_GRANTED');
+        return {count:response.result.plan.operations.length};
+      }),
+    });
+    const response=await host.execute({code:'return codemode.planGeometryAssembly({});'});
+    assert.equal(response.value.count,5);
+    assert.deepEqual(calls,['inspect','plan-geometry-assembly']);
+    assert.equal(approvals.length,0);
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: the Deno RPC is a read-only geometry proposal,
 // never permission to write the selected model or a paired GUI session.
 test('G2 face attachment Code Mode RPC keeps write approval separate',()=>

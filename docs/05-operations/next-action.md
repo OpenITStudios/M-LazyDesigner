@@ -1,3 +1,20 @@
+**Active Rust Geometry G3 — bounded hollow-frame construction (2026-11-19; SOURCE ONLY):**
+Compared Rust@da0191fd against Local@422e4d7b: Rust's canonical document,
+atomic operations and SDK are coherent but do not yet match Local's wide
+geometry-construction methods (extrude, sweep, revolve, loft, profile sweep),
+rotated contact and quality review. First G3 slice extends the existing G1
+assembly with explicitly authored rectangular through-frames: one Bone and
+four positive-volume, disjoint Box-UV panels with an actual opening. Only
+texture-free blockouts are admitted; texture assignment/UV packing remain
+later-stage, neither guessed nor certified. Source tests cover geometry
+topology, UUID/budget/error refusals, reversible .bbmodel export and Code Mode
+receipt authority; all AUTHORED_NOT_RUN. No alternative Scene/Recipe state,
+new CLI command, new host approval, CI or cloud/local execution.
+Target remains Geometry Rust > Local by accepted reference fidelity and
+cost-to-accepted-result; superiority and native parity remain UNVERIFIED.
+Next source task: expand the same canonical bounded compiler only for
+reference-backed form needs; defer native tests until PC-local hold release.
+
 **Rust source efficiency sweep — 2026-11-19 (SOURCE ONLY):**
 Branch Rust work spans standalone Desktop, the shared AuthoringDocument and
 headless Rust CLI. A bounded source inventory reviewed Rust modules across

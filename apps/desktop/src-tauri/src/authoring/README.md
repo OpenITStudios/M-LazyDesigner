@@ -33,6 +33,20 @@ Live AI operation, or implicit source-image interpretation is created.
 Rust regressions are SOURCE_AUTHORED / NOT_EXECUTED; native Blockbench,
 Windows, visual fidelity, performance and accepted quality remain held.
 
+**G3 typed untextured rectangular frame (2026-11-19; SOURCE ONLY):**
+The existing G1 assembly now optionally accepts caller-sized rectangular
+through-frames with an axis, width/height/depth, border, named Bone and four
+explicit panel UUIDs. Rust constructs exactly four disjoint positive-volume
+Box-UV Cubes and compiles them through the unchanged parent-first AddBone /
+AddCube EditPlan and disposable preflight. A real empty opening is geometric,
+not a simulated Texture/alpha hole. The method refuses invalid axes,
+collapsed openings, duplicate IDs, out-of-range panels, insufficient atlas
+room and pre-textured projects. Atlas content is NOT created, assigned,
+packed or accepted; a later Texture stage owns explicit UV layout and
+material review. The source regression covers opening topology, stable
+identity, export/reopen/Undo and fail-closed cases; tests NOT_EXECUTED.
+No independent geometry engine, persistent Recipe, native writer or release.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and
