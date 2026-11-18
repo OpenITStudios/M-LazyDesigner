@@ -1,6 +1,6 @@
 # LazyDesigner Implementation Map
 
-Updated: 2026-10-20
+Updated: 2026-11-18
 
 This document is the **source-ownership map**, not a second engine or
 runtime capability registry. It separates the two independent branch
