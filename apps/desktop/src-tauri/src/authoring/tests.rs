@@ -2022,6 +2022,94 @@ fn animation_length_edit_refuses_truncation_and_unrecognized_tracks_without_part
     assert_eq!(duplicated.summary().revision, 0);
 }
 
+// SOURCE-AUTHORED_NOT_RUN: immutable target discovery must not detach
+// unrelated typed collections, and an untracked Bone rename must not clone
+// imported animation payloads merely by iterating mutably.
+#[test]
+fn bone_rename_without_named_tracks_shares_cube_and_animation_allocations() {
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid: "00000000-0000-4000-8000-000000000959".into(),
+        name: "untracked".into(), length: 1.0,
+    }]).unwrap();
+    let before = session.snapshot_document();
+    session.apply(1, &[EditOperation::RenameNode {
+        uuid: BONE.into(), name: "head".into(),
+    }]).unwrap();
+    let after = session.snapshot_document();
+    assert!(Arc::ptr_eq(&before.cubes.0, &after.cubes.0));
+    assert!(Arc::ptr_eq(&before.animation_assets.0, &after.animation_assets.0));
+    assert!(!Arc::ptr_eq(&before.bones.0, &after.bones.0));
+    assert_eq!(before.bones[0].name, "root_bone");
+    assert_eq!(after.bones[0].name, "head");
+    assert_eq!(before.animation_assets, after.animation_assets);
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *after);
+    session.undo(2).unwrap();
+    assert!(Arc::ptr_eq(&before.animation_assets.0,
+        &session.document().animation_assets.0));
+    session.redo(3).unwrap();
+    assert_eq!(session.document(), after.as_ref());
+}
+
+// SOURCE-AUTHORED_NOT_RUN: validate every affected clip before mutating
+// even when an earlier clip has a correctly labeled Bone track.
+#[test]
+fn bone_rename_refuses_late_inconsistent_track_before_publishing() {
+    let mut doc = AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap();
+    let mut matching = Map::new();
+    matching.insert(BONE.into(), json!({"name": "root_bone", "keyframes": []}));
+    let mut inconsistent = Map::new();
+    inconsistent.insert(BONE.into(), json!({"name": "other_name", "keyframes": []}));
+    doc.animation_assets = vec![
+        json!({"uuid":"00000000-0000-4000-8000-000000000960",
+               "name":"first", "animators":matching}),
+        json!({"uuid":"00000000-0000-4000-8000-000000000961",
+               "name":"second", "animators":inconsistent}),
+    ].into();
+    let mut session = EditorSession::from_document(doc.clone()).unwrap();
+    assert_eq!(session.apply(0, &[EditOperation::RenameNode {
+        uuid:BONE.into(), name:"head".into(),
+    }]).unwrap_err(), "BONE_ANIMATOR_NAME_UNSUPPORTED");
+    assert_eq!(session.document(), &doc);
+    assert_eq!(session.summary().revision, 0);
+    assert!(!session.can_undo());
+}
+
+// SOURCE-AUTHORED_NOT_RUN: empty nested authoring groups may legitimately
+// mutate Bone visibility and position without copying unrelated Cubes.
+#[test]
+fn empty_bone_subtree_edits_keep_cube_revision_shared() {
+    let empty_bone = "00000000-0000-4000-8000-000000000962";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[EditOperation::AddBone {
+        bone: Bone { uuid: empty_bone.into(), name:"empty".into(),
+            origin:Some([0.0,0.0,0.0]), extra: Map::new() },
+        parent_uuid: None,
+    }]).unwrap();
+    let initial = session.snapshot_document();
+    session.apply(1, &[EditOperation::SetNodeVisibility {
+        uuid: empty_bone.into(), visible: false,
+    }]).unwrap();
+    let hidden = session.snapshot_document();
+    assert!(Arc::ptr_eq(&initial.cubes.0, &hidden.cubes.0));
+    assert!(!Arc::ptr_eq(&initial.bones.0, &hidden.bones.0));
+    assert_eq!(hidden.bones.last().unwrap().extra["visibility"], json!(false));
+
+    session.apply(2, &[EditOperation::TranslateBoneSubtree {
+        uuid: empty_bone.into(), delta:[1.0,2.0,3.0],
+    }]).unwrap();
+    let translated = session.snapshot_document();
+    assert!(Arc::ptr_eq(&hidden.cubes.0, &translated.cubes.0));
+    assert_eq!(translated.bones.last().unwrap().origin, Some([1.0,2.0,3.0]));
+    assert_eq!(AuthoringDocument::import_bbmodel(&session.export().unwrap()).unwrap(),
+        *translated);
+    session.undo(3).unwrap();
+    assert!(Arc::ptr_eq(&hidden.cubes.0, &session.document().cubes.0));
+    session.redo(4).unwrap();
+    assert_eq!(session.document(), translated.as_ref());
+}
+
 // SOURCE-AUTHORED ONLY: Rust/Blockbench tests remain NOT_EXECUTED.
 #[test]
 fn node_rename_is_atomic_undoable_and_synchronizes_known_bone_animator_name() {

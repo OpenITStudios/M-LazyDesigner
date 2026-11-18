@@ -1922,8 +1922,10 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
         EditOperation::RenameNode { uuid, name } => {
             if !valid_node_name(name) { return Err(fail("NODE_NAME_INVALID")); }
             let desired = name.trim();
-            if let Some(cube) = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid) {
-                cube.name = Some(desired.to_owned());
+            // Find read-only first: iter_mut() would clone the entire Cube COW
+            // allocation even when the UUID actually refers to a Bone.
+            if let Some(index) = doc.cubes.iter().position(|cube| cube.uuid == *uuid) {
+                doc.cubes[index].name = Some(desired.to_owned());
                 return Ok(uuid.clone());
             }
             let bone_index = doc.bones.iter().position(|bone| bone.uuid == *uuid)
@@ -1941,18 +1943,29 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             // only that known field, never rewrite opaque keyframes/Molang.
             // Imported inconsistent track names refuse rather than silently
             // leave a misleading Bone->Animation relationship behind.
-            for animation in &mut doc.animation_assets {
-                if let Some(track) = animation.get_mut("animators")
-                    .and_then(Value::as_object_mut)
-                    .and_then(|animators| animators.get_mut(uuid))
+            // Validate all named tracks before making the Animation COW
+            // collection mutable. A Bone without any named animator never
+            // needs to duplicate imported keyframes or opaque JSON payloads.
+            let mut named_tracks = Vec::new();
+            for (index, animation) in doc.animation_assets.iter().enumerate() {
+                if let Some(track) = animation.get("animators")
+                    .and_then(Value::as_object)
+                    .and_then(|animators| animators.get(uuid))
                 {
                     if let Some(label) = track.get("name") {
                         if label.as_str() != Some(original.as_str()) {
                             return Err(fail("BONE_ANIMATOR_NAME_UNSUPPORTED"));
                         }
-                        track["name"] = json!(desired);
+                        if desired != original.as_str() { named_tracks.push(index); }
                     }
                 }
+            }
+            for index in named_tracks {
+                let track = doc.animation_assets[index].get_mut("animators")
+                    .and_then(Value::as_object_mut)
+                    .and_then(|animators| animators.get_mut(uuid))
+                    .ok_or_else(|| fail("BONE_ANIMATOR_NAME_UNSUPPORTED"))?;
+                track["name"] = json!(desired);
             }
             doc.bones[bone_index].name = desired.to_owned();
             Ok(uuid.clone())
@@ -1986,16 +1999,20 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(uuid.clone())
         }
         EditOperation::SetNodeVisibility { uuid, visible } => {
-            if let Some(cube) = doc.cubes.iter_mut().find(|cube| cube.uuid == *uuid) {
-                set_visibility(&mut cube.extra, *visible);
+            if let Some(index) = doc.cubes.iter().position(|cube| cube.uuid == *uuid) {
+                set_visibility(&mut doc.cubes[index].extra, *visible);
             } else {
                 let group = find_visibility_group(&doc.hierarchy, uuid)
                     .ok_or_else(|| fail("VISIBILITY_TARGET_NOT_FOUND"))?;
                 let mut cube_ids = HashSet::new();
                 let mut bone_ids = HashSet::new();
                 collect_visibility_targets(group, &mut cube_ids, &mut bone_ids);
-                for cube in &mut doc.cubes {
-                    if cube_ids.contains(&cube.uuid) { set_visibility(&mut cube.extra, *visible); }
+                // An empty Bone subtree can change only its Bone metadata;
+                // do not detach and copy unrelated Cube allocations.
+                if !cube_ids.is_empty() {
+                    for cube in &mut doc.cubes {
+                        if cube_ids.contains(&cube.uuid) { set_visibility(&mut cube.extra, *visible); }
+                    }
                 }
                 for bone in &mut doc.bones {
                     if bone_ids.contains(&bone.uuid) { set_visibility(&mut bone.extra, *visible); }
@@ -2008,9 +2025,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
             let textures = &doc.texture_assets;
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
-            let cube = doc.cubes.iter_mut().find(|c| c.uuid == *uuid)
+            let cube_index = doc.cubes.iter().position(|cube| cube.uuid == *uuid)
                 .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
-            translate_cube_in_place(cube, *delta, per_texture,
+            translate_cube_in_place(&mut doc.cubes[cube_index], *delta, per_texture,
                 resolution, textures, project_box_uv)?;
             Ok(uuid.clone())
         }
@@ -2041,10 +2058,12 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             let per_texture = has_per_texture_uv_rules(doc);
             let resolution = [doc.resolution.width as f64, doc.resolution.height as f64];
             let project_box_uv = doc.meta.box_uv.unwrap_or(false);
-            for cube in &mut doc.cubes {
-                if cube_ids.contains(&cube.uuid) {
-                    translate_cube_in_place(cube, *delta, per_texture,
-                        resolution, &doc.texture_assets, project_box_uv)?;
+            if !cube_ids.is_empty() {
+                for cube in &mut doc.cubes {
+                    if cube_ids.contains(&cube.uuid) {
+                        translate_cube_in_place(cube, *delta, per_texture,
+                            resolution, &doc.texture_assets, project_box_uv)?;
+                    }
                 }
             }
             for bone in &mut doc.bones {

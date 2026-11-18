@@ -1,3 +1,21 @@
+**Rust COW target preflight — 2026-11-18 (SOURCE ONLY):**
+Follow-up source inspection of `Rust@39ecf99f03d60b0c539497945fb4dfff89a5e500`
+found that `RenameNode` and `SetNodeVisibility` used mutable Cube scans
+before knowing whether the UUID was a Cube, and Bone rename used a mutable
+scan of every Animation asset even when no named track existed. Empty Bone
+subtrees also detached unrelated Cube collections during visibility and
+translation edits. The existing Rust transaction owner now performs read-only
+UUID/track preflight, records only matching named clip indices before
+synchronizing labels, and skips mutable Cube passes for empty subtrees.
+Standalone Cube translation also resolves a missing target before any COW
+detachment. Existing error codes, atomic batches, Undo/Redo, opaque keyframes,
+metadata, `.bbmodel` export and visual review gates remain unchanged.
+Regression tests for no-track, late track conflict, empty Bone subtree,
+allocation identity and export/history are AUTHORED_NOT_RUN; real Cargo,
+native/Blockbench and measured CPU/RAM remain NOT_EXECUTED.
+See the current Rust source for implementation authority. Earlier dated
+entries below are historical checkpoints, not new requirements.
+
 **Rust typed Geometry revision sharing — 2026-11-18 (SOURCE ONLY):**
 At `Rust@6ef677c547f88b8acd3a302bc60a31a559783371`, Texture, Animation and opaque
 extension revisions were already shared, but Cube/Bone/Outliner collections
