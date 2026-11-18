@@ -10,7 +10,7 @@
   import { advanceAnimationPlayhead } from './rustAnimationPlayback';
   import { parseFiniteEditorNumber } from './rustNumericInput';
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
-  import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport';
+  import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileEditorSnapshot } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
@@ -255,7 +255,7 @@
       throw new Error('RUST_EDITOR_SNAPSHOT_STALE');
     }
     // A missing image body is valid only with the exact prior epoch and key.
-    const next = reconcileTexturePreview(snapshot, incoming);
+    const next = reconcileEditorSnapshot(snapshot, incoming);
     // Any document receipt invalidates the frame-clock identity. Resume is
     // always explicit; never replay a stale animation after Undo/Open/Save.
     pauseAnimationPlayback();
@@ -289,7 +289,11 @@
     busy = true; closeMenus(); error = '';
     try {
       const reuse = canReusePreviewInCommand(name)
-        ? { knownPreviewSourceKey: snapshot?.previewSourceKey ?? null } : {};
+        ? {
+          knownPreviewSourceKey: snapshot?.previewSourceKey ?? null,
+          knownGeometrySourceKey: snapshot?.geometrySourceKey ?? null,
+          knownAnimationSourceKey: snapshot?.animationSourceKey ?? null,
+        } : {};
       const next = await invoke<EditorSnapshot>(name, { ...args, ...reuse });
       return accept(next);
     } catch (cause) {

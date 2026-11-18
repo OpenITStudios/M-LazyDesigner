@@ -29,7 +29,7 @@ use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use tauri::State;
@@ -151,6 +151,8 @@ pub struct EditorSnapshot {
     cubes: Vec<CubeView>,
     bones: Vec<BoneView>,
     hierarchy: Vec<OutlinerNode>,
+    geometry_source_key: String,
+    geometry_reused: bool,
     texture_names: Vec<String>,
     texture_uuids: Vec<Option<String>>,
     texture_preview_sources: Vec<Option<String>>,
@@ -168,6 +170,8 @@ pub struct EditorSnapshot {
     paint_texture_addable: bool,
     animation_count: usize,
     animations: Vec<AnimationView>,
+    animation_source_key: String,
+    animations_reused: bool,
     preview_scope: &'static str,
 }
 
@@ -671,6 +675,33 @@ fn preview_source_key(epoch: u64, assets: &[Option<(&str, [u32; 2])>]) -> String
     format!("{:x}", digest.finalize())
 }
 
+#[derive(Default, Clone, Copy)]
+struct ProjectionReuse<'a> {
+    preview: Option<&'a str>,
+    geometry: Option<&'a str>,
+    animation: Option<&'a str>,
+}
+
+// Serialize the exact read-only GUI projection into SHA-256 without another
+// large JSON byte buffer. An unhashable projection is always sent in full.
+struct ProjectionHashWriter<'a>(&'a mut Sha256);
+impl Write for ProjectionHashWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+}
+fn projection_source_key<T: Serialize>(epoch: u64, family: &[u8], item: &T) -> String {
+    let mut hash = Sha256::new();
+    hash.update(epoch.to_le_bytes());
+    hash.update(family);
+    if serde_json::to_writer(ProjectionHashWriter(&mut hash), item).is_err() {
+        return String::new();
+    }
+    format!("{:x}", hash.finalize())
+}
+
 fn freeze_projection(store: &EditorStore) -> Option<FrozenEditorProjection> {
     store.active.as_ref().map(|model| FrozenEditorProjection {
         document: model.session.snapshot_document(),
@@ -686,17 +717,17 @@ fn freeze_projection(store: &EditorStore) -> Option<FrozenEditorProjection> {
 }
 
 fn project_frozen(
-    model: &FrozenEditorProjection, known_preview_source_key: Option<&str>,
+    model: &FrozenEditorProjection, reuse: ProjectionReuse<'_>,
 ) -> EditorSnapshot {
         let doc = model.document.as_ref();
         let default_box_uv = doc.meta.box_uv.unwrap_or(false);
         let preview_assets = texture_preview_assets(doc);
         let preview_source_key = preview_source_key(model.epoch, &preview_assets);
-        let preview_sources_reused = known_preview_source_key == Some(preview_source_key.as_str());
+        let preview_sources_reused = reuse.preview == Some(preview_source_key.as_str());
         let uv_mode = preview_uv_mode(doc);
         let scope_indices = (uv_mode == PreviewUvMode::ScopedAttachable)
             .then(|| texture_scope_indices(doc));
-        EditorSnapshot {
+        let mut snapshot = EditorSnapshot {
             epoch: model.epoch,
             revision: model.revision,
             name: doc.extensions.get("name").and_then(Value::as_str)
@@ -740,6 +771,8 @@ fn project_frozen(
                 visible: bone.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
             }).collect(),
             hierarchy: doc.hierarchy.clone(),
+            geometry_source_key: String::new(),
+            geometry_reused: false,
             texture_names: doc.texture_assets.iter().map(|texture| {
                 texture.get("name").and_then(Value::as_str).unwrap_or("Unnamed texture").to_owned()
             }).collect(),
@@ -769,15 +802,38 @@ fn project_frozen(
             paint_texture_addable: can_add_paint_texture(doc),
             animation_count: doc.animation_assets.len(),
             animations: animation_views(doc),
+            animation_source_key: String::new(),
+            animations_reused: false,
             preview_scope: "UNVERIFIED_EMBEDDED_PNG_SUBSET",
+        };
+        // These keys include all derived geometry/UV/scope and animation
+        // data actually delivered to the WebView, not change hints.
+        let geometry = projection_source_key(model.epoch, b"geometry",
+            &(&snapshot.cubes, &snapshot.bones, &snapshot.hierarchy));
+        let animation = projection_source_key(model.epoch, b"animation",
+            &(snapshot.animation_count, &snapshot.animations));
+        snapshot.geometry_reused = !geometry.is_empty() &&
+            reuse.geometry == Some(geometry.as_str());
+        snapshot.animations_reused = !animation.is_empty() &&
+            reuse.animation == Some(animation.as_str());
+        snapshot.geometry_source_key = geometry;
+        snapshot.animation_source_key = animation;
+        if snapshot.geometry_reused {
+            snapshot.cubes.clear();
+            snapshot.bones.clear();
+            snapshot.hierarchy.clear();
         }
+        if snapshot.animations_reused { snapshot.animations.clear(); }
+        snapshot
 }
 
 fn project_with_preview_reuse(
     store: &EditorStore, known_preview_source_key: Option<&str>,
 ) -> Option<EditorSnapshot> {
     let frozen = freeze_projection(store)?;
-    Some(project_frozen(&frozen, known_preview_source_key))
+    Some(project_frozen(&frozen, ProjectionReuse {
+        preview: known_preview_source_key, ..ProjectionReuse::default()
+    }))
 }
 
 #[cfg(test)]
@@ -788,17 +844,17 @@ fn project(store: &EditorStore) -> Option<EditorSnapshot> {
 // Reads remain revision-consistent without retaining EditorStore's mutex
 // while decoding/scanning embedded PNGs or projecting all geometry/animation.
 fn project_detached(
-    guard: MutexGuard<'_, EditorStore>, known_preview_source_key: Option<&str>,
+    guard: MutexGuard<'_, EditorStore>, reuse: ProjectionReuse<'_>,
 ) -> Option<EditorSnapshot> {
     let frozen = freeze_projection(&guard);
     drop(guard);
-    frozen.as_ref().map(|source| project_frozen(source, known_preview_source_key))
+    frozen.as_ref().map(|source| project_frozen(source, reuse))
 }
 
 fn current_detached(
-    guard: MutexGuard<'_, EditorStore>, known_preview_source_key: Option<&str>,
+    guard: MutexGuard<'_, EditorStore>, reuse: ProjectionReuse<'_>,
 ) -> Result<EditorSnapshot, DesktopError> {
-    project_detached(guard, known_preview_source_key)
+    project_detached(guard, reuse)
         .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))
 }
 
@@ -809,7 +865,7 @@ fn current_detached(
 fn detached_edit<F>(
     store: &Mutex<EditorStore>, gate: &Mutex<()>,
     expected_epoch: u64, expected_revision: u64,
-    known_preview_source_key: Option<&str>,
+    reuse: ProjectionReuse<'_>,
     stale_message: Option<&'static str>, edit: F,
 ) -> Result<EditorSnapshot, DesktopError>
 where F: FnOnce(&mut EditorSession) -> Result<(), DesktopError> {
@@ -869,7 +925,7 @@ where F: FnOnce(&mut EditorSession) -> Result<(), DesktopError> {
         failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
     drop(guard);
     drop(write_lease);
-    Ok(project_frozen(&frozen, known_preview_source_key))
+    Ok(project_frozen(&frozen, reuse))
 }
 
 fn create_uuid() -> String {
@@ -887,7 +943,7 @@ fn create_uuid() -> String {
 
 #[tauri::command(async)]
 pub fn rust_editor_snapshot(state: State<'_, EditorState>) -> Result<Option<EditorSnapshot>, DesktopError> {
-    Ok(project_detached(lock(&state)?, None))
+    Ok(project_detached(lock(&state)?, ProjectionReuse::default()))
 }
 
 #[tauri::command(async)]
@@ -914,7 +970,7 @@ pub fn rust_editor_new(
         session, source_path: None, source_sha: None,
         saved_canonical_sha: None, dirty: true,
     });
-    current_detached(store, None)
+    current_detached(store, ProjectionReuse::default())
 }
 
 #[tauri::command]
@@ -949,7 +1005,7 @@ pub async fn rust_editor_open(
         saved_canonical_sha: Some(canonical_sha),
         dirty: false,
     });
-    current_detached(guard, None).map(Some)
+    current_detached(guard, ProjectionReuse::default()).map(Some)
 }
 
 #[tauri::command(async)]
@@ -959,10 +1015,16 @@ pub fn rust_editor_apply(
     expected_revision: u64,
     operations: Vec<EditOperation>,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(), None,
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        }, None,
         move |session| {
             session.apply(expected_revision, &operations).map_err(model_failure)?;
             Ok(())
@@ -1000,7 +1062,8 @@ pub async fn rust_editor_import_paint_png(
     let bytes = storage::read_bounded(&path, MAX_IMPORT_PNG_BYTES).map_err(model_failure)?;
     let source = format!("data:image/png;base64,{}", STANDARD.encode(bytes));
     detached_edit(
-        &state.store, &state.pending_edit, expected_epoch, expected_revision, None, None,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
+        ProjectionReuse::default(), None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::ImportPaintTexture {
                 uuid: create_uuid(), name: filename, source,
@@ -1208,10 +1271,16 @@ pub fn rust_editor_add_cube(
     expected_revision: u64,
     parent_uuid: Option<String>,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(),
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        },
         Some("Refresh the model before adding a Cube."),
         move |session| {
             let mut operations = Vec::new();
@@ -1256,10 +1325,16 @@ pub fn rust_editor_duplicate_cube(
     state: State<'_, EditorState>,
     expected_epoch: u64, expected_revision: u64, source_uuid: String,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(), None,
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        }, None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::DuplicateCube {
                 source_uuid, new_uuid: create_uuid(),
@@ -1276,10 +1351,16 @@ pub fn rust_editor_add_bone(
     expected_revision: u64,
     parent_uuid: Option<String>,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(),
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        },
         Some("Refresh the model before adding a Bone."),
         move |session| {
             let origin = if let Some(ref id) = parent_uuid {
@@ -1306,10 +1387,16 @@ pub fn rust_editor_create_animation(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     name: String, length: f64,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(), None,
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        }, None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::CreateAnimation {
                 uuid: create_uuid(), name, length,
@@ -1324,10 +1411,16 @@ pub fn rust_editor_add_rotation_keyframe(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     animation_uuid: String, bone_uuid: String, time: f64, rotation: [f64; 3],
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(), None,
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        }, None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::AddBoneRotationKeyframe {
                 animation_uuid, bone_uuid, keyframe_uuid: create_uuid(), time, rotation,
@@ -1341,10 +1434,16 @@ pub fn rust_editor_add_rotation_keyframe(
 pub fn rust_editor_undo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(), None,
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        }, None,
         move |session| {
             session.undo(expected_revision).map_err(model_failure)?;
             Ok(())
@@ -1356,10 +1455,16 @@ pub fn rust_editor_undo(
 pub fn rust_editor_redo(
     state: State<'_, EditorState>, expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<String>,
+    known_geometry_source_key: Option<String>,
+    known_animation_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
         &state.store, &state.pending_edit, expected_epoch, expected_revision,
-        known_preview_source_key.as_deref(), None,
+        ProjectionReuse {
+            preview: known_preview_source_key.as_deref(),
+            geometry: known_geometry_source_key.as_deref(),
+            animation: known_animation_source_key.as_deref(),
+        }, None,
         move |session| {
             session.redo(expected_revision).map_err(model_failure)?;
             Ok(())
@@ -1550,7 +1655,7 @@ pub async fn rust_editor_save_copy(
     active.saved_canonical_sha = Some(saved_hash);
     active.source_path = Some(path);
     active.dirty = false;
-    current_detached(guard, None).map(Some)
+    current_detached(guard, ProjectionReuse::default()).map(Some)
 }
 
 #[cfg(test)]
@@ -1572,7 +1677,7 @@ mod tests {
             }),
         });
         let gate = Mutex::new(());
-        let accepted = detached_edit(&store, &gate, 7, 0, None, None, |pending| {
+        let accepted = detached_edit(&store, &gate, 7, 0, ProjectionReuse::default(), None, |pending| {
             assert!(store.try_lock().is_ok());
             pending.apply(0, &[EditOperation::CreateAnimation {
                 uuid:"00000000-0000-4000-8000-000000000915".into(),
@@ -1585,13 +1690,13 @@ mod tests {
         assert!(accepted.can_undo);
         // Competing edit admission must fail before staging another model.
         let lease = gate.lock().unwrap();
-        let busy = detached_edit(&store, &gate, 7, 1, None, None, |_| {
+        let busy = detached_edit(&store, &gate, 7, 1, ProjectionReuse::default(), None, |_| {
             panic!("busy lease must refuse before edit closure");
         }).unwrap_err();
         assert_eq!(busy.code, "RUST_EDITOR_EDIT_BUSY");
         drop(lease);
 
-        let stale = detached_edit(&store, &gate, 7, 1, None, None, |pending| {
+        let stale = detached_edit(&store, &gate, 7, 1, ProjectionReuse::default(), None, |pending| {
             pending.apply(1, &[EditOperation::CreateAnimation {
                 uuid:"00000000-0000-4000-8000-000000000916".into(),
                 name:"uncommitted".into(), length:1.0,
@@ -1615,7 +1720,7 @@ mod tests {
             assert!(!active.session.document().animation_assets.iter().any(|asset|
                 asset["name"] == "uncommitted"));
         }
-        let after = detached_edit(&store, &gate, 7, 2, None, None, |pending| {
+        let after = detached_edit(&store, &gate, 7, 2, ProjectionReuse::default(), None, |pending| {
             assert!(store.try_lock().is_ok());
             pending.undo(2).map_err(model_failure)?;
             Ok(())
@@ -1623,7 +1728,7 @@ mod tests {
         assert_eq!(after.revision, 3);
         assert_eq!(after.animation_count, 1);
         assert!(after.can_redo);
-        let restored = detached_edit(&store, &gate, 7, 3, None, None, |pending| {
+        let restored = detached_edit(&store, &gate, 7, 3, ProjectionReuse::default(), None, |pending| {
             pending.redo(3).map_err(model_failure)?;
             Ok(())
         }).unwrap();
@@ -1643,7 +1748,7 @@ mod tests {
             }),
         });
         let gate = Mutex::new(());
-        let error = detached_edit(&store, &gate, 3, 0, None, None, |pending| {
+        let error = detached_edit(&store, &gate, 3, 0, ProjectionReuse::default(), None, |pending| {
             pending.apply(0, &[EditOperation::CreateAnimation {
                 uuid:"00000000-0000-4000-8000-000000000918".into(),
                 name:"abandoned".into(), length:1.0,
@@ -1676,7 +1781,7 @@ mod tests {
             let guard = store.lock().unwrap();
             freeze_projection(&guard).unwrap()
         };
-        let before = project_frozen(&frozen, None);
+        let before = project_frozen(&frozen, ProjectionReuse::default());
         {
             let mut guard = store.try_lock().unwrap();
             let active = guard.active.as_mut().unwrap();
@@ -1686,8 +1791,12 @@ mod tests {
             }]).unwrap();
             refresh_dirty(active);
         }
-        let first = project_frozen(&frozen, Some(&before.preview_source_key));
-        let after = project_detached(store.lock().unwrap(), Some(&before.preview_source_key))
+        let first = project_frozen(&frozen, ProjectionReuse {
+            preview: Some(&before.preview_source_key), ..ProjectionReuse::default()
+        });
+        let after = project_detached(store.lock().unwrap(), ProjectionReuse {
+            preview: Some(&before.preview_source_key), ..ProjectionReuse::default()
+        })
             .unwrap();
         assert_eq!((before.epoch, before.revision), (9, 0));
         assert_eq!((first.epoch, first.revision, first.animation_count), (9, 0, 0));
@@ -1695,6 +1804,59 @@ mod tests {
         assert_eq!(first.texture_preview_sources.len(), 0);
         assert!(after.preview_sources_reused);
         assert!(store.try_lock().is_ok());
+    }
+
+    // SOURCE-AUTHORED_NOT_RUN: projections are exactly content- and
+    // epoch-bound. Editing one family must not invalidate unchanged others.
+    #[test]
+    fn geometry_animation_reuse_is_content_and_epoch_bound() {
+        let mut store = EditorStore {
+            epoch: 21, active: Some(ActiveModel {
+                session: EditorSession::from_document(
+                    AuthoringDocument::new_bedrock("Slices", "slices").unwrap()
+                ).unwrap(), source_path: None, source_sha: None,
+                saved_canonical_sha: None, dirty: true,
+            }),
+        };
+        let full = project(&store).unwrap();
+        let hints = ProjectionReuse {
+            geometry: Some(&full.geometry_source_key),
+            animation: Some(&full.animation_source_key),
+            ..ProjectionReuse::default()
+        };
+        let same = project_frozen(&freeze_projection(&store).unwrap(), hints);
+        assert!(same.geometry_reused && same.animations_reused);
+        assert!(same.cubes.is_empty() && same.bones.is_empty());
+        assert!(same.hierarchy.is_empty() && same.animations.is_empty());
+        store.active.as_mut().unwrap().session.apply(0, &[
+            EditOperation::CreateAnimation {
+                uuid: "00000000-0000-4000-8000-000000001981".into(),
+                name: "idle".into(), length: 1.0,
+            },
+        ]).unwrap();
+        let changed_anim = project_frozen(&freeze_projection(&store).unwrap(), hints);
+        assert!(changed_anim.geometry_reused && !changed_anim.animations_reused);
+        assert_eq!(changed_anim.animations.len(), 1);
+        let new_hints = ProjectionReuse {
+            geometry: Some(&changed_anim.geometry_source_key),
+            animation: Some(&changed_anim.animation_source_key),
+            ..ProjectionReuse::default()
+        };
+        store.active.as_mut().unwrap().session.apply(1, &[
+            EditOperation::AddBone {
+                bone: Bone { uuid: "00000000-0000-4000-8000-000000001982".into(),
+                    name: "root".into(), origin: Some([0.0, 0.0, 0.0]),
+                    extra: Map::new() },
+                parent_uuid: None,
+            },
+        ]).unwrap();
+        let changed_geo = project_frozen(&freeze_projection(&store).unwrap(), new_hints);
+        assert!(!changed_geo.geometry_reused && changed_geo.animations_reused);
+        assert_eq!(changed_geo.bones.len(), 1);
+        assert!(changed_geo.animations.is_empty());
+        store.epoch += 1;
+        let different_epoch = project_frozen(&freeze_projection(&store).unwrap(), new_hints);
+        assert!(!different_epoch.geometry_reused && !different_epoch.animations_reused);
     }
 
     // Source-authored Rust/Tauri projection regression; native tests held.

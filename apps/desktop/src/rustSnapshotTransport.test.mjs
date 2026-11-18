@@ -1,7 +1,7 @@
 // TEST_AUTHORED_NOT_RUN: local/CI hold is active.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileTexturePreview } from './rustSnapshotTransport.ts';
+import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileTexturePreview, reconcileEditorSnapshot } from './rustSnapshotTransport.ts';
 const base={epoch:1,revision:0,previewSourceKey:'k',previewSourcesReused:false,
  textureNames:['atlas'],texturePreviewSources:['data:image/png;base64,QUJD']};
 
@@ -38,6 +38,46 @@ test('detached immutable projection refuses older epoch/revision responses',()=>
   assert.equal(isOlderEditorSnapshot(current,{...base,epoch:9,revision:0}),false);
 });
 
+test('native projection keys permit exact Geometry/Animation reuse only within one epoch',()=>{
+ const previous={...base,epoch:4,revision:0,
+   geometrySourceKey:'geometry-sha',geometryReused:false,
+   animationSourceKey:'animation-sha',animationsReused:false,
+   cubes:[{uuid:'cube'}],bones:[{uuid:'bone'}],
+   hierarchy:['cube'],animations:[{uuid:'clip'}],animationCount:1};
+ const omitted={...previous,revision:1,geometryReused:true,
+   animationsReused:true,cubes:[],bones:[],hierarchy:[],animations:[]};
+ const hydrated=reconcileEditorSnapshot(previous,omitted);
+ assert.deepEqual(hydrated.cubes,previous.cubes);
+ assert.deepEqual(hydrated.bones,previous.bones);
+ assert.deepEqual(hydrated.hierarchy,previous.hierarchy);
+ assert.deepEqual(hydrated.animations,previous.animations);
+ assert.equal(hydrated.geometryReused,false);
+ assert.equal(hydrated.animationsReused,false);
+ assert.deepEqual(omitted.cubes,[]);
+ assert.deepEqual(omitted.animations,[]);
+
+ for(const change of [
+   {epoch:5},{geometrySourceKey:'different'},
+   {cubes:[{uuid:'forged'}]},{hierarchy:['forged']},
+ ]) assert.throws(
+   ()=>reconcileEditorSnapshot(previous,{...omitted,...change}),
+   /RUST_EDITOR_GEOMETRY_REUSE_STALE/);
+ for(const change of [
+   {animationSourceKey:'different'},
+   {animations:[{uuid:'forged'}]},{animationCount:2}
+ ]) assert.throws(
+   ()=>reconcileEditorSnapshot(previous,{
+     ...omitted,geometryReused:false,
+     cubes:previous.cubes,bones:previous.bones,hierarchy:previous.hierarchy,
+     ...change,
+   }),/RUST_EDITOR_ANIMATION_REUSE_STALE/);
+ assert.throws(()=>reconcileEditorSnapshot(null,omitted),
+   /RUST_EDITOR_GEOMETRY_REUSE_STALE/);
+ const full={...previous,revision:2,geometryReused:false,
+   animationsReused:false,animations:[{uuid:'updated'}]};
+ assert.deepEqual(reconcileEditorSnapshot(previous,full),full);
+});
+
 test('full snapshot preserves intentionally missing PNG sources',()=>{
  const full={...base,texturePreviewSources:[null]};
  assert.equal(reconcileTexturePreview(null,full),full);
@@ -47,6 +87,8 @@ test('only exact preview transport errors qualify for a full read-only Rust refr
   assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_PREVIEW_REUSE_STALE')), true);
   assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE')), true);
   assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_SNAPSHOT_STALE')), true);
+  assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_GEOMETRY_REUSE_STALE')), true);
+  assert.equal(isPreviewTransportFailure(new Error('RUST_EDITOR_ANIMATION_REUSE_STALE')), true);
   for (const unrelated of [
     new Error('DOCUMENT_REVISION_STALE'),
     new Error('RUST_EDITOR_SOURCE_CHANGED'),
@@ -68,7 +110,7 @@ test('a rejected preview response cannot trigger another Rust mutation', async (
   assert.doesNotMatch(handler, /invoke<EditorSnapshot>\('rust_editor_undo'/);
 });
 
-test('only implemented Rust snapshot-returning commands receive the PNG reuse hint', () => {
+test('only implemented Rust snapshot-returning commands receive reuse hints', () => {
   for (const supported of [
     'rust_editor_apply', 'rust_editor_undo', 'rust_editor_redo',
     'rust_editor_add_cube', 'rust_editor_duplicate_cube',

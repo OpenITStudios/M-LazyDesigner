@@ -1,5 +1,6 @@
-// WebView may reuse an existing immutable PNG payload only with a native
-// content identity from the same epoch; never infer from element count.
+// Reuse native immutable PNG, Geometry and Animation payloads only with
+// exact epoch-scoped source projection identities. This is transfer
+// optimization, not a second model store or editable authority.
 import type { EditorSnapshot } from './rustEditorTypes';
 
 // These native operations all return the canonical Rust snapshot. A missing
@@ -23,6 +24,8 @@ export function isPreviewTransportFailure(cause: unknown): boolean {
   return cause instanceof Error && (
     cause.message === 'RUST_EDITOR_PREVIEW_REUSE_STALE' ||
     cause.message === 'RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE' ||
+    cause.message === 'RUST_EDITOR_GEOMETRY_REUSE_STALE' ||
+    cause.message === 'RUST_EDITOR_ANIMATION_REUSE_STALE' ||
     cause.message === 'RUST_EDITOR_SNAPSHOT_STALE'
   );
 }
@@ -57,4 +60,38 @@ export function reconcileTexturePreview(
     throw new Error('RUST_EDITOR_PREVIEW_SOURCES_INCOMPLETE');
   }
   return incoming;
+}
+
+/** Fill omitted immutable payload families only when Rust's epoch and
+ * exact serialized source projection key match the current accepted view.
+ * A rejected reuse is recovered with a full read-only native snapshot.
+ */
+export function reconcileEditorSnapshot(
+  previous: EditorSnapshot | null, incoming: EditorSnapshot,
+): EditorSnapshot {
+  let next = reconcileTexturePreview(previous, incoming);
+  if (next.geometryReused === true) {
+    if (!previous || previous.epoch !== next.epoch ||
+        !next.geometrySourceKey ||
+        previous.geometrySourceKey !== next.geometrySourceKey ||
+        next.cubes.length !== 0 || next.bones.length !== 0 ||
+        next.hierarchy.length !== 0) {
+      throw new Error('RUST_EDITOR_GEOMETRY_REUSE_STALE');
+    }
+    next = { ...next, cubes: previous.cubes, bones: previous.bones,
+      hierarchy: previous.hierarchy, geometryReused: false };
+  }
+  if (next.animationsReused === true) {
+    if (!previous || previous.epoch !== next.epoch ||
+        !next.animationSourceKey ||
+        previous.animationSourceKey !== next.animationSourceKey ||
+        next.animations.length !== 0 ||
+        previous.animationCount !== next.animationCount) {
+      // The saved source may contain opaque clips not projected by the GUI.
+      throw new Error('RUST_EDITOR_ANIMATION_REUSE_STALE');
+    }
+    next = { ...next, animations: previous.animations,
+      animationsReused: false };
+  }
+  return next;
 }

@@ -106,6 +106,9 @@ export type EditorSnapshot = {
   cubes: CubeView[];
   bones: BoneView[];
   hierarchy: HierarchyNode[];
+  /** Native epoch-scoped SHA of projected Cube, Bone and hierarchy arrays. */
+  geometrySourceKey?: string;
+  geometryReused?: boolean;
   textureNames: string[];
   textureUuids: (string | null)[];
   texturePreviewSources: (string | null)[];
@@ -123,6 +126,8 @@ export type EditorSnapshot = {
   paintTextureAddable: boolean;
   animationCount: number;
   animations: AnimationView[];
+  animationSourceKey?: string;
+  animationsReused?: boolean;
   previewScope: 'UNVERIFIED_EMBEDDED_PNG_SUBSET';
 };
 

@@ -86,6 +86,27 @@ AUTHORED_NOT_RUN: CPU gains and installed behavior remain UNVERIFIED.
 More specialized inspection families still keep their public validations;
 do not treat this as a universal cache or permission bypass.
 
+## Epoch-bound GUI snapshot transfer reuse — 2026-11-18 (SOURCE ONLY)
+
+Rust Tauri snapshot-returning editor commands now accept optional known
+Geometry and Animation projection keys alongside the existing PNG key.
+Projection is still derived from one frozen immutable Rust document and
+validated authoring revision; no second canonical model or persistent cache
+is introduced. Rust hashes the **actual** projected Cube/Bone/hierarchy
+and bounded Animation payloads with a source-family domain separator and
+the editor epoch. Only identical projections omit their corresponding
+arrays. Svelte restores the prior accepted immutable arrays after verifying
+the epoch, key, and empty-omission shape, or performs one read-only full
+snapshot refresh on mismatch. Mutations are never retried automatically.
+New/Open/Save Copy and unknown-hint readers continue to receive full
+snapshots. PNG preview identity and Rust edit authority remain unchanged.
+
+This reduces transmitted/serialized IPC data only when the source
+projections match; source projection and hashing still do work in Rust.
+Source-only Rust/TypeScript parity, stale, mismatch and invalid-reuse
+tests are AUTHORED_NOT_RUN. Runtime CPU, IPC size/latency, user-PC
+acceptance and Blockbench visual fidelity remain UNVERIFIED.
+
 ## Programmatic read batching — 2026-11-15 (SOURCE_ONLY)
 
 **Write launch integrity:** A host-approved transaction is rechecked by a
