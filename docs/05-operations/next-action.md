@@ -1,3 +1,15 @@
+**Rust typed Geometry revision sharing — 2026-11-18 (SOURCE ONLY):**
+At `Rust@6ef677c547f88b8acd3a302bc60a31a559783371`, Texture, Animation and opaque
+extension revisions were already shared, but Cube/Bone/Outliner collections
+were cloned on unrelated edits and Tauri copied the full Outliner before
+discarding it for a matching Geometry IPC key. The existing COW owner now
+shares these typed collections, and the projection defers Outliner copying
+until the exact epoch-bound key requires a full response. Rust adapter,
+constructor, consumers and source regressions are updated together;
+tests/native execution and measured performance remain NOT_EXECUTED.
+See `docs/04-system/rust-native-editor-plan.md` for the current contract.
+Earlier dated entries below are historical checkpoints, not current holds.
+
 **Code Mode single-batch duplicate inspection (2026-11-17; SOURCE ONLY):**
 The existing first-party Rust Code Mode `inspectBatch` already opens one SHA-pinned immutable model and supports up to 8 selectors, but duplicate normalized queries in the same request caused repeated Rust inspections. The SDK now coalesces identical selectors only inside that one batch and re-expands results to the guest's requested order, preserving independent JSON values and the native 96 KiB output array cap. Fresh calls still require Rust source SHA validation and do not reuse cached results; operator-selected references, pixel guards, visual reviewer authority and write leases are unchanged. Node positive/negative source cases AUTHORED_NOT_RUN; actual CLI/workflow performance UNVERIFIED.
 

@@ -628,7 +628,7 @@ mod tests {
                 uuid: child_id.into(), is_open: Some(true), extra: Map::new(),
                 children: vec![OutlinerNode::Cube(cube_id)],
             })],
-        })];
+        })].into();
         doc.cubes[0].faces.get_mut("south").unwrap()["texture"] = Value::Null;
         let original = doc.clone();
         let geo: Value = serde_json::from_slice(&export_bedrock_geometry(&doc).unwrap()).unwrap();
@@ -668,7 +668,7 @@ mod tests {
             OutlinerNode::Bone(super::super::OutlinerBone {
                 uuid: source.bones[0].uuid.clone(),
                 is_open: Some(true), children: Vec::new(), extra: Map::new(),
-            })];
+            })].into();
         assert_eq!(export_bedrock_geometry(&unsupported).unwrap_err(),
             "GEOMETRY_EXPORT_CUBE_REQUIRES_BONE");
         assert_eq!(source, AuthoringDocument::import_bbmodel(BASIC).unwrap());
@@ -707,7 +707,7 @@ mod tests {
         }
         doc.hierarchy = vec![OutlinerNode::Bone(super::super::OutlinerBone {
             uuid: root_uuid, is_open: Some(true), extra: Map::new(), children,
-        })];
+        })].into();
         let unchanged = doc.clone();
         let bytes = export_bedrock_geometry(&doc).unwrap();
         assert_eq!(bytes, export_bedrock_geometry(&doc).unwrap());

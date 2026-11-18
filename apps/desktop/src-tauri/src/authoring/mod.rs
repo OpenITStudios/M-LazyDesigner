@@ -202,9 +202,11 @@ impl<'de, T: Clone + Deserialize<'de>> Deserialize<'de> for SharedJson<T> {
 pub struct AuthoringDocument {
     pub meta: ProjectMeta,
     pub resolution: TextureResolution,
-    pub cubes: Vec<Cube>,
-    pub bones: Vec<Bone>,
-    pub hierarchy: Vec<OutlinerNode>,
+    // Typed geometry and Outliner allocations stay shared for Paint/Animation
+    // revisions; the first actual edit to each family detaches via Arc::make_mut.
+    pub cubes: SharedJson<Vec<Cube>>,
+    pub bones: SharedJson<Vec<Bone>>,
+    pub hierarchy: SharedJson<Vec<OutlinerNode>>,
     pub texture_assets: SharedJsonAssets,
     pub animation_assets: SharedJsonAssets,
     pub extensions: SharedJsonExtensions,
@@ -798,7 +800,7 @@ impl AuthoringDocument {
                 box_uv: Some(true), extra: Map::new(),
             },
             resolution: TextureResolution { width: 128, height: 128, extra: Map::new() },
-            cubes: Vec::new(), bones: Vec::new(), hierarchy: Vec::new(),
+            cubes: Vec::new().into(), bones: Vec::new().into(), hierarchy: Vec::new().into(),
             texture_assets: Vec::new().into(), animation_assets: Vec::new().into(),
             extensions: extra.into(),
         };

@@ -28,7 +28,8 @@ impl From<BlockbenchV5> for AuthoringDocument {
     fn from(wire: BlockbenchV5) -> Self {
         Self {
             meta: wire.meta, resolution: wire.resolution,
-            cubes: wire.elements, bones: wire.groups, hierarchy: wire.outliner,
+            cubes: wire.elements.into(), bones: wire.groups.into(),
+            hierarchy: wire.outliner.into(),
             texture_assets: wire.textures.into(), animation_assets: wire.animations.into(),
             extensions: wire.extra.into(),
         }
@@ -73,8 +74,8 @@ impl From<&AuthoringDocument> for BlockbenchV5 {
     fn from(doc: &AuthoringDocument) -> Self {
         Self {
             meta: doc.meta.clone(), resolution: doc.resolution.clone(),
-            elements: doc.cubes.clone(), groups: doc.bones.clone(),
-            outliner: doc.hierarchy.clone(),
+            elements: doc.cubes.as_ref().clone(), groups: doc.bones.as_ref().clone(),
+            outliner: doc.hierarchy.as_ref().clone(),
             textures: doc.texture_assets.as_slice().to_vec(),
             animations: doc.animation_assets.as_slice().to_vec(),
             extra: doc.extensions.as_ref().clone(),

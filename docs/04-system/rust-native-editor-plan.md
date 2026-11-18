@@ -16,36 +16,24 @@ Blockbench .bbmodel round trip, no-overwrite writes and visual proof gates
 remain unchanged. See
 [Code Mode host implementation](../../apps/desktop/code-mode/HOST_INTEGRATION.md).
 
-**Opaque-extension COW refinement (2026-11-18; SOURCE ONLY):**
-The existing immutable asset sharing is now implemented through one
-small generic `SharedJson<T>` owner for Texture and Animation arrays
-and opaque top-level project extension maps. Unchanged project vendor
-metadata can share source allocation across provisional edits and Undo;
-the first `visible_box` or other actual metadata write detaches that
-map through `Arc::make_mut`. Equality first checks shared allocation
-identity, then falls back to value equality for independent identical
-documents. Borrowed `.bbmodel` export and the original cloning oracle
-still serialize ordinary flattened top-level keys, with no new
-`extensions` wrapper field. Tests are AUTHORED_NOT_RUN and runtime
-memory savings, CLI/native editability and Blockbench fidelity are
-UNVERIFIED. No per-Cube/Bone or per-Texture structural-sharing rewrite
-is claimed.
-
-**Rust source memory hot path (2026-11-18; SOURCE ONLY):** The one
-`AuthoringDocument` now uses immutable `Arc<Vec<Value>>` copy-on-write
-ownership for Texture and Animation JSON collections. Ordinary document
-clones used by validated Rust transactions do not duplicate unchanged
-embedded PNG Base64 strings and keyframe/opaque payloads; the first
-mutating access to a shared collection clones that collection before any
-write, preserving older Undo, Redo, read-only snapshot and provisional
-transaction versions. Geometry/Bone/Outliner/extension values still
-use their previous cloning semantics. Borrowed `.bbmodel` export
-continues to encode ordinary JSON Texture/Animation arrays, with no
-altered schema, missing metadata or bypassed admission. Rust source
-regressions cover asset allocation identity, independent Paint/Animation
-writes, Undo/Redo, and export/import parity but are NOT_EXECUTED.
-CPU/memory improvements, native execution and Blockbench editability
-remain UNVERIFIED.
+**Immutable Rust revision sharing (2026-11-18; SOURCE ONLY):**
+The existing generic `SharedJson<T>` copy-on-write owner now covers typed Cube,
+Bone and Outliner collections alongside Texture/Animation JSON arrays and
+flattened opaque project extensions. A cloned `AuthoringDocument` shares
+unchanged collections between candidate transactions, history and read-only
+snapshots; `Arc::make_mut` detaches only the collection that is actually
+modified. The Rust field types for these three geometry collections are now
+`SharedJson<Vec<T>>` rather than bare `Vec<T>`; in-repository Rust
+constructors, the Blockbench adapter and GUI projection consumers are
+updated. The borrowed `.bbmodel` writer retains ordinary `elements`,
+`groups`, `outliner`, `textures`, `animations` arrays and flattened
+extension keys; the previous owned serializer remains the regression oracle.
+On epoch/key-matched Tauri Geometry reuse, the Outliner is no longer cloned
+only to be discarded before IPC. Source-authored regressions cover independent
+collection detachment, Undo/Redo, exact projection keys and import/export.
+These tests are NOT_EXECUTED. Actual Rust compilation, peak memory/CPU/IPC
+improvements, Windows/native behavior and Blockbench fidelity remain
+UNVERIFIED. No alternate model store or GPU scene diff was added.
 
 ## 1. Approved outcome and explicit non-goals
 **Maintainer priority supersession (2026-11-15):** Finish **Geometry → Texturing → Animation** authoring and export fidelity before UI/UX. LazyDesigner can use more effective authoring flows than Blockbench and is not required to copy its user interface. The release-blocking handoff is a faithful, editable Rust-exported `.bbmodel` opened in actual Blockbench with supported Geometry, UV/Texture and Animation preserved. Reverse import remains supported only where lossless, and unrestricted reverse parity is no longer a product gate. Preserve one Rust engine, fail-closed unknown data, local test holds and final native Blockbench proof.

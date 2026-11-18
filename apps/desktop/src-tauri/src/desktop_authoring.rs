@@ -770,7 +770,8 @@ fn project_frozen(
                 rotation: property_vec3(&bone.extra, "rotation"),
                 visible: bone.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
             }).collect(),
-            hierarchy: doc.hierarchy.clone(),
+            // Do not allocate the Outliner until the geometry reuse key is known.
+            hierarchy: Vec::new(),
             geometry_source_key: String::new(),
             geometry_reused: false,
             texture_names: doc.texture_assets.iter().map(|texture| {
@@ -809,7 +810,7 @@ fn project_frozen(
         // These keys include all derived geometry/UV/scope and animation
         // data actually delivered to the WebView, not change hints.
         let geometry = projection_source_key(model.epoch, b"geometry",
-            &(&snapshot.cubes, &snapshot.bones, &snapshot.hierarchy));
+            &(&snapshot.cubes, &snapshot.bones, doc.hierarchy.as_ref()));
         let animation = projection_source_key(model.epoch, b"animation",
             &(snapshot.animation_count, &snapshot.animations));
         snapshot.geometry_reused = !geometry.is_empty() &&
@@ -821,7 +822,10 @@ fn project_frozen(
         if snapshot.geometry_reused {
             snapshot.cubes.clear();
             snapshot.bones.clear();
-            snapshot.hierarchy.clear();
+        } else {
+            // Exact same serialized key as the previous wire projection, but
+            // avoid cloning a potentially deep Outliner for omitted IPC data.
+            snapshot.hierarchy = doc.hierarchy.as_ref().clone();
         }
         if snapshot.animations_reused { snapshot.animations.clear(); }
         snapshot
@@ -1819,6 +1823,8 @@ mod tests {
             }),
         };
         let full = project(&store).unwrap();
+        assert_eq!(full.geometry_source_key, projection_source_key(full.epoch,
+            b"geometry", &(&full.cubes, &full.bones, &full.hierarchy)));
         let hints = ProjectionReuse {
             geometry: Some(&full.geometry_source_key),
             animation: Some(&full.animation_source_key),
@@ -1853,6 +1859,9 @@ mod tests {
         let changed_geo = project_frozen(&freeze_projection(&store).unwrap(), new_hints);
         assert!(!changed_geo.geometry_reused && changed_geo.animations_reused);
         assert_eq!(changed_geo.bones.len(), 1);
+        assert_eq!(changed_geo.hierarchy.len(), 1);
+        assert_eq!(changed_geo.geometry_source_key, projection_source_key(changed_geo.epoch,
+            b"geometry", &(&changed_geo.cubes, &changed_geo.bones, &changed_geo.hierarchy)));
         assert!(changed_geo.animations.is_empty());
         store.epoch += 1;
         let different_epoch = project_frozen(&freeze_projection(&store).unwrap(), new_hints);

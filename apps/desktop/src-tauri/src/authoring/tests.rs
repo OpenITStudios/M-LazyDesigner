@@ -75,6 +75,64 @@ fn immutable_session_snapshots_survive_mutation_and_undo() {
     assert!(std::sync::Arc::ptr_eq(&edited, &session.snapshot_document()));
 }
 
+// SOURCE-AUTHORED_NOT_RUN: typed Geometry/Bone/Outliner allocations must
+// survive unrelated Animation edits, detach only on their own writes, and
+// preserve Undo, Redo and ordinary editable .bbmodel array serialization.
+#[test]
+fn typed_geometry_collections_are_copy_on_write_across_revisions() {
+    let mut direct = AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap();
+    let original = direct.clone();
+    assert!(Arc::ptr_eq(&original.cubes.0, &direct.cubes.0));
+    assert!(Arc::ptr_eq(&original.bones.0, &direct.bones.0));
+    assert!(Arc::ptr_eq(&original.hierarchy.0, &direct.hierarchy.0));
+
+    direct.cubes[0].name = Some("clone-only Cube".into());
+    assert!(!Arc::ptr_eq(&original.cubes.0, &direct.cubes.0));
+    assert!(Arc::ptr_eq(&original.bones.0, &direct.bones.0));
+    direct.bones[0].name = "clone-only Bone".into();
+    assert!(!Arc::ptr_eq(&original.bones.0, &direct.bones.0));
+    assert!(Arc::ptr_eq(&original.hierarchy.0, &direct.hierarchy.0));
+    if let OutlinerNode::Bone(root) = &mut direct.hierarchy[0] {
+        root.is_open = Some(!root.is_open.unwrap_or(true));
+    } else { panic!("fixture root should be a Bone"); }
+    assert!(!Arc::ptr_eq(&original.hierarchy.0, &direct.hierarchy.0));
+    assert_eq!(original, AuthoringDocument::import_bbmodel(SAMPLE.as_bytes()).unwrap());
+    direct.validate().unwrap();
+
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let initial = session.snapshot_document();
+    session.apply(0, &[EditOperation::CreateAnimation {
+        uuid: "00000000-0000-4000-8000-000000000949".into(),
+        name: "idle".into(), length: 1.0,
+    }]).unwrap();
+    let animated = session.snapshot_document();
+    assert!(Arc::ptr_eq(&initial.cubes.0, &animated.cubes.0));
+    assert!(Arc::ptr_eq(&initial.bones.0, &animated.bones.0));
+    assert!(Arc::ptr_eq(&initial.hierarchy.0, &animated.hierarchy.0));
+
+    session.apply(1, &[EditOperation::RenameNode {
+        uuid: CUBE.into(), name: "renamed_cube".into(),
+    }]).unwrap();
+    let renamed = session.snapshot_document();
+    assert!(!Arc::ptr_eq(&animated.cubes.0, &renamed.cubes.0));
+    assert!(Arc::ptr_eq(&animated.bones.0, &renamed.bones.0));
+    assert!(Arc::ptr_eq(&animated.hierarchy.0, &renamed.hierarchy.0));
+    assert!(Arc::ptr_eq(&animated.animation_assets.0, &renamed.animation_assets.0));
+    assert_ne!(animated.cubes[0].name, renamed.cubes[0].name);
+
+    let bytes = session.export().unwrap();
+    let wire: Value = serde_json::from_slice(&bytes).unwrap();
+    for field in ["elements", "groups", "outliner", "animations"] {
+        assert!(wire[field].is_array(), "{field} must stay a JSON array");
+    }
+    assert_eq!(AuthoringDocument::import_bbmodel(&bytes).unwrap(), *renamed);
+    session.undo(2).unwrap();
+    assert!(Arc::ptr_eq(&animated.cubes.0, &session.document().cubes.0));
+    session.redo(3).unwrap();
+    assert!(Arc::ptr_eq(&renamed.cubes.0, &session.document().cubes.0));
+    assert_eq!(session.document(), renamed.as_ref());
+}
+
 // SOURCE-AUTHORED_NOT_RUN: full candidate cloning must retain immutable
 // PNG/keyframe allocations across unrelated edits while Paint/Animation
 // writes detach only their own family. Undo/Redo restore byte-identical
