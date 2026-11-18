@@ -1184,6 +1184,13 @@ mod tests {
         assert_eq!(results.len(),2);
         assert_eq!(results[0]["kind"],"asset_handoff");
         assert_eq!(results[0]["handoff"]["status"],"source_consistent");
+        // InspectBatch binds the canonical editable project export to the
+        // same immutable Rust document as all three resource exporters.
+        assert_eq!(results[0]["handoff"]["bbmodel"]["status"],"source_exportable");
+        assert_eq!(results[0]["handoff"]["bbmodel"]["sha256"],
+            json!(sha256(&session.export().unwrap())));
+        assert_eq!(results[0]["handoff"]["bbmodel"]["bytes"],
+            json!(session.export().unwrap().len()));
         assert_eq!(results[0]["handoff"]["faces"]["selected_texture"],6);
         assert_eq!(results[0]["handoff"]["animation"]["status"],"not_required");
         assert_eq!(results[0]["handoff"]["geometry"]["visible_bounds_source"],"computed_static");

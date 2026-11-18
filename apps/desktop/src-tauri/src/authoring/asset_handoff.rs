@@ -601,6 +601,18 @@ pub fn inspect_bedrock_asset_handoff_page(
                 translation_clearance(doc, static_bounds, &current, compiled_bones);
         }
     }
+    // Bind the editable .bbmodel to the same in-memory document as the
+    // Geometry, Texture and Animation exporters. The existing streaming
+    // digest has the exact saved bytes and size without an extra JSON Vec.
+    // An over-budget canonical output is a blocker, not a false success.
+    let (bbmodel, bbmodel_ok) = match super::bbmodel::canonical_fingerprint_validated(doc) {
+        Ok((digest, bytes)) => (json!({
+            "status":"source_exportable", "sha256":digest, "bytes":bytes,
+        }), true),
+        Err(code) => (json!({
+            "status":"blocked", "reason":code, "sha256":null, "bytes":null,
+        }), false),
+    };
     let png_output = export_paint_png(doc, texture_uuid);
     let (texture, png_ok) = export_evidence(png_output.as_ref().map(Vec::as_slice));
     let animation_required = !doc.animation_assets.is_empty();
@@ -622,6 +634,7 @@ pub fn inspect_bedrock_asset_handoff_page(
     }
 
     let mut blockers = Vec::new();
+    if !bbmodel_ok { blockers.push("BBMODEL_EXPORT_BLOCKED"); }
     if !geo_ok { blockers.push("GEOMETRY_EXPORT_BLOCKED"); }
     if !png_ok { blockers.push("TEXTURE_EXPORT_BLOCKED"); }
     if !anim_ok { blockers.push("ANIMATION_EXPORT_BLOCKED"); }
@@ -661,6 +674,7 @@ pub fn inspect_bedrock_asset_handoff_page(
             Some(offset + issues.len())
         } else { None },
         "issues":issues,
+        "bbmodel":bbmodel,
         "geometry":geometry,
         "texture":texture,
         "animation":animation,
@@ -671,7 +685,7 @@ pub fn inspect_bedrock_asset_handoff_page(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::{EditOperation, EditorSession};
+    use super::super::{Bone, EditOperation, EditorSession};
     use serde_json::json;
 
     const SAMPLE: &[u8] = include_bytes!("../../fixtures/bedrock-basic.bbmodel");
@@ -679,6 +693,9 @@ mod tests {
     const SECOND: &str = "00000000-0000-4000-8000-000000006202";
     const CUBE: &str = "00000000-0000-4000-8000-000000000002";
     const ANIMATION: &str = "00000000-0000-4000-8000-000000006203";
+    const CHILD_BONE: &str = "00000000-0000-4000-8000-000000006204";
+    const CHILD_CUBE: &str = "00000000-0000-4000-8000-000000006205";
+    const CHILD_FRAME: &str = "00000000-0000-4000-8000-000000006206";
 
     fn prepared() -> EditorSession {
         let mut session = EditorSession::open(SAMPLE).unwrap();
@@ -706,6 +723,11 @@ mod tests {
         assert_eq!(report["faces"]["selected_texture"], 6);
         assert_eq!(report["faces"]["other_texture"], 0);
         assert_eq!(report["faces"]["explicitly_absent"], 0);
+        assert_eq!(report["bbmodel"]["status"], "source_exportable");
+        assert_eq!(report["bbmodel"]["sha256"],
+            json!(sha256(&session.export().unwrap())));
+        assert_eq!(report["bbmodel"]["bytes"],
+            json!(session.export().unwrap().len()));
         assert_eq!(report["geometry"]["status"], "source_exportable");
         assert_eq!(report["texture"]["status"], "source_exportable");
         assert_eq!(report["animation"]["status"], "source_exportable");
@@ -722,6 +744,104 @@ mod tests {
         assert_eq!(session.document(), &before);
         let compact = serde_json::to_string(&report).unwrap();
         assert!(!compact.contains("data:image/png"));
+    }
+
+
+    // P0 source regression: one immutable Rust revision must prove identity
+    // across editable .bbmodel, Geometry, RGBA8 PNG and Animation, including
+    // nested rig and all six faces of TWO Cubes. No PC/native test ran.
+    #[test]
+    fn nested_bone_two_cube_four_artifact_handoff_stays_revision_bound() {
+        let mut session = prepared();
+        let prior = session.document().clone();
+        let root_uuid = prior.bones[0].uuid.clone();
+        let mut second_cube = EditorSession::open(SAMPLE).unwrap().document().cubes[0].clone();
+        second_cube.uuid = CHILD_CUBE.into();
+        second_cube.name = Some("arm_segment".into());
+        second_cube.from = [4.0, 0.0, 0.0];
+        second_cube.to = [8.0, 4.0, 4.0];
+        second_cube.origin = Some([4.0, 0.0, 0.0]);
+        let child: Bone = serde_json::from_value(json!({
+            "uuid":CHILD_BONE, "name":"arm_bone", "origin":[4,0,0],
+        })).unwrap();
+        let receipt = session.apply(1, &[
+            EditOperation::AddBone {
+                bone:child, parent_uuid:Some(root_uuid),
+            },
+            EditOperation::AddCube {
+                cube:second_cube, bone_uuid:CHILD_BONE.into(),
+            },
+            EditOperation::AssignCubeTexture {
+                cube_uuid:CHILD_CUBE.into(), texture_uuid:TEXTURE.into(),
+            },
+            EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:ANIMATION.into(), bone_uuid:CHILD_BONE.into(),
+                keyframe_uuid:CHILD_FRAME.into(), channel:"rotation".into(),
+                time:0.5, value:[0.0,30.0,0.0],
+            },
+        ]).unwrap();
+        assert_eq!(receipt.revision, 2);
+        assert_eq!(receipt.operation_count, 4);
+        let saved = session.document().clone();
+        assert_eq!(saved.cubes.len(), 2);
+        assert_eq!(saved.bones.len(), 2);
+        let editable = session.export().unwrap();
+        let reopen = EditorSession::open(&editable).unwrap();
+        assert_eq!(reopen.document(), &saved);
+
+        let handoff = inspect_bedrock_asset_handoff(reopen.document(), TEXTURE).unwrap();
+        assert_eq!(handoff["status"], "source_consistent");
+        assert_eq!(handoff["faces"]["selected_texture"], 12);
+        assert_eq!(handoff["faces"]["total"], 12);
+        assert_eq!(handoff["total_issues"], 0);
+        assert_eq!(handoff["blockers"], json!([]));
+        assert_eq!(handoff["bbmodel"]["sha256"], json!(sha256(&editable)));
+        assert_eq!(handoff["bbmodel"]["bytes"], json!(editable.len()));
+        assert_eq!(handoff["geometry"]["sha256"], json!(sha256(
+            &super::super::export_bedrock_geometry(&saved).unwrap())));
+        assert_eq!(handoff["texture"]["sha256"], json!(sha256(
+            &export_paint_png(&saved, TEXTURE).unwrap())));
+        assert_eq!(handoff["animation"]["sha256"], json!(sha256(
+            &export_bedrock_animations(&saved).unwrap())));
+        assert_eq!(handoff["visual_verdict"], "UNVERIFIED");
+        assert_eq!(handoff["native_verdict"], "NOT_EXECUTED");
+        assert!(!handoff.to_string().contains("data:image/png"));
+
+        // A source-consistent export does not automatically accept an
+        // uncovered face, even when all exporters remain individually valid.
+        let mut flawed = saved.clone();
+        flawed.cubes[1].faces.get_mut("north").unwrap()["texture"] = json!(false);
+        let blocked = inspect_bedrock_asset_handoff(&flawed, TEXTURE).unwrap();
+        assert_eq!(blocked["status"], "blocked");
+        assert_eq!(blocked["issues"][0]["cube_uuid"], CHILD_CUBE);
+        assert_eq!(blocked["issues"][0]["face"], "north");
+        assert_eq!(blocked["blockers"][0], "IMPLICIT_OR_UNASSIGNED_FACE_TEXTURES");
+        assert_eq!(blocked["bbmodel"]["status"], "source_exportable");
+        assert_ne!(blocked["bbmodel"]["sha256"], handoff["bbmodel"]["sha256"]);
+        assert_eq!(saved.cubes[1].faces["north"]["texture"], TEXTURE);
+
+        // An invalid later step must roll back an earlier valid rename in
+        // the SAME batch. It must not advance revision or change Undo.
+        assert_eq!(session.apply(2, &[
+            EditOperation::RenameNode {
+                uuid:CHILD_CUBE.into(), name:"must_not_commit".into(),
+            },
+            EditOperation::AssignCubeFaceTexture {
+                cube_uuid:CHILD_CUBE.into(), face:"diagonal".into(),
+                texture_uuid:TEXTURE.into(),
+            },
+        ]).unwrap_err(), "CUBE_FACE_INVALID");
+        assert_eq!(session.document(), &saved);
+        assert_eq!(session.summary().revision, 2);
+
+        // One Undo restores the previous coherent model; Redo restores all
+        // 4 domain changes without retaining any inspector-side mutation.
+        session.undo(2).unwrap();
+        assert_eq!(session.document(), &prior);
+        session.redo(3).unwrap();
+        assert_eq!(session.document(), &saved);
+        assert_eq!(session.canonical_sha256().unwrap(),
+            handoff["bbmodel"]["sha256"].as_str().unwrap());
     }
 
     #[test]

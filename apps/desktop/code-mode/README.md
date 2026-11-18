@@ -1,3 +1,14 @@
+**P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**
+The existing `inspectBatch([{kind:'asset_handoff', texture_uuid:'...'}])`
+now returns `handoff.bbmodel` with a streaming canonical SHA-256 and
+byte count alongside `geometry`, `texture` and `animation`. Each is
+derived from the same validated immutable Rust source; the top-level
+`sha256` remains the exact INPUT file digest, which may differ when an
+imported file was not canonically formatted. Export failures remain
+explicit blockers and no success is a visual or native Blockbench PASS.
+The SDK/host command count, security, output publication and guest
+authority are unchanged. Source regressions NOT_EXECUTED.
+
 **Bounded Code Mode task context and timing (2026-11-18; SOURCE ONLY):**
 The trusted Node host offers taskContext(project,domain,category,name) by
 compacting ONE SHA-pinned Rust inspectBatch authoring_target read. Exact

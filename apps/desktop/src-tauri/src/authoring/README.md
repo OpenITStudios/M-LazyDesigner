@@ -1,3 +1,16 @@
+**P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**
+The existing read-only Bedrock `asset_handoff` now includes the
+canonical editable `.bbmodel` SHA-256 and exact serialized byte count
+alongside the same-Revision Geometry/PNG/Animation exporter hashes.
+It reuses the validated Rust streaming serializer, not a separate file
+format or an extra model store. A model too large to export is explicitly
+`BBMODEL_EXPORT_BLOCKED`; source consistency still cannot certify
+Blockbench editability, pixels, or playback. A nested two-Bone/two-Cube
+six-face/animation integration regression, the existing CLI
+`inspectBatch` consumer, and streaming-hash equality assertions are
+AUTHORED_NOT_RUN. Default permissions, no-overwrite writes, Code Mode
+sandbox and active localtest hold are unchanged.
+
 **Shared immutable semantic read and disposable preflight (2026-11-18; SOURCE ONLY):**
 `EditorSession::semantic_map` and `EditorSession::preflight` are
 single Rust-native read owners used by both the headless CLI and

@@ -35,6 +35,21 @@ These tests are NOT_EXECUTED. Actual Rust compilation, peak memory/CPU/IPC
 improvements, Windows/native behavior and Blockbench fidelity remain
 UNVERIFIED. No alternate model store or GPU scene diff was added.
 
+**P0 Cross-Domain Asset Fidelity source increment (2026-11-18; NOT_EXECUTED):**
+The existing Rust asset handoff now ties four in-memory outputs to one
+validated document: editable .bbmodel (canonical streaming SHA and byte
+length), Bedrock Geometry JSON, RGBA8 PNG atlas and supported Bedrock
+Animation JSON. This is a read-only extension to the existing handoff,
+not a second compiler, archive exporter or shared JS model state.
+A nested two-Cube/two-Bone authoring regression checks six sides per
+Cube, all four output hashes, reopened editable JSON, atomic refusal,
+Undo/Redo and unchanged source identity. The report distinguishes raw
+input SHA from canonical editable export SHA and marks oversized output
+as a blocker, not a success. Windows, native Blockbench reopen, rendering,
+artistic acceptance, runtime equality and performance remain UNVERIFIED
+under the existing test hold; no general feature cutover or new runtime
+transport follows from this source-only addition.
+
 ## 1. Approved outcome and explicit non-goals
 **Maintainer priority supersession (2026-11-15):** Finish **Geometry → Texturing → Animation** authoring and export fidelity before UI/UX. LazyDesigner can use more effective authoring flows than Blockbench and is not required to copy its user interface. The release-blocking handoff is a faithful, editable Rust-exported `.bbmodel` opened in actual Blockbench with supported Geometry, UV/Texture and Animation preserved. Reverse import remains supported only where lossless, and unrestricted reverse parity is no longer a product gate. Preserve one Rust engine, fail-closed unknown data, local test holds and final native Blockbench proof.
 

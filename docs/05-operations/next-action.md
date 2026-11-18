@@ -1,3 +1,16 @@
+**Rust P0 cross-domain editable-project provenance — 2026-11-18 (SOURCE ONLY):**
+Extended the existing read-only Rust asset handoff with exact streaming
+canonical .bbmodel SHA and byte length, using the same validated document
+as Geometry, PNG and Animation exporter hashes. The canonical digest
+refuses over-limit files and adds an explicit BBMODEL_EXPORT_BLOCKED
+condition. Added nested two-Cube/two-Bone six-face/animated regression,
+atomic invalid-face refusal, Undo/Redo/reopen and CLI inspectBatch hash
+contract checks without adding file writers, models, services or privileges.
+Proof: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN; Cargo, Node/Deno,
+native Windows/Blockbench, visual quality and cost are NOT_EXECUTED.
+The scoped source increment is complete; remaining P0 native acceptance
+and unrelated enhancements are not implied to be finished.
+
 **Rust Code Mode modularity and live-transaction/benchmark design — 2026-11-18 (SOURCE ONLY):**
 Extracted the trusted per-`execute` anonymous timing recorder from the
 large Node `host.mjs` into a small `execution-metrics.mjs` module while

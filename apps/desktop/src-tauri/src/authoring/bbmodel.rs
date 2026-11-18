@@ -148,6 +148,15 @@ pub(super) fn canonical_sha256(doc: &AuthoringDocument) -> Result<String> {
 // validated documents. No mutable model reference escapes EditorSession.
 // The complete output-byte limit and serde error behavior remain intact.
 pub(super) fn canonical_sha256_validated(doc: &AuthoringDocument) -> Result<String> {
+    Ok(canonical_fingerprint_validated(doc)?.0)
+}
+
+/// One bounded streaming pass reports both the exact editable .bbmodel
+/// digest and its encoded byte length. It never allocates a second document
+/// or publishes a file. Call only for a previously validated document.
+pub(super) fn canonical_fingerprint_validated(
+    doc: &AuthoringDocument,
+) -> Result<(String, usize)> {
     let wire = BorrowedBlockbenchV5::from(doc);
     let mut sink = CanonicalDigestSink::new();
     if serde_json::to_writer_pretty(&mut sink, &wire).is_err() ||
@@ -158,7 +167,8 @@ pub(super) fn canonical_sha256_validated(doc: &AuthoringDocument) -> Result<Stri
             "BBMODEL_SERIALIZE_FAILED".into()
         });
     }
-    Ok(format!("{:x}", sink.digest.finalize()))
+    let bytes = sink.bytes;
+    Ok((format!("{:x}", sink.digest.finalize()), bytes))
 }
 
 // SOURCE-AUTHORED_NOT_RUN: executable Rust/Windows and native Blockbench
@@ -202,6 +212,8 @@ mod tests {
             let actual = encode(&doc).unwrap();
             assert_eq!(canonical_sha256(&doc).unwrap(),
                 super::super::sha256(&actual));
+            assert_eq!(canonical_fingerprint_validated(&doc).unwrap(),
+                (super::super::sha256(&actual), actual.len()));
             assert_eq!(canonical_sha256_validated(&doc).unwrap(),
                 canonical_sha256(&doc).unwrap());
             assert_eq!(actual, expected,
