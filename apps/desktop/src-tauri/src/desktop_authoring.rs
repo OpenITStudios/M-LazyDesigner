@@ -31,12 +31,14 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use tauri::State;
 
 #[derive(Default)]
 pub struct EditorState {
     store: Mutex<EditorStore>,
+    // Independent edit gate: one provisional document transaction per editor.
+    pending_edit: Mutex<()>,
 }
 
 #[derive(Default)]
@@ -805,11 +807,21 @@ fn current_detached(
 /// still clones, validates and atomically replaces a complete document. Only
 /// the guarded commit below may install it as authoritative editor state.
 fn detached_edit<F>(
-    store: &Mutex<EditorStore>, expected_epoch: u64, expected_revision: u64,
+    store: &Mutex<EditorStore>, gate: &Mutex<()>,
+    expected_epoch: u64, expected_revision: u64,
     known_preview_source_key: Option<&str>,
     stale_message: Option<&'static str>, edit: F,
 ) -> Result<EditorSnapshot, DesktopError>
 where F: FnOnce(&mut EditorSession) -> Result<(), DesktopError> {
+    // Refuse competing expensive provisional copies before cloning the source.
+    // The read-only snapshot mutex is independent of this write lease.
+    let write_lease = match gate.try_lock() {
+        Ok(guard) => guard,
+        Err(TryLockError::WouldBlock) => return Err(failure(
+            "RUST_EDITOR_EDIT_BUSY", "An editor edit is already in progress.")),
+        Err(TryLockError::Poisoned(_)) => return Err(failure(
+            "RUST_EDITOR_UNAVAILABLE", "The editor edit gate is unavailable.")),
+    };
     let stale = || match stale_message {
         Some(message) => failure("RUST_EDITOR_REVISION_STALE", message),
         None => model_failure("DOCUMENT_REVISION_STALE".to_owned()),
@@ -851,8 +863,13 @@ where F: FnOnce(&mut EditorSession) -> Result<(), DesktopError> {
     };
     active.session = pending;
     active.dirty = dirty;
-    // Free the lock before expensive, immutable Svelte snapshot projection.
-    current_detached(guard, known_preview_source_key)
+    // Bind the exact committed revision while the store is locked. The
+    // write lease can end before the large immutable projection begins.
+    let frozen = freeze_projection(&guard).ok_or_else(||
+        failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    drop(guard);
+    drop(write_lease);
+    Ok(project_frozen(&frozen, known_preview_source_key))
 }
 
 fn create_uuid() -> String {
@@ -944,7 +961,7 @@ pub fn rust_editor_apply(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(), None,
         move |session| {
             session.apply(expected_revision, &operations).map_err(model_failure)?;
@@ -983,7 +1000,7 @@ pub async fn rust_editor_import_paint_png(
     let bytes = storage::read_bounded(&path, MAX_IMPORT_PNG_BYTES).map_err(model_failure)?;
     let source = format!("data:image/png;base64,{}", STANDARD.encode(bytes));
     detached_edit(
-        &state.store, expected_epoch, expected_revision, None, None,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision, None, None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::ImportPaintTexture {
                 uuid: create_uuid(), name: filename, source,
@@ -1193,7 +1210,7 @@ pub fn rust_editor_add_cube(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(),
         Some("Refresh the model before adding a Cube."),
         move |session| {
@@ -1241,7 +1258,7 @@ pub fn rust_editor_duplicate_cube(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(), None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::DuplicateCube {
@@ -1261,7 +1278,7 @@ pub fn rust_editor_add_bone(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(),
         Some("Refresh the model before adding a Bone."),
         move |session| {
@@ -1291,7 +1308,7 @@ pub fn rust_editor_create_animation(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(), None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::CreateAnimation {
@@ -1309,7 +1326,7 @@ pub fn rust_editor_add_rotation_keyframe(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(), None,
         move |session| {
             session.apply(expected_revision, &[EditOperation::AddBoneRotationKeyframe {
@@ -1326,7 +1343,7 @@ pub fn rust_editor_undo(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(), None,
         move |session| {
             session.undo(expected_revision).map_err(model_failure)?;
@@ -1341,7 +1358,7 @@ pub fn rust_editor_redo(
     known_preview_source_key: Option<String>,
 ) -> Result<EditorSnapshot, DesktopError> {
     detached_edit(
-        &state.store, expected_epoch, expected_revision,
+        &state.store, &state.pending_edit, expected_epoch, expected_revision,
         known_preview_source_key.as_deref(), None,
         move |session| {
             session.redo(expected_revision).map_err(model_failure)?;
@@ -1554,7 +1571,8 @@ mod tests {
                 saved_canonical_sha: None, dirty: true,
             }),
         });
-        let accepted = detached_edit(&store, 7, 0, None, None, |pending| {
+        let gate = Mutex::new(());
+        let accepted = detached_edit(&store, &gate, 7, 0, None, None, |pending| {
             assert!(store.try_lock().is_ok());
             pending.apply(0, &[EditOperation::CreateAnimation {
                 uuid:"00000000-0000-4000-8000-000000000915".into(),
@@ -1565,7 +1583,15 @@ mod tests {
         assert_eq!(accepted.revision, 1);
         assert_eq!(accepted.animation_count, 1);
         assert!(accepted.can_undo);
-        let stale = detached_edit(&store, 7, 1, None, None, |pending| {
+        // Competing edit admission must fail before staging another model.
+        let lease = gate.lock().unwrap();
+        let busy = detached_edit(&store, &gate, 7, 1, None, None, |_| {
+            panic!("busy lease must refuse before edit closure");
+        }).unwrap_err();
+        assert_eq!(busy.code, "RUST_EDITOR_EDIT_BUSY");
+        drop(lease);
+
+        let stale = detached_edit(&store, &gate, 7, 1, None, None, |pending| {
             pending.apply(1, &[EditOperation::CreateAnimation {
                 uuid:"00000000-0000-4000-8000-000000000916".into(),
                 name:"uncommitted".into(), length:1.0,
@@ -1589,7 +1615,7 @@ mod tests {
             assert!(!active.session.document().animation_assets.iter().any(|asset|
                 asset["name"] == "uncommitted"));
         }
-        let after = detached_edit(&store, 7, 2, None, None, |pending| {
+        let after = detached_edit(&store, &gate, 7, 2, None, None, |pending| {
             assert!(store.try_lock().is_ok());
             pending.undo(2).map_err(model_failure)?;
             Ok(())
@@ -1597,7 +1623,7 @@ mod tests {
         assert_eq!(after.revision, 3);
         assert_eq!(after.animation_count, 1);
         assert!(after.can_redo);
-        let restored = detached_edit(&store, 7, 3, None, None, |pending| {
+        let restored = detached_edit(&store, &gate, 7, 3, None, None, |pending| {
             pending.redo(3).map_err(model_failure)?;
             Ok(())
         }).unwrap();
@@ -1616,7 +1642,8 @@ mod tests {
                 saved_canonical_sha: None, dirty: true,
             }),
         });
-        let error = detached_edit(&store, 3, 0, None, None, |pending| {
+        let gate = Mutex::new(());
+        let error = detached_edit(&store, &gate, 3, 0, None, None, |pending| {
             pending.apply(0, &[EditOperation::CreateAnimation {
                 uuid:"00000000-0000-4000-8000-000000000918".into(),
                 name:"abandoned".into(), length:1.0,
