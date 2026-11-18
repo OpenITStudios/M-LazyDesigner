@@ -12,6 +12,8 @@ use std::sync::Arc;
 mod bbmodel;
 mod semantic_map;
 mod geometry;
+mod geometry_assembly;
+pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest};
 mod paint;
 mod correction_scope;
 pub use correction_scope::TextureCorrectionScope;
@@ -3326,6 +3328,14 @@ impl EditorSession {
     /// Tauri and headless CLI consume the same bounded Rust-owned map.
     pub fn semantic_map(&self, category: &str, offset: usize, limit: usize) -> Result<Value> {
         semantic_map::from_validated(&self.doc, self.revision, category, offset, limit)
+    }
+
+    /// Compile a source-bound G1 Geometry assembly and validate it on the
+    /// existing disposable Rust preflight path. No state/Undo is mutated.
+    pub fn plan_geometry_assembly(
+        &self, request: &GeometryAssemblyRequest,
+    ) -> Result<GeometryAssemblyProposal> {
+        geometry_assembly::compile(self, request)
     }
 
     /// Dry-run exactly the canonical mutation path on a disposable COW clone.

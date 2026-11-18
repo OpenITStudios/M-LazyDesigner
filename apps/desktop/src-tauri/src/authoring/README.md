@@ -20,6 +20,19 @@ No new Rust package or duplicate document store is needed. Source
 status is NOT_EXECUTED; see [system owner map](../../../../../docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints)
 and [architecture/acceptance](../../../../../docs/04-system/rust-native-editor-plan.md).
 
+**G1 Rust semantic geometry assembly (2026-11-18; SOURCE ONLY):**
+The shared `geometry_assembly.rs` compiler accepts exact named Bone/Cube
+parts, required Bone pivots and parent UUIDs. It deterministically orders
+out-of-order dependencies into the existing `EditPlan`, refusing unknown/
+cyclic parent, duplicate UUID/name, stale revision, unsafe Geometry and
+over-budget input through the existing disposable Rust preflight.
+The CLI `plan-geometry-assembly` is read-only, SHA-bound, and returns
+the exact plan and preflight receipt for a later independently authorized
+`apply`. No new Geometry model, parallel recipe store, new writer,
+Live AI operation, or implicit source-image interpretation is created.
+Rust regressions are SOURCE_AUTHORED / NOT_EXECUTED; native Blockbench,
+Windows, visual fidelity, performance and accepted quality remain held.
+
 ## Dated source history (preserved)
 
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**

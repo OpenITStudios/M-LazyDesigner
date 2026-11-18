@@ -1,3 +1,17 @@
+**G1 Rust semantic Geometry assembly — 2026-11-18 (SOURCE ONLY):**
+Added a bounded read-only `geometry_assembly.rs` compiler for explicit
+named Cube/Bone parts, exact parent UUIDs and required pivots. It
+topologically sorts dependent Bones, produces one canonical Rust `EditPlan`
+and performs existing disposable preflight before offering any plan.
+The SHA-pinned headless `plan-geometry-assembly` command exposes only
+NOT_GRANTED/UNVERIFIED output; actual edits still use independently
+approved `apply`. Source-authored positive/negative Rust regressions
+cover out-of-order/existing parents, duplicate/cyclic/missing UUIDs,
+invalid face UV, canonical .bbmodel, Geometry export, atomic Undo/Redo.
+NO GUI/live-write capability, new engine, tests or CI were enabled.
+Proof: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN; native and visual quality,
+CLI execution and accepted-art efficiency NOT_EXECUTED.
+
 **Rust repository navigation cleanup — 2026-11-18 (SOURCE ONLY):**
 The physical Rust authoring domains were already split into Geometry/UV,
 Paint/Texture, Animation, format and Code Mode modules. Root and local
