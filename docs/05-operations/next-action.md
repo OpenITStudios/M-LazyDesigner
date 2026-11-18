@@ -1,3 +1,25 @@
+**Rust native publication + snapshot allocation pass — 2026-11-18 (SOURCE ONLY):**
+The selected `Rust` editor now shares its existing `pending_edit` lease
+between New/Open admission, GUI transactions and native Save Copy/Geometry/
+Animation/PNG/review-capture publishing. After the user-owned picker closes,
+a publisher freezes the exact admitted Rust `EditorSession` and original
+source SHA under a short EditorStore lock. External source verification,
+export serialization and exclusive new-file publication run on that immutable
+version **without holding EditorStore**, while the same lease prevents
+competing model edits and New/Open replacement. Save Copy alone reacquires
+EditorStore for a short, revision/epoch-checked saved-baseline checkpoint.
+All previous source SHA, same-directory, permission, no-overwrite, native
+review-source and rejection rules remain; no parallel model store is added.
+The GUI's Cube/Bone 3-axis projection now reads admitted numeric JSON
+vectors without cloning or deserializing temporary Values. Existing exact
+epoch-bound IPC payload identity remains unchanged; speculative cross-revision
+projection caching was explicitly not introduced. Authored Rust regressions
+cover publication lease contention, stale snapshots, changed external
+sources, read-only mutex access and numeric vector equivalence. Test, Cargo,
+Windows/Tauri, WebView2, Blockbench fidelity and measured speed/RAM remain
+NOT_EXECUTED under the active local/CI hold. Earlier checkpoints below are
+historical, not instructions to expand the scope.
+
 **Single-pass Rust Paint eligibility projection — 2026-11-18 (SOURCE ONLY):**
 At `Rust@077a3851b983ab9376005e3f071568c3fe4a6652`, the same Tauri snapshot
 evaluated each Texture separately for editable, adoptable and exportable

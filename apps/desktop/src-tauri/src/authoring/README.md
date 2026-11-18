@@ -1,3 +1,17 @@
+**Rust Save/Export concurrency refinement (2026-11-18; SOURCE ONLY):**
+New/Open, editor transactions and native Save Copy, Geometry/Animation,
+Texture PNG and review-capture publication now share the existing short
+edit/publication lease. A saved file is produced from one immutable,
+revision-checked Rust session after the picker returns; external disk SHA,
+file encoding and no-overwrite publication do not retain the EditorStore
+mutex. Read-only snapshots can proceed while the file operation runs.
+Save Copy updates the live source checkpoint only after publication under
+a final short lock. As before, competing writes refuse rather than
+implicitly retrying a possibly persisted mutation. The in-memory model,
+original-file protections, .bbmodel format and visual review gates remain
+unchanged. Source regressions are AUTHORED_NOT_RUN and native behavior is
+UNVERIFIED.
+
 # Rust-native authoring core — Phase 1/2 source integration
 
 **Source-bound user-initiated camera PNG capture (2026-11-17; SOURCE ONLY):**

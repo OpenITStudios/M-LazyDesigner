@@ -58,6 +58,27 @@ struct ActiveModel {
     dirty: bool,
 }
 
+/// An immutable, admitted session for file conversion and source integrity
+/// checks outside EditorStore's short-lived mutex. This is not another model.
+struct FrozenPublication {
+    session: EditorSession,
+    source_path: Option<PathBuf>,
+    source_sha: Option<String>,
+    saved_canonical_sha: Option<String>,
+    dirty: bool,
+}
+impl From<&ActiveModel> for FrozenPublication {
+    fn from(active: &ActiveModel) -> Self {
+        Self {
+            session: active.session.clone(),
+            source_path: active.source_path.clone(),
+            source_sha: active.source_sha.clone(),
+            saved_canonical_sha: active.saved_canonical_sha.clone(),
+            dirty: active.dirty,
+        }
+    }
+}
+
 /// A revision-bound read-only projection of the same canonical Rust document.
 /// Capture under the store lock; render the large Svelte snapshot after unlock.
 struct FrozenEditorProjection {
@@ -232,6 +253,50 @@ fn check_epoch(store: &EditorStore, expected: u64) -> Result<(), DesktopError> {
         Ok(())
     }
 }
+// One serialization gate for all model writes AND file publication. Read-only
+// snapshot calls never acquire it, and conversion/disk I/O never hold store.
+fn write_lease(gate: &Mutex<()>) -> Result<MutexGuard<'_, ()>, DesktopError> {
+    match gate.try_lock() {
+        Ok(guard) => Ok(guard),
+        Err(TryLockError::WouldBlock) => Err(failure(
+            "RUST_EDITOR_EDIT_BUSY", "An editor edit is already in progress.")),
+        Err(TryLockError::Poisoned(_)) => Err(failure(
+            "RUST_EDITOR_UNAVAILABLE", "The editor edit gate is unavailable.")),
+    }
+}
+
+fn freeze_publication(
+    store: &Mutex<EditorStore>, expected_epoch: u64,
+    expected_revision: u64, stale_message: &'static str,
+) -> Result<FrozenPublication, DesktopError> {
+    let guard = lock_store(store)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_ref().ok_or_else(||
+        failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE", stale_message));
+    }
+    Ok(FrozenPublication::from(active))
+}
+
+// Preserve the same-directory, raw source SHA and no-overwrite admission,
+// but do its bounded filesystem read without holding the editor store mutex.
+fn verify_publication_source(
+    source: &FrozenPublication, output: &std::path::Path,
+    changed_message: &'static str,
+) -> Result<(), DesktopError> {
+    if let Some(ref path) = source.source_path {
+        storage::same_directory(path, output).map_err(model_failure)?;
+        let expected = source.source_sha.as_ref().ok_or_else(|| failure(
+            "RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
+        let data = storage::read_bounded(path, MAX_MODEL_BYTES).map_err(model_failure)?;
+        if sha256(&data) != *expected {
+            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", changed_message));
+        }
+    }
+    Ok(())
+}
+
 /// Revision advances are not equivalent to unsaved content. Reconcile the
 /// edited Rust document with the last Open/Save Copy canonical snapshot,
 /// without creating an alternate scene or changing the raw source SHA guard.
@@ -254,11 +319,19 @@ fn check_discard(store: &EditorStore, allowed: bool) -> Result<(), DesktopError>
     }
 }
 
+// Read the same admitted numeric JSON vector directly; avoid allocating a
+// temporary Value and deserializing every Cube/Bone on every GUI snapshot.
+fn borrowed_vec3(value: &Value) -> Option<[f64; 3]> {
+    let elements = value.as_array()?;
+    if elements.len() != 3 { return None; }
+    let vec = [
+        elements[0].as_f64()?, elements[1].as_f64()?, elements[2].as_f64()?,
+    ];
+    vec.iter().all(|axis| axis.is_finite()).then_some(vec)
+}
+
 fn property_vec3(properties: &Map<String, Value>, key: &str) -> [f64; 3] {
-    properties.get(key)
-        .and_then(|v| serde_json::from_value::<[f64; 3]>(v.clone()).ok())
-        .filter(|v| v.iter().all(|n| n.is_finite()))
-        .unwrap_or([0.0, 0.0, 0.0])
+    properties.get(key).and_then(borrowed_vec3).unwrap_or([0.0; 3])
 }
 
 // Only default texture materials can be approximated by this bounded renderer.
@@ -754,8 +827,7 @@ fn project_frozen(
                 rotation: property_vec3(&cube.extra, "rotation"),
                 inflate: cube.extra.get("inflate").and_then(Value::as_f64).unwrap_or(0.0),
                 stretch: cube.extra.get("stretch")
-                    .and_then(|value| serde_json::from_value::<[f64; 3]>(value.clone()).ok())
-                    .unwrap_or([1.0, 1.0, 1.0]),
+                    .and_then(borrowed_vec3).unwrap_or([1.0; 3]),
                 visible: cube.extra.get("visibility").and_then(Value::as_bool).unwrap_or(true),
                 // Blockbench's Cube preview controller maps behind/default/front to -1/0/1.
                 render_order: match cube.extra.get("render_order").and_then(Value::as_str) {
@@ -877,15 +949,9 @@ fn detached_edit<F>(
     stale_message: Option<&'static str>, edit: F,
 ) -> Result<EditorSnapshot, DesktopError>
 where F: FnOnce(&mut EditorSession) -> Result<(), DesktopError> {
-    // Refuse competing expensive provisional copies before cloning the source.
-    // The read-only snapshot mutex is independent of this write lease.
-    let write_lease = match gate.try_lock() {
-        Ok(guard) => guard,
-        Err(TryLockError::WouldBlock) => return Err(failure(
-            "RUST_EDITOR_EDIT_BUSY", "An editor edit is already in progress.")),
-        Err(TryLockError::Poisoned(_)) => return Err(failure(
-            "RUST_EDITOR_UNAVAILABLE", "The editor edit gate is unavailable.")),
-    };
+    // Prevent overlap with another staged edit or a native file publisher.
+    // Read-only snapshots remain independent from this lease.
+    let write_lease = write_lease(gate)?;
     let stale = || match stale_message {
         Some(message) => failure("RUST_EDITOR_REVISION_STALE", message),
         None => model_failure("DOCUMENT_REVISION_STALE".to_owned()),
@@ -970,6 +1036,9 @@ pub fn rust_editor_new(
     let document = AuthoringDocument::new_bedrock(name.trim(), identifier)
         .map_err(model_failure)?;
     let session = EditorSession::from_document(document).map_err(model_failure)?;
+    // New/Open must observe the same gate as Save/Export so the active model
+    // cannot be replaced while an immutable revision is being published.
+    let _lease = write_lease(&state.pending_edit)?;
     let mut store = lock(&state)?;
     check_epoch(&store, expected_epoch)?;
     check_discard(&store, discard)?;
@@ -1002,6 +1071,7 @@ pub async fn rust_editor_open(
     // Keep raw disk identity independent of canonical Rust model content.
     let canonical_sha = sha256(&session.export().map_err(model_failure)?);
     let sha = sha256(&bytes);
+    let _lease = write_lease(&state.pending_edit)?;
     let mut guard = lock(&state)?;
     check_epoch(&guard, expected_epoch)?;
     check_discard(&guard, discard)?;
@@ -1113,16 +1183,16 @@ fn decode_review_capture_png(data_url: &str) -> Result<Vec<u8>, DesktopError> {
 /// A review capture must match the exact saved on-disk model used by Code
 /// Mode; an unsaved scene or imported noncanonical source cannot masquerade
 /// as its saved .bbmodel. Save Copy creates that canonical source boundary.
-fn review_capture_source(active: &ActiveModel) -> Result<(PathBuf, String), DesktopError> {
-    if active.dirty {
+fn review_capture_source(source: &FrozenPublication) -> Result<(PathBuf, String), DesktopError> {
+    if source.dirty {
         return Err(failure("REVIEW_CAPTURE_MODEL_UNSAVED", "Save Copy before capturing review images."));
     }
-    let path = active.source_path.as_ref().ok_or_else(|| failure(
+    let path = source.source_path.as_ref().ok_or_else(|| failure(
         "REVIEW_CAPTURE_MODEL_UNSAVED", "This model has no saved .bbmodel source."))?;
-    let disk_sha = active.source_sha.as_ref().ok_or_else(|| failure(
+    let disk_sha = source.source_sha.as_ref().ok_or_else(|| failure(
         "REVIEW_CAPTURE_SOURCE_UNKNOWN", "Saved .bbmodel identity is unavailable."))?;
-    let canonical = active.session.canonical_sha256().map_err(model_failure)?;
-    if canonical != *disk_sha || active.saved_canonical_sha.as_ref() != Some(&canonical) {
+    let canonical = source.session.canonical_sha256().map_err(model_failure)?;
+    if canonical != *disk_sha || source.saved_canonical_sha.as_ref() != Some(&canonical) {
         return Err(failure("REVIEW_CAPTURE_CANONICAL_COPY_REQUIRED",
             "Save Copy to bind this preview to exact canonical .bbmodel bytes."));
     }
@@ -1146,16 +1216,11 @@ pub async fn rust_editor_export_review_capture(
         return Err(failure("REVIEW_CAPTURE_VIEW_INVALID", "Select one of the six fixed camera views."));
     }
     let bytes = decode_review_capture_png(&png_data_url)?;
-    let (source_path, source_sha) = {
-        let store = lock(&state)?;
-        check_epoch(&store, expected_epoch)?;
-        let active = store.active.as_ref().ok_or_else(|| failure(
-            "RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-        if active.session.summary().revision != expected_revision {
-            return Err(failure("RUST_EDITOR_REVISION_STALE", "Model changed before review capture."));
-        }
-        review_capture_source(active)?
-    };
+    let source = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "Model changed before review capture.",
+    )?;
+    let (source_path, source_sha) = review_capture_source(&source)?;
     let stem = source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("model");
     let label: String = stem.chars().filter(|c|
         c.is_ascii_alphanumeric() || *c=='_' || *c=='-').take(48).collect();
@@ -1174,14 +1239,12 @@ pub async fn rust_editor_export_review_capture(
         "Review PNG save dialog did not complete."))?;
     let Some(path) = destination else { return Ok(None); };
     storage::png(&path).map_err(model_failure)?;
-    let store = lock(&state)?;
-    check_epoch(&store, expected_epoch)?;
-    let active = store.active.as_ref().ok_or_else(|| failure(
-        "RUST_EDITOR_NO_MODEL", "No model is available for review capture."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "Model changed during review capture selection."));
-    }
-    let (still_source, still_sha) = review_capture_source(active)?;
+    let _lease = write_lease(&state.pending_edit)?;
+    let frozen = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "Model changed during review capture selection.",
+    )?;
+    let (still_source, still_sha) = review_capture_source(&frozen)?;
     if still_source != source_path || still_sha != source_sha {
         return Err(failure("REVIEW_CAPTURE_MODEL_STALE", "The selected saved model changed during capture."));
     }
@@ -1235,23 +1298,15 @@ pub async fn rust_editor_export_paint_png(
     let Some(path) = destination else { return Ok(None); };
     storage::png(&path).map_err(model_failure)?;
 
-    let guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_ref()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "The model changed during PNG export selection."));
-    }
-    if let Some(ref source) = active.source_path {
-        storage::same_directory(source, &path).map_err(model_failure)?;
-        let expected = active.source_sha.as_ref()
-            .ok_or_else(|| failure("RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
-        let current = storage::read_bounded(source, MAX_MODEL_BYTES).map_err(model_failure)?;
-        if sha256(&current) != *expected {
-            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", "The original model changed on disk; no PNG was exported."));
-        }
-    }
-    let bytes = export_paint_png(active.session.document(), &texture_uuid).map_err(model_failure)?;
+    let _lease = write_lease(&state.pending_edit)?;
+    let frozen = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "The model changed during PNG export selection.",
+    )?;
+    verify_publication_source(
+        &frozen, &path, "The original model changed on disk; no PNG was exported.",
+    )?;
+    let bytes = export_paint_png(frozen.session.document(), &texture_uuid).map_err(model_failure)?;
     storage::publish_new_png(&path, &bytes, MAX_EXPORT_PNG_BYTES).map_err(model_failure)?;
     Ok(Some(PaintPngExportReceipt { sha256: sha256(&bytes), byte_count: bytes.len() }))
 }
@@ -1519,23 +1574,15 @@ pub async fn rust_editor_export_bedrock_geometry(
     let Some(path) = chosen else { return Ok(None); };
     storage::geometry_json(&path).map_err(model_failure)?;
 
-    let guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_ref()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "The model changed during geometry export selection."));
-    }
-    if let Some(ref source) = active.source_path {
-        storage::same_directory(source, &path).map_err(model_failure)?;
-        let expected = active.source_sha.as_ref()
-            .ok_or_else(|| failure("RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
-        let source_bytes = storage::read_bounded(source, MAX_MODEL_BYTES).map_err(model_failure)?;
-        if sha256(&source_bytes) != *expected {
-            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", "The original model changed on disk; no geometry was exported."));
-        }
-    }
-    let bytes = export_bedrock_geometry(active.session.document()).map_err(model_failure)?;
+    let _lease = write_lease(&state.pending_edit)?;
+    let frozen = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "The model changed during geometry export selection.",
+    )?;
+    verify_publication_source(
+        &frozen, &path, "The original model changed on disk; no geometry was exported.",
+    )?;
+    let bytes = export_bedrock_geometry(frozen.session.document()).map_err(model_failure)?;
     storage::publish_new_geometry(&path, &bytes, MAX_MODEL_BYTES).map_err(model_failure)?;
     Ok(Some(GeometryExportReceipt {
         sha256: sha256(&bytes), byte_count: bytes.len(),
@@ -1582,27 +1629,19 @@ pub async fn rust_editor_export_bedrock_animations(
     let Some(path) = chosen else { return Ok(None); };
     storage::animation_json(&path).map_err(model_failure)?;
 
-    let guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_ref()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "The model changed during animation export selection."));
-    }
-    if let Some(ref source) = active.source_path {
-        storage::same_directory(source, &path).map_err(model_failure)?;
-        let expected = active.source_sha.as_ref()
-            .ok_or_else(|| failure("RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
-        let source_bytes = storage::read_bounded(source, MAX_MODEL_BYTES).map_err(model_failure)?;
-        if sha256(&source_bytes) != *expected {
-            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", "The original model changed on disk; no animations were exported."));
-        }
-    }
-    let bytes = export_bedrock_animations(active.session.document()).map_err(model_failure)?;
+    let _lease = write_lease(&state.pending_edit)?;
+    let frozen = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "The model changed during animation export selection.",
+    )?;
+    verify_publication_source(
+        &frozen, &path, "The original model changed on disk; no animations were exported.",
+    )?;
+    let bytes = export_bedrock_animations(frozen.session.document()).map_err(model_failure)?;
     storage::publish_new_animation(&path, &bytes, MAX_MODEL_BYTES).map_err(model_failure)?;
     Ok(Some(AnimationExportReceipt {
         sha256: sha256(&bytes), byte_count: bytes.len(),
-        curve_fidelity: bedrock_animation_curve_fidelity(active.session.document()),
+        curve_fidelity: bedrock_animation_curve_fidelity(frozen.session.document()),
     }))
 }
 
@@ -1640,25 +1679,27 @@ pub async fn rust_editor_save_copy(
     }).await.map_err(|_| failure("RUST_EDITOR_PICKER_FAILED", "Save dialog did not complete."))?;
     let Some(path) = destination else { return Ok(None); };
 
-    let mut guard = lock(&state)?;
-    check_epoch(&guard, expected_epoch)?;
-    let active = guard.active.as_mut()
-        .ok_or_else(|| failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
-    if active.session.summary().revision != expected_revision {
-        return Err(failure("RUST_EDITOR_REVISION_STALE", "Model changed while the Save Copy dialog was open."));
-    }
-    if let Some(ref source) = active.source_path {
-        storage::same_directory(source, &path).map_err(model_failure)?;
-        let expected = active.source_sha.as_ref()
-            .ok_or_else(|| failure("RUST_EDITOR_SOURCE_UNKNOWN", "The original source identity is missing."))?;
-        let actual = storage::read_bounded(source, MAX_MODEL_BYTES).map_err(model_failure)?;
-        if sha256(&actual) != *expected {
-            return Err(failure("RUST_EDITOR_SOURCE_CHANGED", "The original model changed on disk; no copy was written."));
-        }
-    }
-    let bytes = active.session.export().map_err(model_failure)?;
+    // Keep the file-publishing lease through the short final checkpoint.
+    // Snapshot readers can still acquire EditorStore while the disk is read,
+    // the .bbmodel is encoded and the exclusive new file is published.
+    let _lease = write_lease(&state.pending_edit)?;
+    let frozen = freeze_publication(
+        &state.store, expected_epoch, expected_revision,
+        "Model changed while the Save Copy dialog was open.",
+    )?;
+    verify_publication_source(
+        &frozen, &path, "The original model changed on disk; no copy was written.",
+    )?;
+    let bytes = frozen.session.export().map_err(model_failure)?;
     storage::publish_new(&path, &bytes, MAX_MODEL_BYTES).map_err(model_failure)?;
     let saved_hash = sha256(&bytes);
+    let mut guard = lock(&state)?;
+    check_epoch(&guard, expected_epoch)?;
+    let active = guard.active.as_mut().ok_or_else(||
+        failure("RUST_EDITOR_NO_MODEL", "Open or create a model first."))?;
+    if active.session.summary().revision != expected_revision {
+        return Err(failure("RUST_EDITOR_REVISION_STALE", "Model changed during Save Copy."));
+    }
     active.source_sha = Some(saved_hash.clone());
     active.saved_canonical_sha = Some(saved_hash);
     active.source_path = Some(path);
@@ -1669,6 +1710,102 @@ pub async fn rust_editor_save_copy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Source-authored only: the single publication lease excludes edits/model
+    // replacement, while read-only snapshots can still acquire the store.
+    // No user-PC, filesystem or Tauri runtime test has been executed.
+    #[test]
+    fn frozen_publication_releases_store_lock_and_refuses_stale_model() {
+        let raw = include_bytes!("../fixtures/bedrock-basic.bbmodel");
+        let session = EditorSession::open(raw).unwrap();
+        let expected = session.canonical_sha256().unwrap();
+        let store = Mutex::new(EditorStore {
+            epoch: 22, active: Some(ActiveModel {
+                session, source_path: None, source_sha: None,
+                saved_canonical_sha: Some(expected.clone()), dirty: false,
+            }),
+        });
+        let gate = Mutex::new(());
+        let lease = write_lease(&gate).unwrap();
+        let frozen = freeze_publication(&store, 22, 0, "stale").unwrap();
+        assert_eq!(frozen.session.canonical_sha256().unwrap(), expected);
+        assert!(store.try_lock().is_ok());
+        assert_eq!(write_lease(&gate).err().unwrap().code, "RUST_EDITOR_EDIT_BUSY");
+        let blocked = detached_edit(&store, &gate, 22, 0,
+            ProjectionReuse::default(), None, |_| {
+                panic!("A pending edit must not start during publication.");
+            }).unwrap_err();
+        assert_eq!(blocked.code, "RUST_EDITOR_EDIT_BUSY");
+        drop(lease);
+        let output = frozen.session.export().unwrap();
+        assert_eq!(sha256(&output), expected);
+
+        let new_lease = write_lease(&gate).unwrap();
+        {
+            // Simulates an uncoordinated or stale writer for revision refusal.
+            let mut guard = store.lock().unwrap();
+            guard.active.as_mut().unwrap().session.apply(0, &[
+                EditOperation::CreateAnimation {
+                    uuid:"00000000-0000-4000-8000-000000000986".into(),
+                    name:"changed".into(), length:1.0,
+                }
+            ]).unwrap();
+        }
+        assert_eq!(freeze_publication(&store, 22, 0, "stale")
+            .err().unwrap().code, "RUST_EDITOR_REVISION_STALE");
+        store.lock().unwrap().epoch += 1;
+        assert_eq!(freeze_publication(&store, 22, 1, "stale")
+            .err().unwrap().code, "RUST_EDITOR_SESSION_STALE");
+        drop(new_lease);
+    }
+
+    // A read-only publisher continues to reject a changed on-disk original.
+    // The independent user-owned no-overwrite publisher remains untouched.
+    #[test]
+    fn frozen_publication_rechecks_raw_source_before_writing_new_sibling() {
+        let dir = std::env::temp_dir().join(format!(
+            "ld-publish-{:016x}", rand::rng().next_u64()));
+        std::fs::create_dir(&dir).unwrap();
+        let input = dir.join("source.bbmodel");
+        let output = dir.join("new-copy.bbmodel");
+        let raw = include_bytes!("../fixtures/bedrock-basic.bbmodel");
+        std::fs::write(&input, raw).unwrap();
+        let session = EditorSession::open(raw).unwrap();
+        let source = FrozenPublication {
+            session, source_path: Some(input.clone()),
+            source_sha: Some(sha256(raw)),
+            saved_canonical_sha: None, dirty: true,
+        };
+        verify_publication_source(&source, &output, "changed").unwrap();
+        assert!(!output.exists());
+        std::fs::write(&input, b"other source data").unwrap();
+        assert_eq!(verify_publication_source(&source, &output, "changed")
+            .unwrap_err().code, "RUST_EDITOR_SOURCE_CHANGED");
+        assert!(!output.exists());
+        std::fs::remove_file(input).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    // Preserve numeric accepted JSON vector projection without cloning the
+    // source Value/allocating a serde owned-deserialization temporary.
+    #[test]
+    fn borrowed_vec3_projection_matches_previous_owned_decoder() {
+        for value in [
+            json!([1, 2.5, -3]), json!([0, 0, 0]), json!([3, 4]),
+            json!([1, 2, 3, 4]), json!(["1", 2, 3]),
+            json!([1, true, 3]), json!([1, null, 3]),
+            json!({"x":1,"y":2,"z":3}), json!(null),
+        ] {
+            let expected = serde_json::from_value::<[f64; 3]>(value.clone())
+                .ok().filter(|vec| vec.iter().all(|axis| axis.is_finite()));
+            assert_eq!(borrowed_vec3(&value), expected);
+        }
+        let mut properties = Map::new();
+        properties.insert("rotation".into(), json!([90.0, 0, -20.5]));
+        assert_eq!(property_vec3(&properties, "rotation"), [90.0, 0.0, -20.5]);
+        properties.insert("rotation".into(), json!([false, 0, 0]));
+        assert_eq!(property_vec3(&properties, "rotation"), [0.0; 3]);
+    }
 
     // SOURCE-AUTHORED_NOT_RUN: prepared transactions never hold the store
     // lock across cloning, validation or canonical hashing, and a competing
@@ -2046,7 +2183,7 @@ mod tests {
             session, source_path: None, source_sha: None,
             saved_canonical_sha: None, dirty: true,
         };
-        assert!(review_capture_source(&active).is_err());
+        assert!(review_capture_source(&FrozenPublication::from(&active)).is_err());
         let tmp = std::env::temp_dir().join(format!(
             "ld-review-{:016x}.bbmodel", rand::rng().next_u64()));
         let canonical = active.session.export().unwrap();
@@ -2055,11 +2192,11 @@ mod tests {
         active.source_path = Some(tmp.clone());
         active.source_sha = Some(exact.clone());
         active.saved_canonical_sha = Some(exact.clone());
-        assert!(review_capture_source(&active).is_err()); // still dirty
+        assert!(review_capture_source(&FrozenPublication::from(&active)).is_err()); // still dirty
         active.dirty = false;
-        assert_eq!(review_capture_source(&active).unwrap().1, exact);
+        assert_eq!(review_capture_source(&FrozenPublication::from(&active)).unwrap().1, exact);
         std::fs::write(&tmp, b"external model changed").unwrap();
-        assert!(review_capture_source(&active).is_err());
+        assert!(review_capture_source(&FrozenPublication::from(&active)).is_err());
         let _ = std::fs::remove_file(tmp);
     }
 
