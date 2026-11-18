@@ -51,13 +51,17 @@ pub(super) fn duplicate_animation_clip(
     if doc.animation_assets.len() >= MAX_ELEMENTS {
         return Err(fail("ANIMATION_DUPLICATE_SIZE_LIMIT"));
     }
-    let sources: Vec<usize> = doc.animation_assets.iter().enumerate()
-        .filter(|(_,clip)| clip.get("uuid").and_then(Value::as_str) == Some(source_uuid))
-        .map(|(i,_)|i).collect();
-    let source_index = match sources.as_slice() {
-        [] => return Err(fail("ANIMATION_NOT_FOUND")),
-        [i] => *i,
-        _ => return Err(fail("ANIMATION_ID_AMBIGUOUS")),
+    // We need only the first two matches to distinguish missing, unique and
+    // ambiguous UUIDs. Do not allocate an index vector for opaque asset lists.
+    let source_index = {
+        let mut sources = doc.animation_assets.iter().enumerate()
+            .filter(|(_, clip)| clip.get("uuid").and_then(Value::as_str) == Some(source_uuid))
+            .map(|(index, _)| index);
+        let first = sources.next().ok_or_else(|| fail("ANIMATION_NOT_FOUND"))?;
+        if sources.next().is_some() {
+            return Err(fail("ANIMATION_ID_AMBIGUOUS"));
+        }
+        first
     };
     let original = &doc.animation_assets[source_index];
     if !editable_transform_clip(original, &doc.bones) {

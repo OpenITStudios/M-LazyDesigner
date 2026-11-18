@@ -2,77 +2,101 @@
 //! NEVER an artistic PASS or user approval.
 use super::{paint, face_regions, uv_sharing, AuthoringDocument, MaterialPatchRegion, Result, FACE_NAMES};
 use serde_json::{json,Value};
-use std::collections::{HashMap,HashSet};
+use std::collections::HashSet;
 
-fn pixel(bytes:&[u8],width:u32,x:u32,y:u32)->[u8;4]{
-    let i=((y*width+x)*4) as usize;
-    [bytes[i],bytes[i+1],bytes[i+2],bytes[i+3]]
+fn pixel(bytes: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
+    let index = ((y * width + x) * 4) as usize;
+    [bytes[index], bytes[index + 1], bytes[index + 2], bytes[index + 3]]
 }
-fn analyze(bytes:&[u8],width:u32,region:&MaterialPatchRegion)->Value{
-    let w=region.to[0]-region.from[0];
-    let h=region.to[1]-region.from[1];
-    let mut exact=HashSet::<[u8;3]>::new();
-    let mut coarse=HashMap::<u16,u32>::new();
-    let (mut visible,mut opaque)=(0u32,0u32);
-    let (mut low,mut high)=(255u32,0u32);
-    let (mut different,mut adjacency)=(0u32,0u32);
-    let(mut rows,mut uniform_rows)=(Vec::<[u8;3]>::new(),true);
-    for y in region.from[1]..region.to[1]{
-        let(mut first,mut uniform)=(None,true);
-        for x in region.from[0]..region.to[0]{
-            let p=pixel(bytes,width,x,y);
-            if p[3]==0{uniform=false;continue;}
-            visible+=1;if p[3]==255{opaque+=1;}
-            let rgb=[p[0],p[1],p[2]];
-            exact.insert(rgb);
-            let key=((u16::from(p[0])>>5)<<6) |
-                ((u16::from(p[1])>>5)<<3)|(u16::from(p[2])>>5);
-            *coarse.entry(key).or_insert(0)+=1;
-            let luma=(54*u32::from(p[0])+183*u32::from(p[1])+
-                19*u32::from(p[2]))/256;
-            low=low.min(luma);high=high.max(luma);
-            if first.is_some_and(|v|v!=rgb){uniform=false;}
-            if first.is_none(){first=Some(rgb);}
-            for (nx,ny) in [(x+1,y),(x,y+1)]{
-                if nx>=region.to[0]||ny>=region.to[1]{continue;}
-                let other=pixel(bytes,width,nx,ny);
-                if other[3]>0{
-                    adjacency+=1;
-                    if other[..3]!=p[..3]{different+=1;}
+
+/// One bounded saved-atlas crop. Hints describe patterns for human review,
+/// not the artistic quality or final finish of a painted material.
+fn analyze(bytes: &[u8], width: u32, region: &MaterialPatchRegion) -> Value {
+    let region_width = region.to[0] - region.from[0];
+    let region_height = region.to[1] - region.from[1];
+    let mut exact_colors = HashSet::<[u8; 3]>::new();
+
+    // High three RGB bits yield 8 * 8 * 8 buckets; no per-pixel map hashing.
+    let mut coarse = [0u32; 512];
+    let (mut visible, mut opaque) = (0u32, 0u32);
+    let (mut low, mut high) = (255u32, 0u32);
+    let (mut different, mut adjacency) = (0u32, 0u32);
+    let mut row_colors = Vec::<[u8; 3]>::with_capacity(region_height as usize);
+    let mut uniform_rows = true;
+
+    for y in region.from[1]..region.to[1] {
+        let (mut first, mut uniform) = (None, true);
+        for x in region.from[0]..region.to[0] {
+            let rgba = pixel(bytes, width, x, y);
+            if rgba[3] == 0 {
+                uniform = false;
+                continue;
+            }
+
+            visible += 1;
+            if rgba[3] == 255 { opaque += 1; }
+            let rgb = [rgba[0], rgba[1], rgba[2]];
+            exact_colors.insert(rgb);
+            let bucket = ((usize::from(rgba[0]) >> 5) << 6)
+                | ((usize::from(rgba[1]) >> 5) << 3)
+                | (usize::from(rgba[2]) >> 5);
+            coarse[bucket] += 1;
+
+            let luma = (54 * u32::from(rgba[0]) +
+                183 * u32::from(rgba[1]) + 19 * u32::from(rgba[2])) / 256;
+            low = low.min(luma);
+            high = high.max(luma);
+
+            if first.is_some_and(|color| color != rgb) { uniform = false; }
+            if first.is_none() { first = Some(rgb); }
+
+            // Count each horizontal/vertical adjacency once.
+            for (neighbor_x, neighbor_y) in [(x + 1, y), (x, y + 1)] {
+                if neighbor_x >= region.to[0] || neighbor_y >= region.to[1] {
+                    continue;
+                }
+                let neighbor = pixel(bytes, width, neighbor_x, neighbor_y);
+                if neighbor[3] > 0 {
+                    adjacency += 1;
+                    if neighbor[..3] != rgba[..3] { different += 1; }
                 }
             }
         }
-        if !uniform{uniform_rows=false;}
-        if let Some(rgb)=first{rows.push(rgb);}
+        if !uniform { uniform_rows = false; }
+        if let Some(rgb) = first { row_colors.push(rgb); }
     }
-    let mut hints=Vec::<&str>::new();
-    if visible>=16{
-        if exact.len()==1{
+
+    let mut hints = Vec::<&str>::new();
+    if visible >= 16 {
+        if exact_colors.len() == 1 {
             hints.push("UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE");
-        }else if high-low<21 &&
-            coarse.values().copied().max().unwrap_or(0)*100>=visible*92{
+        } else if high - low < 21 &&
+            coarse.iter().copied().max().unwrap_or(0) * 100 >= visible * 92 {
             hints.push("LOW_FORM_VALUE_VARIATION_CANDIDATE");
         }
-        if w>=4&&h>=4&&opaque==w*h&&uniform_rows&&
-            rows.iter().any(|v|*v!=rows[0]){
+
+        if region_width >= 4 && region_height >= 4 &&
+            opaque == region_width * region_height &&
+            uniform_rows && row_colors.iter().any(|color| *color != row_colors[0]) {
             hints.push("UNIFORM_HORIZONTAL_BANDS_REVIEW");
         }
-        if adjacency>=8&&different*100>=adjacency*85{
+        if adjacency >= 8 && different * 100 >= adjacency * 85 {
             hints.push("FRAGMENTED_OR_NOISE_FIRST_REVIEW");
         }
     }
-    // Horizontal/vertical uniform bars are candidate warnings, not proof:
-    // painted panels, seams and deliberate material boundaries can be valid.
-    if w>=4 && h>=4 && opaque==w*h {
+
+    // Bars are diagnostic candidates: deliberate panels and seams are valid.
+    if region_width >= 4 && region_height >= 4 &&
+        opaque == region_width * region_height {
         let mut columns_uniform = true;
         let mut columns_different = false;
-        let first_column = pixel(bytes,width,region.from[0],region.from[1]);
+        let first_column = pixel(bytes, width, region.from[0], region.from[1]);
         for x in region.from[0]..region.to[0] {
-            let first = pixel(bytes,width,x,region.from[1]);
-            if first[..3]!=first_column[..3] { columns_different=true; }
-            for y in region.from[1]+1..region.to[1] {
-                if pixel(bytes,width,x,y)[..3]!=first[..3] {
-                    columns_uniform=false;
+            let first = pixel(bytes, width, x, region.from[1]);
+            if first[..3] != first_column[..3] { columns_different = true; }
+            for y in region.from[1] + 1..region.to[1] {
+                if pixel(bytes, width, x, y)[..3] != first[..3] {
+                    columns_uniform = false;
                     break;
                 }
             }
@@ -82,19 +106,25 @@ fn analyze(bytes:&[u8],width:u32,region:&MaterialPatchRegion)->Value{
             hints.push("UNIFORM_VERTICAL_BANDS_REVIEW");
         }
     }
-    let status=if hints.contains(&"UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE"){
+
+    let status = if hints.contains(&"UNIFORM_VISIBLE_COLOR_BASE_ONLY_CANDIDATE") {
         "BASE_ONLY_CANDIDATE"
-    }else if hints.is_empty(){"NOT_EVALUATED"}else{"REVIEW_REQUIRED"};
+    } else if hints.is_empty() {
+        "NOT_EVALUATED"
+    } else {
+        "REVIEW_REQUIRED"
+    };
     json!({
-        "scope":"selected_saved_rgba8_atlas_region",
-        "region":region,"region_pixels":w*h,
-        "visible_pixels":visible,"unique_visible_rgb":exact.len(),
-        "approx_luma_span":if visible==0{Value::Null}else{json!(high-low)},
-        "review_hints":hints,"status":status,
-        "visual_verdict":"UNVERIFIED","texture_completion_attested":false,
-        "note":"Only an atlas candidate diagnostic. No proof of form-following shading, reference alignment or artistic acceptance."
+        "scope": "selected_saved_rgba8_atlas_region",
+        "region": region, "region_pixels": region_width * region_height,
+        "visible_pixels": visible, "unique_visible_rgb": exact_colors.len(),
+        "approx_luma_span": if visible == 0 { Value::Null } else { json!(high - low) },
+        "review_hints": hints, "status": status,
+        "visual_verdict": "UNVERIFIED", "texture_completion_attested": false,
+        "note": "Only an atlas candidate diagnostic. No proof of form-following shading, reference alignment or artistic acceptance."
     })
 }
+
 pub fn inspect_texture_styling_region(doc:&AuthoringDocument,
     texture_uuid:&str,region:&MaterialPatchRegion)->Result<Value>{
     doc.validate()?;
@@ -518,4 +548,27 @@ mod tests{
             from:[0,0],to:[2,2]});
         assert_eq!(report["status"],"NOT_EVALUATED");
     }
+    #[test]
+    fn low_variation_review_uses_exact_nine_bit_color_bucket_counts() {
+        let mut rgba = vec![0u8; 8 * 8 * 4];
+        for (index, pixel) in rgba.chunks_exact_mut(4).enumerate() {
+            // Two distinct RGBs in the SAME high-three-bit bucket. Both
+            // should be counted, rather than classified as a flat color.
+            let shade = if index == 63 { 101 } else { 100 };
+            pixel.copy_from_slice(&[shade, shade, shade, 255]);
+        }
+        let report = analyze(&rgba, 8, &region());
+        assert_eq!(report["unique_visible_rgb"], 2);
+        assert!(report["review_hints"].as_array().unwrap().iter()
+            .any(|hint| hint == "LOW_FORM_VALUE_VARIATION_CANDIDATE"));
+        assert_eq!(report["visual_verdict"], "UNVERIFIED");
+
+        // Distinct coarse buckets and a wide value span must not receive
+        // the low-variation hint, regardless of a dominant first color.
+        rgba[63 * 4..63 * 4 + 4].copy_from_slice(&[240, 240, 240, 255]);
+        let contrast = analyze(&rgba, 8, &region());
+        assert!(!contrast["review_hints"].as_array().unwrap().iter()
+            .any(|hint| hint == "LOW_FORM_VALUE_VARIATION_CANDIDATE"));
+    }
+
 }

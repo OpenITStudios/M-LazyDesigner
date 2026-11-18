@@ -1,3 +1,19 @@
+**Rust source efficiency sweep — 2026-11-19 (SOURCE ONLY):**
+Branch Rust work spans standalone Desktop, the shared AuthoringDocument and
+headless Rust CLI. A bounded source inventory reviewed Rust modules across
+Geometry, Texture, Animation, authoring reads, desktop/navigation and storage.
+Changed only three defensible owners: fixed 512-bin color histogram without
+per-pixel HashMap allocations (material_styling.rs), duplicate-clip UUID lookup
+without collecting all matches (animation_clip.rs), and page-local 24-target
+parent projection with early exit (semantic_map.rs). Existing bounded
+validation, output shape/order, source SHA, Undo and write permission stay
+unchanged. New Texture and parent-page regression sources are AUTHORED_NOT_RUN;
+existing Animation duplicate/ambiguous-ID regressions remain held.
+No new crates, services, cache, general index, benchmark runner, CI or tests.
+Actual CPU/memory improvement, Cargo/Node/Windows and Blockbench/native
+acceptance remain NOT_EXECUTED. STOP at the source review ceiling; do not
+repeat optimizations without measured hot-path evidence.
+
 **Rust Geometry G2.2 code economy — 2026-11-19 (SOURCE ONLY):**
 The bounded propagation compiler retains validation-checked borrowed moving
 Cube references in link order and pre-reserves its known-size collections.
