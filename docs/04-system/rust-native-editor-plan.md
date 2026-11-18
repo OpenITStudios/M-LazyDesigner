@@ -16,6 +16,22 @@ Blockbench .bbmodel round trip, no-overwrite writes and visual proof gates
 remain unchanged. See
 [Code Mode host implementation](../../apps/desktop/code-mode/HOST_INTEGRATION.md).
 
+**Rust source memory hot path (2026-11-18; SOURCE ONLY):** The one
+`AuthoringDocument` now uses immutable `Arc<Vec<Value>>` copy-on-write
+ownership for Texture and Animation JSON collections. Ordinary document
+clones used by validated Rust transactions do not duplicate unchanged
+embedded PNG Base64 strings and keyframe/opaque payloads; the first
+mutating access to a shared collection clones that collection before any
+write, preserving older Undo, Redo, read-only snapshot and provisional
+transaction versions. Geometry/Bone/Outliner/extension values still
+use their previous cloning semantics. Borrowed `.bbmodel` export
+continues to encode ordinary JSON Texture/Animation arrays, with no
+altered schema, missing metadata or bypassed admission. Rust source
+regressions cover asset allocation identity, independent Paint/Animation
+writes, Undo/Redo, and export/import parity but are NOT_EXECUTED.
+CPU/memory improvements, native execution and Blockbench editability
+remain UNVERIFIED.
+
 ## 1. Approved outcome and explicit non-goals
 **Maintainer priority supersession (2026-11-15):** Finish **Geometry → Texturing → Animation** authoring and export fidelity before UI/UX. LazyDesigner can use more effective authoring flows than Blockbench and is not required to copy its user interface. The release-blocking handoff is a faithful, editable Rust-exported `.bbmodel` opened in actual Blockbench with supported Geometry, UV/Texture and Animation preserved. Reverse import remains supported only where lossless, and unrestricted reverse parity is no longer a product gate. Preserve one Rust engine, fail-closed unknown data, local test holds and final native Blockbench proof.
 

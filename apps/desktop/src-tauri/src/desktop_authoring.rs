@@ -2216,7 +2216,7 @@ mod tests {
                 "name":"armor.png", "scope":2, "source":second,
                 "uv_width":64, "uv_height":32
             })
-        ];
+        ].into();
         let original = doc.clone();
         let store = EditorStore {
             epoch: 17,
@@ -2251,7 +2251,7 @@ mod tests {
                 "scope":1, "source":source, "uv_width":64, "uv_height":32}),
             json!({"uuid":"00000000-0000-4000-8000-000000000904",
                 "scope":2, "source":source, "uv_width":64, "uv_height":32})
-        ];
+        ].into();
         let safe = texture_preview_assets(&doc);
         assert_eq!(safe[1].as_ref().map(|(_, uv)| *uv), Some([64, 32]));
         assert_eq!(scoped_cube_texture_index(Some(&texture_scope_indices(&doc)), &doc.cubes[0], &safe,
@@ -3120,7 +3120,7 @@ mod tests {
         doc.texture_assets = vec![
             json!({"uuid":id,"name":"import.png"}),
             json!({"name":"legacy-uuidless.png"}),
-        ];
+        ].into();
         let original = doc.clone();
         let store = EditorStore {
             epoch: 1,

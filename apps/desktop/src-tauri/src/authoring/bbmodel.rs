@@ -29,7 +29,7 @@ impl From<BlockbenchV5> for AuthoringDocument {
         Self {
             meta: wire.meta, resolution: wire.resolution,
             cubes: wire.elements, bones: wire.groups, hierarchy: wire.outliner,
-            texture_assets: wire.textures, animation_assets: wire.animations,
+            texture_assets: wire.textures.into(), animation_assets: wire.animations.into(),
             extensions: wire.extra,
         }
     }
@@ -58,8 +58,9 @@ impl<'a> From<&'a AuthoringDocument> for BorrowedBlockbenchV5<'a> {
         Self {
             meta: &doc.meta, resolution: &doc.resolution,
             elements: &doc.cubes, groups: &doc.bones,
-            outliner: &doc.hierarchy, textures: &doc.texture_assets,
-            animations: &doc.animation_assets, extra: &doc.extensions,
+            outliner: &doc.hierarchy,
+            textures: doc.texture_assets.as_slice(),
+            animations: doc.animation_assets.as_slice(), extra: &doc.extensions,
         }
     }
 }
@@ -72,8 +73,10 @@ impl From<&AuthoringDocument> for BlockbenchV5 {
         Self {
             meta: doc.meta.clone(), resolution: doc.resolution.clone(),
             elements: doc.cubes.clone(), groups: doc.bones.clone(),
-            outliner: doc.hierarchy.clone(), textures: doc.texture_assets.clone(),
-            animations: doc.animation_assets.clone(), extra: doc.extensions.clone(),
+            outliner: doc.hierarchy.clone(),
+            textures: doc.texture_assets.as_slice().to_vec(),
+            animations: doc.animation_assets.as_slice().to_vec(),
+            extra: doc.extensions.clone(),
         }
     }
 }

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 mod bbmodel;
@@ -131,6 +132,57 @@ pub enum OutlinerNode {
     Bone(OutlinerBone),
 }
 
+/// Large JSON asset collections share their immutable allocations between
+/// document revisions. Geometry edits no longer clone embedded Base64 PNGs
+/// or Animation keyframes just to construct the next atomic candidate.
+/// Mutation stays Rust-owned: the first mutable access clones that collection
+/// if another revision (Undo, snapshot, or provisional edit) still holds it.
+/// Wire format remains a plain JSON array, not a reference or external file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SharedJsonAssets(Arc<Vec<Value>>);
+
+impl From<Vec<Value>> for SharedJsonAssets {
+    fn from(items: Vec<Value>) -> Self { Self(Arc::new(items)) }
+}
+impl std::iter::FromIterator<Value> for SharedJsonAssets {
+    fn from_iter<I: IntoIterator<Item = Value>>(items: I) -> Self {
+        Self::from(items.into_iter().collect::<Vec<_>>())
+    }
+}
+impl Deref for SharedJsonAssets {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Self::Target { self.0.as_ref() }
+}
+impl DerefMut for SharedJsonAssets {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+impl<'a> IntoIterator for &'a SharedJsonAssets {
+    type Item = &'a Value;
+    type IntoIter = std::slice::Iter<'a, Value>;
+    fn into_iter(self) -> Self::IntoIter { self.iter() }
+}
+impl<'a> IntoIterator for &'a mut SharedJsonAssets {
+    type Item = &'a mut Value;
+    type IntoIter = std::slice::IterMut<'a, Value>;
+    fn into_iter(self) -> Self::IntoIter {
+        Arc::make_mut(&mut self.0).iter_mut()
+    }
+}
+impl Serialize for SharedJsonAssets {
+    fn serialize<S: serde::Serializer>(&self, serializer: S)
+        -> std::result::Result<S::Ok, S::Error> {
+        self.0.as_ref().serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for SharedJsonAssets {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D)
+        -> std::result::Result<Self, D::Error> {
+        Vec::<Value>::deserialize(deserializer).map(Self::from)
+    }
+}
+
 /// Authoritative typed Rust state. Opaque texture, animation and extension
 /// payloads are retained without interpreting or editing those domains.
 #[derive(Debug, Clone, PartialEq)]
@@ -140,8 +192,8 @@ pub struct AuthoringDocument {
     pub cubes: Vec<Cube>,
     pub bones: Vec<Bone>,
     pub hierarchy: Vec<OutlinerNode>,
-    pub texture_assets: Vec<Value>,
-    pub animation_assets: Vec<Value>,
+    pub texture_assets: SharedJsonAssets,
+    pub animation_assets: SharedJsonAssets,
     pub extensions: Map<String, Value>,
 }
 
@@ -734,7 +786,8 @@ impl AuthoringDocument {
             },
             resolution: TextureResolution { width: 128, height: 128, extra: Map::new() },
             cubes: Vec::new(), bones: Vec::new(), hierarchy: Vec::new(),
-            texture_assets: Vec::new(), animation_assets: Vec::new(), extensions: extra,
+            texture_assets: Vec::new().into(), animation_assets: Vec::new().into(),
+            extensions: extra,
         };
         document.validate()?;
         Ok(document)

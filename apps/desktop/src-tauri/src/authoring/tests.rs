@@ -75,6 +75,70 @@ fn immutable_session_snapshots_survive_mutation_and_undo() {
     assert!(std::sync::Arc::ptr_eq(&edited, &session.snapshot_document()));
 }
 
+// SOURCE-AUTHORED_NOT_RUN: full candidate cloning must retain immutable
+// PNG/keyframe allocations across unrelated edits while Paint/Animation
+// writes detach only their own family. Undo/Redo restore byte-identical
+// revisions and the .bbmodel wire keeps ordinary JSON arrays.
+#[test]
+fn shared_json_assets_preserve_undo_and_opaque_serialization() {
+    let tex = "00000000-0000-4000-8000-000000000946";
+    let clip = "00000000-0000-4000-8000-000000000947";
+    let mut session = EditorSession::from_document(
+        AuthoringDocument::new_bedrock("Sharing", "sharing").unwrap()
+    ).unwrap();
+    session.apply(0, &[EditOperation::CreatePaintTexture {
+        uuid: tex.into(), name: "atlas.png".into(),
+    }]).unwrap();
+    let paint_only = session.snapshot_document();
+    let original_png = paint_only.texture_assets[0]["source"].clone();
+    let copied = paint_only.as_ref().clone();
+    assert!(Arc::ptr_eq(&paint_only.texture_assets.0, &copied.texture_assets.0));
+    assert!(Arc::ptr_eq(&paint_only.animation_assets.0, &copied.animation_assets.0));
+
+    session.apply(1, &[EditOperation::CreateAnimation {
+        uuid: clip.into(), name: "idle".into(), length: 1.0,
+    }]).unwrap();
+    let animated = session.snapshot_document();
+    assert!(Arc::ptr_eq(&paint_only.texture_assets.0, &animated.texture_assets.0));
+    assert!(!Arc::ptr_eq(&paint_only.animation_assets.0, &animated.animation_assets.0));
+    assert_eq!(paint_only.animation_assets.len(), 0);
+    assert_eq!(animated.animation_assets.len(), 1);
+
+    session.apply(2, &[EditOperation::PaintTexturePixel {
+        texture_index: 0, x: 0, y: 0, rgba: [31, 71, 111, 255],
+    }]).unwrap();
+    let painted = session.snapshot_document();
+    assert!(!Arc::ptr_eq(&animated.texture_assets.0, &painted.texture_assets.0));
+    assert!(Arc::ptr_eq(&animated.animation_assets.0, &painted.animation_assets.0));
+    assert_eq!(animated.texture_assets[0]["source"], original_png);
+    assert_ne!(painted.texture_assets[0]["source"], original_png);
+
+    let wire = session.export().unwrap();
+    let parsed: Value = serde_json::from_slice(&wire).unwrap();
+    assert!(parsed["textures"].is_array());
+    assert!(parsed["animations"].is_array());
+    assert_eq!(AuthoringDocument::import_bbmodel(&wire).unwrap(), *painted);
+
+    session.undo(3).unwrap();
+    assert!(Arc::ptr_eq(&animated.texture_assets.0,
+        &session.document().texture_assets.0));
+    session.undo(4).unwrap();
+    assert!(Arc::ptr_eq(&paint_only.animation_assets.0,
+        &session.document().animation_assets.0));
+    session.redo(5).unwrap();
+    assert!(Arc::ptr_eq(&animated.animation_assets.0,
+        &session.document().animation_assets.0));
+    session.redo(6).unwrap();
+    assert_eq!(session.document(), painted.as_ref());
+
+    // Public caller mutation cannot change the previous immutable version.
+    let mut copy = painted.as_ref().clone();
+    copy.animation_assets[0]["name"] = json!("edited-only-copy");
+    assert!(!Arc::ptr_eq(&painted.animation_assets.0, &copy.animation_assets.0));
+    assert_eq!(painted.animation_assets[0]["name"], "idle");
+    assert_eq!(session.document().animation_assets[0]["name"], "idle");
+}
+
 fn sample_cube(uuid: &str) -> Cube {
     let mut value: Value = serde_json::from_str(SAMPLE).unwrap();
     value["elements"][0]["uuid"] = json!(uuid);
