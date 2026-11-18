@@ -50,6 +50,17 @@ operations or forged mutation authority. No image inference, UV packing,
 Texture painting, automatic Apply or native/visual quality claim.
 Rust/Node/Windows/Blockbench tests NOT_EXECUTED.
 
+**G3.1 hollow box via the existing G1 Code Mode route (2026-11-19; SOURCE ONLY):**
+Optional `parts[].hollow_boxes` accepts `name`, `center`,
+`size`, `wall`, `open_face` (POS_X/NEG_X/POS_Y/NEG_Y/POS_Z/NEG_Z)
+and five `cube_uuids` in wall_a_low, wall_a_high, wall_b_low,
+wall_b_high, back order. Exactly five panels are proposed by the Rust
+G1 compiler under the caller's Bone in the same source-SHA-bound,
+read-only `planGeometryAssembly` call. The SDK checks declared output
+UUIDs, parent UUID and unchanged `NOT_GRANTED/UNVERIFIED` preflight;
+no JS shape solver, native mutation, UV packing, painting or approval.
+Node/host consumer regression fixtures AUTHORED_NOT_RUN.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

@@ -109,11 +109,25 @@ export interface GeometryRectangularFrame {
   border: number;
   cube_uuids: [string,string,string,string];
 }
+/** G3.1 open, volume-bearing hollow box, never a painted fake cavity.
+ * Five Cube IDs in order: a_low, a_high, b_low, b_high, back.
+ * One of POS_X/NEG_X/POS_Y/NEG_Y/POS_Z/NEG_Z names the open face.
+ * Layout/paint/material and visual approval remain separate.
+ */
+export interface GeometryHollowBox {
+  name: string;
+  center: Vec3;
+  size: [number,number,number];
+  open_face: "POS_X"|"NEG_X"|"POS_Y"|"NEG_Y"|"POS_Z"|"NEG_Z";
+  wall: number;
+  cube_uuids: [string,string,string,string,string];
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
   cubes: Array<Cube & { name: string }>;
   frames?: GeometryRectangularFrame[];
+  hollow_boxes?: GeometryHollowBox[];
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */

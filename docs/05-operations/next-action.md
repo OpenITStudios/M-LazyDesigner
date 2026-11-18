@@ -1,3 +1,19 @@
+**Active Rust Geometry G3.1 — true open hollow box (2026-11-19; SOURCE ONLY):**
+Rust@0185bc2 (Local reference @422e4d7) G1 geometry assembly was
+extended with caller-declared hollow boxes: 5 disjoint Box-UV blockout
+Cubes, one true cavity, six open-face directions, explicit panel UUIDs,
+and the same Bone/pivot and EditPlan/Undo/preflight authority.
+The G3 frame and G3.1 cavity share one untextured Cube helper;
+existing G1 callers can omit both optional fields without change.
+Pre-textured projects, invalid or collapsed interiors, unsafe bounds,
+over-budget shape batches and unfit per-Cube Box UV nets fail closed.
+Rust/source and Node/Code Mode regression cases are AUTHORED_NOT_RUN.
+No new Rust CLI command, separate geometry engine, persistent Recipe,
+CI, native test or user-PC access. External source-level Local geometry
+still has sweep/revolve/loft, OBB and advanced surface diagnosis gaps.
+Rust superiority, visual fidelity and speed remain UNVERIFIED;
+Geometry remains priority before broader Texture/Animation work.
+
 **Active Rust Geometry G3 — bounded hollow-frame construction (2026-11-19; SOURCE ONLY):**
 Compared Rust@da0191fd against Local@422e4d7b: Rust's canonical document,
 atomic operations and SDK are coherent but do not yet match Local's wide

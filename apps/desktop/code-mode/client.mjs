@@ -912,21 +912,23 @@ export function createRustCodeModeClient({
           input:source, 'expected-sha256':digest, assembly:file,
         });
         const plan = receipt.plan, preview = receipt.preflight;
-        // Bind every proposed output UUID to a declared Bone, Cube, or G3
-        // four-panel frame. Keep all actual geometry calculations in Rust.
+        // Bind each returned UUID to one declared Bone, Cube or G3 blockout
+        // panel. All shape calculation remains in the canonical Rust owner.
         const declared = new Map();
         let declarationValid = true;
         for (const part of assembly.parts) {
           if (!part || typeof part !== 'object' || !part.bone ||
               !Array.isArray(part.cubes) ||
-              (part.frames !== undefined && !Array.isArray(part.frames))) {
+              (part.frames !== undefined && !Array.isArray(part.frames)) ||
+              (part.hollow_boxes !== undefined &&
+                !Array.isArray(part.hollow_boxes))) {
             declarationValid = false;
             break;
           }
-          const declare = (uuid, op, parent, name, frame = false) => {
+          const declare = (uuid, op, parent, name, blockout = false) => {
             if (typeof uuid !== 'string' || !uuid.length || declared.has(uuid)) {
               declarationValid = false;
-            } else { declared.set(uuid, {op,parent,name,frame}); }
+            } else { declared.set(uuid, {op,parent,name,blockout}); }
           };
           declare(part.bone.uuid, 'add_bone', part.parent_uuid, part.bone.name);
           for (const cube of part.cubes) {
@@ -942,6 +944,18 @@ export function createRustCodeModeClient({
               declare(frame.cube_uuids[i], 'add_cube', part.bone.uuid,
                 frame.name+'_'+side,true));
           }
+          for (const hollow of part.hollow_boxes ?? []) {
+            if (!hollow || !Array.isArray(hollow.cube_uuids) ||
+                hollow.cube_uuids.length !== 5 ||
+                typeof hollow.name !== 'string') {
+              declarationValid = false;
+              break;
+            }
+            ['wall_a_low','wall_a_high','wall_b_low','wall_b_high','back']
+              .forEach((side,i) =>
+                declare(hollow.cube_uuids[i], 'add_cube', part.bone.uuid,
+                  hollow.name+'_'+side,true));
+          }
         }
         const used = new Set();
         const operationIdentityValid = Array.isArray(plan?.operations) &&
@@ -953,7 +967,7 @@ export function createRustCodeModeClient({
             return op.op === 'add_bone' ?
               op.parent_uuid === claim.parent && op.bone?.name === claim.name :
               op.bone_uuid === claim.parent && op.cube?.name === claim.name &&
-                (!claim.frame || op.cube?.box_uv === true);
+                (!claim.blockout || op.cube?.box_uv === true);
           });
         const expected = declared.size;
         if (!declarationValid || expected < 1 || expected > 128 ||

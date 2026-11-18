@@ -47,6 +47,22 @@ material review. The source regression covers opening topology, stable
 identity, export/reopen/Undo and fail-closed cases; tests NOT_EXECUTED.
 No independent geometry engine, persistent Recipe, native writer or release.
 
+**G3.1 true hollow-box construction (2026-11-19; SOURCE ONLY):**
+The same G1 source planner now accepts optional `parts[].hollow_boxes`
+for a caller-authored center, integer size, 1–16-unit wall and six
+POS/NEG_X/Y/Z open-face choices. Five non-overlapping native Cubes enclose
+a real interior cavity: four side panels plus the opposite back.
+Each panel has an explicit UUID and belongs to the declared Bone.
+The Rust blockout Cube helper is shared with G3 rectangular frames;
+no new authoring database, persistent Recipe, shape runtime, publisher
+or CLI subcommand. Requests enforce the same 128-operation budget before
+shape allocation, bounds/UUID checks, per-Cube Box UV net capacity,
+untouched existing Texture state and independent preflight/Apply.
+Blockouts cannot declare Texture/UV/visual completion. Rust tests are
+AUTHORED_NOT_RUN (six face directions, disjoint volume, cavity, rejection,
+source immutability, Undo/Redo and editable .bbmodel). Native performance
+and reference quality relative to Local remain NOT_EXECUTED/UNVERIFIED.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and

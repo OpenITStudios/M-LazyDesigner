@@ -23,6 +23,9 @@ pub struct GeometryAssemblyPart {
     /// frame, compiled into the same AddCube operations as explicit parts.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frames: Vec<GeometryRectangularFrame>,
+    /// Optional five-panel untextured cavity; absent in prior G1/G3 requests.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hollow_boxes: Vec<GeometryHollowBox>,
 }
 
 /// Source-authored through-opening. Axis is the normal to its opening;
@@ -38,6 +41,105 @@ pub struct GeometryRectangularFrame {
     pub border: u32,
     /// Stable panel UUIDs, in left/right/bottom/top order.
     pub cube_uuids: [String; 4],
+}
+
+/// True three-dimensional cavity with one open face. Five exact Cube IDs
+/// correspond to wall_a_low, wall_a_high, wall_b_low, wall_b_high, back.
+/// a and b are the remaining axes in ascending X/Y/Z order.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GeometryHollowBox {
+    pub name: String,
+    pub center: [f64; 3],
+    pub size: [u32; 3],
+    pub open_face: String,
+    pub wall: u32,
+    pub cube_uuids: [String; 5],
+}
+
+/// One ordinary, untextured Bedrock Cube source shape, shared by G3
+/// primitives. Box UV is provisional; this does not allocate atlas space.
+fn blockout_cube(
+    uuid: &str, name: String,
+    from: [f64; 3], to: [f64; 3], bone_origin: [f64; 3],
+) -> Cube {
+    let mut faces = Map::new();
+    for side in FACE_NAMES {
+        faces.insert(side.into(), json!({"uv":[0,0,1,1]}));
+    }
+    let mut extra = Map::new();
+    extra.insert("box_uv".into(), Value::Bool(true));
+    Cube {
+        uuid: uuid.to_owned(), kind: "cube".into(), name: Some(name),
+        from, to, origin: Some(bone_origin), uv_offset: None, faces, extra,
+    }
+}
+
+fn compile_hollow_box(
+    shape: &GeometryHollowBox, bone_origin: [f64; 3],
+) -> Result<[Cube; 5]> {
+    let (normal, open_positive) = match shape.open_face.as_str() {
+        "POS_X" => (0, true), "NEG_X" => (0, false),
+        "POS_Y" => (1, true), "NEG_Y" => (1, false),
+        "POS_Z" => (2, true), "NEG_Z" => (2, false),
+        _ => return Err(fail("GEOMETRY_HOLLOW_FACE_INVALID")),
+    };
+    if !valid_node_name(&shape.name) || shape.name.chars().count() > 110 {
+        return Err(fail("GEOMETRY_HOLLOW_NAME_INVALID"));
+    }
+    if shape.size.iter().any(|n| !(1..=32).contains(n)) {
+        return Err(fail("GEOMETRY_HOLLOW_SIZE_INVALID"));
+    }
+    if !(1..=16).contains(&shape.wall) {
+        return Err(fail("GEOMETRY_HOLLOW_WALL_INVALID"));
+    }
+    let [a, b] = match normal {
+        0 => [1, 2], 1 => [0, 2], 2 => [0, 1], _ => unreachable!(),
+    };
+    let size = shape.size.map(f64::from);
+    let wall = f64::from(shape.wall);
+    if size[a] <= 2.0 * wall || size[b] <= 2.0 * wall ||
+       size[normal] <= wall {
+        return Err(fail("GEOMETRY_HOLLOW_CAVITY_REQUIRED"));
+    }
+    let low: [f64; 3] = std::array::from_fn(|i|
+        shape.center[i] - size[i] / 2.0);
+    let high: [f64; 3] = std::array::from_fn(|i|
+        shape.center[i] + size[i] / 2.0);
+    if !valid_bounds(low, high) {
+        return Err(fail("GEOMETRY_HOLLOW_BOUNDS_INVALID"));
+    }
+    let (a_low, a_high) = (low[a] + wall, high[a] - wall);
+    let (b_low, b_high) = (low[b] + wall, high[b] - wall);
+    let make = |index: usize, suffix: &str,
+                a_span: [f64; 2], b_span: [f64; 2],
+                n_span: [f64; 2]| {
+        let mut from = low;
+        let mut to = high;
+        from[a] = a_span[0]; to[a] = a_span[1];
+        from[b] = b_span[0]; to[b] = b_span[1];
+        from[normal] = n_span[0]; to[normal] = n_span[1];
+        blockout_cube(&shape.cube_uuids[index],
+            format!("{}_{}", shape.name, suffix), from, to, bone_origin)
+    };
+    let full_depth = [low[normal], high[normal]];
+    let back = if open_positive {
+        [low[normal], low[normal] + wall]
+    } else {
+        [high[normal] - wall, high[normal]]
+    };
+    let panels = [
+        make(0, "wall_a_low", [low[a], a_low], [low[b], high[b]], full_depth),
+        make(1, "wall_a_high", [a_high, high[a]], [low[b], high[b]], full_depth),
+        make(2, "wall_b_low", [a_low, a_high], [low[b], b_low], full_depth),
+        make(3, "wall_b_high", [a_low, a_high], [b_high, high[b]], full_depth),
+        make(4, "back", [a_low, a_high], [b_low, b_high], back),
+    ];
+    if panels.iter().any(|cube| !valid_bounds(cube.from, cube.to) ||
+        (0..3).any(|i| cube.to[i] <= cube.from[i])) {
+        return Err(fail("GEOMETRY_HOLLOW_PANEL_INVALID"));
+    }
+    Ok(panels)
 }
 
 /// This geometry method is *untextured* blockout: Box UV metadata exists
@@ -69,25 +171,13 @@ fn compile_rectangular_frame(
         return Err(fail("GEOMETRY_FRAME_BOUNDS_INVALID"));
     }
     let make_panel = |index: usize, name: &str,
-                          along_a: [f64; 2], along_b: [f64; 2]| {
+                      along_a: [f64; 2], along_b: [f64; 2]| {
         let mut from = low;
         let mut to = high;
         from[a] = along_a[0]; to[a] = along_a[1];
         from[b] = along_b[0]; to[b] = along_b[1];
-        let mut faces = Map::new();
-        for side in FACE_NAMES {
-            // No texture reference. Canonical AddCube derives its Box UV
-            // rectangles, and a later Texture stage owns atlas allocation.
-            faces.insert(side.into(), json!({"uv":[0,0,1,1]}));
-        }
-        let mut extra = Map::new();
-        extra.insert("box_uv".into(), Value::Bool(true));
-        Cube {
-            uuid: frame.cube_uuids[index].clone(),
-            kind: "cube".into(),
-            name: Some(format!("{}_{}", frame.name, name)),
-            from, to, origin: Some(bone_origin), uv_offset: None, faces, extra,
-        }
+        blockout_cube(&frame.cube_uuids[index],
+            format!("{}_{}", frame.name, name), from, to, bone_origin)
     };
     let result = [
         make_panel(0, "left", [low[a], low[a] + border], [low[b], high[b]]),
@@ -157,6 +247,8 @@ pub(super) fn compile(
         // Admit the entire bounded operation count *before* constructing
         // any panels. Never allocate a large transient shape on bad input.
         let additions = part.frames.len().checked_mul(4)
+            .and_then(|frame_count| part.hollow_boxes.len().checked_mul(5)
+                .and_then(|hollow_count| frame_count.checked_add(hollow_count)))
             .and_then(|panels| 1usize.checked_add(part.cubes.len())?
                 .checked_add(panels))
             .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
@@ -165,10 +257,16 @@ pub(super) fn compile(
         if count > MAX_OPERATIONS {
             return Err(fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
         }
-        if !part.frames.is_empty() && !doc.texture_assets.is_empty() {
-            return Err(fail("GEOMETRY_FRAME_TEXTURED_PROJECT_UNSUPPORTED"));
+        if !doc.texture_assets.is_empty() {
+            if !part.frames.is_empty() {
+                return Err(fail("GEOMETRY_FRAME_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
+            if !part.hollow_boxes.is_empty() {
+                return Err(fail("GEOMETRY_HOLLOW_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
         }
-        let mut panels = Vec::with_capacity(part.frames.len() * 4);
+        let mut panels = Vec::with_capacity(
+            part.frames.len() * 4 + part.hollow_boxes.len() * 5);
         for frame in &part.frames {
             // The Bone pivot is caller supplied and validated above.
             panels.extend(compile_rectangular_frame(
@@ -176,12 +274,18 @@ pub(super) fn compile(
                     fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?,
             )?);
         }
-        // Bind UUID membership to the source request, not to transient
-        // generated Cubes. The panels are later moved into the operation
-        // buffer; borrowing their strings across iterations is invalid.
+        for hollow in &part.hollow_boxes {
+            panels.extend(compile_hollow_box(hollow,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?)?);
+        }
+        // Bind UUID membership to the source request, not temporary Cubes.
+        // These IDs outlive the generated operation buffer and preflight.
         for uuid in part.cubes.iter().map(|cube| cube.uuid.as_str())
             .chain(part.frames.iter().flat_map(|frame|
-                frame.cube_uuids.iter().map(String::as_str))) {
+                frame.cube_uuids.iter().map(String::as_str)))
+            .chain(part.hollow_boxes.iter().flat_map(|hollow|
+                hollow.cube_uuids.iter().map(String::as_str))) {
             if !valid_uuid(uuid) || !used_ids.insert(uuid) {
                 return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
             }
@@ -190,14 +294,18 @@ pub(super) fn compile(
             .any(|cube| !cube.name.as_deref().is_some_and(valid_node_name)) {
             return Err(fail("GEOMETRY_ASSEMBLY_CUBE_NAME_REQUIRED"));
         }
-        for cube in &panels {
-            // Box UV panels start at [0,0]; refuse an atlas that cannot
-            // contain even one actual panel net. Later Texture owns packing.
+        for (index, cube) in panels.iter().enumerate() {
+            // Box UV is provisional. Refuse a shape whose individual Cube
+            // net cannot fit even once; actual island packing is still
+            // a separate explicit Texture/UV decision.
             let dims: [f64; 3] = std::array::from_fn(|i|
                 cube.to[i] - cube.from[i]);
             if 2.0 * (dims[0] + dims[2]) > f64::from(doc.resolution.width) ||
                dims[1] + dims[2] > f64::from(doc.resolution.height) {
-                return Err(fail("GEOMETRY_FRAME_UV_ATLAS_TOO_SMALL"));
+                let code = if index < part.frames.len() * 4 {
+                    "GEOMETRY_FRAME_UV_ATLAS_TOO_SMALL"
+                } else { "GEOMETRY_HOLLOW_UV_ATLAS_TOO_SMALL" };
+                return Err(fail(code));
             }
         }
         generated.push(panels);
@@ -280,7 +388,7 @@ mod tests {
         }
         GeometryAssemblyPart {
             bone, parent_uuid: parent.map(str::to_owned), cubes: vec![cube],
-            frames: Vec::new(),
+            frames: Vec::new(), hollow_boxes: Vec::new(),
         }
     }
 
@@ -566,6 +674,209 @@ mod tests {
         })).is_err());
         let empty = part(ROOT,"body",None,CUBE_A);
         assert!(serde_json::to_value(empty).unwrap().get("frames").is_none());
+    }
+
+
+    const HOLLOW_IDS: [&str; 5] = [
+        "00000000-0000-4000-8000-000000001121",
+        "00000000-0000-4000-8000-000000001122",
+        "00000000-0000-4000-8000-000000001123",
+        "00000000-0000-4000-8000-000000001124",
+        "00000000-0000-4000-8000-000000001125",
+    ];
+
+    fn hollow_request() -> GeometryAssemblyRequest {
+        let mut part = part(ROOT, "container_bone", None, CUBE_A);
+        part.cubes.clear();
+        part.hollow_boxes.push(GeometryHollowBox {
+            name: "container".into(), center: [0.0; 3],
+            size: [10, 8, 6], open_face: "POS_Z".into(), wall: 1,
+            cube_uuids: HOLLOW_IDS.map(str::to_owned),
+        });
+        GeometryAssemblyRequest { expected_revision: 0, parts: vec![part] }
+    }
+
+    #[test]
+    fn hollow_box_generates_five_disjoint_panels_with_real_cavity_and_reversible_export() {
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Hollow", "hollow").unwrap()
+        ).unwrap();
+        let before = session.document().clone();
+        let plan = compile(&session, &hollow_request()).unwrap();
+        assert_eq!(plan.plan.operations.len(), 6);
+        assert_eq!(plan.preflight["status"], "VALIDATED_NOT_APPLIED");
+        assert_eq!(plan.preflight["write_authority"], "NOT_GRANTED");
+        assert_eq!(session.document(), &before);
+        assert!(!session.can_undo());
+
+        // For POS_Z, X and Y retain full wall depth; only the final
+        // interior-sized panel closes the -Z face.
+        let expected = [
+            ([-5.0,-4.0,-3.0],[-4.0,4.0,3.0]),
+            ([4.0,-4.0,-3.0],[5.0,4.0,3.0]),
+            ([-4.0,-4.0,-3.0],[4.0,-3.0,3.0]),
+            ([-4.0,3.0,-3.0],[4.0,4.0,3.0]),
+            ([-4.0,-3.0,-3.0],[4.0,3.0,-2.0]),
+        ];
+        let mut volume = 0.0;
+        for (index, (from, to)) in expected.iter().enumerate() {
+            let EditOperation::AddCube { cube, bone_uuid } =
+                &plan.plan.operations[index + 1]
+            else { panic!("Expected one AddCube per panel"); };
+            assert_eq!(cube.uuid, HOLLOW_IDS[index]);
+            assert_eq!(bone_uuid, ROOT);
+            assert_eq!((&cube.from, &cube.to), (from, to));
+            assert_eq!(cube.name.as_deref(), Some(
+                ["container_wall_a_low", "container_wall_a_high",
+                 "container_wall_b_low", "container_wall_b_high",
+                 "container_back"][index]));
+            assert_eq!(cube.extra.get("box_uv"), Some(&Value::Bool(true)));
+            assert!(cube.faces.values().all(|face| face.get("texture").is_none()));
+            assert_eq!(cube.origin, Some([0.0; 3]));
+            volume += (0..3).map(|axis| to[axis] - from[axis]).product::<f64>();
+            // Every panel misses a point in the open cavity.
+            assert!(!(0..3).all(|axis|
+                from[axis] <= [0.0, 0.0, 2.0][axis] &&
+                [0.0, 0.0, 2.0][axis] < to[axis]));
+        }
+        assert_eq!(volume, 240.0); // 10*8*6 minus 8*6*5
+        for i in 0..5 {
+            for j in i+1..5 {
+                assert!((0..3).any(|axis|
+                    expected[i].1[axis].min(expected[j].1[axis]) <=
+                    expected[i].0[axis].max(expected[j].0[axis])
+                ));
+            }
+        }
+
+        session.apply(0, &plan.plan.operations).unwrap();
+        let after = session.document().clone();
+        assert_eq!(after.cubes.len(), 5);
+        let saved = session.export().unwrap();
+        assert_eq!(plan.preflight["candidate_sha256"], sha256(&saved));
+        assert_eq!(EditorSession::open(&saved).unwrap().document(), &after);
+        assert!(geometry::export_bedrock_geometry(&after).is_ok());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(), &before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(), &after);
+    }
+
+    #[test]
+    fn hollow_box_six_faces_keep_correct_back_and_open_cavity() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Hollow", "hollow").unwrap()
+        ).unwrap();
+        for (face, axis, positive) in [
+            ("POS_X",0,true), ("NEG_X",0,false),
+            ("POS_Y",1,true), ("NEG_Y",1,false),
+            ("POS_Z",2,true), ("NEG_Z",2,false),
+        ] {
+            let mut req = hollow_request();
+            req.parts[0].hollow_boxes[0].open_face = face.into();
+            let proposal = compile(&session, &req).unwrap();
+            assert_eq!(proposal.plan.operations.len(), 6);
+            let panel = &proposal.plan.operations[5];
+            let EditOperation::AddCube { cube: back, .. } = panel
+            else { panic!("Expected back panel"); };
+            let depth = f64::from(req.parts[0].hollow_boxes[0].size[axis]);
+            assert_eq!(back.to[axis] - back.from[axis], 1.0);
+            if positive {
+                assert_eq!(back.from[axis], -depth / 2.0);
+            } else {
+                assert_eq!(back.to[axis], depth / 2.0);
+            }
+            let mut open_point = [0.0; 3];
+            open_point[axis] = if positive {
+                depth / 2.0 - 0.5
+            } else {
+                -depth / 2.0 + 0.5
+            };
+            for op in &proposal.plan.operations[1..] {
+                let EditOperation::AddCube { cube, .. } = op
+                else { panic!("Expected 5 Cubes"); };
+                assert!(!(0..3).all(|i|
+                    cube.from[i] <= open_point[i] &&
+                    open_point[i] < cube.to[i]));
+            }
+            assert_eq!(proposal.preflight["write_authority"], "NOT_GRANTED");
+        }
+    }
+
+    #[test]
+    fn hollow_box_rejects_unsafe_inputs_before_applying_any_cube() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Hollow", "hollow").unwrap()
+        ).unwrap();
+        let before = session.document().clone();
+        for (case, expected) in [
+            (0,"GEOMETRY_HOLLOW_FACE_INVALID"),
+            (1,"GEOMETRY_HOLLOW_SIZE_INVALID"),
+            (2,"GEOMETRY_HOLLOW_WALL_INVALID"),
+            (3,"GEOMETRY_HOLLOW_CAVITY_REQUIRED"),
+            (4,"GEOMETRY_HOLLOW_BOUNDS_INVALID"),
+            (5,"GEOMETRY_ASSEMBLY_UUID_CONFLICT"),
+            (6,"GEOMETRY_HOLLOW_NAME_INVALID"),
+        ] {
+            let mut req = hollow_request();
+            let hollow = &mut req.parts[0].hollow_boxes[0];
+            match case {
+                0 => hollow.open_face = "FRONT".into(),
+                1 => hollow.size = [0,8,6],
+                2 => hollow.wall = 0,
+                3 => hollow.wall = 4,
+                4 => hollow.center = [100_000.0,0.0,0.0],
+                5 => hollow.cube_uuids[1] = hollow.cube_uuids[0].clone(),
+                6 => hollow.name = "x".repeat(120),
+                _ => unreachable!(),
+            }
+            assert_eq!(compile(&session, &req).err().as_deref(), Some(expected));
+        }
+        let mut cross = hollow_request();
+        cross.parts[0].frames.push(GeometryRectangularFrame {
+            name: "portal".into(), center: [0.0; 3], size: [10,8,2],
+            normal_axis: "Z".into(), border: 1,
+            cube_uuids: [HOLLOW_IDS[0], FRAME_IDS[1],
+                FRAME_IDS[2], FRAME_IDS[3]].map(str::to_owned),
+        });
+        assert_eq!(compile(&session, &cross).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+
+        let mut oversized = hollow_request();
+        let one = oversized.parts[0].hollow_boxes[0].clone();
+        oversized.parts[0].hollow_boxes = vec![one; 26];
+        assert_eq!(compile(&session, &oversized).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
+        assert_eq!(session.document(), &before);
+        assert!(!session.can_undo());
+
+        let mut tiny = session.clone();
+        tiny.apply(0, &[EditOperation::SetEmptyAtlasResolution {
+            width: 4, height: 4,
+        }]).unwrap();
+        assert_eq!(compile(&tiny, &GeometryAssemblyRequest {
+            expected_revision: 1, ..hollow_request()
+        }).err().as_deref(), Some("GEOMETRY_HOLLOW_UV_ATLAS_TOO_SMALL"));
+
+        let mut textured = session.clone();
+        textured.apply(0, &[EditOperation::CreatePaintTexture {
+            uuid: "00000000-0000-4000-8000-000000001126".into(),
+            name: "atlas".into(),
+        }]).unwrap();
+        assert_eq!(compile(&textured, &GeometryAssemblyRequest {
+            expected_revision: 1, ..hollow_request()
+        }).err().as_deref(), Some("GEOMETRY_HOLLOW_TEXTURED_PROJECT_UNSUPPORTED"));
+        assert_eq!(compile(&session, &GeometryAssemblyRequest {
+            expected_revision: 1, ..hollow_request()
+        }).err().as_deref(), Some("DOCUMENT_REVISION_STALE"));
+        let mut unknown = serde_json::to_value(
+            &hollow_request().parts[0].hollow_boxes[0]).unwrap();
+        unknown["unknown_field"] = json!(true);
+        assert!(serde_json::from_value::<GeometryHollowBox>(unknown).is_err());
+        let prior = part(ROOT, "legacy", None, CUBE_A);
+        let json = serde_json::to_value(&prior).unwrap();
+        assert!(json.get("frames").is_none());
+        assert!(json.get("hollow_boxes").is_none());
     }
 
 }
