@@ -8,7 +8,7 @@
  * does not magically make unrestricted Node or a modified Deno invocation safe.
  */
 const METHODS = Object.freeze([
-  "projectInfo", "inspect", "catalog", "semanticMap", "preflight", "planGeometryAssembly", "taskContext", "preflightGuidance", "liveSessionInfo", "liveSemanticMap", "inspectBatch", "inspectApprovedMaterial", "inspectSelectedVisualPair", "inspectCubeSurfaces",
+  "projectInfo", "inspect", "catalog", "semanticMap", "preflight", "planGeometryAssembly", "planGeometryAttachment", "taskContext", "preflightGuidance", "liveSessionInfo", "liveSemanticMap", "inspectBatch", "inspectApprovedMaterial", "inspectSelectedVisualPair", "inspectCubeSurfaces",
   "inspectCubeFaceAlpha", "texturingReadiness", "inspectTexture", "inspectTextureAlpha",
   "inspectAnimation", "inspectAnimationTrack", "inspectAnimationTransformTrack", "audit",
   "newModel", "apply", "importPng", "exportPng", "exportGeometry", "exportAnimations",

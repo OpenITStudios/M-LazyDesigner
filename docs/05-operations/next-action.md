@@ -1,3 +1,15 @@
+**G2 Code Mode attachment read-only integration — 2026-11-18 (SOURCE ONLY):**
+Exposed the existing Rust `plan-geometry-attachment` via typed
+`planGeometryAttachment` in the Code Mode SDK, trusted Node host and
+Deno guest allowlist. The caller supplies explicit Cube/face/offset
+data; Rust returns the one-operation plan, SHA-bound preflight and
+diagnostics. SDK rejects forged granted/collision outcomes, stale
+file SHA and mismatched target or delta. A separate `apply` still
+needs host approval and new no-overwrite output. Authored Node
+source regressions include positive/negative transport and
+zero write approval. Proof: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN;
+local/native execution and accepted quality remain UNVERIFIED.
+
 **G2 same-Bone Face-to-Face attachment — 2026-11-18 (SOURCE ONLY):**
 Added `geometry_attachment.rs` as a narrow read-only Rust planner for
 one explicitly named Cube face pair, nonnegative clearance and

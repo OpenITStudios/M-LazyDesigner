@@ -1054,6 +1054,9 @@ export async function createCodeModeHost({
     // No trusted-host approval, output path, live write, or implicit Apply.
     planGeometryAssembly: async (args) =>
       selected(args).planGeometryAssembly(args.assembly),
+    // G2 remains read-only: all file edits use independently approved Apply.
+    planGeometryAttachment: async (args) =>
+      selected(args).planGeometryAttachment(args.attachment),
     // One existing native authoring_target query, then a small host-only
     // projection. No unbounded scene/PNG/opaque payload reaches Deno.
     taskContext: async (args) => {
@@ -2437,6 +2440,7 @@ export function createCodeModeTool(host) {
       'Known UUID: skip name discovery. Group independent source questions in one inspectBatch; filter/aggregate in JavaScript, then return only the answer, source SHA and meaningful blockers. A null/absent face is not automatically an artistic defect.',
       'Use semanticMap only for a small, paged identity/parent inventory. A preflight dry-run validates an exact typed Rust plan without writing or obtaining authority; a later apply still needs separate trusted approval, current source SHA and real visual review.',
       'For Geometry part assemblies with explicitly authored Cube dimensions, Bone pivots and UUID parents, use planGeometryAssembly to compile a source-bound parent-first EditPlan in Rust. This is read-only and never applies, guesses reference dimensions or replaces host approval.',
+      'For two unrotated Cubes sharing one Bone frame, planGeometryAttachment can propose a cardinal face-to-face gap/offset as one Rust TranslateCube. Cross-Bone/rotated cases are unsupported; this does not establish collision or visual quality and is never applied automatically.',
       'Use taskContext for one exact named target when the UUID is unknown; it compacts a single verified authoring_target read, not artistic evidence. Use preflightGuidance for advisory risk orientation; call native preflight for risky plans when appropriate. Neither grants permission nor changes the required Rust Apply validation.',
       ...(host.initial?.liveReadOnly ? [
         'For a user-paired live editor, call liveSessionInfo then liveSemanticMap with its exact expectedEpoch and expectedRevision. These are read-only. Do not confuse live state with headless disk project handles or attempt live writes.'

@@ -39,6 +39,19 @@ verified on every native plan call. SDK and host guest-RPC positive/
 negative regressions AUTHORED_NOT_RUN, native execution/visual
 quality NOT_EXECUTED.
 
+**G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
+`codemode.planGeometryAttachment({project,attachment})` is a bounded
+read-only request that sends caller-authored Cube UUIDs, opposite
+faces, clearance and tangential offsets through the existing
+Deno → trusted Node → Rust CLI path. Rust alone computes the
+`TranslateCube` plan and disposable preflight. The SDK binds
+diagnostics/UUIDs/delta to the requested target and refuses
+fabricated write authority or collision verdicts; actual
+`codemode.apply` remains separately authorized. No live GUI write,
+persistent parametric constraints, cross-Bone solver, new process
+service or parallel geometry engine is introduced. Node/Deno/Cargo,
+Windows and native Blockbench behavior are NOT_EXECUTED.
+
 ## Dated source history (preserved)
 
 **P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**

@@ -106,6 +106,19 @@ export interface GeometryAssemblyRequest {
   expected_revision: 0;
   parts: GeometryAssemblyPart[];
 }
+/** G2 transient face alignment in the same Bone/local frame.
+ * Tangent axes: X -> [Y,Z], Y -> [X,Z], Z -> [X,Y].
+ * A one-shot plan, not persistent constraints or collision certification.
+ */
+export interface GeometryFaceAttachmentRequest {
+  expected_revision: 0;
+  anchor_cube_uuid: string;
+  moving_cube_uuid: string;
+  anchor_face: CubeFaceSurface["side"];
+  moving_face: CubeFaceSurface["side"];
+  clearance: number;
+  tangent_offset: Vec2;
+}
 /** Native .bbmodel sound/particle keyframe metadata. No local file, script or playback. */
 export interface AnimationEffectPoint {
   effect: string;
@@ -607,6 +620,34 @@ export interface GeometryAssemblyReceipt {
   write_authority: "NOT_GRANTED";
   visual_verdict: "UNVERIFIED";
 }
+/** Rust source-only G2 proposal. The plan must pass separately approved Apply. */
+export interface GeometryFaceAttachmentReceipt {
+  status: "OK";
+  sha256: string;
+  summary: DocumentSummary;
+  plan: {
+    expected_revision: 0;
+    operations: Array<Extract<EditOperation,{op:"translate_cube"}>>;
+    correction_scope: null;
+  };
+  preflight: PreflightReceipt["preflight"];
+  diagnostic: {
+    scope: "same_bone_axis_aligned_face_attachment";
+    anchor_cube_uuid: string;
+    moving_cube_uuid: string;
+    parent_bone_uuid: string;
+    anchor_face: CubeFaceSurface["side"];
+    moving_face: CubeFaceSurface["side"];
+    clearance: number;
+    tangent_axes: [number,number];
+    tangent_offset: Vec2;
+    delta: Vec3;
+    collision_verdict: "NOT_EVALUATED";
+    visual_verdict: "UNVERIFIED";
+  };
+  write_authority: "NOT_GRANTED";
+  visual_verdict: "UNVERIFIED";
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
@@ -937,6 +978,9 @@ export interface RustCodeModeClient {
   planGeometryAssembly(input: {
     input: string; expectedSha256: string; assembly: GeometryAssemblyRequest;
   }): Promise<GeometryAssemblyReceipt>;
+  planGeometryAttachment(input: {
+    input: string; expectedSha256: string; attachment: GeometryFaceAttachmentRequest;
+  }): Promise<GeometryFaceAttachmentReceipt>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectTextureAlpha(input: {
     input: string; textureUuid: string; expectedSha256?: string;
@@ -1034,6 +1078,7 @@ export interface RustCodeModeProject {
   semanticMap(category: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<SemanticMapReceipt>;
   preflight(input: {operations: EditOperation[]; correctionScope?: TextureCorrectionScope}): Promise<PreflightReceipt>;
   planGeometryAssembly(assembly: GeometryAssemblyRequest): Promise<GeometryAssemblyReceipt>;
+  planGeometryAttachment(attachment: GeometryFaceAttachmentRequest): Promise<GeometryFaceAttachmentReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
   inspectTextureAlpha(textureUuid: string): Promise<InspectReceipt & {alpha: TextureAlphaInspection}>;

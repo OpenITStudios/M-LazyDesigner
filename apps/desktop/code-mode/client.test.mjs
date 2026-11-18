@@ -109,6 +109,76 @@ test('G1 Geometry assembly composes an exact Rust plan without mutation permissi
   }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: G2 face alignment uses only a read-only Rust
+// plan. No host write approval is requested, and fabricated grants refuse.
+test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',async()=>{
+  const attachment={
+    expected_revision:0,anchor_cube_uuid:'anchor',
+    moving_cube_uuid:'moving',anchor_face:'east',moving_face:'west',
+    clearance:2,tangent_offset:[1,-1],
+  };
+  const receipt={
+    status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations:[{
+      op:'translate_cube',uuid:'moving',delta:[-4,1,-1],
+    }],correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:1,changed_uuids:['moving']},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    diagnostic:{scope:'same_bone_axis_aligned_face_attachment',
+      anchor_cube_uuid:'anchor',moving_cube_uuid:'moving',
+      parent_bone_uuid:'root',anchor_face:'east',moving_face:'west',
+      clearance:2,tangent_axes:[1,2],tangent_offset:[1,-1],
+      delta:[-4,1,-1],collision_verdict:'NOT_EVALUATED',
+      visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+  };
+  let calls=0,approvals=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,authorizeMutation:async()=>{approvals++;return true;},
+    runner:async argv=>{
+      calls++;
+      assert.equal(argv[0],'plan-geometry-attachment');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+      const sent=JSON.parse(await readFile(argv[argv.indexOf('--attachment')+1],'utf8'));
+      assert.deepEqual(sent,attachment);
+      return receipt;
+    },
+  });
+  const result=await client.planGeometryAttachment({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,attachment,
+  });
+  assert.equal(result.plan.operations[0].uuid,'moving');
+  assert.equal(result.diagnostic.collision_verdict,'NOT_EVALUATED');
+  assert.equal(approvals,0);
+  for(const invalid of [
+    {...attachment,expected_revision:1},
+    {...attachment,clearance:Infinity},
+    {...attachment,tangent_offset:[NaN,0]},
+  ]){
+    await assert.rejects(client.planGeometryAttachment({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,attachment:invalid,
+    }),/CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_INVALID/);
+  }
+  assert.equal(calls,1);
+  for(const fake of [
+    {...receipt,write_authority:'GRANTED'},
+    {...receipt,plan:{...receipt.plan,operations:[{
+      op:'translate_cube',uuid:'wrong',delta:[-4,1,-1]
+    }]}},
+    {...receipt,diagnostic:{...receipt.diagnostic,collision_verdict:'CLEAR'}},
+  ]){
+    const forged=createRustCodeModeClient({
+      binary:BIN,runner:async()=>fake,
+    });
+    await assert.rejects(forged.planGeometryAttachment({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,attachment,
+    }),/CODE_MODE_GEOMETRY_ATTACHMENT_RECEIPT_INVALID/);
+  }
+  assert.equal(approvals,0);
+});
+
 test('Code Mode routes focused read directly without model echo', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

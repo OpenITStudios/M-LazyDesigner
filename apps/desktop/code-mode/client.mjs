@@ -262,6 +262,24 @@ function serializeGeometryAssembly(assembly) {
   return payload;
 }
 
+/** G2 transport only: Rust owns every geometric validity decision. */
+function serializeGeometryAttachment(attachment) {
+  if (!attachment || typeof attachment !== 'object' ||
+      Array.isArray(attachment) || attachment.expected_revision !== 0) {
+    throw new TypeError('CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_INVALID');
+  }
+  const payload = JSON.stringify(attachment, (_key, value) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw new TypeError('CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_INVALID');
+    }
+    return value;
+  });
+  if (!payload || Buffer.byteLength(payload, 'utf8') > PLAN_LIMIT) {
+    throw new TypeError('CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_TOO_LARGE');
+  }
+  return payload;
+}
+
 // Require a native *matched* correction receipt before any scoped Paint
 // call can be reported as successful to Code Mode. Rust may already have
 // published its no-overwrite sibling when a malformed success is observed:
@@ -661,6 +679,64 @@ export function createRustCodeModeClient({
       }
       return receipt;
     },
+    async planGeometryAttachment({ input, expectedSha256, attachment }) {
+      const digest = hash(expectedSha256).toLowerCase();
+      const source = absolute(input, 'input');
+      const payload = serializeGeometryAttachment(attachment);
+      const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-face-attachment-'));
+      const file = join(directory, 'attachment.json');
+      try {
+        await writeFile(file, payload, { encoding:'utf8', mode:0o600, flag:'wx' });
+        const receipt = await call('plan-geometry-attachment', {
+          input:source, 'expected-sha256':digest, attachment:file,
+        });
+        const plan = receipt.plan, preview = receipt.preflight;
+        const op = plan?.operations?.[0], diagnostic = receipt.diagnostic;
+        if (typeof receipt.sha256 !== 'string' ||
+            receipt.sha256.toLowerCase() !== digest ||
+            receipt.summary?.revision !== 0 ||
+            !plan || plan.expected_revision !== 0 ||
+            plan.correction_scope !== null ||
+            !Array.isArray(plan.operations) || plan.operations.length !== 1 ||
+            op?.op !== 'translate_cube' ||
+            op.uuid !== attachment.moving_cube_uuid ||
+            !Array.isArray(op.delta) || op.delta.length !== 3 ||
+            !op.delta.every(Number.isFinite) ||
+            preview?.status !== 'VALIDATED_NOT_APPLIED' ||
+            preview.base_revision !== 0 || preview.mutation?.revision !== 1 ||
+            preview.mutation.operation_count !== 1 ||
+            !Array.isArray(preview.mutation.changed_uuids) ||
+            !preview.mutation.changed_uuids.includes(attachment.moving_cube_uuid) ||
+            preview.candidate_summary?.revision !== 1 ||
+            typeof preview.candidate_sha256 !== 'string' ||
+            !SHA256.test(preview.candidate_sha256) ||
+            preview.write_authority !== 'NOT_GRANTED' ||
+            preview.visual_verdict !== 'UNVERIFIED' ||
+            diagnostic?.scope !== 'same_bone_axis_aligned_face_attachment' ||
+            diagnostic.anchor_cube_uuid !== attachment.anchor_cube_uuid ||
+            diagnostic.moving_cube_uuid !== attachment.moving_cube_uuid ||
+            typeof diagnostic.parent_bone_uuid !== 'string' ||
+            diagnostic.anchor_face !== attachment.anchor_face ||
+            diagnostic.moving_face !== attachment.moving_face ||
+            diagnostic.clearance !== attachment.clearance ||
+            !Array.isArray(diagnostic.tangent_offset) ||
+            diagnostic.tangent_offset.length !== 2 ||
+            !diagnostic.tangent_offset.every((n,i) =>
+              n === attachment.tangent_offset?.[i]) ||
+            !Array.isArray(diagnostic.delta) ||
+            diagnostic.delta.length !== 3 ||
+            !diagnostic.delta.every((n,i) => n === op.delta[i]) ||
+            diagnostic.collision_verdict !== 'NOT_EVALUATED' ||
+            diagnostic.visual_verdict !== 'UNVERIFIED' ||
+            receipt.write_authority !== 'NOT_GRANTED' ||
+            receipt.visual_verdict !== 'UNVERIFIED') {
+          throw new Error('CODE_MODE_GEOMETRY_ATTACHMENT_RECEIPT_INVALID');
+        }
+        return receipt;
+      } finally {
+        await rm(directory, { recursive:true, force:true });
+      }
+    },
     async planGeometryAssembly({ input, expectedSha256, assembly }) {
       const digest = hash(expectedSha256).toLowerCase();
       const source = absolute(input, 'input');
@@ -961,6 +1037,8 @@ export async function openRustCodeModeProject(client, input) {
       client.preflight({ input: path, expectedSha256, operations, correctionScope }),
     planGeometryAssembly: (assembly) =>
       client.planGeometryAssembly({ input:path, expectedSha256, assembly }),
+    planGeometryAttachment: (attachment) =>
+      client.planGeometryAttachment({ input:path, expectedSha256, attachment }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),

@@ -8,6 +8,7 @@ import type {
   MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
   MaterialCorrectionIntent, MaterialFacePatchBinding, CubeFaceSurface, SemanticModelMap,
   GeometryAssemblyRequest, GeometryAssemblyReceipt,
+  GeometryFaceAttachmentRequest, GeometryFaceAttachmentReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -133,6 +134,10 @@ export interface CodeModeGuestAPI {
   planGeometryAssembly(args: {
     project:string; assembly:GeometryAssemblyRequest;
   }): Promise<GeometryAssemblyReceipt>;
+  /** G2 read-only same-Bone face alignment, never a persistent relation. */
+  planGeometryAttachment(args: {
+    project:string; attachment:GeometryFaceAttachmentRequest;
+  }): Promise<GeometryFaceAttachmentReceipt>;
   /** One authoritative authoring_target inspection, compacted by trusted host. */
   taskContext(args: {
     project:string; domain:"geometry"|"uv"|"texturing"|"animation";
