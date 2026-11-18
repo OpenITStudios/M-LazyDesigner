@@ -90,7 +90,10 @@ pub(super) fn compile(
         return Err(fail("GEOMETRY_PROPAGATION_RESIZE_UNCHANGED"));
     }
     let frame = same_bone_parent(session, &root.uuid)?;
-    let mut targets = HashSet::new();
+    let mut targets = HashSet::with_capacity(request.links.len());
+    // Retain validated Cube references in link order; scheduling can reuse
+    // them instead of searching the document for each dependent.
+    let mut moving_cubes = Vec::with_capacity(request.links.len());
     for link in &request.links {
         if !valid_uuid(&link.anchor_cube_uuid) ||
            !valid_uuid(&link.moving_cube_uuid) {
@@ -113,6 +116,7 @@ pub(super) fn compile(
            same_bone_parent(session, &link.moving_cube_uuid)? != frame {
             return Err(fail("GEOMETRY_PROPAGATION_FRAME_UNSUPPORTED"));
         }
+        moving_cubes.push(moving);
     }
     // An unrelated model Cube cannot become an implicit dependency root.
     for link in &request.links {
@@ -122,21 +126,22 @@ pub(super) fn compile(
         }
     }
 
-    let mut operations = vec![EditOperation::ReframeCube {
+    let mut operations = Vec::with_capacity(request.links.len() + 1);
+    operations.push(EditOperation::ReframeCube {
         uuid: request.resize_cube_uuid.clone(),
         from: request.from,
         to: request.to,
         uv_policy: request.uv_policy.clone(),
-    }];
+    });
     // Transient candidate bounds are not saved or treated as a second model.
     // Only the selected root and explicitly dependent Cubes enter this map.
-    let mut prospective = HashMap::from([(
+    let mut prospective = HashMap::with_capacity(request.links.len() + 1);
+    prospective.insert(
         request.resize_cube_uuid.as_str(),
         Bounds { from: request.from, to: request.to },
-    )]);
-    let mut changed_bounds = HashMap::from([(
-        request.resize_cube_uuid.clone(), (request.from, request.to),
-    )]);
+    );
+    let mut changed_bounds = HashMap::with_capacity(request.links.len() + 1);
+    changed_bounds.insert(request.resize_cube_uuid.clone(), (request.from, request.to));
     let mut scheduled = vec![false; request.links.len()];
     let mut results = Vec::with_capacity(request.links.len());
     let mut remaining = request.links.len();
@@ -147,7 +152,7 @@ pub(super) fn compile(
             if scheduled[index] { continue; }
             let Some(anchor) = prospective.get(link.anchor_cube_uuid.as_str()).copied()
             else { continue; };
-            let moving = source_cube(session, &link.moving_cube_uuid)?;
+            let moving = moving_cubes[index];
             let (delta, tangent_axes) = delta_for_faces(
                 anchor.from, anchor.to, moving.from, moving.to,
                 &link.anchor_face, &link.moving_face,

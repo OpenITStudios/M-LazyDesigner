@@ -1,3 +1,13 @@
+**Rust Geometry G2.2 code economy — 2026-11-19 (SOURCE ONLY):**
+The bounded propagation compiler retains validation-checked borrowed moving
+Cube references in link order and pre-reserves its known-size collections.
+Dependency ordering no longer repeats the per-link Cube linear lookup; no
+global index, persistent cache, new constraint solver or authoring authority
+was introduced. Existing chain, branch, rejection, Undo/Redo and editable
+.bbmodel regression source remains the acceptance anchor (NOT_EXECUTED).
+This is a source-level work reduction, NOT a measured performance gain;
+Windows/Rust/Blockbench validation remains deferred under current hold.
+
 **Active Rust Geometry G2.3 — scoped AABB overlap review (2026-11-18; SOURCE ONLY):**
 The canonical same-Bone G2 face-alignment and G2.2 resize-propagation
 planners now derive a bounded before/after AABB overlap impact inventory
