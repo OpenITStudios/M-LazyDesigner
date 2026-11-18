@@ -33,6 +33,21 @@ Live AI operation, or implicit source-image interpretation is created.
 Rust regressions are SOURCE_AUTHORED / NOT_EXECUTED; native Blockbench,
 Windows, visual fidelity, performance and accepted quality remain held.
 
+**G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
+`geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
+Cube alignment with a caller-specified nonnegative clearance and
+tangent offset. It requires two distinct Cubes in the SAME Bone frame,
+opposite cardinal faces and nondegenerate unrotated/uninflated/
+unstretched bounds. Cross-Bone frames, ambiguous rotations, unsafe
+UV-driven moves, zero-delta edits and out-of-range results fail closed;
+the existing Rust `TranslateCube` and disposable `EditorSession::preflight`
+remain authoritative. `plan-geometry-attachment` is a SHA-pinned
+read-only CLI operation, not a persistent constraint, resizing
+propagation, collision solver, file write, or native quality verdict.
+Authored regressions cover all six facing directions, exact offset,
+Undo/Redo, .bbmodel reopen, unsuitable parents/transforms and invalid
+input. Tests/native Blockbench remain NOT_EXECUTED.
+
 ## Dated source history (preserved)
 
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**

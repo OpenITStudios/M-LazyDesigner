@@ -14,6 +14,8 @@ mod semantic_map;
 mod geometry;
 mod geometry_assembly;
 pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest};
+mod geometry_attachment;
+pub use geometry_attachment::{GeometryFaceAttachmentRequest, GeometryFaceAttachmentProposal};
 mod paint;
 mod correction_scope;
 pub use correction_scope::TextureCorrectionScope;
@@ -3336,6 +3338,14 @@ impl EditorSession {
         &self, request: &GeometryAssemblyRequest,
     ) -> Result<GeometryAssemblyProposal> {
         geometry_assembly::compile(self, request)
+    }
+
+    /// G2: propose an explicit same-Bone face alignment with UV-aware Rust
+    /// translation, using the existing disposable transaction validator.
+    pub fn plan_geometry_attachment(
+        &self, request: &GeometryFaceAttachmentRequest,
+    ) -> Result<GeometryFaceAttachmentProposal> {
+        geometry_attachment::compile(self, request)
     }
 
     /// Dry-run exactly the canonical mutation path on a disposable COW clone.

@@ -1,3 +1,20 @@
+**G2 same-Bone Face-to-Face attachment — 2026-11-18 (SOURCE ONLY):**
+Added `geometry_attachment.rs` as a narrow read-only Rust planner for
+one explicitly named Cube face pair, nonnegative clearance and
+tangent offsets. It only admits distinct axis-aligned noninflated/
+unstretched Cubes on the same Bone. Proposals use the existing
+`TranslateCube` operation and disposable `EditorSession` preflight;
+no stored constraints, independent renderer, implicit geometry
+inference, new authoring engine or file mutation is introduced.
+The CLI `plan-geometry-attachment` uses the already-held source SHA.
+Authored Rust regression source includes six cardinal face cases,
+correct delta/UV authority, Undo/Redo and reopen, mismatched parent
+frames, rotations/inflate, no-op, invalid faces and stale revision.
+Proof: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED.
+G2 parametric propagation, cross-Bone transformations, collision
+analysis, native visual quality and measured improvements remain
+NOT_EXECUTED / NOT_IMPLEMENTED.
+
 **G1 Rust assembly Code Mode read-only integration — 2026-11-18 (SOURCE ONLY):**
 Extended existing typed Code Mode client, trusted Node host and Deno
 guest allowlist with SHA-bound `planGeometryAssembly`. It forwards
