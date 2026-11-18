@@ -1,3 +1,18 @@
+**Rust Code Mode model-publication receipt consistency — 2026-11-18 (SOURCE ONLY):**
+The trusted Code Mode host previously checked the saved output .bbmodel
+SHA against the native CLI receipt only for scoped Paint corrections.
+It now requires the same native mutation identity for unscoped Apply and
+PNG imports and always reopens new/apply/import output through the Rust
+inspector to compare the actual saved SHA. New-model creation must supply a
+valid output SHA before registration. Missing/stale/mismatched receipts
+refuse without a successful project handle or automatic retry; the
+published sibling may already exist and needs operator reconciliation.
+Existing Deno isolation, write approvals, source bounds, Paint review,
+format and no-overwrite behavior are unchanged. Positive/negative Node
+regressions AUTHORED_NOT_RUN under the active test/CI hold; native
+filesystem behavior and performance remain UNVERIFIED.
+Earlier entries below retain their historical proof limits.
+
 **Core Rust Texture inspection and import decode reduction — 2026-11-18 (SOURCE ONLY):**
 At `Rust@2e1c17dbd54d26579786746eb6b87003e17257d9`, the SHA-bound Rust CLI `inspect-batch` shared one validated
 EditorSession but rebuilt the texture UUID index and decoded identical PNG

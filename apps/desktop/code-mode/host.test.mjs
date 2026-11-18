@@ -3687,3 +3687,117 @@ test('reviewed sample freezes its source after a potentially published but unver
     assert.equal(applies,1);
     assert.equal(approvals,1);
   }));
+
+test('all Code Mode unscoped model edits bind native mutation and saved file receipts', () =>
+  fixture(async input => {
+    for (const caseId of ['valid', 'missing-receipt', 'stale-source', 'saved-sha-mismatch']) {
+      const calls = [];
+      const host = await createCodeModeHost({
+        rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+        authorizeMutation: async () => true,
+        runner: async argv => {
+          calls.push(argv[0]);
+          if (argv[0] === 'inspect') {
+            const isOutput = basename(argv[argv.indexOf('--input') + 1]) === 'candidate.bbmodel';
+            return { status: 'OK', sha256: isOutput &&
+              caseId === 'saved-sha-mismatch' ? 'c'.repeat(64) :
+              isOutput ? 'b'.repeat(64) : HASH, summary: SUMMARY };
+          }
+          assert.equal(argv[0], 'apply');
+          const receipt = {
+            status: 'OK', source_sha256: HASH, output_sha256: 'b'.repeat(64),
+            summary: { ...SUMMARY, revision: 1 },
+            mutation: { revision: 1, operation_count: 1, changed_uuids: ['cube-1'] },
+          };
+          if (caseId === 'missing-receipt') delete receipt.mutation;
+          if (caseId === 'stale-source') receipt.source_sha256 = 'd'.repeat(64);
+          return receipt;
+        },
+        spawnImpl: () => fakeGuest({ method: 'apply', args: {
+          project: 'p0', output: 'candidate.bbmodel',
+          operations: [{ op: 'translate_cube', uuid: 'cube-1', delta: [1, 0, 0] }],
+        } }, response => {
+          assert.equal(response.ok, caseId === 'valid');
+          if (!response.ok) assert.equal(response.code,
+            caseId === 'saved-sha-mismatch' ?
+              'CODE_MODE_RUST_PUBLISHED_OUTPUT_SHA_MISMATCH' :
+              'CODE_MODE_RUST_MUTATION_RECEIPT_UNVERIFIED');
+          return { accepted: response.ok };
+        }),
+      });
+      const result = await host.execute({ code: 'return codemode.apply({project:"p0"});' });
+      assert.equal(result.value.accepted, caseId === 'valid');
+      // Reject incomplete/stale CLI receipts before a new file receives a
+      // project handle. Never retry an uncertain native publication.
+      assert.deepEqual(calls, caseId === 'valid' ||
+        caseId === 'saved-sha-mismatch' ?
+          ['inspect', 'apply', 'inspect'] : ['inspect', 'apply']);
+    }
+  }));
+
+test('Code Mode new-model output must match its claimed native SHA', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-new-sha-'));
+  try {
+    for (const caseId of ['missing-sha', 'saved-sha-mismatch']) {
+      const calls = [];
+      const host = await createCodeModeHost({
+        rustBinary: '/trusted/rust', denoBinary: '/trusted/deno',
+        outputDirectory: directory,
+        authorizeMutation: async () => true,
+        runner: async argv => {
+          calls.push(argv[0]);
+          if (argv[0] === 'new') return { status: 'OK',
+            ...(caseId === 'missing-sha' ? {} : { sha256: 'b'.repeat(64) }),
+            summary: SUMMARY };
+          return { status: 'OK', sha256: 'c'.repeat(64), summary: SUMMARY };
+        },
+        spawnImpl: () => fakeGuest({ method: 'newModel', args: {
+          output: 'bootstrap.bbmodel', name: 'New Model',
+          modelIdentifier: 'geometry.new_model',
+        } }, response => {
+          assert.equal(response.ok, false);
+          assert.equal(response.code, caseId === 'missing-sha' ?
+            'CODE_MODE_RUST_NEW_RECEIPT_UNVERIFIED' :
+            'CODE_MODE_RUST_PUBLISHED_OUTPUT_SHA_MISMATCH');
+          return { blocked: true };
+        }, null),
+      });
+      const result = await host.execute({ code: 'return codemode.newModel({});' });
+      assert.equal(result.value.blocked, true);
+      assert.deepEqual(calls, caseId === 'missing-sha' ? ['new'] : ['new', 'inspect']);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('Code Mode PNG model import cannot register an unverified mutation output', () =>
+  fixture(async input => {
+    const pngPath = join(dirname(input), 'operator-selected.png');
+    await writeFile(pngPath, 'test-source');
+    const calls = [];
+    const host = await createCodeModeHost({
+      rustBinary: '/trusted/rust', denoBinary: '/trusted/deno', input,
+      preselectedPngPath: pngPath,
+      authorizeMutation: async () => true,
+      runner: async argv => {
+        calls.push(argv[0]);
+        if (argv[0] === 'inspect') return { status: 'OK', sha256: HASH, summary: SUMMARY };
+        assert.equal(argv[0], 'import-png');
+        return { status: 'OK', source_sha256: HASH,
+          output_sha256: 'b'.repeat(64), summary: { ...SUMMARY, revision: 1 },
+          mutation: { revision: 1, operation_count: 0, changed_uuids: [] } };
+      },
+      spawnImpl: () => fakeGuest({ method: 'importPng', args: {
+        project: 'p0', output: 'imported.bbmodel', uuid: 'texture-uuid',
+        name: 'Selected',
+      } }, response => {
+        assert.equal(response.ok, false);
+        assert.equal(response.code, 'CODE_MODE_RUST_MUTATION_RECEIPT_UNVERIFIED');
+        return { blocked: true };
+      }),
+    });
+    const result = await host.execute({ code: 'return codemode.importPng({project:"p0"});' });
+    assert.equal(result.value.blocked, true);
+    assert.deepEqual(calls, ['inspect', 'import-png']);
+  }));

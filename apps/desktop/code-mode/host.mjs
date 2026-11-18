@@ -74,6 +74,23 @@ function shortError(error) {
   const value = error?.message ?? String(error);
   return typeof value === 'string' ? value.slice(0, 160) : 'CODE_MODE_HOST_FAILURE';
 }
+
+// A successful CLI exit is not a sufficient mutation receipt. The native
+// publisher may already have written a sibling even when this check refuses;
+// never replay, delete, or silently accept that uncertain output.
+function verifiedModelMutationSha(receipt, expectedSourceSha, operationCount) {
+  if (typeof receipt?.source_sha256 !== 'string' ||
+      receipt.source_sha256.toLowerCase() !== expectedSourceSha.toLowerCase() ||
+      typeof receipt?.output_sha256 !== 'string' ||
+      !SHA256.test(receipt.output_sha256) ||
+      !Number.isSafeInteger(receipt?.mutation?.revision) ||
+      receipt.mutation.revision < 1 ||
+      receipt?.mutation?.operation_count !== operationCount ||
+      receipt?.summary?.revision !== receipt.mutation.revision) {
+    throw new Error('CODE_MODE_RUST_MUTATION_RECEIPT_UNVERIFIED');
+  }
+  return receipt.output_sha256.toLowerCase();
+}
 async function regularFile(path, label) {
   const file = await lstat(path);
   if (!file.isFile() || file.isSymbolicLink()) {
@@ -1677,7 +1694,10 @@ export async function createCodeModeHost({
       const receipt = await client.newModel({
         output, name: args.name, modelIdentifier: args.modelIdentifier,
       });
-      return { receipt, ...await register(output) };
+      if (typeof receipt?.sha256 !== 'string' || !SHA256.test(receipt.sha256)) {
+        throw new Error('CODE_MODE_RUST_NEW_RECEIPT_UNVERIFIED');
+      }
+      return { receipt, ...await register(output, receipt.sha256.toLowerCase()) };
     },
     apply: async (args) => {
       const p = selected(args);
@@ -1937,15 +1957,18 @@ export async function createCodeModeHost({
         ]));
       }
       const output = await outputPath(args.output, '.bbmodel');
-      let receipt;
+      let receipt, publishedSha;
       try {
         receipt = await p.apply({ output, operations: activeOperations,
           correctionScope: effectiveCorrectionScope,
           ...(materialIntent ? {correctionIntent:materialIntent} : {}),
           ...(workPacket ? {materialWorkPacket:workPacket} : {}) });
+        publishedSha = verifiedModelMutationSha(
+          receipt, p.expectedSha256, activeOperations.length);
       } catch (error) {
         if (reviewedTextureSession && pixelEdit &&
-            error?.message==='CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED') {
+            (error?.message==='CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED' ||
+             error?.message==='CODE_MODE_RUST_MUTATION_RECEIPT_UNVERIFIED')) {
           // Rust may have published a sibling despite malformed output.
           // Freeze this reviewed source revision: a renamed retry would
           // conceal the unresolved native result from the operator.
@@ -1958,8 +1981,9 @@ export async function createCodeModeHost({
         // its next handle fails, retrying the same snapshot is unsafe.
         completedReviewedCorrections.add(p.expectedSha256);
       }
-      const next=await register(output,
-        effectiveCorrectionScope===undefined?undefined:receipt.output_sha256);
+      // Reopen through native Rust inspection and compare the actual saved
+      // model SHA for every edit, not only scoped Paint corrections.
+      const next=await register(output, publishedSha);
       return { receipt, ...next,
         ...(pixelEdit?{texturing_workflow:{
           status:'PAINT_SAVED_NOT_VISUALLY_ACCEPTED',
@@ -2004,7 +2028,8 @@ export async function createCodeModeHost({
         input: p.input, output, png, uuid: args.uuid, name: args.name,
         expectedSha256: p.expectedSha256,
       });
-      return { receipt, ...await register(output) };
+      const publishedSha = verifiedModelMutationSha(receipt, p.expectedSha256, 1);
+      return { receipt, ...await register(output, publishedSha) };
     },
     exportPng: async (args) => {
       const p = selected(args);

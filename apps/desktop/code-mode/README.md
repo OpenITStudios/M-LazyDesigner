@@ -1,3 +1,15 @@
+**Uniform Rust model-output receipt verification (2026-11-18; SOURCE ONLY):**
+The trusted Code Mode host now requires a matching source-model SHA,
+output-model SHA, native mutation count/revision and summary revision for
+all model-edit and PNG-import receipts, including unscoped operations.
+New-model creation requires its Rust output SHA. Every resulting .bbmodel
+is reopened with the first-party Rust inspector and compared to the native
+publisher hash before registering a new project handle. Incorrect or
+missing receipts fail closed without claiming success; a sibling may already
+exist and must not be automatically retried or removed. Scoped Paint review
+and its existing stricter pixel guards are unchanged. Source regressions
+are AUTHORED_NOT_RUN; no actual CLI, filesystem or native behavior was tested.
+
 **Rust-native shared Texture inspection scratch (2026-11-18; SOURCE ONLY):**
 The existing SHA-verified `inspect-batch` now reuses one lazily built
 texture-UUID index and up to eight decoded RGBA8 PNG buffers between distinct
