@@ -241,6 +241,27 @@ function serializePlan(operations, normalizedScope) {
   return payload;
 }
 
+/** Bounded transport only. Rust validates every Bone/Cube/parent and
+ * performs authoritative disposable preflight. No JS geometry compiler. */
+function serializeGeometryAssembly(assembly) {
+  if (!assembly || typeof assembly !== 'object' ||
+      Array.isArray(assembly) || assembly.expected_revision !== 0 ||
+      !Array.isArray(assembly.parts) || assembly.parts.length < 1 ||
+      assembly.parts.length > 128) {
+    throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID');
+  }
+  const payload = JSON.stringify(assembly, (_key, value) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID');
+    }
+    return value;
+  });
+  if (!payload || Buffer.byteLength(payload, 'utf8') > PLAN_LIMIT) {
+    throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_TOO_LARGE');
+  }
+  return payload;
+}
+
 // Require a native *matched* correction receipt before any scoped Paint
 // call can be reported as successful to Code Mode. Rust may already have
 // published its no-overwrite sibling when a malformed success is observed:
@@ -640,6 +661,48 @@ export function createRustCodeModeClient({
       }
       return receipt;
     },
+    async planGeometryAssembly({ input, expectedSha256, assembly }) {
+      const digest = hash(expectedSha256).toLowerCase();
+      const source = absolute(input, 'input');
+      const payload = serializeGeometryAssembly(assembly);
+      const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-geometry-plan-'));
+      const file = join(directory, 'assembly.json');
+      try {
+        await writeFile(file, payload, { encoding:'utf8', mode:0o600, flag:'wx' });
+        // Read-only Rust compiler; actual apply remains separately approved.
+        const receipt = await call('plan-geometry-assembly', {
+          input:source, 'expected-sha256':digest, assembly:file,
+        });
+        const plan = receipt.plan, preview = receipt.preflight;
+        const expected = assembly.parts.reduce(
+          (sum, part) => sum + 1 + (Array.isArray(part?.cubes) ? part.cubes.length : 0), 0);
+        if (typeof receipt.sha256 !== 'string' ||
+            receipt.sha256.toLowerCase() !== digest ||
+            receipt.summary?.revision !== 0 ||
+            !plan || plan.expected_revision !== 0 ||
+            !Array.isArray(plan.operations) ||
+            plan.operations.length < 1 || plan.operations.length !== expected ||
+            plan.operations.length > 128 ||
+            plan.operations.some(op => !op ||
+              !['add_bone','add_cube'].includes(op.op)) ||
+            preview?.status !== 'VALIDATED_NOT_APPLIED' ||
+            preview.base_revision !== 0 || preview.mutation?.revision !== 1 ||
+            preview.mutation?.operation_count !== plan.operations.length ||
+            !Array.isArray(preview.mutation?.changed_uuids) ||
+            preview.candidate_summary?.revision !== 1 ||
+            typeof preview.candidate_sha256 !== 'string' ||
+            !SHA256.test(preview.candidate_sha256) ||
+            preview.write_authority !== 'NOT_GRANTED' ||
+            preview.visual_verdict !== 'UNVERIFIED' ||
+            receipt.write_authority !== 'NOT_GRANTED' ||
+            receipt.visual_verdict !== 'UNVERIFIED') {
+          throw new Error('CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID');
+        }
+        return receipt;
+      } finally {
+        await rm(directory, { recursive:true, force:true });
+      }
+    },
     async preflight({ input, expectedSha256, operations, correctionScope }) {
       const digest = hash(expectedSha256).toLowerCase();
       const payload = serializePlan(
@@ -895,6 +958,8 @@ export async function openRustCodeModeProject(client, input) {
       client.semanticMap({ input: path, expectedSha256, category, offset, limit }),
     preflight: ({ operations, correctionScope }) =>
       client.preflight({ input: path, expectedSha256, operations, correctionScope }),
+    planGeometryAssembly: (assembly) =>
+      client.planGeometryAssembly({ input:path, expectedSha256, assembly }),
     catalog: (kind, { offset = 0, limit = 32 } = {}) =>
       client.catalog({ input: path, kind, offset, limit, expectedSha256 }),
     audit: () => client.audit({ input: path, expectedSha256 }),

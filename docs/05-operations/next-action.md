@@ -1,3 +1,16 @@
+**G1 Rust assembly Code Mode read-only integration — 2026-11-18 (SOURCE ONLY):**
+Extended existing typed Code Mode client, trusted Node host and Deno
+guest allowlist with SHA-bound `planGeometryAssembly`. It forwards
+the bounded request to the first-party Rust CLI compiler, checks
+read-only proposal/preflight receipts and leaves ordinary `apply`
+subject to independent trusted-host approval and no-overwrite file
+publication. No new document store, live AI writer, independent JS
+geometry compiler, service or permission granted. Authored Node
+SDK/host regression source covers exact payload, stale/invalid
+requests, proposal receipt and zero write approvals.
+Proof: SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN; actual Deno/Node/Rust,
+Windows, Blockbench and artist quality NOT_EXECUTED.
+
 **G1 Rust semantic Geometry assembly — 2026-11-18 (SOURCE ONLY):**
 Added a bounded read-only `geometry_assembly.rs` compiler for explicit
 named Cube/Bone parts, exact parent UUIDs and required pivots. It

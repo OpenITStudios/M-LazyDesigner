@@ -1050,6 +1050,10 @@ export async function createCodeModeHost({
     preflight: async (args) => selected(args).preflight({
       operations: args.operations, correctionScope: args.correctionScope,
     }),
+    // Structure-first G1 composition is a SHA-pinned read-only Rust plan.
+    // No trusted-host approval, output path, live write, or implicit Apply.
+    planGeometryAssembly: async (args) =>
+      selected(args).planGeometryAssembly(args.assembly),
     // One existing native authoring_target query, then a small host-only
     // projection. No unbounded scene/PNG/opaque payload reaches Deno.
     taskContext: async (args) => {
@@ -2432,6 +2436,7 @@ export function createCodeModeTool(host) {
       'For a named target with unknown UUID, use authoring_target inside inspectBatch. Read-only example: const r=await codemode.inspectBatch({project:codemode.initial.project,requests:[{kind:"authoring_target",domain:"texturing",category:"cubes",name:"Helmet"}]}); const t=r.results[0].target; return {status:t.status,uuid:t.selected?.identity.uuid??null,ops:t.candidate_operations,blockers:t.source_blockers,candidates:t.status==="EXACT_MATCH"?undefined:t.candidates.slice(0,4)};',
       'Known UUID: skip name discovery. Group independent source questions in one inspectBatch; filter/aggregate in JavaScript, then return only the answer, source SHA and meaningful blockers. A null/absent face is not automatically an artistic defect.',
       'Use semanticMap only for a small, paged identity/parent inventory. A preflight dry-run validates an exact typed Rust plan without writing or obtaining authority; a later apply still needs separate trusted approval, current source SHA and real visual review.',
+      'For Geometry part assemblies with explicitly authored Cube dimensions, Bone pivots and UUID parents, use planGeometryAssembly to compile a source-bound parent-first EditPlan in Rust. This is read-only and never applies, guesses reference dimensions or replaces host approval.',
       'Use taskContext for one exact named target when the UUID is unknown; it compacts a single verified authoring_target read, not artistic evidence. Use preflightGuidance for advisory risk orientation; call native preflight for risky plans when appropriate. Neither grants permission nor changes the required Rust Apply validation.',
       ...(host.initial?.liveReadOnly ? [
         'For a user-paired live editor, call liveSessionInfo then liveSemanticMap with its exact expectedEpoch and expectedRevision. These are read-only. Do not confuse live state with headless disk project handles or attempt live writes.'

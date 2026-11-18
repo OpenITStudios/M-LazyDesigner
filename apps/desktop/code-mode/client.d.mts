@@ -94,6 +94,18 @@ export interface Bone {
   origin?: Vec3;
   [key: string]: unknown;
 }
+/** Source-bound G1 assembly; geometry, pivots and parent UUIDs are
+ * explicit. This is NOT a user image interpretation or write authority. */
+export interface GeometryAssemblyPart {
+  bone: Bone;
+  parent_uuid: string | null;
+  cubes: Cube[];
+}
+export interface GeometryAssemblyRequest {
+  /** Headless saved-file sessions start at revision zero. */
+  expected_revision: 0;
+  parts: GeometryAssemblyPart[];
+}
 /** Native .bbmodel sound/particle keyframe metadata. No local file, script or playback. */
 export interface AnimationEffectPoint {
   effect: string;
@@ -581,6 +593,20 @@ export interface PreflightReceipt {
     visual_verdict: "UNVERIFIED";
   };
 }
+/** Read-only Rust G1 structure compiler; Apply still requires separate host approval. */
+export interface GeometryAssemblyReceipt {
+  status: "OK";
+  sha256: string;
+  summary: DocumentSummary;
+  plan: {
+    expected_revision: 0;
+    operations: EditOperation[];
+    correction_scope: null;
+  };
+  preflight: PreflightReceipt["preflight"];
+  write_authority: "NOT_GRANTED";
+  visual_verdict: "UNVERIFIED";
+}
 export interface InspectReceipt {
   status: "OK";
   sha256: string;
@@ -908,6 +934,9 @@ export interface RustCodeModeClient {
     input: string; expectedSha256: string;
     operations: EditOperation[]; correctionScope?: TextureCorrectionScope;
   }): Promise<PreflightReceipt>;
+  planGeometryAssembly(input: {
+    input: string; expectedSha256: string; assembly: GeometryAssemblyRequest;
+  }): Promise<GeometryAssemblyReceipt>;
   inspectTexture(input: { input: string; index: number; expectedSha256?: string }): Promise<InspectReceipt & { asset: InspectAsset }>;
   inspectTextureAlpha(input: {
     input: string; textureUuid: string; expectedSha256?: string;
@@ -1004,6 +1033,7 @@ export interface RustCodeModeProject {
   catalog(kind: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<InspectReceipt & {catalog: CatalogPage}>;
   semanticMap(category: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<SemanticMapReceipt>;
   preflight(input: {operations: EditOperation[]; correctionScope?: TextureCorrectionScope}): Promise<PreflightReceipt>;
+  planGeometryAssembly(assembly: GeometryAssemblyRequest): Promise<GeometryAssemblyReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
   inspectTexture(index: number): Promise<InspectReceipt & {asset: InspectAsset}>;
   inspectTextureAlpha(textureUuid: string): Promise<InspectReceipt & {alpha: TextureAlphaInspection}>;

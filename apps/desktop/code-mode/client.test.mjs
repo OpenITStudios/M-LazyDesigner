@@ -45,6 +45,70 @@ test('Code Mode forwards only SHA-bound reference/capture paths from trusted SDK
   assert.equal(calls.length,1);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: G1 assembly is a read-only, SHA-pinned
+// temporary Rust request and never asks a trusted host for write approval.
+test('G1 Geometry assembly composes an exact Rust plan without mutation permission', async () => {
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'bone-g1',name:'body',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],
+  }]};
+  let calls=0, approved=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:async()=>{approved++;return true;},
+    runner:async argv=>{
+      calls++;
+      assert.equal(argv[0],'plan-geometry-assembly');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+      const forwarded=JSON.parse(await readFile(argv[argv.indexOf('--assembly')+1],'utf8'));
+      assert.deepEqual(forwarded,assembly);
+      return {status:'OK',sha256:SHA,summary:{revision:0},
+        plan:{expected_revision:0,operations:[{
+          op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null,
+        }],correction_scope:null},
+        preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+          mutation:{revision:1,operation_count:1,changed_uuids:['bone-g1']},
+          candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+        write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+    },
+  });
+  const receipt=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.equal(receipt.plan.operations[0].bone.uuid,'bone-g1');
+  assert.equal(receipt.preflight.write_authority,'NOT_GRANTED');
+  assert.equal(approved,0);
+  for(const invalid of [
+    {...assembly,expected_revision:1},
+    {...assembly,parts:[]},
+    {...assembly,parts:[{...assembly.parts[0],cubes:[{number:Infinity}]}]},
+  ]){
+    await assert.rejects(client.planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:invalid,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID/);
+  }
+  assert.equal(calls,1);
+  assert.equal(approved,0);
+  const forged=createRustCodeModeClient({
+    binary:BIN,
+    runner:async()=>({
+      status:'OK',sha256:SHA,summary:{revision:0},
+      plan:{expected_revision:0,operations:[{
+        op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null,
+      }],correction_scope:null},
+      preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+        mutation:{revision:1,operation_count:1,changed_uuids:['bone-g1']},
+        candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+        write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+      write_authority:'GRANTED',visual_verdict:'UNVERIFIED',
+    }),
+  });
+  await assert.rejects(forged.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+});
+
 test('Code Mode routes focused read directly without model echo', async () => {
   const calls = [];
   const client = createRustCodeModeClient({

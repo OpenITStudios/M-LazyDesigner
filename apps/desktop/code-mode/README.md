@@ -24,6 +24,21 @@ Only trusted host approval may authorize a separately saved file mutation;
 Deno itself cannot grant rights. Source tests, native sandbox and
 Blockbench quality remain NOT_EXECUTED.
 
+**G1 Geometry assembly in Code Mode (2026-11-18; SOURCE ONLY):**
+The first-party `codemode.planGeometryAssembly({project,assembly})`
+now forwards explicit named Bone/Cube parts and UUID parents to the
+single Rust `plan-geometry-assembly` compiler. Node transmits only a
+bounded temporary JSON request; Rust returns an ordered typed
+`EditPlan` plus disposable preflight. A successful read is
+`VALIDATED_NOT_APPLIED / NOT_GRANTED / UNVERIFIED`. No direct
+write, alternate model, inferred shape, GUI session write or new
+approval bypass is introduced. A caller must explicitly supply the
+returned operations to the original separately authorized
+`codemode.apply`; no automatic replay occurs. Headless source SHA is
+verified on every native plan call. SDK and host guest-RPC positive/
+negative regressions AUTHORED_NOT_RUN, native execution/visual
+quality NOT_EXECUTED.
+
 ## Dated source history (preserved)
 
 **P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**

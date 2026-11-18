@@ -7,6 +7,7 @@ import type {
   MutationRequest, OutputReceipt, TextureCorrectionScope,
   MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
   MaterialCorrectionIntent, MaterialFacePatchBinding, CubeFaceSurface, SemanticModelMap,
+  GeometryAssemblyRequest, GeometryAssemblyReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -128,6 +129,10 @@ export interface CodeModeGuestAPI {
   inspect(args: { project: string; uuid: string }): Promise<InspectReceipt>;
   catalog(args: { project: string; kind: CatalogPage["kind"]; offset?: number; limit?: number }): Promise<InspectReceipt>;
   inspectBatch(args: { project: string; requests: InspectBatchQuery[] }): Promise<InspectBatchReceipt>;
+  /** Read-only G1 assembly proposal; a later Apply remains independently approved. */
+  planGeometryAssembly(args: {
+    project:string; assembly:GeometryAssemblyRequest;
+  }): Promise<GeometryAssemblyReceipt>;
   /** One authoritative authoring_target inspection, compacted by trusted host. */
   taskContext(args: {
     project:string; domain:"geometry"|"uv"|"texturing"|"animation";

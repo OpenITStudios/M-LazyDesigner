@@ -202,6 +202,49 @@ test('Code Mode exposes a single host-side code tool, with read-only RPC', () =>
     assert.deepEqual(calls.map((args) => args[0]), ['inspect', 'inspect-batch']);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: the Deno guest may request a bounded G1 plan
+// but has no new file publisher, permitWriteLaunch or model authority.
+test('G1 assembly guest RPC is read-only and keeps apply authorization distinct', () =>
+  fixture(async input=>{
+    const assembly={expected_revision:0,parts:[{
+      bone:{uuid:'bone-g1',name:'body',origin:[0,0,0]},
+      parent_uuid:null,cubes:[],
+    }]};
+    const calls=[], approvals=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:request=>{approvals.push(request);return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'plan-geometry-assembly');
+        assert.deepEqual(JSON.parse(
+          await readFile(argv[argv.indexOf('--assembly')+1],'utf8')
+        ),assembly);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          plan:{expected_revision:0,operations:[{
+            op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null,
+          }],correction_scope:null},
+          preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+            mutation:{revision:1,operation_count:1,changed_uuids:['bone-g1']},
+            candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+      },
+      spawnImpl:()=>fakeGuest({method:'planGeometryAssembly',args:{
+        project:'p0',assembly,
+      }},response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.plan.operations[0].op,'add_bone');
+        return {status:response.result.preflight.status};
+      }),
+    });
+    const report=await host.execute({code:'return codemode.planGeometryAssembly({});'});
+    assert.equal(report.value.status,'VALIDATED_NOT_APPLIED');
+    assert.deepEqual(calls,['inspect','plan-geometry-assembly']);
+    assert.equal(approvals.length,0);
+  }));
+
 test('Code Mode host denies writes without operator approval or a safe output name', () =>
   fixture(async (input) => {
     for (const requestedOutput of ['candidate.bbmodel', '../escape.bbmodel']) {
