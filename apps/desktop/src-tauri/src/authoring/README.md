@@ -1,3 +1,13 @@
+**Rust Open fingerprint allocation reduction (2026-11-18; SOURCE ONLY):**
+The native Open command now computes its initial canonical document SHA with
+the validated EditorSession streaming sink instead of exporting a second
+complete .bbmodel Vec solely for hashing. The independent raw source-file SHA,
+original-file change guard, loaded session/Undo, initial clean state, format
+and eventual Save Copy behavior are unchanged. A source regression checks a
+noncanonical compact imported JSON file against the byte-identical canonical
+export oracle and independent raw identity. Regression AUTHORED_NOT_RUN;
+actual memory/latency, Windows GUI and Blockbench acceptance UNVERIFIED.
+
 **Rust Save/Export concurrency refinement (2026-11-18; SOURCE ONLY):**
 New/Open, editor transactions and native Save Copy, Geometry/Animation,
 Texture PNG and review-capture publication now share the existing short

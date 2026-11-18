@@ -1069,7 +1069,10 @@ pub async fn rust_editor_open(
     let bytes = storage::read_bounded(&path, MAX_MODEL_BYTES).map_err(model_failure)?;
     let session = EditorSession::open(&bytes).map_err(model_failure)?;
     // Keep raw disk identity independent of canonical Rust model content.
-    let canonical_sha = sha256(&session.export().map_err(model_failure)?);
+    // The admitted session already owns a validated Rust document. Stream
+    // canonical bytes into SHA-256 without allocating a second full .bbmodel
+    // solely to establish the initial clean/dirty checkpoint.
+    let canonical_sha = session.canonical_sha256().map_err(model_failure)?;
     let sha = sha256(&bytes);
     let _lease = write_lease(&state.pending_edit)?;
     let mut guard = lock(&state)?;
@@ -2083,6 +2086,35 @@ mod tests {
         opaque.animation_assets[0]["opaque"] = json!(true);
         assert_eq!(export_bedrock_animations(&opaque).unwrap_err(),
             "ANIMATION_EXPORT_CLIP_UNSUPPORTED");
+    }
+
+    // SOURCE ONLY: tests remain on hold. Imported JSON formatting must not
+    // conflate the raw disk-source identity with canonical editor content.
+    #[test]
+    fn open_checkpoint_streams_canonical_sha_and_keeps_original_disk_identity() {
+        const RAW: &[u8] = include_bytes!("../fixtures/bedrock-basic.bbmodel");
+        let compact = serde_json::to_vec(
+            &serde_json::from_slice::<Value>(RAW).unwrap()
+        ).unwrap();
+        assert_ne!(compact.as_slice(), RAW);
+        let session = EditorSession::open(&compact).unwrap();
+        let raw_sha = sha256(&compact);
+        let canonical_sha = session.canonical_sha256().unwrap();
+        assert_ne!(raw_sha, canonical_sha);
+        // Independent export is the byte-level parity oracle, not the
+        // production Open path used solely to obtain the fingerprint.
+        assert_eq!(canonical_sha, sha256(&session.export().unwrap()));
+        let mut active = ActiveModel {
+            session, source_path: Some(PathBuf::from("model.bbmodel")),
+            source_sha: Some(raw_sha.clone()),
+            saved_canonical_sha: Some(canonical_sha.clone()),
+            dirty: false,
+        };
+        refresh_dirty(&mut active);
+        assert!(!active.dirty);
+        assert_eq!(active.source_sha.as_deref(), Some(raw_sha.as_str()));
+        assert_eq!(active.saved_canonical_sha.as_deref(),
+            Some(canonical_sha.as_str()));
     }
 
     // SOURCE AUTHORED; NOT_EXECUTED under the Rust branch's localtest hold.

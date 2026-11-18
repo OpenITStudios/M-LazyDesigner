@@ -1,3 +1,14 @@
+**Rust native Open canonical fingerprint — 2026-11-18 (SOURCE ONLY):**
+The Tauri Open path was still calling a full, allocating .bbmodel export
+just to obtain the admitted session's initial canonical SHA. It now uses
+the existing streaming EditorSession digest, while retaining the distinct
+raw input SHA for external-file change protection. Original Open/Save,
+format, revision, Undo, no-overwrite and stale-read semantics are unchanged.
+A source-authored test compares compact input JSON, canonical saved
+export bytes and the initial not-dirty checkpoint. Cargo, Tauri, localtest,
+native Blockbench and measured allocation/latency remain NOT_EXECUTED.
+Earlier entries retain their original evidence status.
+
 **Rust Code Mode model-publication receipt consistency — 2026-11-18 (SOURCE ONLY):**
 The trusted Code Mode host previously checked the saved output .bbmodel
 SHA against the native CLI receipt only for scoped Paint corrections.
