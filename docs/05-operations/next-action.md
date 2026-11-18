@@ -1,3 +1,23 @@
+**Core Rust Texture inspection and import decode reduction — 2026-11-18 (SOURCE ONLY):**
+At `Rust@2e1c17dbd54d26579786746eb6b87003e17257d9`, the SHA-bound Rust CLI `inspect-batch` shared one validated
+EditorSession but rebuilt the texture UUID index and decoded identical PNG
+bitmaps for independent Cube surface, Cube face alpha and Texture coverage
+selectors. The validated immutable inspection view now owns one lazy UUID
+index and one bounded decoded-PNG scratch cache (eight RGBA8 images at most,
+with eviction), reused only during that read. A later batch still opens and
+verifies the disk source SHA; standalone untrusted document inspectors still
+validate and use their own bounded page scratch. Separately, native
+`ImportPaintTexture` now reuses the strict owned RGBA8 decoder's original
+compressed byte count, eliminating a second complete Base64 decode solely
+for the 1 MiB import size check. All error contracts, Texture alpha coverage
+and visually unverified status, opaque source preservation, Undo/Redo,
+no-overwrite and `.bbmodel` wire remain unchanged. Positive/negative source
+regressions compare native scalar/batched inspectors, bounded cache
+eviction, source preservation and malformed/different-resolution imports.
+Cargo/CLI execution, PC-local/native Blockbench acceptance and measured
+CPU/RAM/latency remain NOT_EXECUTED under the active hold.
+Older entries below are historical and do not reopen held tests.
+
 **Rust native publication + snapshot allocation pass — 2026-11-18 (SOURCE ONLY):**
 The selected `Rust` editor now shares its existing `pending_edit` lease
 between New/Open admission, GUI transactions and native Save Copy/Geometry/

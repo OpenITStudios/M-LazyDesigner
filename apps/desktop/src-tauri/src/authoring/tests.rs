@@ -48,6 +48,87 @@ fn validated_inspection_matches_standalone_public_source_contract() {
     }
 }
 
+// SOURCE-AUTHORED_NOT_RUN: the same SHA-pinned validated inspection view
+// must share UUID lookups and bounded PNG bytes across distinct Code Mode
+// selectors without changing exact public scalar reports or model data.
+#[test]
+fn validated_batch_inspection_shares_bounded_texture_scratch() {
+    let texture_id = "00000000-0000-4000-8000-000000009976";
+    let mut session = EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    session.apply(0, &[
+        EditOperation::CreatePaintTexture {
+            uuid: texture_id.into(), name: "shared.png".into(),
+        },
+        EditOperation::AssignCubeTexture {
+            cube_uuid: CUBE.into(), texture_uuid: texture_id.into(),
+        },
+    ]).unwrap();
+    let before = session.document().clone();
+    let view = session.inspections();
+    assert!(view.texture_indices.get().is_none());
+    assert!(view.decoded_pngs.borrow().is_empty());
+    assert_eq!(view.cube_surfaces(CUBE).unwrap(),
+        inspect_cube_surfaces(session.document(), CUBE).unwrap());
+    assert!(view.texture_indices.get().is_some());
+    assert!(view.decoded_pngs.borrow().is_empty());
+
+    let first = view.cube_face_alpha(CUBE).unwrap();
+    assert_eq!(first, inspect_cube_uv_alpha(session.document(), CUBE).unwrap());
+    assert_eq!(view.decoded_pngs.borrow().len(), 1);
+    assert_eq!(view.cube_face_alpha(CUBE).unwrap(), first);
+    assert_eq!(view.decoded_pngs.borrow().len(), 1);
+    for attention_only in [false, true] {
+        assert_eq!(view.model_texture_coverage(0, 1, attention_only).unwrap(),
+            inspect_model_texture_coverage_filtered(
+                session.document(), 0, 1, attention_only,
+            ).unwrap());
+        assert_eq!(view.decoded_pngs.borrow().len(), 1);
+    }
+    assert_eq!(view.model_texture_coverage(0, 0, false).unwrap_err(),
+        "TEXTURE_COVERAGE_PAGE_INVALID");
+    assert_eq!(view.cube_face_alpha("unknown-cube").unwrap_err(),
+        "CUBE_NOT_FOUND");
+    assert_eq!(view.decoded_pngs.borrow().len(), 1);
+    assert_eq!(session.document(), &before);
+
+    // Simulate a full scratch buffer of unrelated previously decoded atlases.
+    // The next miss must evict it before retaining this authored 128² PNG.
+    let mut scratch: Vec<(usize, Vec<u8>)> =
+        (1..=MAX_INSPECTION_PNG_CACHE).map(|i| (i, vec![0u8; 4])).collect();
+    let indexed = indexed_texture_uuids(session.document());
+    let result = inspect_cube_uv_alpha_validated(
+        session.document(), &session.document().cubes[0],
+        &mut scratch, &indexed,
+    ).unwrap();
+    assert_eq!(result, first);
+    assert_eq!(scratch.len(), 1);
+    assert_eq!(scratch[0].0, 0);
+}
+
+// SOURCE-AUTHORED_NOT_RUN: import checks the original compressed bytes
+// returned by the same strict decoder used by native Paint/export.
+#[test]
+fn native_png_import_reuses_owned_decode_without_reencoding_source() {
+    let source_asset = paint::create(
+        "00000000-0000-4000-8000-000000009977", "source.png", 32, 32,
+    ).unwrap();
+    let source = source_asset["source"].as_str().unwrap();
+    let imported = paint::import_png(
+        "00000000-0000-4000-8000-000000009978", "imported.png", source, 32, 32,
+    ).unwrap();
+    assert_eq!(imported["source"], json!(source));
+    assert_eq!(paint::export_png(&imported, 32, 32).unwrap(),
+        paint::export_png(&source_asset, 32, 32).unwrap());
+    assert_eq!(paint::import_png("id", "import.png", source, 16, 16).unwrap_err(),
+        "PAINT_PNG_FORMAT_UNSUPPORTED");
+    assert_eq!(paint::import_png("id", "import.png",
+        "data:image/png;base64,AAAA", 32, 32).unwrap_err(),
+        "PAINT_PNG_DECODE_FAILED");
+    assert_eq!(paint::import_png("id", "import.png",
+        "outside.png", 32, 32).unwrap_err(),
+        "PAINT_PNG_SOURCE_INVALID");
+}
+
 // SOURCE-AUTHORED_NOT_RUN: a published snapshot survives a later transaction
 // and Undo restores the exact saved immutable version. A failed edit cannot
 // mutate the frozen projection source through an alias.

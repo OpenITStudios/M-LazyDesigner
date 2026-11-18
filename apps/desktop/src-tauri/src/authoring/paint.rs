@@ -266,23 +266,32 @@ pub(super) fn import_png(
         return Err("PAINT_PNG_TOO_LARGE".into());
     }
     let asset = authored_asset(uuid, name, source);
-    // Decode the complete image before staging it in the Rust document.
-    // Store original bytes verbatim; do not re-encode on import.
-    let _ = decode(&asset, width, height)?;
-    if STANDARD.decode(encoded).map_err(|_| "PAINT_PNG_SOURCE_INVALID")?.len()
-        > MAX_IMPORT_PNG_BYTES {
+    // One authenticated owned-PNG decode supplies BOTH full RGBA8 format
+    // verification and the original compressed byte count. Do not Base64-
+    // decode a second time just to enforce the stricter import limit.
+    let (png_bytes, _) = decode_owned_with_bytes(&asset, width, height)?;
+    if png_bytes.len() > MAX_IMPORT_PNG_BYTES {
         return Err("PAINT_PNG_TOO_LARGE".into());
     }
     Ok(asset)
 }
 
 fn decode(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {
+    let (_, rgba) = decode_owned_with_bytes(texture, width, height)?;
+    Ok(rgba)
+}
+
+// Keep the same ownership, grid and strict full-PNG decoder gates for both
+// editing and importing. Only the result shape differs from the PNG export.
+fn decode_owned_with_bytes(
+    texture: &Value, width: u32, height: u32,
+) -> Result<(Vec<u8>, Vec<u8>)> {
     if !editable(texture) { return Err("PAINT_TEXTURE_NOT_OWNED".into()); }
     if texture.get("uv_width").is_some_and(|v| v.as_u64() != Some(u64::from(width))) ||
        texture.get("uv_height").is_some_and(|v| v.as_u64() != Some(u64::from(height))) {
         return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
     }
-    decode_rgba8_source(texture, width, height)
+    decode_rgba8_source_with_bytes(texture, width, height)
 }
 
 fn decode_rgba8_source(texture: &Value, width: u32, height: u32) -> Result<Vec<u8>> {

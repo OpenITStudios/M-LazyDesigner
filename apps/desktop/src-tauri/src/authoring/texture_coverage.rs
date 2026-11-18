@@ -2,6 +2,7 @@
 //! A saved atlas alpha histogram is never proof that a visible face is painted.
 use super::{AuthoringDocument, Result, inspect_cube_uv_alpha_validated};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 const MAX_PAGE: usize = 8;
 
@@ -41,6 +42,23 @@ pub(super) fn inspect_model_texture_coverage_filtered_validated(
         return Err("TEXTURE_COVERAGE_PAGE_INVALID".into());
     }
     let texture_indices = super::indexed_texture_uuids(doc);
+    let mut decoded = Vec::new();
+    inspect_model_texture_coverage_filtered_with_cache(
+        doc, offset, limit, attention_only, &texture_indices, &mut decoded,
+    )
+}
+
+/// A Code Mode session may share its validated document's transient UUID
+/// index and bounded decoded-atlas cache between different selectors. The
+/// same per-page output and error contract applies to standalone callers.
+pub(super) fn inspect_model_texture_coverage_filtered_with_cache(
+    doc: &AuthoringDocument, offset: usize, limit: usize, attention_only: bool,
+    texture_indices: &HashMap<&str, usize>,
+    decoded: &mut Vec<(usize, Vec<u8>)>,
+) -> Result<Value> {
+    if offset > 65_536 || limit == 0 || limit > MAX_PAGE {
+        return Err("TEXTURE_COVERAGE_PAGE_INVALID".into());
+    }
     let total = doc.cubes.len();
     let mut cubes = Vec::new();
     let mut review_candidates = 0u64;
@@ -50,14 +68,12 @@ pub(super) fn inspect_model_texture_coverage_filtered_validated(
     let mut unresolved = 0u64;
     let mut reviewed_cubes = 0usize;
     let mut returned_faces = 0usize;
-    // No persistent cache: the immutable page shares decoded PNGs only within
-    // this read and discards them before any later model revision.
-    let mut decoded = Vec::new();
-
+    // The standalone caller owns a page-local scratch buffer; a validated
+    // CLI batch owns the same buffer for its eight bounded selectors.
     for cube in doc.cubes.iter().skip(offset).take(limit) {
         reviewed_cubes += 1;
         let inspected = inspect_cube_uv_alpha_validated(
-            doc, cube, &mut decoded, &texture_indices)?;
+            doc, cube, decoded, texture_indices)?;
         let faces = inspected["faces"].as_array()
             .ok_or_else(|| "TEXTURE_COVERAGE_FACES_INVALID".to_string())?;
         let mut compact_faces = Vec::with_capacity(faces.len());

@@ -1,3 +1,17 @@
+**Rust-native shared Texture inspection scratch (2026-11-18; SOURCE ONLY):**
+The existing SHA-verified `inspect-batch` now reuses one lazily built
+texture-UUID index and up to eight decoded RGBA8 PNG buffers between distinct
+Cube surface, Cube alpha and paged six-face Texture coverage selectors.
+All buffers belong only to the validated immutable Rust inspection view and
+are discarded at the end of the batch; a later CLI call still re-reads the
+disk source and validates its exact SHA. Atlas decoding remains bounded to
+eight 256² RGBA8 images (~2 MiB), with eviction before a ninth distinct PNG.
+Standalone direct inspectors retain their full document validation and
+per-page scratch semantics. Exact selector result/error formats, 8-request
+and 96 KiB reply budgets, agent permissions and visual review requirements
+are unchanged. Native regression source is AUTHORED_NOT_RUN; no throughput
+or memory measurements were executed.
+
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
 **SHA-bound inspectBatch duplicate-selector reduction (2026-11-17; SOURCE ONLY):** Within one bounded Rust `inspect-batch` call, the first-party SDK now sends each normalized identical read-only selector only once and restores the original positional results from the returned immutable source SHA. A later call always re-reads and rechecks the current model SHA; no persistent cache, new runner, loss of caller order, host reference-binding bypass or Rust validation shortcut is introduced. It rejects mismatched source/selector-count/kind receipts and enforces the existing Rust 96 KiB result-array budget after expanding duplicate entries; each duplicate result is independently cloned to prevent accidental guest-side aliasing. Source-only regression cases authored for repeated/reordered selectors, stale source, malformed/oversized receipts and temp-file cleanup. No real Node/Rust/PC-local tests or measured timing were executed.

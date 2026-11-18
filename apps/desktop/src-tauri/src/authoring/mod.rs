@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -56,6 +57,8 @@ pub const MAX_PLAN_BYTES: usize = 64 * 1024;
 pub const MAX_IMPORT_PNG_BYTES: usize = 1024 * 1024;
 /// Shared bound for native Paint creation/import and the supported 3D preview.
 pub const MAX_PAINT_TEXTURES: usize = 16;
+// A source inspection can keep at most eight 256² RGBA8 atlases (~2 MiB).
+const MAX_INSPECTION_PNG_CACHE: usize = 8;
 /// Maximum validated RGBA8 PNG source bytes emitted without re-encoding.
 pub const MAX_EXPORT_PNG_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ELEMENTS: usize = 65_536;
@@ -1748,6 +1751,10 @@ fn inspect_cube_uv_alpha_validated(
         } else {
             let texture_index = index.ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
             if !decoded.iter().any(|(i, _)| *i == texture_index) {
+                // Reuse decoded pixels only inside one immutable inspection
+                // view. Bound retained RGBA8 memory even for an eight-query
+                // Code Mode batch with many distinct imported atlases.
+                if decoded.len() >= MAX_INSPECTION_PNG_CACHE { decoded.clear(); }
                 let png = paint::decode_for_uv_inspection(
                     &doc.texture_assets[texture_index], width, height
                 )?;
@@ -3243,20 +3250,30 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
 /// fields prevent callers from constructing this for unvalidated documents.
 pub struct ValidatedInspection<'a> {
     doc: &'a AuthoringDocument,
+    // One lazily constructed UUID index and bounded decoder scratch for all
+    // selectors in the existing SHA-pinned Rust CLI inspection batch. No
+    // caches survive this borrowed validated EditorSession read.
+    texture_indices: OnceCell<HashMap<&'a str, usize>>,
+    decoded_pngs: RefCell<Vec<(usize, Vec<u8>)>>,
 }
 
-impl ValidatedInspection<'_> {
+impl<'a> ValidatedInspection<'a> {
+    fn texture_indices(&self) -> &HashMap<&'a str, usize> {
+        self.texture_indices.get_or_init(|| indexed_texture_uuids(self.doc))
+    }
+
     pub fn cube_surfaces(&self, uuid: &str) -> Result<Value> {
-        inspect_cube_surfaces_validated_uuid(self.doc, uuid)
+        let cube = self.doc.cubes.iter().find(|cube| cube.uuid == uuid)
+            .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
+        inspect_cube_surfaces_validated(self.doc, cube, self.texture_indices())
     }
 
     pub fn cube_face_alpha(&self, uuid: &str) -> Result<Value> {
         let cube = self.doc.cubes.iter().find(|cube| cube.uuid == uuid)
             .ok_or_else(|| fail("CUBE_NOT_FOUND"))?;
-        let texture_indices = indexed_texture_uuids(self.doc);
-        let mut decoded = Vec::new();
+        let mut decoded = self.decoded_pngs.borrow_mut();
         inspect_cube_uv_alpha_validated(
-            self.doc, cube, &mut decoded, &texture_indices,
+            self.doc, cube, &mut decoded, self.texture_indices(),
         )
     }
 
@@ -3267,8 +3284,10 @@ impl ValidatedInspection<'_> {
     pub fn model_texture_coverage(
         &self, offset: usize, limit: usize, attention_only: bool,
     ) -> Result<Value> {
-        texture_coverage::inspect_model_texture_coverage_filtered_validated(
+        let mut decoded = self.decoded_pngs.borrow_mut();
+        texture_coverage::inspect_model_texture_coverage_filtered_with_cache(
             self.doc, offset, limit, attention_only,
+            self.texture_indices(), &mut decoded,
         )
     }
 }
@@ -3303,7 +3322,11 @@ impl EditorSession {
         Arc::clone(&self.doc)
     }
     pub fn inspections(&self) -> ValidatedInspection<'_> {
-        ValidatedInspection { doc: self.doc.as_ref() }
+        ValidatedInspection {
+            doc: self.doc.as_ref(),
+            texture_indices: OnceCell::new(),
+            decoded_pngs: RefCell::new(Vec::new()),
+        }
     }
     pub fn can_undo(&self) -> bool { !self.undo.is_empty() }
     pub fn can_redo(&self) -> bool { !self.redo.is_empty() }
