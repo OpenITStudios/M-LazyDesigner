@@ -9,6 +9,7 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 /// Tangent offsets are in ascending *other* axes:
 /// ±X face: [Y, Z]; ±Y face: [X, Z]; ±Z face: [X, Y].
@@ -69,6 +70,122 @@ pub(super) fn bounded_unrotated_box(cube: &Cube) -> Result<()> {
         return Err(fail("GEOMETRY_ATTACHMENT_TRANSFORM_UNSUPPORTED"));
     }
     Ok(())
+}
+
+/// Narrow, advisory pre/post AABB review for explicitly changed Cubes.
+/// Only direct Cube siblings in one Bone are comparable. Rotated, inflated or
+/// stretched neighbors are counted as unexamined, never treated as clear.
+/// Touching faces have zero intersection and are NOT volume collisions.
+/// This is not a world-space solver or a write/visual approval gate.
+const MAX_OVERLAP_SAMPLES: usize = 16;
+
+fn direct_bone_children<'a>(
+    nodes: &'a [super::OutlinerNode], uuid: &str,
+) -> Option<&'a [super::OutlinerNode]> {
+    for node in nodes {
+        if let super::OutlinerNode::Bone(bone) = node {
+            if bone.uuid == uuid { return Some(&bone.children); }
+            if let Some(children) = direct_bone_children(&bone.children, uuid) {
+                return Some(children);
+            }
+        }
+    }
+    None
+}
+
+fn aabb_intersection(
+    a: ([f64; 3], [f64; 3]), b: ([f64; 3], [f64; 3]),
+) -> Option<[f64; 3]> {
+    let depth: [f64; 3] = std::array::from_fn(|i|
+        a.1[i].min(b.1[i]) - a.0[i].max(b.0[i])
+    );
+    if depth.iter().all(|d| d.is_finite() && *d > 0.0) {
+        Some(depth)
+    } else { None }
+}
+
+/// The changed map contains only Cubes whose saved bounds the EditPlan changes.
+/// The scan is O(changed * same-Bone members), not scene-wide pairwise work.
+pub(super) fn axis_aligned_overlap_review(
+    session: &EditorSession, bone_uuid: &str,
+    changed: &HashMap<String, ([f64; 3], [f64; 3])>,
+) -> Result<Value> {
+    let doc = session.document();
+    let children = direct_bone_children(&doc.hierarchy, bone_uuid)
+        .ok_or_else(|| fail("GEOMETRY_OVERLAP_BONE_UNRESOLVED"))?;
+    let by_uuid: HashMap<&str, &Cube> = doc.cubes.iter()
+        .map(|cube| (cube.uuid.as_str(), cube)).collect();
+    let mut siblings = Vec::new();
+    let mut unsupported = 0usize;
+    for node in children {
+        if let super::OutlinerNode::Cube(uuid) = node {
+            let cube = *by_uuid.get(uuid.as_str())
+                .ok_or_else(|| fail("GEOMETRY_OVERLAP_SOURCE_INCONSISTENT"))?;
+            if bounded_unrotated_box(cube).is_ok() {
+                siblings.push(cube);
+            } else {
+                if changed.contains_key(uuid) {
+                    return Err(fail("GEOMETRY_OVERLAP_CHANGED_CUBE_UNSUPPORTED"));
+                }
+                unsupported += 1;
+            }
+        }
+    }
+    let affected: Vec<&Cube> = siblings.iter().copied()
+        .filter(|cube| changed.contains_key(&cube.uuid)).collect();
+    if affected.len() != changed.len() {
+        return Err(fail("GEOMETRY_OVERLAP_CHANGED_FRAME_MISMATCH"));
+    }
+    let mut checked = 0usize;
+    let mut introduced = 0usize;
+    let mut preexisting = 0usize;
+    let mut resolved = 0usize;
+    let mut samples = Vec::new();
+    for cube in affected {
+        for other in &siblings {
+            if cube.uuid == other.uuid ||
+               (changed.contains_key(&other.uuid) && cube.uuid > other.uuid) {
+                continue;
+            }
+            checked += 1;
+            let old = aabb_intersection(
+                (cube.from, cube.to), (other.from, other.to)
+            );
+            let after_cube = changed.get(&cube.uuid).copied()
+                .unwrap_or((cube.from, cube.to));
+            let after_other = changed.get(&other.uuid).copied()
+                .unwrap_or((other.from, other.to));
+            let new = aabb_intersection(after_cube, after_other);
+            match (old, new) {
+                (None, Some(depth)) => {
+                    introduced += 1;
+                    if samples.len() < MAX_OVERLAP_SAMPLES {
+                        let (first, second) = if cube.uuid < other.uuid {
+                            (&cube.uuid, &other.uuid)
+                        } else { (&other.uuid, &cube.uuid) };
+                        samples.push(json!({
+                            "cube_uuids":[first, second], "overlap":depth
+                        }));
+                    }
+                }
+                (Some(_), Some(_)) => preexisting += 1,
+                (Some(_), None) => resolved += 1,
+                (None, None) => {}
+            }
+        }
+    }
+    Ok(json!({
+        "scope":"affected_vs_same_bone_axis_aligned_cube_aabb",
+        "affected_cube_count":changed.len(),
+        "checked_pair_count":checked,
+        "introduced_overlap_count":introduced,
+        "preexisting_overlap_count":preexisting,
+        "resolved_overlap_count":resolved,
+        "unsupported_neighbor_count":unsupported,
+        "introduced_samples":samples,
+        "samples_truncated":introduced > MAX_OVERLAP_SAMPLES,
+        "whole_model_collision_verdict":"UNVERIFIED",
+    }))
 }
 
 /// Canonical local face translation shared by G2 one-shot attachment and
@@ -164,6 +281,14 @@ pub(super) fn compile(
     // Canonical Rust TranslateCube handles UV modes, revision, and atomic
     // refusal. Preflight here has no model/Undo/permission side effects.
     let preflight = session.preflight(&plan)?;
+    let after = HashMap::from([(
+        moving.uuid.clone(),
+        (
+            std::array::from_fn(|i| moving.from[i] + delta[i]),
+            std::array::from_fn(|i| moving.to[i] + delta[i]),
+        )
+    )]);
+    let aabb_review = axis_aligned_overlap_review(session, &anchor_parent, &after)?;
     let diagnostic = json!({
         "scope":"same_bone_axis_aligned_face_attachment",
         "anchor_cube_uuid":req.anchor_cube_uuid,
@@ -176,6 +301,7 @@ pub(super) fn compile(
         "tangent_offset":req.tangent_offset,
         "delta":delta,
         "collision_verdict":"NOT_EVALUATED",
+        "aabb_overlap_review":aabb_review,
         "visual_verdict":"UNVERIFIED"
     });
     Ok(GeometryFaceAttachmentProposal { plan, preflight, diagnostic })
@@ -241,6 +367,8 @@ mod tests {
         assert_eq!(proposal.diagnostic["parent_bone_uuid"],BONE_A);
         assert_eq!(proposal.diagnostic["tangent_axes"],json!([1,2]));
         assert_eq!(proposal.diagnostic["collision_verdict"],"NOT_EVALUATED");
+        assert_eq!(proposal.diagnostic["aabb_overlap_review"]["introduced_overlap_count"],0);
+        assert_eq!(proposal.diagnostic["aabb_overlap_review"]["whole_model_collision_verdict"],"UNVERIFIED");
         assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
         assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
         assert_eq!(session.document(),&before);
@@ -354,4 +482,66 @@ mod tests {
             "tangent_offset":[0.0,0.0],"unknown":true
         })).is_err());
     }
+    #[test]
+    fn scoped_overlap_screen_reports_new_contacts_without_approving_or_writing() {
+        const OBSTACLE: &str = "00000000-0000-4000-8000-000000002105";
+        const UNSUPPORTED: &str = "00000000-0000-4000-8000-000000002106";
+        let mut session=prepared();
+        let mut rotated=sample_cube(UNSUPPORTED,[20.0,0.0,0.0]);
+        rotated.extra.insert("rotation".into(),json!([0,15,0]));
+        session.apply(1,&[
+            EditOperation::AddCube {
+                cube:sample_cube(OBSTACLE,[6.0,0.0,0.0]),
+                bone_uuid:BONE_A.into(),
+            },
+            EditOperation::AddCube {cube:rotated,bone_uuid:BONE_A.into()},
+        ]).unwrap();
+        let before=session.document().clone();
+        let proposal=compile(&session,&GeometryFaceAttachmentRequest {
+            expected_revision:2,..request()
+        }).unwrap();
+        let review=&proposal.diagnostic["aabb_overlap_review"];
+        assert_eq!(review["scope"],"affected_vs_same_bone_axis_aligned_cube_aabb");
+        assert_eq!(review["affected_cube_count"],1);
+        assert_eq!(review["checked_pair_count"],2);
+        assert_eq!(review["introduced_overlap_count"],1);
+        assert_eq!(review["preexisting_overlap_count"],0);
+        assert_eq!(review["unsupported_neighbor_count"],1);
+        assert_eq!(review["introduced_samples"][0]["cube_uuids"],json!([MOVING,OBSTACLE]));
+        assert_eq!(review["introduced_samples"][0]["overlap"],json!([4.0,3.0,3.0]));
+        assert_eq!(review["samples_truncated"],false);
+        assert_eq!(review["whole_model_collision_verdict"],"UNVERIFIED");
+        assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(session.document(),&before);
+        assert_eq!(session.summary().revision,2);
+
+        let touching=compile(&prepared(),&GeometryFaceAttachmentRequest {
+            clearance:0.0,tangent_offset:[0.0,0.0],..request()
+        }).unwrap();
+        assert_eq!(touching.diagnostic["aabb_overlap_review"]["introduced_overlap_count"],0);
+    }
+
+
+    #[test]
+    fn overlap_report_caps_samples_without_hiding_total_pair_count() {
+        let mut session=prepared();
+        let additions: Vec<EditOperation> = (0..20).map(|i| {
+            let uuid=format!("00000000-0000-4000-8000-000000004{:03}",i);
+            EditOperation::AddCube {
+                cube:sample_cube(&uuid,[6.0,0.0,0.0]),
+                bone_uuid:BONE_A.into(),
+            }
+        }).collect();
+        session.apply(1,&additions).unwrap();
+        let proposal=compile(&session,&GeometryFaceAttachmentRequest {
+            expected_revision:2,..request()
+        }).unwrap();
+        let review=&proposal.diagnostic["aabb_overlap_review"];
+        assert_eq!(review["checked_pair_count"],21);
+        assert_eq!(review["introduced_overlap_count"],20);
+        assert_eq!(review["introduced_samples"].as_array().unwrap().len(),16);
+        assert_eq!(review["samples_truncated"],true);
+        assert_eq!(review["whole_model_collision_verdict"],"UNVERIFIED");
+    }
+
 }

@@ -62,6 +62,19 @@ overflow and stale revisions are refused. The SHA-pinned CLI
 `plan-geometry-resize-propagation` is read-only; a separate approved
 `apply` remains necessary. Rust regressions authored NOT_EXECUTED.
 
+**G2.3 bounded same-Bone AABB overlap impact (2026-11-18; SOURCE ONLY):**
+Both G2 planners now screen only their changed Cube bounds against
+unrotated, uninflated, unstretched Cube siblings directly under the same
+Bone, before/after the exact proposed operation. Positive-volume new,
+preexisting and resolved overlaps are distinguished; face contact at zero
+penetration is not called a collision. Diagnostic samples are capped at
+16 pairs with an explicit truncation flag. Unsupported neighbor count
+and "whole_model_collision_verdict=UNVERIFIED" prevent false scene-wide
+clearance: cross-Bone, rotated/inflated/stretched, and intentional
+overlaps still need a separate review. This adds no persistent graph,
+new mutation gate, forced overlap rejection or visual approval.
+Source regressions are AUTHORED_NOT_RUN, native acceptance DEFERRED.
+
 ## Dated source history (preserved)
 
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**

@@ -64,6 +64,19 @@ No constraints are saved or applied automatically; an operator-
 approved `codemode.apply` is still separately required.
 Node/Cargo/native/Blockbench execution remains NOT_EXECUTED.
 
+**G2.3 overlap hints in existing read-only proposals (2026-11-18; SOURCE ONLY):**
+Both planGeometryAttachment and planGeometryResizePropagation
+return diagnostic.aabb_overlap_review from the same Rust proposal.
+The bounded numeric report counts newly introduced, preexisting and
+resolved positive-volume AABB overlaps involving changed Cubes and
+supported direct same-Bone siblings; it includes at most 16 introduced
+pair samples and counts unsupported neighbors. The typed SDK validates
+sample target identity, positive bounds and the explicitly UNVERIFIED
+whole-model verdict. It cannot certify global collision freedom or
+artist-approved intentional overlap, and it does not change host
+approval, source SHA, execution isolation or file publication.
+Rust/Node/Deno/Windows/native tests remain NOT_EXECUTED.
+
 ## Dated source history (preserved)
 
 **P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**

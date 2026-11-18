@@ -12,6 +12,15 @@ import { paintOperationsFingerprint } from './material-work-packet.mjs';
 
 const HASH = 'a'.repeat(64);
 const SUMMARY = { revision: 0, cubes: 1, bones: 1, textures: 0, animations: 0 };
+function geometryReview(affectedCount) {
+  return {scope:'affected_vs_same_bone_axis_aligned_cube_aabb',
+    affected_cube_count:affectedCount,checked_pair_count:1,
+    introduced_overlap_count:0,preexisting_overlap_count:0,
+    resolved_overlap_count:0,unsupported_neighbor_count:0,
+    introduced_samples:[],samples_truncated:false,
+    whole_model_collision_verdict:'UNVERIFIED'};
+}
+
 // Mock exactly the canonical Rust correction receipt; source-only fixture,
 // never evidence that Cargo or a native .bbmodel transaction actually ran.
 function scopedNativeReceipt(textureUuid,{
@@ -276,7 +285,7 @@ test('G2 face attachment Code Mode RPC keeps write approval separate',()=>
             parent_bone_uuid:'root',anchor_face:'east',moving_face:'west',
             clearance:2,tangent_axes:[1,2],tangent_offset:[1,-1],
             delta:[-4,1,-1],collision_verdict:'NOT_EVALUATED',
-            visual_verdict:'UNVERIFIED'},
+            aabb_overlap_review:geometryReview(1),visual_verdict:'UNVERIFIED'},
           write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
       },
       spawnImpl:()=>fakeGuest({method:'planGeometryAttachment',args:{
@@ -331,7 +340,7 @@ test('G2.2 Code Mode guest gets only read-only resize proposal',()=>
             ordered_links:[{anchor_cube_uuid:'base',moving_cube_uuid:'arm',
               delta:[-3,0,0],tangent_axes:[1,2],status:'translation_planned'}],
             persistent_constraints:false,collision_verdict:'NOT_EVALUATED',
-            visual_verdict:'UNVERIFIED'},
+            aabb_overlap_review:geometryReview(2),visual_verdict:'UNVERIFIED'},
           write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
       },
       spawnImpl:()=>fakeGuest({method:'planGeometryResizePropagation',args:{

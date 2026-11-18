@@ -7,6 +7,16 @@ import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs'
 const BIN = '/abs/lazydesigner-authoring';
 const SHA = 'a'.repeat(64);
 
+function geometryReview(affectedCount) {
+  return {scope:'affected_vs_same_bone_axis_aligned_cube_aabb',
+    affected_cube_count:affectedCount,checked_pair_count:1,
+    introduced_overlap_count:0,preexisting_overlap_count:0,
+    resolved_overlap_count:0,unsupported_neighbor_count:0,
+    introduced_samples:[],samples_truncated:false,
+    whole_model_collision_verdict:'UNVERIFIED'};
+}
+
+
 test('Code Mode forwards only SHA-bound reference/capture paths from trusted SDK', async () => {
   const input='/abs/model.bbmodel';
   const source='a'.repeat(64), reference='b'.repeat(64), capture='c'.repeat(64);
@@ -131,7 +141,7 @@ test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',
       parent_bone_uuid:'root',anchor_face:'east',moving_face:'west',
       clearance:2,tangent_axes:[1,2],tangent_offset:[1,-1],
       delta:[-4,1,-1],collision_verdict:'NOT_EVALUATED',
-      visual_verdict:'UNVERIFIED'},
+      aabb_overlap_review:geometryReview(1),visual_verdict:'UNVERIFIED'},
     write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
   };
   let calls=0,approvals=0;
@@ -168,6 +178,11 @@ test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',
       op:'translate_cube',uuid:'wrong',delta:[-4,1,-1]
     }]}},
     {...receipt,diagnostic:{...receipt.diagnostic,collision_verdict:'CLEAR'}},
+    {...receipt,diagnostic:{...receipt.diagnostic,
+      aabb_overlap_review:{...geometryReview(1),whole_model_collision_verdict:'CLEAR'}}},
+    {...receipt,diagnostic:{...receipt.diagnostic,
+      aabb_overlap_review:{...geometryReview(1),introduced_overlap_count:1,
+        introduced_samples:[{cube_uuids:['other','unknown'],overlap:[1,2,3]}]}}},
   ]){
     const forged=createRustCodeModeClient({
       binary:BIN,runner:async()=>fake,
@@ -207,7 +222,7 @@ test('Code Mode G2.2 sends explicit dependencies and refuses forged approvals',a
         anchor_cube_uuid:'base',moving_cube_uuid:'arm',
         delta:[-3,0,0],tangent_axes:[1,2],status:'translation_planned',
       }],persistent_constraints:false,collision_verdict:'NOT_EVALUATED',
-      visual_verdict:'UNVERIFIED'},
+      aabb_overlap_review:geometryReview(2),visual_verdict:'UNVERIFIED'},
     write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
   };
   let reads=0,approvals=0;
@@ -254,6 +269,11 @@ test('Code Mode G2.2 sends explicit dependencies and refuses forged approvals',a
       ...valid.preflight.mutation,changed_uuids:['base','wrong_child'],
     }}},
     {...valid,diagnostic:{...valid.diagnostic,collision_verdict:'CLEAR'}},
+    {...valid,diagnostic:{...valid.diagnostic,
+      aabb_overlap_review:{...geometryReview(2),affected_cube_count:1}}},
+    {...valid,diagnostic:{...valid.diagnostic,
+      aabb_overlap_review:{...geometryReview(2),introduced_overlap_count:1,
+        introduced_samples:[{cube_uuids:['arm','other'],overlap:[0,1,1]}]}}},
     {...valid,diagnostic:{...valid.diagnostic,ordered_links:[{
       ...valid.diagnostic.ordered_links[0],delta:[-5,0,0],
     }]}}

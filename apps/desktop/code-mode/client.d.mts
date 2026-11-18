@@ -638,6 +638,23 @@ export interface GeometryAssemblyReceipt {
   visual_verdict: "UNVERIFIED";
 }
 /** Rust source-only G2 proposal. The plan must pass separately approved Apply. */
+/** G2 numeric contact hints for directly affected same-Bone AABB pairs.
+ * Only unrotated/uninflated/unstretched Cube siblings are compared.
+ * Positive-volume overlap is distinct from touching faces.
+ * No global collision clearance, host approval or visual proof.
+ */
+export interface GeometryAxisAlignedOverlapReview {
+  scope:"affected_vs_same_bone_axis_aligned_cube_aabb";
+  affected_cube_count:number;
+  checked_pair_count:number;
+  introduced_overlap_count:number;
+  preexisting_overlap_count:number;
+  resolved_overlap_count:number;
+  unsupported_neighbor_count:number;
+  introduced_samples:Array<{cube_uuids:[string,string];overlap:Vec3}>;
+  samples_truncated:boolean;
+  whole_model_collision_verdict:"UNVERIFIED";
+}
 export interface GeometryFaceAttachmentReceipt {
   status: "OK";
   sha256: string;
@@ -660,6 +677,7 @@ export interface GeometryFaceAttachmentReceipt {
     tangent_offset: Vec2;
     delta: Vec3;
     collision_verdict: "NOT_EVALUATED";
+    aabb_overlap_review: GeometryAxisAlignedOverlapReview;
     visual_verdict: "UNVERIFIED";
   };
   write_authority: "NOT_GRANTED";
@@ -692,6 +710,7 @@ export interface GeometryResizePropagationReceipt {
     }>;
     persistent_constraints: false;
     collision_verdict: "NOT_EVALUATED";
+    aabb_overlap_review: GeometryAxisAlignedOverlapReview;
     visual_verdict: "UNVERIFIED";
   };
   write_authority: "NOT_GRANTED";

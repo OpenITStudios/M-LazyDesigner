@@ -300,6 +300,56 @@ function serializeGeometryPropagation(request) {
   return payload;
 }
 
+// Advisory AABB screen is bounded to changed and same-Bone axis-aligned
+// Cube pairs. It is not a whole-model collision/visual certification.
+function validAxisAlignedOverlapReview(screen, changed) {
+  if (!screen || typeof screen !== 'object' || Array.isArray(screen)) return false;
+  const fields = new Set([
+    'scope','affected_cube_count','checked_pair_count',
+    'introduced_overlap_count','preexisting_overlap_count',
+    'resolved_overlap_count','unsupported_neighbor_count',
+    'introduced_samples','samples_truncated','whole_model_collision_verdict',
+  ]);
+  const count = n => Number.isSafeInteger(n) && n >= 0;
+  if (Object.keys(screen).some(key => !fields.has(key)) ||
+      screen.scope !== 'affected_vs_same_bone_axis_aligned_cube_aabb' ||
+      screen.whole_model_collision_verdict !== 'UNVERIFIED' ||
+      !count(screen.affected_cube_count) ||
+      screen.affected_cube_count !== changed.size ||
+      !count(screen.checked_pair_count) ||
+      !count(screen.introduced_overlap_count) ||
+      !count(screen.preexisting_overlap_count) ||
+      !count(screen.resolved_overlap_count) ||
+      !count(screen.unsupported_neighbor_count) ||
+      screen.introduced_overlap_count +
+        screen.preexisting_overlap_count +
+        screen.resolved_overlap_count > screen.checked_pair_count ||
+      !Array.isArray(screen.introduced_samples) ||
+      screen.introduced_samples.length !==
+        Math.min(16, screen.introduced_overlap_count) ||
+      screen.samples_truncated !== (screen.introduced_overlap_count > 16)) {
+    return false;
+  }
+  const pairs = new Set();
+  for (const sample of screen.introduced_samples) {
+    const uuids = sample?.cube_uuids, overlap = sample?.overlap;
+    if (!sample || typeof sample !== 'object' || Array.isArray(sample) ||
+        Object.keys(sample).some(key=>!['cube_uuids','overlap'].includes(key)) ||
+        !Array.isArray(uuids) || uuids.length !== 2 ||
+        !uuids.every(v=>typeof v==='string' && v.length > 0 && v.length <= 128) ||
+        uuids[0] >= uuids[1] ||
+        !uuids.some(id=>changed.has(id)) ||
+        !Array.isArray(overlap) || overlap.length !== 3 ||
+        !overlap.every(v=>Number.isFinite(v) && v > 0 && v <= 200000)) {
+      return false;
+    }
+    const pair = JSON.stringify(uuids);
+    if (pairs.has(pair)) return false;
+    pairs.add(pair);
+  }
+  return true;
+}
+
 // Require a native *matched* correction receipt before any scoped Paint
 // call can be reported as successful to Code Mode. Rust may already have
 // published its no-overwrite sibling when a malformed success is observed:
@@ -777,6 +827,8 @@ export function createRustCodeModeClient({
               row.delta.some((value,j)=>value !== remainder[i].delta[j])) ||
             diagnostic.persistent_constraints !== false ||
             diagnostic.collision_verdict !== 'NOT_EVALUATED' ||
+            !validAxisAlignedOverlapReview(diagnostic.aabb_overlap_review,
+              new Set([propagation.resize_cube_uuid,...remainder.map(op=>op.uuid)])) ||
             diagnostic.visual_verdict !== 'UNVERIFIED' ||
             receipt.write_authority !== 'NOT_GRANTED' ||
             receipt.visual_verdict !== 'UNVERIFIED') {
@@ -835,6 +887,8 @@ export function createRustCodeModeClient({
             diagnostic.delta.length !== 3 ||
             !diagnostic.delta.every((n,i) => n === op.delta[i]) ||
             diagnostic.collision_verdict !== 'NOT_EVALUATED' ||
+            !validAxisAlignedOverlapReview(diagnostic.aabb_overlap_review,
+              new Set([attachment.moving_cube_uuid])) ||
             diagnostic.visual_verdict !== 'UNVERIFIED' ||
             receipt.write_authority !== 'NOT_GRANTED' ||
             receipt.visual_verdict !== 'UNVERIFIED') {

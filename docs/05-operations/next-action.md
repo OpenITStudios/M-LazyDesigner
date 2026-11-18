@@ -1,3 +1,18 @@
+**Active Rust Geometry G2.3 — scoped AABB overlap review (2026-11-18; SOURCE ONLY):**
+The canonical same-Bone G2 face-alignment and G2.2 resize-propagation
+planners now derive a bounded before/after AABB overlap impact inventory
+for actually changed Cubes against direct axis-aligned Cube siblings.
+They distinguish introduced, preexisting and resolved positive-volume
+overlaps; touching faces are not overlaps. Up to 16 new-pair samples are
+returned with explicit truncation and unsupported rotated/inflated/
+stretched neighbor counts. This is an advisory local-space screen:
+whole-model collisions, cross-Bone geometry, visual quality and intentional
+overlap acceptance remain UNVERIFIED. Canonical Rust EditPlan/preflight,
+source SHA, independent Apply approval and no-overwrite publishing are
+unchanged. Code Mode checks diagnostic shape/bounds and refuses invented
+global clearance; source regressions AUTHORED_NOT_RUN. Rust/Node/Windows
+and native Blockbench tests are on hold; no local/CI execution claimed.
+
 **G2.2 Code Mode read-only propagation bridge — 2026-11-18 (SOURCE ONLY):**
 Exposed `planGeometryResizePropagation` via the existing typed
 Code Mode SDK, trusted Node host and Deno allowlist. The input

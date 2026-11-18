@@ -4,7 +4,7 @@
 //! SOURCE_ONLY: Rust, Node, Windows and Blockbench tests NOT_EXECUTED.
 
 use super::{
-    fail, geometry_attachment::{bounded_unrotated_box, delta_for_faces},
+    fail, geometry_attachment::{axis_aligned_overlap_review, bounded_unrotated_box, delta_for_faces},
     outliner_parent_uuid, valid_bounds, valid_uuid, Cube, EditOperation,
     EditPlan, EditorSession, Result, MAX_OPERATIONS, MAX_PLAN_BYTES,
 };
@@ -134,6 +134,9 @@ pub(super) fn compile(
         request.resize_cube_uuid.as_str(),
         Bounds { from: request.from, to: request.to },
     )]);
+    let mut changed_bounds = HashMap::from([(
+        request.resize_cube_uuid.clone(), (request.from, request.to),
+    )]);
     let mut scheduled = vec![false; request.links.len()];
     let mut results = Vec::with_capacity(request.links.len());
     let mut remaining = request.links.len();
@@ -160,6 +163,7 @@ pub(super) fn compile(
                     uuid: link.moving_cube_uuid.clone(), delta,
                 });
                 translations += 1;
+                changed_bounds.insert(link.moving_cube_uuid.clone(), (next.from, next.to));
             }
             prospective.insert(link.moving_cube_uuid.as_str(), next);
             results.push(json!({
@@ -190,6 +194,7 @@ pub(super) fn compile(
     // Checks root UV policy, every dependent UV-aware translation,
     // rollback/revision, and editable .bbmodel on a disposable Rust draft.
     let preflight = session.preflight(&plan)?;
+    let aabb_review = axis_aligned_overlap_review(session, &frame, &changed_bounds)?;
     let diagnostic = json!({
         "scope":"one_shot_same_bone_resize_propagation",
         "resize_cube_uuid":request.resize_cube_uuid,
@@ -200,6 +205,7 @@ pub(super) fn compile(
         "ordered_links":results,
         "persistent_constraints":false,
         "collision_verdict":"NOT_EVALUATED",
+        "aabb_overlap_review":aabb_review,
         "visual_verdict":"UNVERIFIED",
     });
     Ok(GeometryResizePropagationProposal { plan, preflight, diagnostic })
@@ -283,6 +289,8 @@ mod tests {
         assert_eq!(proposal.diagnostic["dependency_count"],3);
         assert_eq!(proposal.diagnostic["translated_count"],3);
         assert_eq!(proposal.diagnostic["persistent_constraints"],false);
+        assert_eq!(proposal.diagnostic["aabb_overlap_review"]["introduced_overlap_count"],0);
+        assert_eq!(proposal.diagnostic["aabb_overlap_review"]["whole_model_collision_verdict"],"UNVERIFIED");
         assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
         assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
         assert_eq!(session.document(),&before);
@@ -380,4 +388,33 @@ mod tests {
         assert_eq!(unsafe_uv.document(),&original);
         assert!(!unsafe_uv.can_undo());
     }
+    #[test]
+    fn resize_overlap_review_distinguishes_preexisting_from_new_pairs() {
+        const OBSTACLE: &str="00000000-0000-4000-8000-000000003007";
+        const EXISTING: &str="00000000-0000-4000-8000-000000003008";
+        let mut session=prepared();
+        session.apply(1,&[
+            EditOperation::AddCube {
+                cube:cube(OBSTACLE,[5.0,0.0,0.0]),bone_uuid:ROOT_BONE.into()
+            },
+            EditOperation::AddCube {
+                cube:cube(EXISTING,[3.0,0.0,0.0]),bone_uuid:ROOT_BONE.into()
+            },
+        ]).unwrap();
+        let before=session.document().clone();
+        let proposal=compile(&session,&GeometryResizePropagationRequest {
+            expected_revision:2,..request()
+        }).unwrap();
+        let review=&proposal.diagnostic["aabb_overlap_review"];
+        assert_eq!(review["scope"],"affected_vs_same_bone_axis_aligned_cube_aabb");
+        assert_eq!(review["affected_cube_count"],4);
+        assert_eq!(review["introduced_overlap_count"],2);
+        assert_eq!(review["preexisting_overlap_count"],1);
+        assert_eq!(review["unsupported_neighbor_count"],0);
+        assert_eq!(review["introduced_samples"].as_array().unwrap().len(),2);
+        assert_eq!(review["whole_model_collision_verdict"],"UNVERIFIED");
+        assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(session.document(),&before);
+    }
+
 }
