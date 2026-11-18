@@ -680,6 +680,7 @@ export function createRustCodeModeClient({
             receipt.sha256.toLowerCase() !== digest ||
             receipt.summary?.revision !== 0 ||
             !plan || plan.expected_revision !== 0 ||
+            plan.correction_scope !== null ||
             !Array.isArray(plan.operations) ||
             plan.operations.length < 1 || plan.operations.length !== expected ||
             plan.operations.length > 128 ||

@@ -97,9 +97,9 @@ export interface Bone {
 /** Source-bound G1 assembly; geometry, pivots and parent UUIDs are
  * explicit. This is NOT a user image interpretation or write authority. */
 export interface GeometryAssemblyPart {
-  bone: Bone;
+  bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
-  cubes: Cube[];
+  cubes: Array<Cube & { name: string }>;
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */
