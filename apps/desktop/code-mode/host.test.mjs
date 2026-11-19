@@ -542,6 +542,69 @@ test('G3.4a Catmull–Rom guest request stays SHA-bound and read-only',()=>
     assert.equal(approvals.length,0);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: G3.4b anisotropic profile uses the same first
+// party Rust G1 guest route and does not grant Apply authority.
+test('G3.4b profile guest RPC remains one SHA-bound read-only G1 plan',()=>
+  fixture(async input=>{
+    const seed='00000000-0000-4000-8000-000000004501';
+    const uuid=i=>{
+      const h=createHash('sha256').update(
+        'lazydesigner:geometry-profile-v1\0'+seed+'\0'+i).digest('hex');
+      return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+
+        '-8'+h.slice(17,20)+'-'+h.slice(20,32);
+    };
+    const ids=[uuid(0),uuid(1)];
+    const assembly={expected_revision:0,parts:[{
+      bone:{uuid:'profile-bone',name:'profile_bone',origin:[0,0,0]},
+      parent_uuid:null,cubes:[],profile_sweeps:[{
+        name:'vent',uuid_seed:seed,up_axis:'Y',
+        cross_section:'ELLIPSE',stations:[
+          {position:[-5,0,0],half_width:2,half_height:2},
+          {position:[0,0,0],half_width:3,half_height:2},
+          {position:[0,0,5],half_width:3,half_height:2},
+        ],
+      }],
+    }]};
+    const operations=[
+      {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+      ...ids.map((id,i)=>({op:'add_cube',bone_uuid:'profile-bone',
+        cube:{uuid:id,name:'vent_v_'+i,box_uv:true}})),
+    ];
+    const calls=[],approvals=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:x=>{approvals.push(x);return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'plan-geometry-assembly');
+        assert.deepEqual(JSON.parse(
+          await readFile(argv[argv.indexOf('--assembly')+1],'utf8')
+        ),assembly);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          plan:{expected_revision:0,operations,correction_scope:null},
+          preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+            mutation:{revision:1,operation_count:3,
+              changed_uuids:['profile-bone',...ids]},
+            candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+      },
+      spawnImpl:()=>fakeGuest({method:'planGeometryAssembly',args:{
+        project:'p0',assembly,
+      }},response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.plan.operations.length,3);
+        assert.equal(response.result.write_authority,'NOT_GRANTED');
+        return {status:response.result.preflight.status};
+      }),
+    });
+    const result=await host.execute({code:'return codemode.planGeometryAssembly({});'});
+    assert.equal(result.value.status,'VALIDATED_NOT_APPLIED');
+    assert.deepEqual(calls,['inspect','plan-geometry-assembly']);
+    assert.equal(approvals.length,0);
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: the Deno RPC is a read-only geometry proposal,
 // never permission to write the selected model or a paired GUI session.
 test('G2 face attachment Code Mode RPC keeps write approval separate',()=>

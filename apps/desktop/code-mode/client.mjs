@@ -241,14 +241,20 @@ function serializePlan(operations, normalizedScope) {
   return payload;
 }
 
-/** G3.3 identity only. Rust remains the sole geometric/raster authority.
- * Match the versioned Rust UUID namespace, not an inferred Cube layout. */
-function generatedSweepCubeUuid(seed, index) {
+/** Geometry identity only, never a second JS voxel or frame compiler.
+ * Keep Rust's versioned per-method UUID namespace and formatting. */
+function generatedBlockoutCubeUuid(namespace, seed, index) {
   const digest=createHash('sha256')
-    .update('lazydesigner:geometry-sweep-v1\0'+seed+'\0'+index)
+    .update('lazydesigner:'+namespace+'\0'+seed+'\0'+index)
     .digest('hex');
   return digest.slice(0,8)+'-'+digest.slice(8,12)+'-4'+
     digest.slice(13,16)+'-8'+digest.slice(17,20)+'-'+digest.slice(20,32);
+}
+function generatedSweepCubeUuid(seed, index) {
+  return generatedBlockoutCubeUuid('geometry-sweep-v1',seed,index);
+}
+function generatedProfileCubeUuid(seed, index) {
+  return generatedBlockoutCubeUuid('geometry-profile-v1',seed,index);
 }
 
 /** Bounded transport only. Rust validates every Bone/Cube/parent and
@@ -937,7 +943,9 @@ export function createRustCodeModeClient({
               (part.arches !== undefined &&
                 !Array.isArray(part.arches)) ||
               (part.sweeps !== undefined &&
-                !Array.isArray(part.sweeps))) {
+                !Array.isArray(part.sweeps)) ||
+              (part.profile_sweeps !== undefined &&
+                !Array.isArray(part.profile_sweeps))) {
             declarationValid = false;
             break;
           }
@@ -1016,6 +1024,30 @@ export function createRustCodeModeClient({
                 op?.op === 'add_cube' && op.cube?.uuid === uuid)) break;
               declare(uuid,'add_cube',part.bone.uuid,
                 sweep.name+'_v_'+count,true);
+              count++;
+            }
+            if (count === 0) declarationValid = false;
+          }
+          for (const profile of part.profile_sweeps ?? []) {
+            if (!profile || typeof profile.uuid_seed !== 'string' ||
+                typeof profile.name !== 'string' ||
+                !['X','Y','Z'].includes(profile.up_axis) ||
+                !['ELLIPSE','RECTANGLE'].includes(profile.cross_section) ||
+                !Array.isArray(profile.stations) ||
+                profile.stations.length < 2 || profile.stations.length > 8) {
+              declarationValid = false;
+              break;
+            }
+            // Only the canonical Rust partition knows its output count.
+            // Bind the contiguous UUID index namespace, Bone and name;
+            // all actual geometry and bounded preflight remain Rust-owned.
+            let count=0;
+            while (count < 64) {
+              const uuid=generatedProfileCubeUuid(profile.uuid_seed,count);
+              if (!proposedOperations.some(op =>
+                op?.op === 'add_cube' && op.cube?.uuid === uuid)) break;
+              declare(uuid,'add_cube',part.bone.uuid,
+                profile.name+'_v_'+count,true);
               count++;
             }
             if (count === 0) declarationValid = false;

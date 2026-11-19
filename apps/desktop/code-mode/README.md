@@ -104,6 +104,21 @@ No extra process, new permission, new Apply route, default-on feature
 or independent JavaScript solver. Node guest/SDK regression source
 AUTHORED_NOT_RUN; native Blockbench acceptance UNVERIFIED.
 
+**G3.4b anisotropic profile through existing G1 Code Mode (2026-11-19; SOURCE ONLY):**
+Optional `assembly.parts[].profile_sweeps` takes exact `name`,
+`uuid_seed`, `stations` (position plus half_width/half_height),
+`up_axis` X/Y/Z, and `cross_section` ELLIPSE/RECTANGLE.
+The Rust compiler owns 3D minimum-rotation frames, voxel occupancy,
+joint/contact rejection, G3.3's shared Cube partition and source-bound
+preflight. The SDK validates input shape and binds each contiguous
+profile-v1 seed-derived Cube UUID, name, parent Bone and provisional
+Box-UV marker to the returned G1 plan; it does not recompute geometry.
+No additional trusted permission, writer, profile data store or CLI
+command. Explicitly unsupported: authored twist, smooth Catmull–Rom
+PROFILE_SWEEP, automatic material/UV layout, artist-quality PASS.
+Rust/SDK/guest regression source AUTHORED_NOT_RUN; Blockbench native
+fidelity, performance and geometry-vs-Local parity UNVERIFIED.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

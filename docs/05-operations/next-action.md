@@ -1,3 +1,21 @@
+**Active Rust Geometry G3.4b — source-local anisotropic profile transport (2026-11-19; SOURCE ONLY):**
+Building from Rust@3dac78f and Local baseline@422e4d7, the existing
+G1 Geometry Assembly accepts explicitly authored LINEAR profile
+sweeps with RECTANGLE/ELLIPSE sections, varying half-width/height and
+caller-selected initial X/Y/Z up axis. Minimal-rotation parallel transport
+avoids recomputing an unstable Frenet frame at each polyline bend.
+A 32,768-cell bounded raster records per-segment ownership; all sequential
+segments must join through face-connected material near their shared
+station. The native 64-Cube partition, separate profile-v1 UUID namespace,
+same Source SHA/preflight/Undo, independent Apply approval, and untextured
+Box UV gates are retained. No new Rust writer or geometry/voxel engine,
+new process, external runtime, cloud CI, or second document model.
+Source regressions AUTHORED_NOT_RUN; actual Cargo/Node/Windows/Blockbench
+testing and visual/model/reference quality remain UNVERIFIED.
+Unsupported within this slice: twist, anisotropic Catmull-Rom, accurate
+mesh surface, UV atlas packing and measured Rust>Local performance.
+Keep Geometry as the primary development domain; no release/promotion.
+
 **Active Rust Geometry G3.4a — bounded curved centerline, not full profile sweep (2026-11-19; SOURCE ONLY):**
 Building on Rust@206be91 and Local baseline@422e4d7, optional
 centripetal Catmull–Rom interpolation now supplements the existing

@@ -157,6 +157,24 @@ export interface GeometrySphereSweep {
    * 0.25..1 model units. Not a final voxel/visual fidelity guarantee. */
   max_chord_error?: number;
 }
+/** G3.4b explicit anisotropic, flat-ended LINEAR profile along 3D
+ * stations. The initial X/Y/Z up-axis fixes roll; subsequent segment
+ * frames follow the minimum tangent-to-tangent rotation.
+ * The section is RECTANGLE or ELLIPSE; no twist/mesh/smooth spline
+ * is accepted, and the raster is not native/visual fidelity proof.
+ */
+export interface GeometryProfileStation {
+  position: [number,number,number];
+  half_width: number;
+  half_height: number;
+}
+export interface GeometryProfileSweep {
+  name: string;
+  uuid_seed: string;
+  stations: GeometryProfileStation[];
+  up_axis: "X"|"Y"|"Z";
+  cross_section: "ELLIPSE"|"RECTANGLE";
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
@@ -165,6 +183,7 @@ export interface GeometryAssemblyPart {
   hollow_boxes?: GeometryHollowBox[];
   arches?: GeometryArch[];
   sweeps?: GeometrySphereSweep[];
+  profile_sweeps?: GeometryProfileSweep[];
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */

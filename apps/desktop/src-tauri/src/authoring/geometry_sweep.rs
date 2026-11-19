@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 const MAX_SWEEP_STATIONS: usize = 8;
-const MAX_SWEEP_CUBES: usize = 64;
-const MAX_SWEEP_CELLS: usize = 32_768;
-const MAX_SWEEP_AXIS: usize = 64;
+pub(super) const MAX_SWEEP_CUBES: usize = 64;
+pub(super) const MAX_SWEEP_CELLS: usize = 32_768;
+pub(super) const MAX_SWEEP_AXIS: usize = 64;
 const SURFACE_EPS: f64 = 1.0e-9;
 const MAX_CURVE_SAMPLES: usize = 96;
 const MAX_CURVE_DEPTH: u8 = 8;
@@ -343,7 +343,7 @@ fn index(x: usize,y: usize,z: usize, size:[usize;3])->usize{
 
 /// Exact accepted occupancy in one source-local voxel grid. Reject disconnected
 /// material before partitioning: face contact, not diagonal proximity.
-fn partition(occupied: &[bool],size:[usize;3],low:[i32;3],limit:usize)
+pub(super) fn partition(occupied: &[bool],size:[usize;3],low:[i32;3],limit:usize)
     -> Result<Vec<([f64;3],[f64;3])>> {
     let first=occupied.iter().position(|cell|*cell)
         .ok_or_else(||fail("GEOMETRY_SWEEP_EMPTY"))?;

@@ -10,6 +10,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use super::geometry_sweep::{self, GeometrySphereSweep};
+use super::geometry_profile_sweep::{self, GeometryProfileSweep};
 use std::collections::HashSet;
 
 /// The parent is an existing or simultaneously declared Bone UUID.
@@ -34,6 +35,9 @@ pub struct GeometryAssemblyPart {
     /// The transient derived UUIDs are not persisted as parametric metadata.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sweeps: Vec<GeometrySphereSweep>,
+    /// G3.4b explicit profile and initial frame, native Cube voxel blockout.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_sweeps: Vec<GeometryProfileSweep>,
 }
 
 /// Source-authored through-opening. Axis is the normal to its opening;
@@ -363,13 +367,13 @@ pub(super) fn compile(
     let mut used_names: HashSet<String> = doc.bones.iter()
         .map(|bone| bone.name.to_ascii_lowercase()).collect();
     let mut count = 0usize;
-    // Only generated sweep IDs require owned storage: other IDs borrow from
-    // the admitted request or document. Check both sets on every new UUID.
-    let mut sweep_ids: HashSet<String> = HashSet::new();
+    // Only generated Sphere/Profile Sweep IDs need owned storage: explicit
+    // IDs borrow from the admitted request/document. Check both ID sets.
+    let mut generated_ids: HashSet<String> = HashSet::new();
     let mut generated: Vec<Vec<Cube>> = Vec::with_capacity(request.parts.len());
     for part in &request.parts {
         if !valid_uuid(&part.bone.uuid) ||
-           sweep_ids.contains(&part.bone.uuid) ||
+           generated_ids.contains(&part.bone.uuid) ||
            !used_ids.insert(part.bone.uuid.as_str()) {
             return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
         }
@@ -390,6 +394,7 @@ pub(super) fn compile(
                 .try_fold(panels, |count, arch|
                     count.checked_add(arch.cube_uuids.len())))
             .and_then(|panels| panels.checked_add(part.sweeps.len()))
+            .and_then(|panels| panels.checked_add(part.profile_sweeps.len()))
             .and_then(|panels| 1usize.checked_add(part.cubes.len())?
                 .checked_add(panels))
             .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
@@ -411,6 +416,9 @@ pub(super) fn compile(
             if !part.sweeps.is_empty() {
                 return Err(fail("GEOMETRY_SWEEP_TEXTURED_PROJECT_UNSUPPORTED"));
             }
+            if !part.profile_sweeps.is_empty() {
+                return Err(fail("GEOMETRY_PROFILE_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
         }
         let mut panels = Vec::with_capacity(additions - 1 - part.cubes.len());
         for frame in &part.frames {
@@ -431,14 +439,33 @@ pub(super) fn compile(
                     fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?)?);
         }
         let explicit_panels = panels.len();
-        // The operation count above reserves one Cube per sweep. Replace
-        // each reservation with its real bounded partition count below.
+        // The operation count above reserves one Cube per generated sweep.
+        // Replace each reservation with the exact bounded partition count.
         if part.sweeps.len() > 4 {
             return Err(fail("GEOMETRY_SWEEP_COUNT_INVALID"));
         }
         for sweep in &part.sweeps {
             let remaining = MAX_OPERATIONS - count + 1;
             let cubes = geometry_sweep::compile(sweep,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?,
+                remaining)?;
+            count = count.checked_add(cubes.len() - 1)
+                .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
+            if count > MAX_OPERATIONS {
+                return Err(fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
+            }
+            panels.extend(cubes);
+        }
+        let profile_start = panels.len();
+        if part.profile_sweeps.len() > 4 {
+            return Err(fail("GEOMETRY_PROFILE_COUNT_INVALID"));
+        }
+        for profile in &part.profile_sweeps {
+            // Reserve one Cube per profile above; grow only within the
+            // already verified shared 128-operation G1 budget.
+            let remaining = MAX_OPERATIONS - count + 1;
+            let cubes = geometry_profile_sweep::compile(profile,
                 part.bone.origin.ok_or_else(||
                     fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?,
                 remaining)?;
@@ -459,13 +486,13 @@ pub(super) fn compile(
             .chain(part.arches.iter().flat_map(|arch|
                 arch.cube_uuids.iter().map(String::as_str))) {
             if !valid_uuid(uuid) ||
-               sweep_ids.contains(uuid) || !used_ids.insert(uuid) {
+               generated_ids.contains(uuid) || !used_ids.insert(uuid) {
                 return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
             }
         }
         for cube in panels.iter().skip(explicit_panels) {
             if used_ids.contains(cube.uuid.as_str()) ||
-               !sweep_ids.insert(cube.uuid.clone()) {
+               !generated_ids.insert(cube.uuid.clone()) {
                 return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
             }
         }
@@ -488,7 +515,9 @@ pub(super) fn compile(
                     "GEOMETRY_HOLLOW_UV_ATLAS_TOO_SMALL"
                 } else if index < explicit_panels {
                     "GEOMETRY_ARCH_UV_ATLAS_TOO_SMALL"
-                } else { "GEOMETRY_SWEEP_UV_ATLAS_TOO_SMALL" };
+                } else if index < profile_start {
+                    "GEOMETRY_SWEEP_UV_ATLAS_TOO_SMALL"
+                } else { "GEOMETRY_PROFILE_UV_ATLAS_TOO_SMALL" };
                 return Err(fail(code));
             }
         }
@@ -574,6 +603,7 @@ mod tests {
             bone, parent_uuid: parent.map(str::to_owned), cubes: vec![cube],
             frames: Vec::new(), hollow_boxes: Vec::new(),
             arches: Vec::new(), sweeps: Vec::new(),
+            profile_sweeps: Vec::new(),
         }
     }
 
@@ -1438,6 +1468,132 @@ mod tests {
         assert_eq!(session.document(),&before);
         session.redo(2).unwrap();
         assert_eq!(session.document(),&after);
+    }
+
+
+    const PROFILE_SEED: &str = "00000000-0000-4000-8000-000000004501";
+
+    fn profile_request() -> GeometryAssemblyRequest {
+        let mut body=part(ROOT,"profile_bone",None,CUBE_A);
+        body.cubes.clear();
+        body.profile_sweeps.push(GeometryProfileSweep {
+            name:"vent".into(), uuid_seed:PROFILE_SEED.into(),
+            up_axis:"Y".into(), cross_section:"RECTANGLE".into(),
+            stations:vec![
+                super::super::geometry_profile_sweep::GeometryProfileStation {
+                    position:[-5,0,0],half_width:2,half_height:2,
+                },
+                super::super::geometry_profile_sweep::GeometryProfileStation {
+                    position:[0,0,0],half_width:3,half_height:2,
+                },
+                super::super::geometry_profile_sweep::GeometryProfileStation {
+                    position:[0,0,5],half_width:3,half_height:2,
+                },
+            ],
+        });
+        GeometryAssemblyRequest{expected_revision:0,parts:vec![body]}
+    }
+
+    #[test]
+    fn g34b_profile_sweep_creates_reversible_native_cubes_via_one_g1_preflight() {
+        let mut session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Profile","profile").unwrap()
+        ).unwrap();
+        let before=session.document().clone();
+        let proposal=compile(&session,&profile_request()).unwrap();
+        assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
+        assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(proposal.preflight["visual_verdict"],"UNVERIFIED");
+        assert_eq!(session.document(),&before);
+        assert!(!session.can_undo());
+        let count=proposal.plan.operations.len();
+        assert!((3..=65).contains(&count)); // Bone + bounded Cube partition
+        for (i,op) in proposal.plan.operations[1..].iter().enumerate(){
+            let EditOperation::AddCube {cube,bone_uuid}=op
+                else {panic!("Profile must produce canonical AddCube operations");};
+            assert_eq!(bone_uuid,ROOT);
+            assert_eq!(cube.uuid,
+                super::super::geometry_profile_sweep::cube_uuid(PROFILE_SEED,i));
+            assert_eq!(cube.name.as_deref(),Some(format!("vent_v_{i}").as_str()));
+            assert_eq!(cube.extra.get("box_uv"),Some(&Value::Bool(true)));
+            assert!(cube.faces.values().all(|face|face.get("texture").is_none()));
+            assert_eq!(cube.origin,Some([0.0;3]));
+        }
+        session.apply(0,&proposal.plan.operations).unwrap();
+        let after=session.document().clone();
+        assert_eq!(after.cubes.len(),count-1);
+        let saved=session.export().unwrap();
+        assert_eq!(proposal.preflight["candidate_sha256"],sha256(&saved));
+        assert_eq!(EditorSession::open(&saved).unwrap().document(),&after);
+        assert!(geometry::export_bedrock_geometry(&after).is_ok());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(),&before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(),&after);
+    }
+
+    #[test]
+    fn g34b_profile_is_fail_closed_for_uuids_texture_uv_and_stale_revision() {
+        let session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Profile","profile").unwrap()
+        ).unwrap();
+        let before=session.document().clone();
+        let generated=super::super::geometry_profile_sweep::cube_uuid(
+            PROFILE_SEED,0);
+        let mut explicit=profile_request();
+        let mut existing=part(CHILD,"explicit",None,CUBE_B);
+        existing.cubes[0].uuid=generated.clone();
+        explicit.parts[0].cubes.push(existing.cubes[0].clone());
+        assert_eq!(compile(&session,&explicit).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+        let mut later=profile_request();
+        later.parts.push(existing);
+        assert_eq!(compile(&session,&later).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+
+        let mut repeated=profile_request();
+        let shared=repeated.parts[0].profile_sweeps[0].clone();
+        repeated.parts[0].profile_sweeps.push(shared);
+        assert_eq!(compile(&session,&repeated).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+        assert_eq!(session.document(),&before);
+        assert!(!session.can_undo());
+
+        let mut textured=session.clone();
+        textured.apply(0,&[EditOperation::CreatePaintTexture {
+            uuid:"00000000-0000-4000-8000-000000004502".into(),
+            name:"atlas".into(),
+        }]).unwrap();
+        assert_eq!(compile(&textured,&GeometryAssemblyRequest {
+            expected_revision:1,..profile_request()
+        }).err().as_deref(),
+            Some("GEOMETRY_PROFILE_TEXTURED_PROJECT_UNSUPPORTED"));
+
+        let mut tiny=session.clone();
+        tiny.apply(0,&[EditOperation::SetEmptyAtlasResolution {
+            width:4,height:4,
+        }]).unwrap();
+        assert_eq!(compile(&tiny,&GeometryAssemblyRequest {
+            expected_revision:1,..profile_request()
+        }).err().as_deref(),
+            Some("GEOMETRY_PROFILE_UV_ATLAS_TOO_SMALL"));
+
+        let mut excess=profile_request();
+        let one=excess.parts[0].profile_sweeps[0].clone();
+        excess.parts[0].profile_sweeps=vec![one;5];
+        assert_eq!(compile(&session,&excess).err().as_deref(),
+            Some("GEOMETRY_PROFILE_COUNT_INVALID"));
+        assert_eq!(compile(&session,&GeometryAssemblyRequest {
+            expected_revision:1,..profile_request()
+        }).err().as_deref(),Some("DOCUMENT_REVISION_STALE"));
+
+        let invalid=serde_json::json!({
+            "name":"vent","uuid_seed":PROFILE_SEED,"up_axis":"Y",
+            "cross_section":"ELLIPSE","stations":[], "twist":45
+        });
+        assert!(serde_json::from_value::<GeometryProfileSweep>(invalid).is_err());
+        let legacy=serde_json::to_value(part(CHILD,"legacy",None,CUBE_B)).unwrap();
+        assert!(legacy.get("profile_sweeps").is_none());
     }
 
 }

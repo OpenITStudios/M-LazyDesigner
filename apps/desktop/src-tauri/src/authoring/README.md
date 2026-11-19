@@ -122,6 +122,29 @@ PROFILE_SWEEP, tangent-frame transport, twist, mesh generation or
 reference-verified quality. Rust/Node source regressions authored
 NOT_EXECUTED; no claims of artistic/PC-native superiority.
 
+**G3.4b anisotropic LINEAR profile sweep (2026-11-19; SOURCE ONLY):**
+`geometry_profile_sweep.rs` is a pure native Cuboid compiler inside
+the same G1 Rust authoring core. Opt-in `parts[].profile_sweeps`
+declares 2–8 integer-position stations (half_width/half_height 1–6),
+`cross_section` = ELLIPSE or RECTANGLE, and `up_axis` = X/Y/Z.
+An initial projected up axis fixes roll. Minimum tangent-to-tangent
+rotation parallel-transports the normal/binormal across authored
+polyline bends; an ambiguous parallel starting axis or near-reversal
+refuses rather than silently choosing another frame. Cross sections
+change width/height linearly per flat-ended segment; there is NO
+per-station twist, native mesh, Catmull-Rom profile or hidden rig transform.
+One <=32,768-cell voxel source carries 7-bit segment ownership and
+union occupancy. Original G3.3 six-connected disjoint-Cuboid partition
+and 64-Cube cap are reused: no duplicate voxel engine. Consecutive
+segments must contact by a full face near their declared common station,
+not only through an unrelated distant segment. Cube IDs are
+SHA-256-derived from a distinct profile-v1 namespace and explicit seed,
+not persistent parametric shape identities. Existing G1 preflight,
+source-SHA-bound Code Mode, Undo/Redo, atlas safety and separately
+authorized Apply are unchanged; no texture allocation or visual verdict.
+Source regressions AUTHORED_NOT_RUN; actual native quality/compatibility
+and comparison with Local remain UNVERIFIED.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and

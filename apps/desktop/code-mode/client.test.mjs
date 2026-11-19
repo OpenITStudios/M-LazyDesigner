@@ -506,6 +506,95 @@ test('G3.4a adaptive Catmull-Rom sweep is opt-in and keeps G1 read-only',async()
   }
 });
 
+// SOURCE_AUTHORED_NOT_RUN: the G3.4b transported anisotropic profile uses
+// the exact G1 Rust SHA-bound planner; mocked Cubes prove only SDK identity.
+test('G3.4b profile sweep binds versioned IDs and keeps mutation unapproved',async()=>{
+  const seed='00000000-0000-4000-8000-000000004501';
+  const uuid=i=>{
+    const h=createHash('sha256').update(
+      'lazydesigner:geometry-profile-v1\0'+seed+'\0'+i).digest('hex');
+    return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+
+      '-8'+h.slice(17,20)+'-'+h.slice(20,32);
+  };
+  const ids=[uuid(0),uuid(1)];
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'profile-bone',name:'profile_bone',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],profile_sweeps:[{
+      name:'vent',uuid_seed:seed,up_axis:'Y',cross_section:'RECTANGLE',
+      stations:[
+        {position:[-5,0,0],half_width:2,half_height:2},
+        {position:[0,0,0],half_width:3,half_height:2},
+        {position:[0,0,5],half_width:3,half_height:2},
+      ],
+    }],
+  }]};
+  const operations=[
+    {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+    ...ids.map((id,i)=>({op:'add_cube',bone_uuid:'profile-bone',
+      cube:{uuid:id,name:'vent_v_'+i,box_uv:true}})),
+  ];
+  const receipt={status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:3,
+        changed_uuids:['profile-bone',...ids]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+  let calls=0,approvals=0;
+  const build=runner=>createRustCodeModeClient({binary:BIN,runner,
+    authorizeMutation:async()=>{approvals++;return true;},
+  });
+  const client=build(async argv=>{
+    calls++;
+    assert.equal(argv[0],'plan-geometry-assembly');
+    assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+    assert.deepEqual(JSON.parse(await readFile(
+      argv[argv.indexOf('--assembly')+1],'utf8')),assembly);
+    return receipt;
+  });
+  const result=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.deepEqual(result.plan.operations.map(op=>
+    op.op==='add_bone'?op.bone.uuid:op.cube.uuid),['profile-bone',...ids]);
+  assert.equal(result.preflight.write_authority,'NOT_GRANTED');
+  assert.equal(calls,1);
+  for(const forged of [
+    {...receipt,write_authority:'GRANTED'},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],cube:{
+        ...operations[1].cube,uuid:'other'}},operations[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],bone_uuid:'wrong'},operations[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],cube:{
+        ...operations[1].cube,name:'wrong'}},operations[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],cube:{
+        ...operations[1].cube,box_uv:false}},operations[2]]}},
+    {...receipt,preflight:{...receipt.preflight,mutation:{
+      ...receipt.preflight.mutation,
+      changed_uuids:['profile-bone','forged',ids[1]]}}},
+  ]){
+    await assert.rejects(build(async()=>forged).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  for(const changed of [
+    {up_axis:'INVALID'},
+    {cross_section:'MESH'},
+    {stations:[]},
+  ]){
+    const input={...assembly,parts:[{...assembly.parts[0],
+      profile_sweeps:[{...assembly.parts[0].profile_sweeps[0],...changed}]}]};
+    await assert.rejects(build(async()=>receipt).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:input,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  assert.equal(approvals,0);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: G2 face alignment uses only a read-only Rust
 // plan. No host write approval is requested, and fabricated grants refuse.
 test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',async()=>{
