@@ -14,8 +14,10 @@
   import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileEditorSnapshot } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { matchingSemanticCandidate, semanticViewportSources, sourceRgb,
+    semanticIntentFingerprint, repeatedRejectedIntent,
     type SemanticMaterialIntent, type SemanticMaterialDraft,
-    type SemanticMaterialPreviewReceipt, type SemanticMaterialReferenceReceipt
+    type SemanticMaterialPreviewReceipt, type SemanticMaterialReferenceReceipt,
+    type SemanticRejectReason
   } from './rustSemanticMaterialPreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
@@ -69,8 +71,11 @@
   let semanticCorner:SemanticMaterialIntent['light_corner']='upper_left';
   let semanticContrast:SemanticMaterialIntent['contrast']='subtle';
   let semanticPreview:SemanticMaterialDraft|null=null;
-  let semanticShowCandidate=true,semanticViewedSource=false,
+  let semanticShowCandidate=false,semanticViewedSource=false,
     semanticViewedCandidate=false,semanticReviewed=false;
+  let semanticRejectReason:SemanticRejectReason='flat_volume';
+  let semanticRejected:{fingerprint:string;reason:SemanticRejectReason}|null=null;
+  let semanticRejectionNote='';
   let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number]; radius: number; erase: boolean; rectangle: boolean; overflow: boolean } | null = null;
   let menu: Menu = null;
   let loading = true;
@@ -316,6 +321,7 @@
       semanticReferenceSha=null;
       semanticReferenceStatus='';
       semanticReferenceImage=null;
+      semanticRejected=null;semanticRejectionNote='';
       // Old read-only pairing is bound to the previous model epoch; revoke
       // before another model is exposed. Never carry a capability forward.
       if (livePairing) void stopLiveRead();
@@ -1104,7 +1110,7 @@
 
   function clearSemanticPreview(){
     semanticPreview=null;
-    semanticShowCandidate=true;
+    semanticShowCandidate=false;
     semanticViewedSource=false;semanticViewedCandidate=false;
     semanticReviewed=false;
   }
@@ -1126,6 +1132,7 @@
         }
         semanticReferenceSha=r.pngSha256;
         semanticReferenceImage=r.referencePngSource;
+        semanticRejected=null;semanticRejectionNote='';
         semanticReferenceStatus='Selected PNG '+r.pngSha256.slice(0,12)+
           ' (not verified as approved artwork).';
         clearSemanticPreview();
@@ -1157,6 +1164,10 @@
     if(!snapshot||busy||loading||paintStroke||workspaceMode!=='paint')return;
     const intent=sourceSemanticIntent();
     if(!intent){error='Select an editable atlas, Cube, face and reference PNG.';return;}
+    if(repeatedRejectedIntent(intent,semanticRejected)){
+      error='This exact candidate was rejected. Change the reference-grounded treatment or select another material method before trying again.';
+      return;
+    }
     const {epoch,revision}=snapshot;
     clearSemanticPreview();busy=true;error='';
     try{
@@ -1169,8 +1180,9 @@
           paintTextureIndex,semanticReferenceSha))
         throw new Error('SEMANTIC_PREVIEW_SOURCE_STALE');
       semanticPreview=candidate;
-      semanticShowCandidate=true;semanticViewedCandidate=true;
-      notice='Disposable 3D candidate. Compare original and candidate before applying.';
+      semanticShowCandidate=false;semanticViewedSource=false;
+      semanticViewedCandidate=false;semanticReviewed=false;
+      notice='Disposable material prepared. Select Source and Candidate to compare both before applying.';
     }catch(cause){clearSemanticPreview();showError(cause);}
     finally{busy=false;}
   }
@@ -1179,6 +1191,22 @@
     semanticShowCandidate=value;
     if(value)semanticViewedCandidate=true;
     else semanticViewedSource=true;
+  }
+  function rejectSemanticCandidate(){
+    if(!validSemanticPreview||!semanticPreview||busy)return;
+    semanticRejected={
+      fingerprint:semanticIntentFingerprint(semanticPreview.intent),
+      reason:semanticRejectReason,
+    };
+    const guidance={
+      flat_volume:'Flat form: recheck reference and treatment, not merely the same edge mask.',
+      identity_risk:'Identity risk: preserve the approved marking explicitly or stop. Base-color matching alone cannot identify an emblem.',
+      style_mismatch:'Material mismatch: review the actual material master and selected colors before recomposing.',
+      other:'Reject this proposal: change diagnosis or return to reviewer-authored brush treatment.',
+    };
+    semanticRejectionNote=guidance[semanticRejectReason];
+    clearSemanticPreview();
+    notice='Candidate rejected. Original model and PNG were not changed.';
   }
   async function applySemanticCandidate(){
     if(!semanticPreview||!validSemanticPreview||busy||
@@ -1190,7 +1218,10 @@
       expectedSourceSha256:candidate.sourceModelSha256,
       expectedCandidateSha256:candidate.candidateSha256,
     });
-    if(next)notice='Candidate applied with one Rust Undo step. Independent artistic quality is still unverified.';
+    if(next){
+      semanticRejected=null;semanticRejectionNote='';
+      notice='Candidate applied with one Rust Undo step. Independent artistic quality is still unverified.';
+    }
     else clearSemanticPreview();
   }
 
@@ -1843,6 +1874,7 @@
             </select>
           </label>
         </div>
+        {#if semanticRejectionNote}<p class="hint">{semanticRejectionNote}</p>{/if}
         <button type="button" disabled={busy || loading || !!paintStroke ||
           !selectedId || !semanticReferenceSha ||
           !snapshot.paintEditableTextures[paintTextureIndex]}
@@ -1855,8 +1887,18 @@
               disabled={busy} onclick={() => showSemanticCandidate(true)}>Candidate</button>
             <button type="button" disabled={busy} onclick={clearSemanticPreview}>Discard</button>
           </div>
-          <p class="hint">Compare the same 3D model. Change controls and regenerate if
-            this treatment does not improve the material.</p>
+          <label>Reason if rejected
+            <select bind:value={semanticRejectReason} disabled={busy}>
+              <option value="flat_volume">Flat or poorly formed shading</option>
+              <option value="identity_risk">Approved identity at risk</option>
+              <option value="style_mismatch">Material/style mismatch</option>
+              <option value="other">Other visual defect</option>
+            </select>
+          </label>
+          <button type="button" disabled={busy}
+            onclick={rejectSemanticCandidate}>Reject and revise</button>
+          <p class="hint">Compare both images on the same model. Rejected exact
+            treatment settings cannot be repeated without a meaningful change.</p>
           <label class="semantic-material-review">
             <input type="checkbox" bind:checked={semanticReviewed}
               disabled={busy || !semanticViewedSource || !semanticViewedCandidate}/>
@@ -2273,6 +2315,7 @@
             <div class="property-group">
               <label for="uv-face">UV Face</label>
               <select id="uv-face" bind:value={selectedFace}
+                onchange={clearSemanticPreview}
                 disabled={busy || selectedCube.boxUv}>
                 {#each FACES as face}
                   <option value={face}>{face}</option>

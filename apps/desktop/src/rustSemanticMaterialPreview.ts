@@ -30,6 +30,19 @@ export type SemanticMaterialPreviewReceipt={
   visualVerdict:'UNVERIFIED';writeAuthority:'NOT_GRANTED';
 };
 export type SemanticMaterialDraft=SemanticMaterialPreviewReceipt&{intent:SemanticMaterialIntent};
+/** Ephemeral review history for one exact semantic proposal. Not an art score. */
+export type SemanticRejectReason='flat_volume'|'identity_risk'|
+  'style_mismatch'|'other';
+export function semanticIntentFingerprint(intent:SemanticMaterialIntent):string {
+  return JSON.stringify(intent);
+}
+export function repeatedRejectedIntent(
+  intent:SemanticMaterialIntent,rejected:{
+    fingerprint:string;reason:SemanticRejectReason;
+  }|null,
+):boolean {
+  return rejected?.fingerprint===semanticIntentFingerprint(intent);
+}
 export function sourceRgb(hex:string):[number,number,number]|null{
   if(!/^#[0-9a-f]{6}$/i.test(hex))return null;
   return [Number.parseInt(hex.slice(1,3),16),

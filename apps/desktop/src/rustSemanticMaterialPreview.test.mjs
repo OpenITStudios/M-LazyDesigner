@@ -1,7 +1,8 @@
 // SOURCE_AUTHORED_NOT_RUN; native/Node tests held by repository profile.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {sourceRgb,matchingSemanticCandidate,semanticViewportSources}
+import {sourceRgb,matchingSemanticCandidate,semanticViewportSources,
+  semanticIntentFingerprint,repeatedRejectedIntent}
   from './rustSemanticMaterialPreview.ts';
 const snapshot={epoch:2,revision:5,
   texturePreviewSources:['data:image/png;base64,QUJD','data:image/png;base64,REVG'],
@@ -44,6 +45,15 @@ test('stale epoch, revision, selection, reference and forged approval never disp
     assert.equal(matchingSemanticCandidate(s,c,id,face,index,sha),false);
     assert.equal(semanticViewportSources(s,c,true,false),s.texturePreviewSources);
   }
+});
+test('exact rejected material proposal cannot repeat without changed input',()=>{
+  const rejected={fingerprint:semanticIntentFingerprint(intent),reason:'flat_volume'};
+  assert.equal(repeatedRejectedIntent(intent,rejected),true);
+  assert.equal(repeatedRejectedIntent({...intent,contrast:'balanced'},rejected),false);
+  assert.equal(repeatedRejectedIntent({...intent,source_base_rgba:[90,90,110,255]},rejected),false);
+  assert.equal(repeatedRejectedIntent({...intent,reference_png_sha256:'z'.repeat(64)},rejected),false);
+  assert.equal(repeatedRejectedIntent({...intent,cube_uuid:'other'},rejected),false);
+  assert.equal(repeatedRejectedIntent(intent,null),false);
 });
 test('UI swatch parsing accepts exact RGB without derived palettes',()=>{
   assert.deepEqual(sourceRgb('#5a6e82'),[90,110,130]);
