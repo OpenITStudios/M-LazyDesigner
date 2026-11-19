@@ -29,7 +29,7 @@ pub use geometry_propagation::{
 };
 mod paint;
 mod correction_scope;
-pub use correction_scope::TextureCorrectionScope;
+pub use correction_scope::{TextureCorrectionScope, CorrectionRectangle, ExpectedBeforePixel};
 mod material_pair;
 pub use material_pair::{inspect_material_pair, MaterialPatchRegion};
 mod material_styling;
@@ -3458,6 +3458,13 @@ impl EditorSession {
         ).transpose()?;
         if operations.is_empty() || operations.len() > MAX_OPERATIONS {
             return Err(fail("EDIT_BATCH_SIZE_INVALID"));
+        }
+        // A direct EditOperation must not bypass the intent's source revision
+        // by using a different outer batch revision.
+        if operations.iter().any(|operation|matches!(operation,
+            EditOperation::ReplaceExistingFaceTextureGuarded{intent,..}
+                if intent.expected_revision!=expected_revision)) {
+            return Err(fail("EXTERNAL_TEXTURE_REVISION_STALE"));
         }
         let mut next = self.doc.as_ref().clone();
         let mut changed = Vec::new();

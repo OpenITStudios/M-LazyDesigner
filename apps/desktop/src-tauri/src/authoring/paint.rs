@@ -362,7 +362,7 @@ pub(super) fn replace_face_from_png_guarded(
         if x<from[0] || x>=to[0] || y<from[1] || y>=to[1] {
             return Err("EXTERNAL_TEXTURE_OUTSIDE_FACE".into());
         }
-        if before != base || before[3] != after[3] {
+        if before != base.as_slice() || before[3] != after[3] {
             return Err("EXTERNAL_TEXTURE_ORIGINAL_DETAIL_OR_ALPHA".into());
         }
         // A one-texel margin is retained around observed non-base marks.
@@ -370,7 +370,7 @@ pub(super) fn replace_face_from_png_guarded(
         for yy in y.saturating_sub(1).max(from[1])..=(y+1).min(to[1]-1) {
             for xx in x.saturating_sub(1).max(from[0])..=(x+1).min(to[0]-1) {
                 let at = ((yy as usize)*width as usize+xx as usize)*4;
-                if original[at..at+4] != base {
+                if original.get(at..at+4) != Some(base.as_slice()) {
                     return Err("EXTERNAL_TEXTURE_NEAR_ORIGINAL_DETAIL".into());
                 }
             }

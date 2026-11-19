@@ -7220,6 +7220,15 @@ fn external_face_png_keeps_original_detail_and_existing_texture_identity() {
         "CORRECTION_PROTECTED_PIXEL_CHANGED");
     assert_eq!(forbidden.export().unwrap(),original);
 
+    // Direct raw EditOperation cannot forge another source revision.
+    assert_eq!(forbidden.apply(0,&[
+        EditOperation::ReplaceExistingFaceTextureGuarded{
+            intent:ExternalFaceTextureIntent{expected_revision:1,..intent.clone()},
+            candidate_png_source:png.clone(),
+        },
+    ]).unwrap_err(),"EXTERNAL_TEXTURE_REVISION_STALE");
+    assert_eq!(forbidden.export().unwrap(),original);
+
     // Direct unscoped EditOperation still enforces the actual source swatch.
     let mut outside=forbidden.document().texture_assets[0].clone();
     paint::pixel(&mut outside,128,128,12,12,[80,100,120,255]).unwrap();
