@@ -63,3 +63,17 @@ test('compound selection is source-bound and omits complex overlays safely',()=>
   assert.equal(bindSourceSelection(hit,{...response,selection_steps:[{mode:'add',seed:[0,0]}]},
     2048,2048),null);
 });
+
+// SOURCE_AUTHORED_NOT_RUN: Rust Option::None becomes seed:null for invert.
+test('native invert step with null seed matches UI-authored seed omission',()=>{
+  const hit={cubeUuid:'c',textureUuid:'t',face:'north',epoch:1,revision:1,
+    sourceUv:[0,0,4,4],sourceRotation:0,texel:[0,0],
+    textureIndex:0,size:[4,4],contextKey:'k'};
+  const expected=[{mode:'replace',seed:[0,0]},{mode:'invert'}];
+  const response={revision:1,cube_uuid:'c',texture_uuid:'t',face:'north',
+    seed:[0,0],source_rgba:[0,0,0,0],pixel_count:15,
+    atlas_rows:[],preview_complete:false,source_authority:'RUST_SAVED_RGBA8',
+    write_authority:'NOT_GRANTED',
+    selection_steps:[{mode:'replace',seed:[0,0]},{mode:'invert',seed:null}]};
+  assert.ok(bindSourceSelection(hit,response,16,16,expected));
+});

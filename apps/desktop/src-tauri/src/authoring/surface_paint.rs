@@ -516,6 +516,23 @@ mod tests{
         assert_eq!(s.export().unwrap(),before);
     }
     #[test]
+    fn deterministic_pattern_is_local_and_does_not_change_unselected_rgba(){
+        let mut session=session();
+        let mut request=intent();
+        request.points=vec![[0,0],[1,0],[2,0],[3,0]];
+        request.protected_regions=vec![];
+        request.pattern=Some(SurfacePattern{
+            kind:super::super::surface_pattern::SurfacePatternKind::Checker,
+            period:2,phase:[0,0],
+        });
+        session.apply_surface_paint_stroke(&request).unwrap();
+        let rgba=paint::decode_for_uv_inspection(
+            &session.document().texture_assets[0],128,128).unwrap();
+        assert_eq!(&rgba[0..4],&[140,150,160,255]);
+        assert_eq!(&rgba[4..8],&[140,150,160,255]);
+        assert_eq!(&rgba[8..12],&[80,100,120,255]);
+    }
+    #[test]
     fn square_and_diamond_brush_keep_all_original_detail_pixels(){
         let mut s=session();
         let original=s.export().unwrap();

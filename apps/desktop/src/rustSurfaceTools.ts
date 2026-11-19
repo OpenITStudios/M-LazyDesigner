@@ -94,8 +94,17 @@ export function bindSourceSelection(
      response.pixel_count<0||response.pixel_count>hit.size[0]*hit.size[1]||
      !Array.isArray(response.atlas_rows))return null;
   const steps=response.selection_steps??[{mode:'replace',seed:[...hit.texel]}];
-  if(!validSelectionSteps(steps,hit.size)||
-     (expectedSteps&&JSON.stringify(steps)!==JSON.stringify(expectedSteps)))return null;
+  // Rust Option::None serializes as seed:null; the UI omits that field.
+  // Compare semantic values so invert remains a valid native read receipt.
+  const samePlan=!expectedSteps||(steps.length===expectedSteps.length&&
+    steps.every((step,i)=>{
+      const expected=expectedSteps[i];
+      return step.mode===expected.mode&&
+        (step.seed==null&&expected.seed==null||
+          !!step.seed&&!!expected.seed&&
+          step.seed.length===2&&step.seed.every((v,j)=>v===expected.seed?.[j]));
+    }));
+  if(!validSelectionSteps(steps,hit.size)||!samePlan)return null;
   const complete=response.preview_complete??true;
   if(typeof complete!=='boolean'||response.atlas_rows.length>(complete?4096:0))return null;
   let count=0,previousY=-1,previousX1=0;
