@@ -344,6 +344,7 @@ fn main() {
             desktop_authoring::rust_editor_open,
             desktop_authoring::rust_editor_apply,
             desktop_authoring::rust_editor_paint_surface_stroke,
+            desktop_authoring::rust_editor_sample_surface_color,
             desktop_authoring::rust_editor_export_paint_png,
             desktop_authoring::rust_editor_export_review_capture,
             desktop_authoring::rust_editor_export_bedrock_geometry,

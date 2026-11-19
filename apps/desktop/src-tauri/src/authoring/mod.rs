@@ -41,7 +41,9 @@ pub use material_synthesis::{SemanticMaterialIntent, SemanticMaterialProposal};
 mod external_texture;
 pub use external_texture::ExternalFaceTextureIntent;
 mod surface_paint;
-pub use surface_paint::SurfacePaintIntent;
+mod surface_seam;
+pub use surface_paint::{SurfacePaintIntent,SurfacePaintSampleRequest,SurfaceSourceSample};
+pub use surface_seam::SurfaceSeamPatch;
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;
 pub use visual_pair::{inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES};
@@ -3387,6 +3389,12 @@ impl EditorSession {
         &mut self, intent:&SurfacePaintIntent,
     )->Result<MutationReceipt>{
         surface_paint::apply(self,intent)
+    }
+    /// Read precisely one source-owned RGBA8 texel; no edit or Undo.
+    pub fn sample_surface_source(
+        &self,request:&SurfacePaintSampleRequest,
+    )->Result<SurfaceSourceSample>{
+        surface_paint::sample(self,request)
     }
 
     /// G2: propose an explicit same-Bone face alignment with UV-aware Rust

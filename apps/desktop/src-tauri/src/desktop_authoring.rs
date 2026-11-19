@@ -23,6 +23,7 @@ use lazydesigner::authoring::{
     BezierKeyframeHandles,
     AuthoringDocument, Bone, Cube, EditOperation, EditPlan, EditorSession,
     SemanticMaterialIntent, SemanticMaterialProposal, ExternalFaceTextureIntent, SurfacePaintIntent,
+    SurfacePaintSampleRequest, SurfaceSourceSample,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -1480,6 +1481,22 @@ pub async fn rust_editor_open(
         dirty: false,
     });
     current_detached(guard, ProjectionReuse::default()).map(Some)
+}
+
+/// Read exactly one current, source-bound face-local RGBA8 texel in Rust.
+#[tauri::command(async)]
+pub fn rust_editor_sample_surface_color(
+    state:State<'_,EditorState>,expected_epoch:u64,
+    expected_revision:u64,request:SurfacePaintSampleRequest,
+)->Result<SurfaceSourceSample,DesktopError>{
+    if request.expected_revision!=expected_revision{
+        return Err(failure("SURFACE_SAMPLE_REVISION_STALE",
+            "The sampled face has changed since selection."));
+    }
+    let source=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    let sample=source.sample_surface_source(&request).map_err(model_failure)?;
+    let _fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    Ok(sample)
 }
 
 /// One user gesture on one source-bound 3D Cube face. Selection, atlas UV,
