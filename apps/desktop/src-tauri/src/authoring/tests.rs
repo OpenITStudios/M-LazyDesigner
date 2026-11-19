@@ -7161,8 +7161,9 @@ fn external_face_png_keeps_original_detail_and_existing_texture_identity() {
     }
     s.apply(0,&ops).unwrap();
     s.apply(1,&[
-        EditOperation::PaintTexturePixel{
-            texture_index:0,x:1,y:1,rgba:[80,100,120,255],
+        EditOperation::PaintTextureRectangle{
+            texture_index:0,from:[0,0],to:[3,3],
+            rgba:[80,100,120,255],erase:false,
         },
         EditOperation::PaintTexturePixel{
             texture_index:0,x:3,y:3,rgba:[220,20,20,255],
