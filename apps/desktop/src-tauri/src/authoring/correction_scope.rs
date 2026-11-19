@@ -72,7 +72,10 @@ pub(super) fn validate_scope(
     let height = doc.resolution.height;
     if scope.protected_regions.len() > 16 ||
         scope.expected_before_pixels.len() > 64 ||
-        scope.editable_before_rgba.len() > 16 {
+        scope.editable_before_rgba.len() >
+            (width as usize).saturating_mul(height as usize) ||
+        serde_json::to_vec(scope)
+            .is_err_or(|bytes|bytes.len()>super::MAX_PLAN_BYTES) {
         return Err("CORRECTION_SCOPE_INVALID".into());
     }
     let mut seen_colors = HashSet::new();
@@ -160,6 +163,10 @@ pub(super) fn verify_after(
             return Err("CORRECTION_EXPECTED_BEFORE_MISMATCH".into());
         }
     }
+    // Exact HashSet membership is O(1) per changed texel even with many
+    // original source RGBAs; no arbitrary 16-color editing ceiling.
+    let allowed_source:HashSet<[u8;4]>=
+        scope.editable_before_rgba.iter().copied().collect();
     let mut changed = 0usize;
     for (index, (old, new)) in original.chunks_exact(4)
         .zip(candidate.chunks_exact(4)).enumerate() {
@@ -187,9 +194,8 @@ pub(super) fn verify_after(
         // This is a PRE-IMAGE guard on every changed pixel. One stray
         // approved marking color aborts the entire Rust edit transaction;
         // a changed highlight cannot silently overwrite old artwork.
-        if !scope.editable_before_rgba.is_empty() &&
-           !scope.editable_before_rgba.iter()
-               .any(|allowed| old == allowed.as_slice()) {
+        if !allowed_source.is_empty() &&
+           !allowed_source.contains(&[old[0],old[1],old[2],old[3]]) {
             return Err("CORRECTION_SOURCE_COLOR_NOT_ALLOWED".into());
         }
         changed += 1;
@@ -396,10 +402,21 @@ mod tests {
             pixel(1,1,[20,30,40,255]),
         ],Some(&dup)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
         let mut many=scope(false);
-        many.editable_before_rgba=(0..17).map(|n|[n,0,0,255]).collect();
-        assert_eq!(s.apply_with_correction_scope(1,&[
+        // Many explicit original swatches can be reviewed in one correction.
+        many.editable_before_rgba=vec![[0,0,0,0]];
+        many.editable_before_rgba.extend((0..32).map(|n|[n,1,2,255]));
+        let receipt=s.apply_with_correction_scope(1,&[
             pixel(1,1,[20,30,40,255]),
-        ],Some(&many)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
+        ],Some(&many)).unwrap();
+        assert_eq!(receipt.revision,2);
+        s.undo(2).unwrap();
+        assert_eq!(s.export().unwrap(),before);
+        let mut giant=scope(false);
+        giant.editable_before_rgba=(0..8192u32).map(|n|
+            [(n%256) as u8,((n/256)%256) as u8,30,255]).collect();
+        assert_eq!(s.apply_with_correction_scope(3,&[
+            pixel(1,1,[20,30,40,255]),
+        ],Some(&giant)).unwrap_err(),"CORRECTION_SCOPE_INVALID");
         assert_eq!(s.export().unwrap(),before);
     }
 

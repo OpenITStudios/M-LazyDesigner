@@ -3525,7 +3525,7 @@ fn recolor_cube_palette_refuses_unsafe_targets_opaque_sources_and_aliases() {
         (vec![],vec![swatch.clone()],"PALETTE_TARGETS_SIZE_INVALID"),
         (vec![target.clone();17],vec![swatch.clone()],"PALETTE_TARGETS_SIZE_INVALID"),
         (vec![target.clone()],vec![],"PALETTE_SWAPS_SIZE_INVALID"),
-        (vec![target.clone()],vec![swatch.clone();33],"PALETTE_SWAPS_SIZE_INVALID"),
+        (vec![target.clone()],vec![swatch.clone();33],"PALETTE_SWAPS_DUPLICATE_SOURCE"),
         (vec![target.clone(),target.clone()],vec![swatch.clone()],
             "PALETTE_TARGET_CUBE_DUPLICATE"),
         (vec![CubePaletteTarget {cube_uuid:CUBE.into(),faces:vec![]}],

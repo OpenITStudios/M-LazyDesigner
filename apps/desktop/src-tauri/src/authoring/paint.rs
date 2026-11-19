@@ -216,6 +216,10 @@ fn encode(width: u32, height: u32, pixels: &[u8]) -> Result<String> {
         let mut encoder = png::Encoder::new(&mut png_bytes, width, height);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
+        // Both DEFLATE and adaptive scanline filters are lossless. No color
+        // quantization, indexed PNG conversion, downscale or dithering.
+        encoder.set_compression(png::Compression::Best);
+        encoder.set_adaptive_filter(png::AdaptiveFilterType::Adaptive);
         let mut writer = encoder.write_header().map_err(|_| "PAINT_PNG_ENCODE_FAILED")?;
         writer.write_image_data(pixels).map_err(|_| "PAINT_PNG_ENCODE_FAILED")?;
     }
@@ -520,7 +524,12 @@ pub(super) fn recolor_regions(
     if regions.is_empty() || regions.len() > 16 * 6 {
         return Err("PALETTE_REGIONS_SIZE_INVALID".into());
     }
-    if swaps.is_empty() || swaps.len() > 32 {
+    // Color diversity belongs to the pixel data; only source atlas pixels
+    // and bounded native plan bytes limit one recolor operation.
+    if swaps.is_empty() ||
+       swaps.len() > (width as usize).saturating_mul(height as usize) ||
+       serde_json::to_vec(swaps)
+           .is_err_or(|payload| payload.len()>super::MAX_PLAN_BYTES) {
         return Err("PALETTE_SWAPS_SIZE_INVALID".into());
     }
     let mut colors = HashMap::with_capacity(swaps.len());
@@ -686,4 +695,37 @@ pub(super) fn pixel(
     texture: &mut Value, width: u32, height: u32, x: u32, y: u32, rgba: [u8; 4],
 ) -> Result<()> {
     stroke(texture, width, height, &[[x, y]], rgba)
+}
+
+
+#[cfg(test)]
+mod lossless_png_palette_tests {
+    use super::*;
+    // SOURCE_AUTHORED_NOT_RUN: exact 4096-color RGBA (including hidden RGB).
+    #[test]
+    fn compressed_png_round_trip_preserves_unique_rgba_and_alpha() {
+        let (w,h)=(64u32,64u32);
+        let mut pixels=vec![0u8;(w*h*4) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let at=((y*w+x)*4) as usize;
+                pixels[at..at+4].copy_from_slice(&[
+                    x as u8, y as u8, ((x*13+y*7)%256) as u8,
+                    if (x+y)%5==0 {0} else {((x*3+y*5)%256) as u8},
+                ]);
+            }
+        }
+        let source=encode(w,h,&pixels).unwrap();
+        let asset=authored_asset("source","rich-rgba.png",&source);
+        assert_eq!(decode(&asset,w,h).unwrap(),pixels);
+        let png=export_png(&asset,w,h).unwrap();
+        let reader=png::Decoder::new(Cursor::new(png.as_slice()))
+            .read_info().unwrap();
+        assert_eq!(reader.info().color_type,png::ColorType::Rgba);
+        assert_eq!(reader.info().bit_depth,png::BitDepth::Eight);
+        assert_eq!(png.len(),STANDARD.decode(source.strip_prefix(PREFIX).unwrap())
+            .unwrap().len()); // unchanged PNG is never reencoded for export
+        assert_eq!(pixels.chunks_exact(4).map(|p|[p[0],p[1],p[2],p[3]])
+            .collect::<std::collections::HashSet<_>>().len(),4096);
+    }
 }

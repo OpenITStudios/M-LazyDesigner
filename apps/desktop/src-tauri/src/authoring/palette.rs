@@ -10,7 +10,6 @@ use serde_json::Value;
 use std::collections::HashSet;
 
 const MAX_TARGET_CUBES: usize = 16;
-const MAX_PALETTE_SWAPS: usize = 32;
 
 /// Recolor explicit, non-overlapping regions across one atlas with one PNG
 /// decode+encode and one transaction. Preserve the original hand-painted
@@ -24,7 +23,7 @@ pub(super) fn recolor_cube_faces_palette_guarded(
     if targets.is_empty() || targets.len() > MAX_TARGET_CUBES {
         return Err("PALETTE_TARGETS_SIZE_INVALID".into());
     }
-    if palette.is_empty() || palette.len() > MAX_PALETTE_SWAPS {
+    if palette.is_empty() {
         return Err("PALETTE_SWAPS_SIZE_INVALID".into());
     }
 
@@ -54,6 +53,12 @@ pub(super) fn recolor_cube_faces_palette_guarded(
     // A face can be linked to the atlas by UUID or numeric Texture index;
     // never infer missing face links or silently color the default texture.
     doc.validate()?;
+    if palette.len() > (doc.resolution.width as usize)
+        .saturating_mul(doc.resolution.height as usize) ||
+       serde_json::to_vec(palette)
+           .is_err_or(|bytes|bytes.len()>super::MAX_PLAN_BYTES) {
+        return Err("PALETTE_SWAPS_SIZE_INVALID".into());
+    }
     let texture_index = doc.texture_assets.iter().position(|asset|
         asset.get("uuid").and_then(Value::as_str) == Some(texture_uuid)
     ).ok_or_else(|| "PALETTE_TEXTURE_NOT_FOUND".to_string())?;
