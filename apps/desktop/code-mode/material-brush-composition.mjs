@@ -86,7 +86,7 @@ function strokePoints(points){
   return Object.freeze(out);
 }
 /** Source-only normalization, not reviewer consent or visual evidence. */
-export function normalizedMaterialBrushComposition(value,roles){
+export function prepareMaterialBrushComposition(value,roles){
   object(value,['mask','strokes']);
   if(!Array.isArray(roles) || roles.length===0 ||
      roles.some(role=>typeof role!=='string') ||
@@ -123,9 +123,13 @@ export function normalizedMaterialBrushComposition(value,roles){
       radius:stroke.radius,tip:stroke.tip,taper:stroke.taper});
   });
   const normalized=Object.freeze({mask,strokes:Object.freeze(strokes)});
-  // Reject an unsafe or unrepresentable path before it reaches host approval.
-  draw(normalized,roles);
-  return normalized;
+  // Once per preparation: same checked source is used for the packet
+  // digest and its exact compiled row-spans, without painting anything.
+  const clusters=draw(normalized,roles);
+  return Object.freeze({composition:normalized,clusters});
+}
+export function normalizedMaterialBrushComposition(value,roles){
+  return prepareMaterialBrushComposition(value,roles).composition;
 }
 function pathSamples(stroke){
   let knots=stroke.points;
@@ -224,5 +228,5 @@ function draw(composition,roles){
 }
 /** Build exact row-span cluster candidates; later native UV preflight remains mandatory. */
 export function compileMaterialBrushComposition(value,roles){
-  return draw(normalizedMaterialBrushComposition(value,roles),roles);
+  return prepareMaterialBrushComposition(value,roles).clusters;
 }

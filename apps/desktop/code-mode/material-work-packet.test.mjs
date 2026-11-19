@@ -6,7 +6,8 @@ import {normalizedMaterialWorkPacket,materialWorkPacketDigest,
   validateMaterialWorkPacketOperations,compileMaterialClusterPaint,
   paintOperationsFingerprint,materialFaceClusters}
   from './material-work-packet.mjs';
-import {normalizedMaterialBrushComposition,compileMaterialBrushComposition}
+import {normalizedMaterialBrushComposition,compileMaterialBrushComposition,
+  prepareMaterialBrushComposition}
   from './material-brush-composition.mjs';
 
 const CUBE='00000000-0000-4000-8000-000000000002';
@@ -240,6 +241,16 @@ function brushPacket(){
   };
   return p;
 }
+test('one prepared brush source binds normalized intent to exact compiled pixel spans',()=>{
+  const draft=brushPacket().facePlans[0].brushComposition;
+  const roles=['shadow','base','highlight'];
+  const prepared=prepareMaterialBrushComposition(draft,roles);
+  assert.deepEqual(prepared.composition,normalizedMaterialBrushComposition(draft,roles));
+  assert.deepEqual(prepared.clusters,compileMaterialBrushComposition(draft,roles));
+  assert.equal(Object.isFrozen(prepared),true);
+  assert.equal(Object.isFrozen(prepared.clusters),true);
+  assert.equal(Object.isFrozen(prepared.composition),true);
+});
 test('source-selected brush masks compile into native guarded face-local Paint operations',()=>{
   const source=brushPacket();
   const plan=normalizedMaterialWorkPacket(source);

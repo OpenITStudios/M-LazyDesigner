@@ -5,7 +5,7 @@
  * Rust is the sole bitmap/transaction/UV authority.
  */
 import {createHash} from 'node:crypto';
-import {normalizedMaterialBrushComposition,compileMaterialBrushComposition}
+import {prepareMaterialBrushComposition,compileMaterialBrushComposition}
   from './material-brush-composition.mjs';
 
 const SHA=/^[0-9a-f]{64}$/;
@@ -191,6 +191,7 @@ export function normalizedMaterialWorkPacket(value){
   }
   if(!Array.isArray(value.facePlans) ||
      value.facePlans.length<1 || value.facePlans.length>MAX_FACES)fail();
+  let plannedSpanCount=0;
   plan.facePlans=Object.freeze(value.facePlans.map(face=>{
     object(face,['cubeUuid','face','atlasRegion','formCue',
       'shadowPlacement','highlightPlacement','clusterPlan','clusters',
@@ -207,14 +208,15 @@ export function normalizedMaterialWorkPacket(value){
        value.shadingIntent!=='FORM_SHADING')fail();
     if(value.shadingIntent==='ALPHA_SILHOUETTE' &&
        (face.clusters!==undefined || face.brushComposition!==undefined))fail();
-    const brushComposition=face.brushComposition===undefined?undefined:
-      normalizedMaterialBrushComposition(face.brushComposition,roles);
+    const prepared=face.brushComposition===undefined?null:
+      prepareMaterialBrushComposition(face.brushComposition,roles);
+    const brushComposition=prepared?.composition;
     const clusters=face.clusters===undefined?undefined:
       normalizedFaceClusters(face.clusters,plan.palette,value.shadingIntent);
-    const composedClusters=brushComposition===undefined?undefined:
-      normalizedFaceClusters(
-        compileMaterialBrushComposition(brushComposition,roles),
-        plan.palette,value.shadingIntent);
+    const composedClusters=prepared===null?undefined:
+      normalizedFaceClusters(prepared.clusters,plan.palette,value.shadingIntent);
+    plannedSpanCount+=(clusters??composedClusters??[]).reduce(
+      (n,c)=>n+c.spans.length,0);
     const atlasRegion=rectangle(face.atlasRegion);
     const area=(atlasRegion.to[0]-atlasRegion.from[0])*
       (atlasRegion.to[1]-atlasRegion.from[1]);
@@ -236,10 +238,7 @@ export function normalizedMaterialWorkPacket(value){
   const rectKeys=plan.facePlans.map(x=>key(x.atlasRegion));
   if(new Set(faceKeys).size!==faceKeys.length ||
      new Set(rectKeys).size!==rectKeys.length)fail();
-  if(plan.facePlans.reduce((sum,face)=>sum+
-      materialFaceClusters(face,plan.palette).reduce((n,c)=>n+c.spans.length,0),0)>MAX_SPANS){
-    fail();
-  }
+  if(plannedSpanCount>MAX_SPANS)fail();
   const normalized=Object.freeze(plan);
   if(Buffer.byteLength(JSON.stringify(normalized),'utf8')>12000)fail();
   return normalized;
