@@ -190,6 +190,43 @@ mod tests{
         assert_eq!(s.export().unwrap(),original);
     }
     #[test]
+    fn rotated_face_projects_one_pixel_into_the_correct_existing_atlas(){
+        let mut s=session();
+        s.apply(2,&[EditOperation::SetFaceUvRotation{
+            uuid:CUBE.into(),face:"north".into(),rotation:90,
+        }]).unwrap();
+        let mut request=intent();
+        request.expected_revision=3;
+        request.points=vec![[0,0]];
+        request.protected_regions=vec![];
+        let before=s.export().unwrap();
+        s.apply_surface_paint_stroke(&request).unwrap();
+        let bytes=paint::decode_for_uv_inspection(
+            &s.document().texture_assets[0],128,128).unwrap();
+        // North UV [0..4,0..4], rotated 90 => local [0,0]
+        // is physical atlas [0,3]. No adjacent red detail lies here.
+        assert_eq!(&bytes[(3*128)*4..(3*128)*4+4],
+            &[140,150,160,255]);
+        s.undo(4).unwrap();
+        assert_eq!(s.export().unwrap(),before);
+    }
+    #[test]
+    fn protected_same_rgba_and_unshared_alias_guards_fail_closed(){
+        let mut s=session();
+        let original=s.export().unwrap();
+        let mut only_protected=intent();
+        only_protected.points=vec![[1,1]];
+        assert_eq!(s.apply_surface_paint_stroke(&only_protected).unwrap_err(),
+            "SURFACE_PAINT_NO_EDITABLE_PIXELS");
+        assert_eq!(s.export().unwrap(),original);
+        let mut wrong_face=intent();
+        wrong_face.face="invalid".into();
+        assert_eq!(s.apply_surface_paint_stroke(&wrong_face).unwrap_err(),
+            "SURFACE_PAINT_INTENT_INVALID");
+        assert_eq!(s.export().unwrap(),original);
+    }
+
+    #[test]
     fn source_and_uv_refusals_leave_original_unchanged(){
         let mut s=session();
         let original=s.export().unwrap();

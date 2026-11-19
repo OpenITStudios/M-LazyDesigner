@@ -51,3 +51,10 @@ test('reviewer masks are exact atlas rectangles with no guessed bounds',()=>{
   assert.equal(protectedAtlasRectangle([-1,1],[2,3],[32,32]),null);
   assert.equal(protectedAtlasRectangle([1,1],[32,3],[32,32]),null);
 });
+
+test('direct 3D renderer hit on mirrored Box UV inset remains face-local',()=>{
+  const face={uv:[12,3,4,11],rotation:180,texture:'atlas'};
+  const corners=faceUvCoordinates(face,[32,32],true);
+  const hit=hitFaceLocalTexel(face,corners,uvAt(corners,.25,.875));
+  assert.deepEqual(hit,{size:[8,8],texel:[2,7]});
+});

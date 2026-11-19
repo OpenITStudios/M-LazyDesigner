@@ -258,7 +258,8 @@
     !validSemanticPreview && !validExternalPreview &&
     !!snapshot.paintEditableTextures[paintTextureIndex] &&
     !!snapshot.texturePreviewSources[paintTextureIndex] &&
-    !!snapshot.textureUuids[paintTextureIndex] && paintAlpha===255;
+    !!snapshot.textureUuids[paintTextureIndex] &&
+    paintTool==='pencil' && paintAlpha===255;
   $: surfacePaintContextKey=JSON.stringify([
     snapshot?.epoch,snapshot?.revision,paintTextureIndex,
     snapshot?.textureUuids[paintTextureIndex],paintColor,
@@ -1525,12 +1526,12 @@
     const rect=protectedAtlasRectangle(completed.from,completed.to,
       snapshot.textureResolution);
     if(!rect)return;
-    if(surfaceProtectedRegions.length>=16){
-      error='Up to 16 protected rectangles per stroke. Clear or consolidate masks.';
-      return;
-    }
     if(!surfaceProtectedRegions.some(r=>
       JSON.stringify(r)===JSON.stringify(rect))){
+      if(surfaceProtectedRegions.length>=16){
+        error='Up to 16 protected rectangles per texture. Clear or consolidate masks.';
+        return;
+      }
       surfaceProtectedRegions=[...surfaceProtectedRegions,rect];
     }
     event.preventDefault();
@@ -2328,8 +2329,9 @@
               cannot be altered. Use protected rectangles for same-color
               emblems or markings before painting.</p>
             {#if surfacePaint3d && !surfacePaintEnabled}
-              <p class="hint">3D Paint needs an editable texture, opaque Alpha
-                (255), no preview candidate, and an idle Rust session.</p>
+              <p class="hint">3D Paint needs the Pencil tool, an editable
+                texture, opaque Alpha (255), no preview candidate, and an idle
+                Rust session.</p>
             {/if}
           </div>
           {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
@@ -3116,7 +3118,7 @@
           {surfacePaintEnabled}
           surfacePaintEpoch={snapshot.epoch}
           surfacePaintRevision={snapshot.revision}
-          surfacePaintTextureUuid={snapshot.textureUuids[paintTextureIndex]}
+          surfacePaintTextureUuid={snapshot.textureUuids[paintTextureIndex] ?? null}
           {surfacePaintContextKey}
           onSurfaceStroke={(gesture) => {void paintFromViewport(gesture);}}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
