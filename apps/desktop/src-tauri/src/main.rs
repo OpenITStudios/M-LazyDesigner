@@ -335,6 +335,8 @@ fn main() {
             desktop_authoring::rust_editor_choose_semantic_reference,
             desktop_authoring::rust_editor_preview_semantic_material,
             desktop_authoring::rust_editor_apply_preview_semantic_material,
+            desktop_authoring::rust_editor_preview_external_face_png,
+            desktop_authoring::rust_editor_apply_external_face_png,
             live_read_bridge::rust_live_read_available,
             live_read_bridge::rust_live_read_start,
             live_read_bridge::rust_live_read_stop,

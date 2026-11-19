@@ -38,6 +38,8 @@ mod material_face;
 mod material_form;
 mod material_synthesis;
 pub use material_synthesis::{SemanticMaterialIntent, SemanticMaterialProposal};
+mod external_texture;
+pub use external_texture::ExternalFaceTextureIntent;
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;
 pub use visual_pair::{inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES};
@@ -356,6 +358,11 @@ pub enum EditOperation {
     CreatePaintTexture { uuid: String, name: String },
     EnableImportedPaintTexture { texture_index: usize },
     ImportPaintTexture { uuid: String, name: String, source: String },
+    /// Bounded PNG candidate for one unique, explicit Cube face only.
+    /// Even direct EditOperation callers cannot bypass face/source-color guards.
+    ReplaceExistingFaceTextureGuarded {
+        intent: ExternalFaceTextureIntent, candidate_png_source: String,
+    },
     SetEmptyAtlasResolution { width: u32, height: u32 },
     // Blockbench Project.visible_box [width, height, offsetY] in model blocks.
     SetVisibleBox { bounds: [f64; 3] },
@@ -2940,6 +2947,9 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             doc.resolution.height = *height;
             Ok("project-resolution".into())
         }
+        EditOperation::ReplaceExistingFaceTextureGuarded {
+            intent, candidate_png_source,
+        } => external_texture::apply_operation(doc,intent,candidate_png_source),
         EditOperation::ImportPaintTexture { uuid, name, source } => {
             // Existing imported project assets are never rewritten to admit
             // an unsupported Paint/UV configuration.
@@ -3359,6 +3369,14 @@ impl EditorSession {
         &self, intent: &SemanticMaterialIntent,
     ) -> Result<SemanticMaterialProposal> {
         material_synthesis::compile(self, intent)
+    }
+
+    /// External editor pixels use the same immutable Rust transaction and
+    /// correction scope as direct Paint. No file/editor process is owned here.
+    pub fn apply_external_face_texture(
+        &mut self, intent: &ExternalFaceTextureIntent, candidate_png_source: &str,
+    ) -> Result<MutationReceipt> {
+        external_texture::apply(self,intent,candidate_png_source)
     }
 
     /// G2: propose an explicit same-Bone face alignment with UV-aware Rust

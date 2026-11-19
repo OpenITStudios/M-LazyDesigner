@@ -22,7 +22,7 @@ use lazydesigner::authoring::{
     saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
     BezierKeyframeHandles,
     AuthoringDocument, Bone, Cube, EditOperation, EditPlan, EditorSession,
-    SemanticMaterialIntent, SemanticMaterialProposal,
+    SemanticMaterialIntent, SemanticMaterialProposal, ExternalFaceTextureIntent,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -263,6 +263,26 @@ pub struct SemanticMaterialPreviewReceipt {
     preview_scope: &'static str,
     visual_verdict: &'static str,
     write_authority: &'static str,
+}
+
+/// Local-only preview of a selected existing-face PNG edit. The imported
+/// editor PNG is normalized to Rust-owned bytes; no path reaches the UI/guest.
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct ExternalFaceTexturePreviewReceipt {
+    epoch:u64,
+    revision:u64,
+    source_model_sha256:String,
+    candidate_sha256:String,
+    cube_uuid:String,
+    texture_uuid:String,
+    face:String,
+    texture_index:usize,
+    candidate_png_source:String,
+    selected_png_sha256:String,
+    preview_scope:&'static str,
+    visual_verdict:&'static str,
+    write_authority:&'static str,
 }
 
 /// Read-only geometry output receipt; native file paths never enter Svelte.
@@ -1245,6 +1265,91 @@ pub fn rust_editor_preview_semantic_material(
         preview_scope:"RUST_THREEJS_EPHEMERAL_CANDIDATE",
         visual_verdict:"UNVERIFIED",write_authority:"NOT_GRANTED",
     })
+}
+
+/// User-selected PNG is validated on the current Rust-owned texture/face.
+#[tauri::command]
+pub async fn rust_editor_preview_external_face_png(
+    state: State<'_,EditorState>,expected_epoch:u64,expected_revision:u64,
+    intent:ExternalFaceTextureIntent,
+)->Result<Option<ExternalFaceTexturePreviewReceipt>,DesktopError>{
+    if intent.expected_revision!=expected_revision {
+        return Err(failure("EXTERNAL_TEXTURE_REVISION_STALE",
+            "The external texture target is stale."));
+    }
+    let source=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    let source_sha=source.canonical_sha256().map_err(model_failure)?;
+    let selected=tauri::async_runtime::spawn_blocking(||{
+        FileDialog::new().add_filter("Edited RGBA PNG",&["png"]).pick_file()
+    }).await.map_err(|_|failure("RUST_EDITOR_PICKER_FAILED",
+        "External PNG picker did not complete."))?;
+    let Some(path)=selected else {return Ok(None)};
+    storage::png(&path).map_err(model_failure)?;
+    let bytes=storage::read_bounded(&path,MAX_IMPORT_PNG_BYTES).map_err(model_failure)?;
+    let candidate_input=format!("data:image/png;base64,{}",STANDARD.encode(&bytes));
+    let mut candidate=source.clone();
+    candidate.apply_external_face_texture(&intent,&candidate_input)
+        .map_err(model_failure)?;
+    let candidate_sha=candidate.canonical_sha256().map_err(model_failure)?;
+    let matches:Vec<_>=candidate.document().texture_assets.iter().enumerate()
+        .filter(|(_,t)|t.get("uuid").and_then(Value::as_str)==
+            Some(intent.texture_uuid.as_str())).collect();
+    let [(texture_index,texture)]=matches.as_slice() else {
+        return Err(failure("EXTERNAL_TEXTURE_IDENTITY_INVALID",
+            "The edited texture has ambiguous identity."));
+    };
+    let normalized=embedded_png_preview_source(texture)
+        .ok_or_else(||failure("EXTERNAL_TEXTURE_PNG_UNSUPPORTED",
+            "The validated PNG cannot be previewed."))?;
+    let fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    if fresh.canonical_sha256().map_err(model_failure)?!=source_sha{
+        return Err(failure("EXTERNAL_TEXTURE_SOURCE_STALE",
+            "The model changed while the PNG was selected."));
+    }
+    Ok(Some(ExternalFaceTexturePreviewReceipt{
+        epoch:expected_epoch,revision:expected_revision,
+        source_model_sha256:source_sha,candidate_sha256:candidate_sha,
+        cube_uuid:intent.cube_uuid,texture_uuid:intent.texture_uuid,
+        face:intent.face,texture_index:*texture_index,
+        candidate_png_source:normalized,
+        selected_png_sha256:sha256(&bytes),
+        preview_scope:"RUST_THREEJS_EPHEMERAL_CANDIDATE",
+        visual_verdict:"UNVERIFIED",write_authority:"NOT_GRANTED",
+    }))
+}
+
+/// Direct editor-user Apply. Preview data is untrusted: replay the exact
+/// guarded Rust candidate and compare both source and candidate model SHA.
+#[tauri::command(async)]
+pub fn rust_editor_apply_external_face_png(
+    state:State<'_,EditorState>,expected_epoch:u64,expected_revision:u64,
+    intent:ExternalFaceTextureIntent,candidate_png_source:String,
+    expected_source_sha256:String,expected_candidate_sha256:String,
+)->Result<EditorSnapshot,DesktopError>{
+    if intent.expected_revision!=expected_revision ||
+       ![&expected_source_sha256,&expected_candidate_sha256].iter().all(|sha|
+           sha.len()==64 && sha.bytes().all(|c|c.is_ascii_hexdigit())) {
+        return Err(failure("EXTERNAL_TEXTURE_BINDING_INVALID",
+            "The reviewed PNG has invalid model identity."));
+    }
+    detached_edit(&state.store,&state.pending_edit,
+        expected_epoch,expected_revision,ProjectionReuse::default(),
+        Some("The model changed after external PNG review."),
+        move |session|{
+            if session.canonical_sha256().map_err(model_failure)?!=expected_source_sha256{
+                return Err(failure("EXTERNAL_TEXTURE_SOURCE_STALE",
+                    "The original model no longer matches the preview."));
+            }
+            let mut candidate=session.clone();
+            candidate.apply_external_face_texture(&intent,&candidate_png_source)
+                .map_err(model_failure)?;
+            if candidate.canonical_sha256().map_err(model_failure)?!=expected_candidate_sha256{
+                return Err(failure("EXTERNAL_TEXTURE_CANDIDATE_STALE",
+                    "The edited PNG does not match the reviewed candidate."));
+            }
+            *session=candidate;
+            Ok(())
+        })
 }
 
 /// The same exact source/model/candidate contract applies to direct-user

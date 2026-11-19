@@ -7142,3 +7142,68 @@ fn disposable_preflight_matches_real_rust_candidate_without_commit() {
     assert_eq!(session.preflight(&oversized).unwrap_err(), "PREFLIGHT_PLAN_TOO_LARGE");
     assert_eq!(session.summary().revision, 0);
 }
+
+
+// SOURCE-AUTHORED_NOT_RUN: external PNG edits must retain the exact existing
+// atlas UUID, face ownership, other RGBA8 pixels, Undo, and original source.
+#[test]
+fn external_face_png_keeps_original_detail_and_existing_texture_identity() {
+    const TEX:&str="00000000-0000-4000-8000-000000008811";
+    let mut s=EditorSession::open(SAMPLE.as_bytes()).unwrap();
+    let mut ops=vec![
+        EditOperation::CreatePaintTexture{uuid:TEX.into(),name:"atlas.png".into()},
+        EditOperation::AssignCubeTexture{cube_uuid:CUBE.into(),texture_uuid:TEX.into()},
+    ];
+    for (face,x) in [("north",0),("east",4),("south",8),("west",12),
+                     ("up",16),("down",20)] {
+        ops.push(EditOperation::SetFaceUv{uuid:CUBE.into(),
+            face:face.into(),uv:[x as f64,0.0,(x+4) as f64,4.0]});
+    }
+    s.apply(0,&ops).unwrap();
+    s.apply(1,&[
+        EditOperation::PaintTexturePixel{
+            texture_index:0,x:1,y:1,rgba:[80,100,120,255],
+        },
+        EditOperation::PaintTexturePixel{
+            texture_index:0,x:3,y:3,rgba:[220,20,20,255],
+        },
+    ]).unwrap();
+    let original=s.export().unwrap();
+    let intent=ExternalFaceTextureIntent{
+        expected_revision:2,cube_uuid:CUBE.into(),texture_uuid:TEX.into(),
+        face:"north".into(),source_base_rgba:[80,100,120,255],
+        protected_regions:vec![],expected_before_pixels:vec![],
+    };
+    let mut selected=s.document().texture_assets[0].clone();
+    paint::pixel(&mut selected,128,128,1,1,[120,130,150,255]).unwrap();
+    let png=selected["source"].as_str().unwrap().to_owned();
+    let mut inspected=s.clone();
+    inspected.apply_external_face_texture(&intent,&png).unwrap();
+    assert_eq!(s.export().unwrap(),original);
+    let candidate_sha=inspected.canonical_sha256().unwrap();
+    s.apply_external_face_texture(&intent,&png).unwrap();
+    assert_eq!(s.canonical_sha256().unwrap(),candidate_sha);
+    assert_eq!(s.document().texture_assets.len(),1);
+    assert_eq!(s.document().texture_assets[0]["uuid"],TEX);
+    s.undo(3).unwrap();
+    assert_eq!(s.export().unwrap(),original);
+
+    let mut forbidden=EditorSession::open(&original).unwrap();
+    // Editing original named detail is blocked even if the file is valid.
+    let mut bad=forbidden.document().texture_assets[0].clone();
+    paint::pixel(&mut bad,128,128,3,3,[1,2,3,255]).unwrap();
+    assert!(forbidden.apply_external_face_texture(
+        &ExternalFaceTextureIntent{expected_revision:0,..intent.clone()},
+        bad["source"].as_str().unwrap(),
+    ).is_err());
+    assert_eq!(forbidden.export().unwrap(),original);
+
+    // Direct unscoped EditOperation still enforces the actual source swatch.
+    let mut outside=forbidden.document().texture_assets[0].clone();
+    paint::pixel(&mut outside,128,128,12,12,[80,100,120,255]).unwrap();
+    assert_eq!(forbidden.apply(0,&[EditOperation::ReplaceExistingFaceTextureGuarded{
+        intent:ExternalFaceTextureIntent{expected_revision:0,..intent},
+        candidate_png_source:outside["source"].as_str().unwrap().into(),
+    }]).unwrap_err(),"EXTERNAL_TEXTURE_OUTSIDE_FACE");
+    assert_eq!(forbidden.export().unwrap(),original);
+}

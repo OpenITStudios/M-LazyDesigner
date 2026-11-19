@@ -332,6 +332,62 @@ fn decode_rgba8_source_with_bytes(
     Ok((bytes, pixels))
 }
 
+/// Replace exact pixels from a selected external editor PNG, never a texture
+/// object or UV layout. The caller's face rectangle and source swatch have
+/// already been checked against immutable Rust Cube/UV ownership.
+pub(super) fn replace_face_from_png_guarded(
+    texture: &mut Value, width: u32, height: u32,
+    candidate_source: &str, base: [u8; 4],
+    from: [u32; 2], to: [u32; 2],
+) -> Result<()> {
+    if base[3] != 255 || from[0]>=to[0] || from[1]>=to[1] ||
+       to[0]>width || to[1]>height {
+        return Err("EXTERNAL_TEXTURE_FACE_OR_BASE_INVALID".into());
+    }
+    if !editable(texture) {
+        return Err("EXTERNAL_TEXTURE_NOT_OWNED".into());
+    }
+    let candidate_asset = authored_asset("external-preview", "external.png", candidate_source);
+    let (raw, candidate) = decode_owned_with_bytes(&candidate_asset,width,height)?;
+    if raw.len() > MAX_IMPORT_PNG_BYTES {
+        return Err("EXTERNAL_TEXTURE_PNG_TOO_LARGE".into());
+    }
+    let original = decode(texture,width,height)?;
+    let mut changes = 0usize;
+    for (i,(before,after)) in original.chunks_exact(4)
+        .zip(candidate.chunks_exact(4)).enumerate() {
+        if before == after { continue; }
+        let x = (i as u32)%width;
+        let y = (i as u32)/width;
+        if x<from[0] || x>=to[0] || y<from[1] || y>=to[1] {
+            return Err("EXTERNAL_TEXTURE_OUTSIDE_FACE".into());
+        }
+        if before != base || before[3] != after[3] {
+            return Err("EXTERNAL_TEXTURE_ORIGINAL_DETAIL_OR_ALPHA".into());
+        }
+        // A one-texel margin is retained around observed non-base marks.
+        // Same-RGBA identity remains a user/reviewer protected-mask concern.
+        for yy in y.saturating_sub(1).max(from[1])..=(y+1).min(to[1]-1) {
+            for xx in x.saturating_sub(1).max(from[0])..=(x+1).min(to[0]-1) {
+                let at = ((yy as usize)*width as usize+xx as usize)*4;
+                if original[at..at+4] != base {
+                    return Err("EXTERNAL_TEXTURE_NEAR_ORIGINAL_DETAIL".into());
+                }
+            }
+        }
+        changes+=1;
+    }
+    if changes == 0 {
+        return Err("EDIT_NO_OP".into());
+    }
+    // Normalize to the canonical Rust-owned PNG writer; external ancillary
+    // chunks, layer metadata and hidden editor state do not enter .bbmodel.
+    let encoded=encode(width,height,&candidate)?;
+    texture.as_object_mut().ok_or("EXTERNAL_TEXTURE_NOT_OWNED")?
+        .insert("source".into(),Value::String(encoded));
+    Ok(())
+}
+
 pub(super) const MAX_STROKE_POINTS: usize = 4096;
 
 /// Apply one bounded stroke to one Rust-owned bitmap, decoding and encoding
