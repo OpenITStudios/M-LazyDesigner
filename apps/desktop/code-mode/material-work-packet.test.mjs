@@ -431,6 +431,17 @@ test('sparse-mask row compaction keeps curve 4-connected and protected rest empt
   }
   assert.equal(seen.size,positions.size);
 });
+test('sparse row-span compaction preserves physical face-local x1=256',()=>{
+  const source={
+    mask:{reason:'One entire pixel-row mask establishes the exact 256-wide boundary.',
+      paintable:[{y:4,x0:0,x1:256}],rest:[]},
+    strokes:[{id:'full-row-contract',role:'highlight',
+      formReason:'Synthetic boundary fixture, not a proposed professional shading pattern.',
+      points:[[0,4],[255,4]],radius:0,tip:'square',taper:'none'}],
+  };
+  assert.deepEqual(compileMaterialBrushComposition(source,['highlight'])[0].spans,
+    [{y:4,x0:0,x1:256}]);
+});
 test('operator approval sees the plan digest and description but cannot bypass the Rust write guard',async()=>{
   let approvals=0,runs=0;
   const p=packet();

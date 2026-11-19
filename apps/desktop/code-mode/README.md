@@ -1213,6 +1213,21 @@ Rotated hierarchies, other Bones, animation and world visibility are
 explicitly not certified. The underlying Rust guarded painter and
 separate authorization remain unchanged.
 
+**TC2 curve and sparse brush planning (source-only):** An optional
+`pathKind:"quadratic"` accepts exactly three reviewer-selected
+Cube-face-local integer anchor points (start, control, end). It
+creates a connected stepped pixel gesture for a curved bevel,
+fold or reflection without long manually entered rectangle lists.
+Existing `pathKind:"polyline"` and omitted mode preserve the
+prior behavior. The composer now visits only bounded affected
+mask/stroke pixels during row-span compaction, rather than scanning
+every 256² coordinate. These changes target artist effort and
+source-side processing only; Node/Windows/runtime speed and
+improved visual acceptance have **not been measured**. The
+existing material packet SHA, source palette, native UV/
+preserved-color/Undo/approval gates and post-Paint matched-view
+review remain mandatory.
+
 Selected kinds include `authoring_target`, `cube`, `cube_surfaces`,
 `cube_face_alpha`, `catalog`, `texture`, `texture_alpha`,
 `animation`, `animation_track`, `audit`; the full typed selector union

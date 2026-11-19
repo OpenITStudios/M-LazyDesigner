@@ -454,6 +454,34 @@ texture mask generators
 it does not reuse vendor code or claim physical AO/curvature.
 Compiler completion is not a professional pixel-art verdict.
 
+### Texture Craft TC2 — curved painter gestures and bounded sparse composition
+
+TC1 material masks can optionally use a `pathKind:"quadratic"`
+stroke with three **reviewer-selected Cube-face pixel** anchors
+(start, control and end). The deterministic compiler quantizes
+it to 4-neighbour-connected hard-edged clusters and still
+applies the same rest/paintable mask, swatch roles, taper,
+64-row-span limit and Rust guarded native face Paint. This
+is useful when the approved reference clearly shows a curved
+helmet bevel, cloth fold, or shaped highlight that would
+otherwise require many manually entered pixel coordinates.
+Use straight polylines where the reference calls for them;
+the algorithm must not add decorative curves on its own.
+Pure composer processing uses sparse affected-pixel masks/
+sorted row runs rather than repeated full 256² face scans,
+but no latency or token-efficiency benefit has been executed
+or measured under the active hold.
+
+**Artistic evidence:** a connected/smoothed curve is not
+visual form correctness. The independent reviewer must
+compare fresh reference and native mapped-model views,
+preserve identity, verify all relevant faces, and judge
+pixel scale, material character, quiet areas, and geometry
+interpretation. Existing Golden Pillager A/B acceptance
+remains the sole comparative quality case. This is
+source-only, not an automatic light/curvature/occlusion
+solver, new renderer, layer store, or accepted asset.
+
 ## SURFACE PATTERN PASS
 
 Apply the selected `surface_pattern` recipe to each material cohort only after BASE and VALUE/FORM are readable. Recipes describe directionality, cluster language, value behavior, edge behavior, secondary detail, and anti-patterns. They are not bitmap presets and never select transparency/glow/PBR by name.

@@ -1,3 +1,34 @@
+## 2026-11-19 — Rust TC2 material painter curve + sparse composition (SOURCE ONLY)
+
+Selected source baseline `Rust@94121f9aa05f675cd0234792d21af8c9d9c11419`.
+Single material capability commit `86e046649a25295e8c46d840489497d98ce77e34`
+adds optional reviewer-chosen three-anchor quadratic
+strokes in the existing `material-brush-composition.mjs`.
+The source compiler converts the curve into bounded 4-connected
+face-local row spans, still dispatched through the same
+`MaterialWorkPacket`, Code Mode guarded Rust Paint,
+source-color/alpha/UV ownership, Undo and independent
+host authorization. No material is selected or shaded by
+the compiler automatically. Existing polyline operation
+semantics are intended to remain byte-equivalent.
+
+Sparse touched-pixel sets replace full-sized temporary
+mask arrays, and row compaction now sorts only affected
+pixels. This is a source-level complexity reduction,
+not a measured speedup. Authored positive/negative tests
+cover curved-vs-polyline path, malformed anchors,
+mask rest, 4-connectivity, 256-wide x1 row handling and
+compiled guarded native plan. Rust/Node/TypeScript/Windows
+execution and real artist/camera visual quality have
+NOT been tested under the active project hold. Existing
+Golden Pillager PILL-03/PILL-07 comparison was updated
+with curve-specific artist review and cost-to-accepted
+result requirements; it was NOT_EXECUTED.
+GitHub source commit and selected ref only prove authored
+source, not native working or Rust superiority to Local.
+No CI/cloud build, release, new dependency, unapproved
+localtest, branch merge or asset publication.
+
 ## 2026-11-19 — Rust Texture Craft TC1 source integration (SOURCE ONLY)
 
 Commit chain from `Rust@186ba623e1660cd7dd6e193bef29d3706c66bf0c`:

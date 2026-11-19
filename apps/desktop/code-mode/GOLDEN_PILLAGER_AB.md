@@ -67,6 +67,32 @@ unknown original bitmap colors, simulate native GPU shading or certify
 its result better than `Local`. Its alternate brush path remains
 reviewer-selected and sample-first.
 
+## TC2 curved brush visual acceptance extension (SOURCE ONLY)
+
+Use the same existing PILL-03 helmet flatness and PILL-07
+repeated-stripe comparison, not a new acceptance runner.
+Freeze the identical approved reference, model/UV, selected
+Cube face and camera/shaded model views; compare an explicitly
+selected three-anchor curved gesture with the prior painter
+composition and a true reference-matching flat/stepped
+counterexample. Check whether the curvature improves the
+actual helmet bevel, material value hierarchy, silhouette
+and quiet areas, and whether the 4-connected quantization
+creates corner stair-step artifacts. A syntactically valid
+curve may be worse than a straight hand-placed cluster.
+Review the exact resulting saved atlas face and matched
+shaded model, not just path anchors or geometry normals.
+
+Efficiency must count artist corrections, actual source
+safety refusals, unnecessary brush plan edits, tool calls
+and cost/time to **accepted** result. The sparse compiler
+changes algorithmic work and may save repeated full-256²
+scans, but a real timing/quality improvement over Local
+remains `NOT_MEASURED/UNVERIFIED`. Authored Node tests
+for source equivalence, 4-neighbour connectivity, rest
+preservation, malformed curves and 256-wide row boundaries
+are NOT_EXECUTED under the test hold.
+
 ## Frozen acceptance cases
 
 | Case ID | Prior user feedback | Acceptance evidence to obtain |

@@ -152,6 +152,19 @@ fresh shaded model views before propagating. The same explicit
 artist palette role colors remain authoritative; don't auto-generate
 a formulaic metal/wood color ramp.
 
+**TC2 optional curved pixel-art gesture (SOURCE ONLY):**
+For an actually observed curved bevel, cloth fold, or shaped
+material highlight, a reviewer may use `pathKind:"quadratic"`
+with three chosen face-local start/control/end anchors instead
+of a long hand-entered polyline or a stack of rectangles.
+Keep the approved style's intentional stepped clusters and
+negative space; curvature does not automatically mean beauty.
+Do NOT invent bent highlights or textile folds solely from
+the material label. The resulting hard clusters remain inside
+the original mask/rest and current Rust native UV/source-color
+guards. Fewer coordinates and sparse mask iteration are
+design goals, not measured time or artistic quality improvements.
+
 **Rust reviewed material propagation plan (source-only):**
 Before *broad reviewed* Texture propagation, the AI must submit one
 bounded `materialWorkPacket` with approved/current SHA binding, latest
