@@ -25,7 +25,7 @@
     type ExternalFaceTextureReceipt } from './rustExternalTexturePreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import { protectedAtlasRectangle,
-    type ProtectionRect,type SurfaceGesture } from './rustSurfacePaint';
+    type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
@@ -73,7 +73,11 @@
   // Ephemeral user-review mask, bound to the atlas UUID and model epoch.
   // These rectangles are never persisted as a second bitmap/layer owner.
   let surfacePaint3d=false,surfaceProtectMode=false;
+  let surfaceSampleMode=false,surfaceSeamEnabled=false;
+  let surfaceBrushRadius=1;
+  let surfaceBrushTip:'square'|'diamond'='square';
   let surfaceSourceBase='#5a6e82';
+  let surfaceSampleStatus='';
   let surfaceProtectedRegions:ProtectionRect[]=[];
   let surfaceProtectionBinding:{epoch:number;textureUuid:string}|null=null;
   let surfaceMaskDrag:{pointerId:number;from:PaintPoint;to:PaintPoint;
@@ -259,11 +263,14 @@
     !!snapshot.paintEditableTextures[paintTextureIndex] &&
     !!snapshot.texturePreviewSources[paintTextureIndex] &&
     !!snapshot.textureUuids[paintTextureIndex] &&
-    paintTool==='pencil' && paintAlpha===255;
+    paintTool==='pencil' && paintAlpha===255 &&
+    Number.isInteger(surfaceBrushRadius) &&
+    surfaceBrushRadius>=1 && surfaceBrushRadius<=4;
   $: surfacePaintContextKey=JSON.stringify([
     snapshot?.epoch,snapshot?.revision,paintTextureIndex,
     snapshot?.textureUuids[paintTextureIndex],paintColor,
     paintAlpha,surfaceSourceBase,guardedSurfaceMasks,
+    surfaceSampleMode,surfaceSeamEnabled,surfaceBrushRadius,surfaceBrushTip,
   ]);
 
   // Source-backed once/loop/hold playback is admitted only for the strict
@@ -1467,8 +1474,51 @@
     if (next) notice = 'Imported RGBA8 PNG validated for painting; the original bitmap is unchanged until the first stroke.';
   }
 
+  type SurfaceSampleReceipt={
+    revision:number;cube_uuid:string;texture_uuid:string;
+    face:string;local:[number,number];atlas_at:[number,number];
+    rgba:[number,number,number,number];
+    source_authority:'RUST_SAVED_RGBA8';
+    write_authority:'NOT_GRANTED';visual_verdict:'UNVERIFIED';
+  };
+  async function sampleFromViewport(hit:SurfaceSampleHit):Promise<void>{
+    if(!surfacePaintEnabled||!surfaceSampleMode||!snapshot||busy||
+       hit.contextKey!==surfacePaintContextKey||
+       hit.epoch!==snapshot.epoch||hit.revision!==snapshot.revision||
+       snapshot.textureUuids[hit.textureIndex]!==hit.textureUuid)return;
+    busy=true;error='';surfaceSampleStatus='';
+    try{
+      const result=await invoke<SurfaceSampleReceipt>(
+        'rust_editor_sample_surface_color',{
+          expectedEpoch:hit.epoch,expectedRevision:hit.revision,
+          request:{
+            expected_revision:hit.revision,cube_uuid:hit.cubeUuid,
+            texture_uuid:hit.textureUuid,face:hit.face,
+            expected_face_uv:hit.sourceUv,
+            expected_face_rotation:hit.sourceRotation,local:hit.texel,
+          },
+        });
+      if(snapshot.epoch!==hit.epoch||snapshot.revision!==hit.revision||
+         result.revision!==hit.revision||
+         result.cube_uuid!==hit.cubeUuid||
+         result.texture_uuid!==hit.textureUuid||
+         result.source_authority!=='RUST_SAVED_RGBA8'||
+         result.write_authority!=='NOT_GRANTED')throw new Error('SURFACE_SAMPLE_STALE');
+      if(result.rgba[3]!==255){
+        surfaceSampleStatus='Source pixel alpha is '+result.rgba[3]+
+          '; this guarded 3D brush requires an opaque original pixel.';
+      }else{
+        surfaceSourceBase='#'+result.rgba.slice(0,3)
+          .map(n=>n.toString(16).padStart(2,'0')).join('');
+        surfaceSampleMode=false;
+        surfaceSampleStatus='Original RGBA confirmed by Rust at atlas ('+
+          result.atlas_at.join(', ')+').';
+      }
+    }catch(cause){showError(cause);}
+    finally{busy=false;}
+  }
   async function paintFromViewport(gesture:SurfaceGesture):Promise<void>{
-    if(!surfacePaintEnabled||!snapshot||busy||paintAlpha!==255 ||
+    if(!surfacePaintEnabled||surfaceSampleMode||!snapshot||busy||paintAlpha!==255 ||
        snapshot.epoch!==gesture.epoch||
        snapshot.revision!==gesture.revision||
        snapshot.textureUuids[gesture.textureIndex]!==gesture.textureUuid||
@@ -1486,11 +1536,22 @@
         expected_face_uv:gesture.sourceUv,
         expected_face_rotation:gesture.sourceRotation,
         source_base_rgba:[...base,255],paint_rgba:[...color,255],
-        points:gesture.points,protected_regions:guardedSurfaceMasks,
+        points:gesture.points,
+        brush_radius:surfaceBrushRadius,brush_tip:surfaceBrushTip,
+        ...(gesture.seam?{seam:{
+          cube_uuid:gesture.seam.cubeUuid,
+          face:gesture.seam.face,
+          expected_face_uv:gesture.seam.sourceUv,
+          expected_face_rotation:gesture.seam.sourceRotation,
+          points:gesture.seam.points,
+        }}:{}),
+        protected_regions:guardedSurfaceMasks,
       },
     });
     if(next){
-      notice='3D face stroke committed in one Rust Undo step. Other original colors, alpha, nearby details and review masks remain protected.';
+      notice=gesture.seam
+        ? 'Two adjacent Cube faces painted in one Rust Undo step. Original colors, alpha and protected markings are preserved.'
+        : '3D brush committed in one Rust Undo step. Original colors, alpha and protected markings are preserved.';
     }
   }
   function startSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
@@ -2314,7 +2375,25 @@
           <div class="surface-paint-panel" aria-label="Source-bound 3D pixel painting">
             <label><input type="checkbox" bind:checked={surfacePaint3d}
               disabled={busy || loading || !!paintStroke || !!surfaceMaskDrag}/>
-              Paint directly on 3D Cube (1 pixel)</label>
+              Paint directly on 3D Cube</label>
+            <label>Brush radius
+              <input type="number" min="1" max="4" step="1"
+                bind:value={surfaceBrushRadius}
+                disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+            </label>
+            <label>Brush tip
+              <select bind:value={surfaceBrushTip}
+                disabled={busy || !!paintStroke || !!surfaceMaskDrag}>
+                <option value="square">Square</option>
+                <option value="diamond">Diamond</option>
+              </select>
+            </label>
+            <label><input type="checkbox" bind:checked={surfaceSampleMode}
+              disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
+              Pick original RGB from 3D (Rust)</label>
+            <label><input type="checkbox" bind:checked={surfaceSeamEnabled}
+              disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
+              Bridge adjacent Cube faces (one Undo)</label>
             <label>Original editable RGB
               <input type="color" bind:value={surfaceSourceBase}
                 disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
@@ -2327,12 +2406,15 @@
               disabled={busy || !!surfaceMaskDrag || !guardedSurfaceMasks.length}>
               Clear protected areas ({guardedSurfaceMasks.length})
             </button>
-            <p class="hint">3D drawing is one-face-per-drag and opaque RGB only.
-              The exact original RGB is the paintable source selection; other
-              original colors, adjacent detail pixels, alpha and shared UV
-              cannot be altered. Use protected rectangles for same-color
-              emblems or markings before 3D painting. These masks do
-              not modify or restrict the separate 2D Paint tools.</p>
+            <p class="hint">Brushes remain hard pixel clusters with radius 1–4.
+              All color changes use the exact original opaque RGBA from Rust;
+              other original colors, identity masks, alpha and shared UV are
+              protected. Optional two-face bridging only applies to adjacent
+              coplanar Cube faces in the same Bone and atlas; an unsupported
+              seam aborts the gesture. No automatic material generation.</p>
+            {#if surfaceSampleStatus}
+              <p class="hint" role="status">{surfaceSampleStatus}</p>
+            {/if}
             {#if surfacePaint3d && !surfacePaintEnabled}
               <p class="hint">3D Paint needs the Pencil tool, an editable
                 texture, opaque Alpha (255), no preview candidate, and an idle
@@ -3125,7 +3207,9 @@
           surfacePaintRevision={snapshot.revision}
           surfacePaintTextureUuid={snapshot.textureUuids[paintTextureIndex] ?? null}
           {surfacePaintContextKey}
+          {surfaceSampleMode} {surfaceSeamEnabled}
           onSurfaceStroke={(gesture) => {void paintFromViewport(gesture);}}
+          onSurfaceSample={(hit) => {void sampleFromViewport(hit);}}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
           canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard && !recoveryDialog && !livePairingDialog}
           onTranslate={moveFromViewport} onRotate={rotateFromViewport}

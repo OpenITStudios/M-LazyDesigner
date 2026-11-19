@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {faceUvCoordinates} from './rustTextureProjection.ts';
 import {hitFaceLocalTexel,protectedAtlasRectangle,sameSurface,
-  SURFACE_FACE_ORDER} from './rustSurfacePaint.ts';
+  canBeginSurfaceSeam,SURFACE_FACE_ORDER} from './rustSurfacePaint.ts';
 function uvAt(corners,s,t){
   return [
     corners[0]+s*(corners[2]-corners[0])+t*(corners[4]-corners[0]),
@@ -59,4 +59,14 @@ test('direct 3D renderer hit on mirrored Box UV inset remains face-local',()=>{
   const corners=faceUvCoordinates(face,[32,32],true);
   const hit=hitFaceLocalTexel(face,corners,uvAt(corners,.25,.875));
   assert.deepEqual(hit,{size:[8,8],texel:[2,7]});
+});
+
+test('seam candidate is only a same-atlas/same-face different Cube',()=>{
+  const a={cubeUuid:'a',face:'north',textureIndex:0,
+    sourceUv:[0,0,4,4],sourceRotation:0,
+    texel:[3,2],size:[4,4]};
+  assert.equal(canBeginSurfaceSeam(a,{...a,cubeUuid:'b'}),true);
+  assert.equal(canBeginSurfaceSeam(a,{...a,cubeUuid:'b',face:'east'}),false);
+  assert.equal(canBeginSurfaceSeam(a,{...a,cubeUuid:'b',textureIndex:1}),false);
+  assert.equal(canBeginSurfaceSeam(a,{...a}),false);
 });

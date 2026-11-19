@@ -12,11 +12,21 @@ export type SurfaceHit={
   texel:[number,number];size:[number,number];
   sourceUv:[number,number,number,number];sourceRotation:number;
 };
+export type SurfaceBridge=SurfaceHit&{points:Array<[number,number]>};
 export type SurfaceGesture=SurfaceHit&{
   epoch:number;revision:number;textureUuid:string;
   points:Array<[number,number]>;
   contextKey:string;
+  seam?:SurfaceBridge;
 };
+export type SurfaceSampleHit=SurfaceHit&{
+  epoch:number;revision:number;textureUuid:string;contextKey:string;
+};
+/** Only a candidate; actual adjacency and UV sharing are Rust-validated. */
+export function canBeginSurfaceSeam(first:SurfaceHit,next:SurfaceHit):boolean{
+  return first.cubeUuid!==next.cubeUuid&&first.face===next.face&&
+    first.textureIndex===next.textureIndex;
+}
 export type ProtectionRect={from:[number,number];to:[number,number]};
 /** Exact affine inverse of the four Blockbench/Three UV vertex corners.
  * Box-UV inset, signed mirror and quarter-turns are already in corners.
@@ -33,8 +43,8 @@ export function hitFaceLocalTexel(
      !hitUv.every(Number.isFinite))return null;
   const rotation=supportedFaceUvRotation(face);
   if(rotation===null)return null;
-  const [u0,v0,u1,v1]=face.uv;
-  const natural=[Math.abs(u1-u0),Math.abs(v1-v0)];
+  const [faceU0,faceV0,faceU1,faceV1]=face.uv;
+  const natural=[Math.abs(faceU1-faceU0),Math.abs(faceV1-faceV0)];
   if(!natural.every(x=>Number.isInteger(x)&&x>0&&x<=256))return null;
   const size:[number,number]=rotation===90||rotation===270?
     [natural[1],natural[0]]:[natural[0],natural[1]];

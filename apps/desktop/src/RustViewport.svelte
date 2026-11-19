@@ -15,7 +15,8 @@
   import { reviewCameraAxes, type ReviewViewId } from './rustReviewCapture';
   import { appendPaintStrokeInPlace } from './rustPaintStroke';
   import { SURFACE_FACE_ORDER,hitFaceLocalTexel,sameSurface,
-    type SurfaceHit,type SurfaceGesture } from './rustSurfacePaint';
+    canBeginSurfaceSeam,type SurfaceHit,type SurfaceGesture,
+    type SurfaceSampleHit } from './rustSurfacePaint';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
@@ -39,7 +40,10 @@
   export let surfacePaintRevision = 0;
   export let surfacePaintTextureUuid: string | null = null;
   export let surfacePaintContextKey = '';
+  export let surfaceSampleMode=false;
+  export let surfaceSeamEnabled=false;
   export let onSurfaceStroke:(value:SurfaceGesture)=>void=()=>{};
+  export let onSurfaceSample:(value:SurfaceSampleHit)=>void=()=>{};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
   type GizmoMode = 'translate' | 'rotate' | 'scale';
   export let onTranslate: (uuid: string, delta: Vec3) => Promise<boolean> = async () => false;
@@ -685,13 +689,33 @@
       return;
     }
     const hit=surfacePick(event);
-    if(!hit||!sameSurface(current,hit)){
-      surfaceGesture={...current,stopped:true};
+    if(!hit){
+      surfaceGesture={...current,stopped:true,overflow:surfaceSeamEnabled};
       return;
     }
-    if(!appendPaintStrokeInPlace(current.points,hit.texel,
-      current.size[0],current.size[1])){
-      surfaceGesture={...current,stopped:true,overflow:true};
+    if(current.seam){
+      if(!sameSurface(current.seam,hit)){
+        surfaceGesture={...current,stopped:true,overflow:true};
+        return;
+      }
+      if(!appendPaintStrokeInPlace(current.seam.points,hit.texel,
+        current.seam.size[0],current.seam.size[1])||
+        current.points.length+current.seam.points.length>4096){
+        surfaceGesture={...current,stopped:true,overflow:true};
+      }
+      return;
+    }
+    if(sameSurface(current,hit)){
+      if(!appendPaintStrokeInPlace(current.points,hit.texel,
+        current.size[0],current.size[1])){
+        surfaceGesture={...current,stopped:true,overflow:true};
+      }
+    }else if(surfaceSeamEnabled&&canBeginSurfaceSeam(current,hit)){
+      // Rust verifies shared Bone frame, actual coplanarity, edge contact,
+      // UV isolation and original color before any source may change.
+      surfaceGesture={...current,seam:{...hit,points:[hit.texel]}};
+    }else{
+      surfaceGesture={...current,stopped:true,overflow:surfaceSeamEnabled};
     }
   }
   function finishSurfacePointer(event:PointerEvent,cancelled=false){
@@ -712,7 +736,8 @@
         size:completed.size,sourceUv:completed.sourceUv,
         sourceRotation:completed.sourceRotation,epoch:completed.epoch,
         revision:completed.revision,textureUuid:completed.textureUuid,
-        contextKey:completed.contextKey,points:completed.points});
+        contextKey:completed.contextKey,points:completed.points,
+        ...(completed.seam?{seam:completed.seam}:{})});
     }
   }
   function pointerMove(event:PointerEvent){
@@ -726,6 +751,15 @@
       const hit=surfacePick(event);
       mouseStart=null;
       if(!hit)return;
+      if(surfaceSampleMode){
+        // Source selection is a read-only native RGBA8 sample, not a
+        // WebGL canvas/lighting/texture-image-derived color guess.
+        onSurfaceSample({...hit,epoch:surfacePaintEpoch,
+          revision:surfacePaintRevision,textureUuid:surfacePaintTextureUuid!,
+          contextKey:surfacePaintContextKey});
+        event.preventDefault();
+        return;
+      }
       surfaceGesture={...hit,epoch:surfacePaintEpoch,
         revision:surfacePaintRevision,
         textureUuid:surfacePaintTextureUuid!,
@@ -875,7 +909,9 @@
     onpointerup={pointerUp} onpointercancel={pointerCancel}
     onlostpointercapture={pointerLost}
     aria-label={surfacePaintEnabled
-      ? 'Paint on the selected 3D Cube face with one-pixel exact RGBA strokes. Right drag pans, mouse wheel zooms. Source markings and shared UV are protected by Rust.'
+      ? (surfaceSampleMode
+        ? 'Sample the original face pixel from Rust with a click. No model change.'
+        : 'Draw an exact hard pixel stroke on a source-bound Cube face. Optional adjacent Cube seam bridge is checked by Rust; right drag pans.')
       : 'Geometry preview with embedded PNG textures. Select a Cube and use Move, Rotate or Scale gizmo; drag to orbit, scroll to zoom.'} />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>
