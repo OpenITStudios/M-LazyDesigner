@@ -13,7 +13,7 @@ mod bbmodel;
 mod semantic_map;
 mod geometry;
 mod geometry_assembly;
-pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest, GeometryRectangularFrame, GeometryHollowBox};
+pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest, GeometryRectangularFrame, GeometryHollowBox, GeometryArch};
 mod geometry_attachment;
 pub use geometry_attachment::{GeometryFaceAttachmentRequest, GeometryFaceAttachmentProposal};
 mod geometry_propagation;

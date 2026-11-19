@@ -1,3 +1,19 @@
+**Active Rust Geometry G3.2 — supported structural arch (2026-11-19; SOURCE ONLY):**
+Building on Rust@6c895a1 (Local baseline @422e4d7), the existing G1
+assembly now compiles a source-authored semicircular structural
+arch from two full-height piers and an odd 3–15 crown strips.
+The genuine void remains clear; strips have integer width/height in
+model units for the supported Box UV subset. A flat quantized arch,
+per-unit microsteps, insufficient atlas, unsafe bounds, duplicate IDs
+or over-budget construction refuses before native Apply. One Rust
+AuthoringDocument/preflight/Undo and SHA-bound Code Mode entrypoint
+remain authoritative. Source regression authored, NOT_EXECUTED;
+no CI/PC-native execution or visual acceptance. Local still supports
+broader sweep/revolve/loft/profile sweep and surface/OBB diagnostics;
+Rust superiority remains UNVERIFIED. Next product focus is
+reference-grounded organic/curved construction, not general new
+subsystems, until native validation becomes separately authorized.
+
 **Active Rust Geometry G3.1 — true open hollow box (2026-11-19; SOURCE ONLY):**
 Rust@0185bc2 (Local reference @422e4d7) G1 geometry assembly was
 extended with caller-declared hollow boxes: 5 disjoint Box-UV blockout

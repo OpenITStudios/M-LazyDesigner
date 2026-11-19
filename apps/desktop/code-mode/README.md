@@ -61,6 +61,17 @@ UUIDs, parent UUID and unchanged `NOT_GRANTED/UNVERIFIED` preflight;
 no JS shape solver, native mutation, UV packing, painting or approval.
 Node/host consumer regression fixtures AUTHORED_NOT_RUN.
 
+**G3.2 semicircular arch in existing G1 Code Mode (2026-11-19; SOURCE ONLY):**
+Optional `assembly.parts[].arches` takes `name`, `center`,
+`size`, `span_axis` X/Z, positive `wall` and `rise`,
+plus `cube_uuids` ordered as left_pier, right_pier, then an odd
+3–15 top strips (total 5–17). One trusted
+`planGeometryAssembly` call delegates all Geometry math and native
+preflight to Rust. The SDK binds returned Cube UUIDs, names and Bone
+ownership to the declared input and refuses fabricated write approval.
+No new CLI command, Deno geometry solver, Texture/UV step or mutation.
+Regressions AUTHORED_NOT_RUN; native/visual quality UNVERIFIED.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

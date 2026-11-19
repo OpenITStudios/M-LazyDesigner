@@ -122,12 +122,27 @@ export interface GeometryHollowBox {
   wall: number;
   cube_uuids: [string,string,string,string,string];
 }
+/** G3.2 structural semicircular arch, not a freeform curve or mesh.
+ * First two Cube UUIDs are full-height piers; the remaining 3..15
+ * UUIDs are an odd number of integral-width (>1 model unit) crown strips.
+ * No per-pixel staircasing or invented visual/reference evidence.
+ */
+export interface GeometryArch {
+  name: string;
+  center: Vec3;
+  size: [number,number,number];
+  span_axis: "X"|"Z";
+  wall: number;
+  rise: number;
+  cube_uuids: string[];
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
   cubes: Array<Cube & { name: string }>;
   frames?: GeometryRectangularFrame[];
   hollow_boxes?: GeometryHollowBox[];
+  arches?: GeometryArch[];
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */

@@ -921,7 +921,9 @@ export function createRustCodeModeClient({
               !Array.isArray(part.cubes) ||
               (part.frames !== undefined && !Array.isArray(part.frames)) ||
               (part.hollow_boxes !== undefined &&
-                !Array.isArray(part.hollow_boxes))) {
+                !Array.isArray(part.hollow_boxes)) ||
+              (part.arches !== undefined &&
+                !Array.isArray(part.arches))) {
             declarationValid = false;
             break;
           }
@@ -955,6 +957,23 @@ export function createRustCodeModeClient({
               .forEach((side,i) =>
                 declare(hollow.cube_uuids[i], 'add_cube', part.bone.uuid,
                   hollow.name+'_'+side,true));
+          }
+          for (const arch of part.arches ?? []) {
+            const ids = arch?.cube_uuids;
+            // Only verify transport shape/identity. Rust alone owns
+            // semicircle math, source-validated dimensions and topology.
+            if (!Array.isArray(ids) || ids.length < 5 || ids.length > 17 ||
+                ids.length % 2 !== 1 || typeof arch?.name !== 'string') {
+              declarationValid = false;
+              break;
+            }
+            declare(ids[0], 'add_cube', part.bone.uuid,
+              arch.name+'_left_pier',true);
+            declare(ids[1], 'add_cube', part.bone.uuid,
+              arch.name+'_right_pier',true);
+            ids.slice(2).forEach((uuid,i) =>
+              declare(uuid, 'add_cube', part.bone.uuid,
+                arch.name+'_curve_'+(i+1),true));
           }
         }
         const used = new Set();

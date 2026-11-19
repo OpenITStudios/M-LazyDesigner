@@ -263,6 +263,83 @@ test('G3.1 hollow box binds all five panel IDs and does not gain Apply permissio
   assert.equal(approvals,0);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: a curved G3.2 blockout still crosses the single
+// G1 Rust read-only route, with exact UUID owners and no new write power.
+test('G3.2 curved arch binds piers and crown IDs without inferring geometry',async()=>{
+  const ids=['left','right','curve1','curve2','curve3','curve4','curve5']
+    .map(n=>'arch-'+n);
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'arch-bone',name:'arch_bone',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],arches:[{
+      name:'doorway',center:[0,0,0],size:[19,12,4],
+      span_axis:'X',wall:2,rise:6,cube_uuids:ids,
+    }],
+  }]};
+  const names=['left_pier','right_pier','curve_1','curve_2',
+    'curve_3','curve_4','curve_5'];
+  const ops=[
+    {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+    ...ids.map((uuid,i)=>({op:'add_cube',bone_uuid:'arch-bone',
+      cube:{uuid,name:'doorway_'+names[i],box_uv:true}})),
+  ];
+  const receipt={status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations:ops,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:8,
+        changed_uuids:['arch-bone',...ids]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+  let calls=0, approvals=0;
+  const build=runner=>createRustCodeModeClient({
+    binary:BIN,runner,
+    authorizeMutation:async()=>{approvals++;return true;},
+  });
+  const client=build(async argv=>{
+    calls++;
+    assert.equal(argv[0],'plan-geometry-assembly');
+    assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+    assert.deepEqual(JSON.parse(await readFile(
+      argv[argv.indexOf('--assembly')+1],'utf8')),assembly);
+    return receipt;
+  });
+  const result=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.deepEqual(result.plan.operations.map(op=>
+    op.op==='add_bone'?op.bone.uuid:op.cube.uuid),['arch-bone',...ids]);
+  assert.equal(result.write_authority,'NOT_GRANTED');
+  assert.equal(calls,1);
+  for(const forged of [
+    {...receipt,write_authority:'GRANTED'},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],cube:{...ops[1].cube,uuid:'other'}},
+      ...ops.slice(2)]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],bone_uuid:'foreign-bone'},...ops.slice(2)]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],cube:{...ops[1].cube,name:'not-a-pier'}},
+      ...ops.slice(2)]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],cube:{...ops[1].cube,box_uv:false}},
+      ...ops.slice(2)]}},
+    {...receipt,preflight:{...receipt.preflight,mutation:{
+      ...receipt.preflight.mutation,
+      changed_uuids:['arch-bone','forged',...ids.slice(1)]}}},
+  ]) {
+    await assert.rejects(build(async()=>forged).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  const bad={...assembly,parts:[{...assembly.parts[0],
+    arches:[{...assembly.parts[0].arches[0],cube_uuids:ids.slice(1)}]}]};
+  await assert.rejects(build(async()=>receipt).planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:bad,
+  }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  assert.equal(calls,1);
+  assert.equal(approvals,0);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: G2 face alignment uses only a read-only Rust
 // plan. No host write approval is requested, and fabricated grants refuse.
 test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',async()=>{

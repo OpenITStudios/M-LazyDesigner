@@ -63,6 +63,24 @@ AUTHORED_NOT_RUN (six face directions, disjoint volume, cavity, rejection,
 source immutability, Undo/Redo and editable .bbmodel). Native performance
 and reference quality relative to Local remain NOT_EXECUTED/UNVERIFIED.
 
+**G3.2 bounded structural semicircular arch (2026-11-19; SOURCE ONLY):**
+The same G1 `geometry_assembly.rs` compiler now accepts optional
+`parts[].arches`: caller-declared center, size, X/Z horizontal span,
+wall, rise, and 5–17 explicit UUIDs. Rust builds two full-height support
+piers followed by 3–15 odd-count crown strips along a conservative
+semicircular opening. All strips remain ordinary disjoint Bedrock Cubes
+in one declared Bone and one canonical EditPlan. Opening depth is real;
+no mesh, alpha-illusion, persistent curve system or new executor.
+Anti-microcube guards require at least two units per strip, integer
+strip widths matching Box UV, and visible post-quantization curvature.
+Unsupported/unsafe dimensions, duplicate IDs, over-budget batches,
+pretextured projects and insufficient atlas per-Cube net fail closed.
+UV packing, appearance and actual profile fidelity remain unverified;
+this is only a structural blockout and not general organic sweep.
+Positive/negative Rust source regressions cover both X/Z spans,
+piers, curvature, disjoint volume, no-mutation preflight, Undo/reopen
+and existing G1 request compatibility. Tests NOT_EXECUTED.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and

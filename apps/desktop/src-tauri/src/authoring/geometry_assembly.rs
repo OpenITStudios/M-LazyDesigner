@@ -26,6 +26,9 @@ pub struct GeometryAssemblyPart {
     /// Optional five-panel untextured cavity; absent in prior G1/G3 requests.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hollow_boxes: Vec<GeometryHollowBox>,
+    /// G3.2 structural arch blockouts; omitted by older G1/G3 callers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arches: Vec<GeometryArch>,
 }
 
 /// Source-authored through-opening. Axis is the normal to its opening;
@@ -55,6 +58,130 @@ pub struct GeometryHollowBox {
     pub open_face: String,
     pub wall: u32,
     pub cube_uuids: [String; 5],
+}
+
+/// One vertical semicircular opening made from ordinary native Cubes.
+/// The first two UUIDs own FULL-HEIGHT left/right piers; the remainder
+/// own odd-count top segments, ordered along the horizontal span axis.
+/// Explicit minimum 2-model-unit strips avoid per-voxel micro-steps.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GeometryArch {
+    pub name: String,
+    pub center: [f64; 3],
+    pub size: [u32; 3],
+    pub span_axis: String,
+    pub wall: u32,
+    pub rise: u32,
+    pub cube_uuids: Vec<String>,
+}
+
+/// Conservative source-local stepped semicircle with real empty space.
+/// Each curved strip starts at the HIGHEST underside point over its span:
+/// the solid cannot intrude into the declared opening. This is not a mesh,
+/// a spline engine, artist-approved smoothing or an inferred reference.
+fn compile_arch(shape: &GeometryArch, bone_origin: [f64; 3]) -> Result<Vec<Cube>> {
+    let span = match shape.span_axis.as_str() {
+        "X" => 0, "Z" => 2,
+        _ => return Err(fail("GEOMETRY_ARCH_AXIS_INVALID")),
+    };
+    if !valid_node_name(&shape.name) || shape.name.chars().count() > 110 {
+        return Err(fail("GEOMETRY_ARCH_NAME_INVALID"));
+    }
+    if shape.size.iter().any(|n| !(1..=32).contains(n)) {
+        return Err(fail("GEOMETRY_ARCH_SIZE_INVALID"));
+    }
+    if shape.wall == 0 || shape.wall > 16 || shape.rise == 0 ||
+       shape.rise > 32 {
+        return Err(fail("GEOMETRY_ARCH_DIMENSIONS_INVALID"));
+    }
+    let strips = shape.cube_uuids.len().checked_sub(2)
+        .ok_or_else(|| fail("GEOMETRY_ARCH_COLUMNS_INVALID"))?;
+    if strips < 3 || strips > 15 || strips % 2 == 0 {
+        return Err(fail("GEOMETRY_ARCH_COLUMNS_INVALID"));
+    }
+    let size = shape.size.map(f64::from);
+    let wall = f64::from(shape.wall);
+    let rise = f64::from(shape.rise);
+    let opening_width = size[span] - 2.0 * wall;
+    // Source-first anti-overcube budget. Reject thin steps and too-small
+    // springline/crown rather than inventing visually misleading Cubes.
+    if opening_width <= 0.0 ||
+       size[1] - wall - rise < 1.0 {
+        return Err(fail("GEOMETRY_ARCH_OPENING_INVALID"));
+    }
+    if opening_width / strips as f64 < 2.0 {
+        return Err(fail("GEOMETRY_ARCH_COLUMNS_TOO_NARROW"));
+    }
+    // The saved Bedrock Box UV net rounds face sizes to integer units.
+    // Keep source column widths integral rather than silently distorting UV.
+    if (shape.size[span] - 2 * shape.wall) % strips as u32 != 0 {
+        return Err(fail("GEOMETRY_ARCH_COLUMNS_GRID_UNSUPPORTED"));
+    }
+    let low: [f64; 3] = std::array::from_fn(|i|
+        shape.center[i] - size[i] / 2.0);
+    let high: [f64; 3] = std::array::from_fn(|i|
+        shape.center[i] + size[i] / 2.0);
+    if !valid_bounds(low, high) {
+        return Err(fail("GEOMETRY_ARCH_BOUNDS_INVALID"));
+    }
+    let inner_left = low[span] + wall;
+    let inner_right = high[span] - wall;
+    let half_opening = opening_width / 2.0;
+    let springline = high[1] - wall - rise;
+    let step = opening_width / strips as f64;
+    let mut cubes = Vec::with_capacity(shape.cube_uuids.len());
+    let (mut lowest_crown, mut highest_crown) =
+        (f64::INFINITY, f64::NEG_INFINITY);
+    for (index, (x0, x1, suffix)) in [
+        (low[span], inner_left, "left_pier"),
+        (inner_right, high[span], "right_pier"),
+    ].into_iter().enumerate() {
+        let mut from = low;
+        let mut to = high;
+        from[span] = x0;
+        to[span] = x1;
+        cubes.push(blockout_cube(&shape.cube_uuids[index],
+            format!("{}_{}", shape.name, suffix), from, to, bone_origin));
+    }
+    for index in 0..strips {
+        let x0 = inner_left + index as f64 * step;
+        let x1 = if index + 1 == strips {
+            inner_right
+        } else {
+            inner_left + (index + 1) as f64 * step
+        };
+        let center = shape.center[span];
+        let closest = if x0 <= center && center <= x1 {
+            0.0
+        } else {
+            (x0 - center).abs().min((x1 - center).abs())
+        };
+        let normalized = (closest / half_opening).clamp(0.0, 1.0);
+        let sampled = springline + rise * (1.0 - normalized * normalized).sqrt();
+        // Preserve a conservative opening while matching Bedrock's
+        // integer-sized Box UV net. Quantize RELATIVE to the model bottom.
+        let bottom = low[1] + (sampled - low[1]).ceil()
+            .min(size[1] - wall);
+        lowest_crown = lowest_crown.min(bottom);
+        highest_crown = highest_crown.max(bottom);
+        let mut from = low;
+        let mut to = high;
+        from[span] = x0;
+        to[span] = x1;
+        from[1] = bottom;
+        cubes.push(blockout_cube(&shape.cube_uuids[index + 2],
+            format!("{}_curve_{}", shape.name, index + 1),
+            from, to, bone_origin));
+    }
+    if highest_crown - lowest_crown < 1.0 {
+        return Err(fail("GEOMETRY_ARCH_CURVATURE_UNREPRESENTED"));
+    }
+    if cubes.iter().any(|cube| !valid_bounds(cube.from, cube.to) ||
+        (0..3).any(|axis| cube.from[axis] >= cube.to[axis])) {
+        return Err(fail("GEOMETRY_ARCH_PANEL_INVALID"));
+    }
+    Ok(cubes)
 }
 
 /// One ordinary, untextured Bedrock Cube source shape, shared by G3
@@ -247,8 +374,11 @@ pub(super) fn compile(
         // Admit the entire bounded operation count *before* constructing
         // any panels. Never allocate a large transient shape on bad input.
         let additions = part.frames.len().checked_mul(4)
-            .and_then(|frame_count| part.hollow_boxes.len().checked_mul(5)
-                .and_then(|hollow_count| frame_count.checked_add(hollow_count)))
+            .and_then(|frames| part.hollow_boxes.len().checked_mul(5)
+                .and_then(|hollows| frames.checked_add(hollows)))
+            .and_then(|panels| part.arches.iter()
+                .try_fold(panels, |count, arch|
+                    count.checked_add(arch.cube_uuids.len())))
             .and_then(|panels| 1usize.checked_add(part.cubes.len())?
                 .checked_add(panels))
             .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
@@ -264,9 +394,11 @@ pub(super) fn compile(
             if !part.hollow_boxes.is_empty() {
                 return Err(fail("GEOMETRY_HOLLOW_TEXTURED_PROJECT_UNSUPPORTED"));
             }
+            if !part.arches.is_empty() {
+                return Err(fail("GEOMETRY_ARCH_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
         }
-        let mut panels = Vec::with_capacity(
-            part.frames.len() * 4 + part.hollow_boxes.len() * 5);
+        let mut panels = Vec::with_capacity(additions - 1 - part.cubes.len());
         for frame in &part.frames {
             // The Bone pivot is caller supplied and validated above.
             panels.extend(compile_rectangular_frame(
@@ -279,13 +411,20 @@ pub(super) fn compile(
                 part.bone.origin.ok_or_else(||
                     fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?)?);
         }
+        for arch in &part.arches {
+            panels.extend(compile_arch(arch,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?)?);
+        }
         // Bind UUID membership to the source request, not temporary Cubes.
         // These IDs outlive the generated operation buffer and preflight.
         for uuid in part.cubes.iter().map(|cube| cube.uuid.as_str())
             .chain(part.frames.iter().flat_map(|frame|
                 frame.cube_uuids.iter().map(String::as_str)))
             .chain(part.hollow_boxes.iter().flat_map(|hollow|
-                hollow.cube_uuids.iter().map(String::as_str))) {
+                hollow.cube_uuids.iter().map(String::as_str)))
+            .chain(part.arches.iter().flat_map(|arch|
+                arch.cube_uuids.iter().map(String::as_str))) {
             if !valid_uuid(uuid) || !used_ids.insert(uuid) {
                 return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
             }
@@ -304,7 +443,10 @@ pub(super) fn compile(
                dims[1] + dims[2] > f64::from(doc.resolution.height) {
                 let code = if index < part.frames.len() * 4 {
                     "GEOMETRY_FRAME_UV_ATLAS_TOO_SMALL"
-                } else { "GEOMETRY_HOLLOW_UV_ATLAS_TOO_SMALL" };
+                } else if index < part.frames.len() * 4 +
+                    part.hollow_boxes.len() * 5 {
+                    "GEOMETRY_HOLLOW_UV_ATLAS_TOO_SMALL"
+                } else { "GEOMETRY_ARCH_UV_ATLAS_TOO_SMALL" };
                 return Err(fail(code));
             }
         }
@@ -389,6 +531,7 @@ mod tests {
         GeometryAssemblyPart {
             bone, parent_uuid: parent.map(str::to_owned), cubes: vec![cube],
             frames: Vec::new(), hollow_boxes: Vec::new(),
+            arches: Vec::new(),
         }
     }
 
@@ -877,6 +1020,211 @@ mod tests {
         let json = serde_json::to_value(&prior).unwrap();
         assert!(json.get("frames").is_none());
         assert!(json.get("hollow_boxes").is_none());
+    }
+
+
+    const ARCH_IDS: [&str; 7] = [
+        "00000000-0000-4000-8000-000000001131",
+        "00000000-0000-4000-8000-000000001132",
+        "00000000-0000-4000-8000-000000001133",
+        "00000000-0000-4000-8000-000000001134",
+        "00000000-0000-4000-8000-000000001135",
+        "00000000-0000-4000-8000-000000001136",
+        "00000000-0000-4000-8000-000000001137",
+    ];
+
+    fn arch_request() -> GeometryAssemblyRequest {
+        let mut component = part(ROOT, "arch_bone", None, CUBE_A);
+        component.cubes.clear();
+        component.arches.push(GeometryArch {
+            name: "doorway".into(),
+            center: [0.0; 3],
+            size: [19, 12, 4],
+            span_axis: "X".into(),
+            wall: 2,
+            rise: 6,
+            cube_uuids: ARCH_IDS.iter().map(|id| (*id).into()).collect(),
+        });
+        GeometryAssemblyRequest {
+            expected_revision: 0, parts: vec![component],
+        }
+    }
+
+    #[test]
+    fn curved_arch_retains_grounded_piers_real_opening_and_one_reversible_edit_plan() {
+        let mut session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Curved", "curved").unwrap()
+        ).unwrap();
+        let before = session.document().clone();
+        let plan = compile(&session, &arch_request()).unwrap();
+        assert_eq!(plan.plan.operations.len(), 8);
+        assert_eq!(plan.preflight["status"], "VALIDATED_NOT_APPLIED");
+        assert_eq!(plan.preflight["write_authority"], "NOT_GRANTED");
+        assert_eq!(plan.preflight["visual_verdict"], "UNVERIFIED");
+        assert_eq!(session.document(), &before);
+        assert!(!session.can_undo());
+
+        let mut bounds = Vec::new();
+        for (index, operation) in plan.plan.operations[1..].iter().enumerate() {
+            let EditOperation::AddCube { cube, bone_uuid } = operation
+                else { panic!("Expected an ordinary native Cube"); };
+            assert_eq!(cube.uuid, ARCH_IDS[index]);
+            assert_eq!(bone_uuid, ROOT);
+            assert_eq!(cube.origin, Some([0.0; 3]));
+            assert_eq!(cube.extra.get("box_uv"), Some(&Value::Bool(true)));
+            assert!(cube.faces.values().all(|face|
+                face.get("texture").is_none()));
+            assert_eq!((cube.from[2],cube.to[2]),(-2.0,2.0));
+            bounds.push((cube.from, cube.to));
+        }
+        // Full-height side piers are intentionally separate from arch strips.
+        assert_eq!((bounds[0].0,bounds[0].1),
+            ([-9.5,-6.0,-2.0],[-7.5,6.0,2.0]));
+        assert_eq!((bounds[1].0,bounds[1].1),
+            ([7.5,-6.0,-2.0],[9.5,6.0,2.0]));
+        assert_eq!(bounds[4].0[0],-1.5);
+        assert_eq!(bounds[4].1[0],1.5);
+        assert_eq!(bounds[4].0[1],4.0); // center crown = top - wall
+        assert!(bounds[2].0[1] < bounds[4].0[1]);
+        assert!((bounds[2].0[1]-bounds[6].0[1]).abs()<1e-9);
+
+        // Exactly disjoint volume, contiguous footprints, and an entirely
+        // empty path through the opening below the underside center.
+        for i in 0..bounds.len() {
+            for j in i+1..bounds.len() {
+                assert!((0..3).any(|axis|
+                    bounds[i].1[axis].min(bounds[j].1[axis]) <=
+                    bounds[i].0[axis].max(bounds[j].0[axis])));
+            }
+            assert!(!(0..3).all(|axis|
+                bounds[i].0[axis] <= [0.0,3.0,0.0][axis] &&
+                [0.0,3.0,0.0][axis] < bounds[i].1[axis]));
+        }
+        let receipt = session.apply(0, &plan.plan.operations).unwrap();
+        assert_eq!(receipt.operation_count,8);
+        let after = session.document().clone();
+        assert_eq!(after.cubes.len(),7);
+        let saved = session.export().unwrap();
+        assert_eq!(plan.preflight["candidate_sha256"], sha256(&saved));
+        assert_eq!(EditorSession::open(&saved).unwrap().document(), &after);
+        assert!(geometry::export_bedrock_geometry(&after).is_ok());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(), &before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(), &after);
+    }
+
+    #[test]
+    fn curved_arch_supports_x_and_z_spans_without_changing_bone_pivot() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Curved", "curved").unwrap()
+        ).unwrap();
+        for axis in ["X", "Z"] {
+            let mut req = arch_request();
+            let arch = &mut req.parts[0].arches[0];
+            arch.span_axis = axis.into();
+            arch.size = [19,12,19];
+            arch.center = [1.0,2.0,3.0];
+            let proposal = compile(&session,&req).unwrap();
+            assert_eq!(proposal.plan.operations.len(),8);
+            let span = if axis=="X" {0} else {2};
+            let depth = if span==0 {2} else {0};
+            for op in &proposal.plan.operations[1..] {
+                let EditOperation::AddCube { cube, .. } = op
+                    else { panic!("Expected Cube"); };
+                assert_eq!(cube.from[depth],arch.center[depth]-9.0);
+                assert_eq!(cube.to[depth],arch.center[depth]+9.0);
+                assert_eq!(cube.origin,Some([0.0;3]));
+            }
+            assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
+        }
+    }
+
+    #[test]
+    fn curved_arch_refuses_micro_columns_invalid_openings_and_unsafe_sources() {
+        let session = EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Curved", "curved").unwrap()
+        ).unwrap();
+        let before = session.document().clone();
+        for (case, code) in [
+            (0,"GEOMETRY_ARCH_AXIS_INVALID"),
+            (1,"GEOMETRY_ARCH_SIZE_INVALID"),
+            (2,"GEOMETRY_ARCH_DIMENSIONS_INVALID"),
+            (3,"GEOMETRY_ARCH_OPENING_INVALID"),
+            (4,"GEOMETRY_ARCH_COLUMNS_INVALID"),
+            (5,"GEOMETRY_ARCH_COLUMNS_TOO_NARROW"),
+            (6,"GEOMETRY_ARCH_BOUNDS_INVALID"),
+            (7,"GEOMETRY_ASSEMBLY_UUID_CONFLICT"),
+            (8,"GEOMETRY_ARCH_NAME_INVALID"),
+            (9,"GEOMETRY_ARCH_COLUMNS_GRID_UNSUPPORTED"),
+            (10,"GEOMETRY_ARCH_CURVATURE_UNREPRESENTED"),
+        ] {
+            let mut req = arch_request();
+            let arch=&mut req.parts[0].arches[0];
+            match case {
+                0 => arch.span_axis="Y".into(),
+                1 => arch.size[0]=0,
+                2 => arch.wall=0,
+                3 => arch.rise=12,
+                4 => { arch.cube_uuids.pop(); },
+                5 => arch.size[0]=12,
+                6 => arch.center=[100_000.0,0.0,0.0],
+                7 => arch.cube_uuids[1]=arch.cube_uuids[0].clone(),
+                8 => arch.name="x".repeat(120),
+                9 => arch.size[0]=18,
+                10 => arch.cube_uuids.truncate(5),
+                _ => unreachable!(),
+            }
+            assert_eq!(compile(&session,&req).err().as_deref(),Some(code));
+        }
+        let mut cross = arch_request();
+        cross.parts[0].hollow_boxes.push(GeometryHollowBox {
+            name:"container".into(),center:[0.0;3],size:[10,8,6],
+            open_face:"POS_Z".into(),wall:1,
+            cube_uuids:[
+                ARCH_IDS[0], HOLLOW_IDS[1], HOLLOW_IDS[2],
+                HOLLOW_IDS[3], HOLLOW_IDS[4],
+            ].map(str::to_owned),
+        });
+        assert_eq!(compile(&session,&cross).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+
+        let mut over_budget=arch_request();
+        let one=over_budget.parts[0].arches[0].clone();
+        over_budget.parts[0].arches=vec![one;19];
+        assert_eq!(compile(&session,&over_budget).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
+        assert_eq!(session.document(),&before);
+        assert!(!session.can_undo());
+
+        let mut tiny=session.clone();
+        tiny.apply(0,&[EditOperation::SetEmptyAtlasResolution {
+            width:4,height:4
+        }]).unwrap();
+        assert_eq!(compile(&tiny,&GeometryAssemblyRequest {
+            expected_revision:1,..arch_request()
+        }).err().as_deref(),Some("GEOMETRY_ARCH_UV_ATLAS_TOO_SMALL"));
+
+        let mut textured=session.clone();
+        textured.apply(0,&[EditOperation::CreatePaintTexture {
+            uuid:"00000000-0000-4000-8000-000000001138".into(),
+            name:"atlas".into(),
+        }]).unwrap();
+        assert_eq!(compile(&textured,&GeometryAssemblyRequest {
+            expected_revision:1,..arch_request()
+        }).err().as_deref(),Some("GEOMETRY_ARCH_TEXTURED_PROJECT_UNSUPPORTED"));
+        assert_eq!(compile(&session,&GeometryAssemblyRequest {
+            expected_revision:1,..arch_request()
+        }).err().as_deref(),Some("DOCUMENT_REVISION_STALE"));
+
+        let mut unknown=serde_json::to_value(
+            &arch_request().parts[0].arches[0]).unwrap();
+        unknown["unrecognized"]=json!(true);
+        assert!(serde_json::from_value::<GeometryArch>(unknown).is_err());
+        let existing=serde_json::to_value(part(ROOT,"legacy",None,CUBE_A)).unwrap();
+        assert!(existing.get("frames").is_none());
+        assert!(existing.get("hollow_boxes").is_none());
+        assert!(existing.get("arches").is_none());
     }
 
 }
