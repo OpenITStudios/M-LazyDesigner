@@ -53,11 +53,24 @@ pub fn inspect_material_face_patch(doc:&AuthoringDocument,
         .map_err(|_|"MATERIAL_FACE_OWNERSHIP_UNRESOLVED".to_string())? {
         return Err("MATERIAL_FACE_PATCH_UV_SHARED".into());
     }
+    // The same saved face-local UV orientation used by the native painter.
+    // An unsupported rotation remains advisory-unknown for patch-only reads;
+    // guarded cluster projection will still refuse unsupported orientations.
+    let face_texels=projected.faces.get(side).and_then(Value::as_object)
+        .and_then(|surface|face_regions::face_region_rotation(surface).ok())
+        .map(|rotation| {
+            let mut size=[uv_to[0]-uv_from[0],uv_to[1]-uv_from[1]];
+            if rotation==90 || rotation==270 {size.swap(0,1);}
+            size
+        });
+    let source_form=super::material_form::inspect_source_form(
+        doc,cube,side,face_texels);
     Ok(json!({
         "scope":"source_explicit_cube_face_patch",
         "status":"bound_source_only",
         "texture_uuid":texture_uuid,"cube_uuid":cube_uuid,"face":side,
         "sample_region":patch,
+        "surface_form":source_form,
         "face_uv_region":{"from":uv_from,"to":uv_to},
         "uv_projection":"native_supported_box_or_manual",
         "texture_reference":"explicit_saved_link",
@@ -147,6 +160,10 @@ mod tests{
         assert_eq!(r["face_uv_region"]["from"],json!([1,2]));
         assert_eq!(r["face_uv_region"]["to"],json!([5,6]));
         assert_eq!(r["visual_verdict"],json!("UNVERIFIED"));
+        assert_eq!(r["surface_form"]["normal_cube_local"],json!([0,0,-1]));
+        assert_eq!(r["surface_form"]["normal_saved_model_axis"],Value::Null);
+        assert_eq!(r["surface_form"]["face_local_texels"],json!([4,4]));
+        assert_eq!(r["surface_form"]["form_shading_verdict"],"UNVERIFIED");
         assert_eq!(d,original);
     }
     #[test]

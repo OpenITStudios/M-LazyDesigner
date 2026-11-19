@@ -352,6 +352,8 @@ pub fn inspect_texture_styling_face(
     let (width,height)=if rotation==90 || rotation==270 {
         (hi[1]-lo[1],hi[0]-lo[0])
     }else{(hi[0]-lo[0],hi[1]-lo[1])};
+    let source_form=super::material_form::inspect_source_form(
+        doc,cube,side,Some([width,height]));
     let size=width.checked_mul(height);
     if size.is_none_or(|n|n>4096) {
         return Ok(json!({
@@ -359,6 +361,7 @@ pub fn inspect_texture_styling_face(
             "texture_uuid":texture_uuid,"cube_uuid":cube_uuid,"face":side,
             "face_size":[width,height],"status":"NOT_EVALUATED",
             "reason":"FACE_TOO_LARGE_FOR_BOUNDED_INSPECTION",
+            "surface_form":source_form,
             "review_hints":[],"visual_verdict":"UNVERIFIED",
             "texture_completion_attested":false
         }));
@@ -390,6 +393,7 @@ pub fn inspect_texture_styling_face(
     report["uv_rotation"]=json!(rotation);
     report["uv_alias_exclusivity"]=json!("NOT_ASSESSED");
     report["mapped_render_review"]=json!("REQUIRED");
+    report["surface_form"]=source_form;
     Ok(report)
 }
 

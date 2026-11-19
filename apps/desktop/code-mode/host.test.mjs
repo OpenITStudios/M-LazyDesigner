@@ -43,6 +43,26 @@ function scopedNativeReceipt(textureUuid,{
 
 const REVIEW_CUBE='00000000-0000-4000-8000-000000000002';
 const ALL_FACE_SIDES=Object.freeze(['north','east','south','west','up','down']);
+function sourceFormFixture(cubeUuid,face) {
+  const normals={
+    north:[0,0,-1],east:[1,0,0],south:[0,0,1],
+    west:[-1,0,0],up:[0,1,0],down:[0,-1,0],
+  };
+  return {scope:'saved_cube_face_form_context',
+    cube_uuid:cubeUuid,face,normal_cube_local:normals[face],
+    normal_saved_model_axis:null,
+    plane_axes:['x','y'],extent_model_units:[4,4],
+    face_local_texels:[4,4],texels_per_model_unit:[1,1],
+    uv_orientation_status:'SOURCE_UV_FACE_LOCAL',
+    contact_analysis:{status:'PARENT_LOCAL_STATIC_AXIS_ALIGNED_ONLY',
+      checked_scope:'static_direct_parent_cube_siblings_only',
+      contact_count:0,unsupported_neighbor_count:0,
+      contacts:[],samples_truncated:false},
+    lighting_verdict:'UNVERIFIED',world_visibility_verdict:'UNVERIFIED',
+    animated_pose_verdict:'UNVERIFIED',visual_verdict:'UNVERIFIED',
+    form_shading_verdict:'UNVERIFIED'};
+}
+
 async function mockedNativeFaceBinding(argv, sha) {
   assert.equal(argv[0],'inspect-batch');
   const plan=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
@@ -61,6 +81,7 @@ async function mockedNativeFaceBinding(argv, sha) {
         pixel_alias:'no_detected_overlap_for_sample',
         visual_verdict:'UNVERIFIED',face_coverage_verdict:'UNVERIFIED',
         view_correspondence:'NOT_VERIFIED',
+        surface_form:sourceFormFixture(q.cube_uuid,q.face),
         ...(q.face_spans?{cluster_footprint:{
           scope:'saved_face_local_to_atlas',
           status:'within_selected_patch',
@@ -88,6 +109,7 @@ async function mockedNativeFaceBinding(argv, sha) {
         visual_verdict:'UNVERIFIED',
         face_coverage_verdict:'UNVERIFIED',
         view_correspondence:'NOT_VERIFIED',
+        surface_form:sourceFormFixture(q.cube_uuid,q.face),
       }},
       {kind:'cube_face_alpha',face_alpha:{
         scope:'saved_manual_face_uv_alpha',cube_uuid:REVIEW_CUBE,
@@ -2534,6 +2556,8 @@ test('representative material is constrained; propagation requires fresh accepte
                 visual_verdict:'UNVERIFIED',
                 face_coverage_verdict:'UNVERIFIED',
                 view_correspondence:'NOT_VERIFIED',
+        surface_form:sourceFormFixture(q.cube_uuid,q.face),
+                ...(secondStep===8?{surface_form:undefined}:{}),
                 ...(q.face_spans && secondStep!==7?{cluster_footprint:{
                   scope:'saved_face_local_to_atlas',status:'within_selected_patch',
                   span_count:q.face_spans.length,visual_verdict:'UNVERIFIED',
@@ -2582,13 +2606,15 @@ test('representative material is constrained; propagation requires fresh accepte
         const wrongReference=step===4;
         const manualOverride=step===5;
         const invalidSource=step===6,missingFootprint=step===7;
+        const missingForm=step===8;
         return fakeGuest({method:'apply',args:{
           project:'p0',output:overlap?'overlap.bbmodel':
             missingPacket?'missing-packet.bbmodel':
             wrongReference?'wrong-reference.bbmodel':
             manualOverride?'manual-override.bbmodel':
             invalidSource?'invalid-face.bbmodel':
-            missingFootprint?'missing-footprint.bbmodel':'extended.bbmodel',
+            missingFootprint?'missing-footprint.bbmodel':
+            missingForm?'missing-form.bbmodel':'extended.bbmodel',
           ...(overlap || missingPacket || manualOverride?{operations:
             overlap?[{op:'paint_texture_pixel',texture_index:0,
               x:2,y:2,rgba:[60,70,80,255]}]:
@@ -2609,7 +2635,7 @@ test('representative material is constrained; propagation requires fresh accepte
             return {blocked:true};
           }
           if(missingPacket || wrongReference || manualOverride ||
-             invalidSource || missingFootprint){
+             invalidSource || missingFootprint || missingForm){
             assert.equal(value.ok,false);
             assert.equal(value.code,missingPacket?
               'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED':
@@ -2634,6 +2660,7 @@ test('representative material is constrained; propagation requires fresh accepte
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_REQUIRED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_BINDING_MISMATCH');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_CLUSTER_HOST_OWNED');
+    assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.negative,'CODE_MODE_MATERIAL_WORK_PACKET_FACE_SOURCE_UNVERIFIED');
     assert.equal((await propagationHost.execute({code:'return codemode.apply({project:"p0"});'})).value.propagated,true);

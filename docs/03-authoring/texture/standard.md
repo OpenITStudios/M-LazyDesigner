@@ -375,6 +375,32 @@ Require visible, intentional pixel clusters at normal mapped-model scale with Sh
 
 Texture may reinforce real contact/recess/overlap/underside/joint depth but must not invent missing large volume.
 
+### Rust T1 — source-bound face form evidence (SOURCE ONLY)
+
+Before a reviewed form-shading sample or broad propagation, pair
+`inspectBatch({kind:"material_face_patch",...})` with the actual mapped
+reference/current views. The existing native inspected face now carries
+`surface_form`: local Cube normal, supported model-axis normal when all
+saved ancestral rotations permit it, face-plane model extents, face-local
+texel density, and bounded same-direct-parent static coplanar contacts.
+The face-local styling inspector returns the same evidence beside its
+color/noise hints. These are **source measurements**, not generated
+shading commands, global occlusion detection, real lighting, animation
+pose, inferred material or artistic PASS. Contact evidence refuses
+transformed individual Cubes and labels rotated Bone/world directions
+as unknown; unrelated Bones are never certified unoccluded.
+When a FORM_SHADING material work packet is submitted, the Code Mode
+host requires the matching native `surface_form` receipt, not an agent
+assertion. Missing/mismatched form receipts refuse before native Apply;
+a supported receipt still does not justify indiscriminate stripes,
+material guesses, auto-shadow placement or propagation.
+Use the relevant observed reference, source pixel color and UV aliases
+to choose **where and why** to place value masses; preserve quiet zones,
+identity marks and intentional hard boundaries. Fresh matched model
+views and explicit reviewer acceptance remain the quality authority.
+No new authoring store, ML dependency, renderer, public tool or
+automatic pixel painter is created by this source-only slice.
+
 ## SURFACE PATTERN PASS
 
 Apply the selected `surface_pattern` recipe to each material cohort only after BASE and VALUE/FORM are readable. Recipes describe directionality, cluster language, value behavior, edge behavior, secondary detail, and anti-patterns. They are not bitmap presets and never select transparency/glow/PBR by name.

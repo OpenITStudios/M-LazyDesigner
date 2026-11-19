@@ -878,6 +878,31 @@ export interface MaterialPairComparison {
   different_alpha_pixels: number;
   attention_candidates: string[];
 }
+/** Geometry-derived evidence, not an inference about source lighting or style. */
+export interface SourceCubeFaceFormEvidence {
+  scope:"saved_cube_face_form_context";
+  cube_uuid:string;face:CubeFaceSurface["side"];
+  normal_cube_local:[number,number,number];
+  /** Null when saved Cube/Bone rotation or transforms prevent axis inference. */
+  normal_saved_model_axis:[number,number,number]|null;
+  plane_axes:["x"|"y"|"z","x"|"y"|"z"];
+  extent_model_units:[number,number];
+  face_local_texels:[number,number]|null;
+  texels_per_model_unit:[number|null,number|null];
+  uv_orientation_status:"SOURCE_UV_FACE_LOCAL"|"UNVERIFIED_UV_ROTATION";
+  contact_analysis:{
+    status:"PARENT_LOCAL_STATIC_AXIS_ALIGNED_ONLY"|
+      "UNVERIFIED_CUBE_TRANSFORM_OR_HIERARCHY";
+    checked_scope:"static_direct_parent_cube_siblings_only";
+    contact_count:number;unsupported_neighbor_count:number;
+    contacts:Array<{cube_uuid:string;face_overlap_fraction:number;
+      relationship:"coplanar_outward_face_contact"}>;
+    samples_truncated:boolean;
+  };
+  lighting_verdict:"UNVERIFIED";world_visibility_verdict:"UNVERIFIED";
+  animated_pose_verdict:"UNVERIFIED";visual_verdict:"UNVERIFIED";
+  form_shading_verdict:"UNVERIFIED";
+}
 /** Source-only native Cube-face/UV binding; never rendered material PASS. */
 export interface MaterialFacePatchBinding {
   scope:"source_explicit_cube_face_patch";
@@ -885,6 +910,7 @@ export interface MaterialFacePatchBinding {
   texture_uuid:string;cube_uuid:string;
   face:CubeFaceSurface["side"];
   sample_region:MaterialPatchRegion;
+  surface_form:SourceCubeFaceFormEvidence;
   face_uv_region:MaterialPatchRegion;
   uv_projection:"native_supported_box_or_manual";
   texture_reference:"explicit_saved_link";
@@ -917,6 +943,7 @@ export interface TextureStylingFaceEvidence {
   status:"BASE_ONLY_CANDIDATE"|"REVIEW_REQUIRED"|"NOT_EVALUATED";
   texture_uuid:string;cube_uuid:string;face:CubeFaceSurface["side"];
   face_size:[number,number];uv_rotation?:number;
+  surface_form:SourceCubeFaceFormEvidence;
   uv_alias_exclusivity?:"NOT_ASSESSED";
   mapped_render_review?:"REQUIRED";
   visible_pixels?:number;unique_visible_rgb?:number;

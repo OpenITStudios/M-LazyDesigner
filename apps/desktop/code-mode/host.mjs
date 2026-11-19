@@ -59,6 +59,10 @@ const STYLING_FINISH_VETO_HINTS = new Set([
   'UNIFORM_VERTICAL_BANDS_REVIEW',
   'FRAGMENTED_OR_NOISE_FIRST_REVIEW',
 ]);
+const SOURCE_FACE_NORMALS=Object.freeze({
+  north:[0,0,-1],east:[1,0,0],south:[0,0,1],
+  west:[-1,0,0],up:[0,1,0],down:[0,-1,0],
+});
 const SHA256 = /^[a-f0-9]{64}$/i;
 
 function requireAbsolute(value, label) {
@@ -2288,6 +2292,22 @@ export async function createCodeModeHost({
              workPacket.facePlans.some((face,i)=>{
                const actual=bounded.results[i];
                const binding=actual?.binding;
+               const form=binding?.surface_form;
+               const normal=SOURCE_FACE_NORMALS[face.face];
+               const validSourceForm=form?.scope==='saved_cube_face_form_context' &&
+                 form?.cube_uuid===face.cubeUuid && form?.face===face.face &&
+                 Array.isArray(form?.normal_cube_local) &&
+                 form.normal_cube_local.length===3 &&
+                 form.normal_cube_local.every((n,j)=>n===normal[j]) &&
+                 ['PARENT_LOCAL_STATIC_AXIS_ALIGNED_ONLY',
+                  'UNVERIFIED_CUBE_TRANSFORM_OR_HIERARCHY'].includes(
+                    form?.contact_analysis?.status) &&
+                 form?.contact_analysis?.checked_scope===
+                   'static_direct_parent_cube_siblings_only' &&
+                 form?.lighting_verdict==='UNVERIFIED' &&
+                 form?.world_visibility_verdict==='UNVERIFIED' &&
+                 form?.form_shading_verdict==='UNVERIFIED' &&
+                 form?.visual_verdict==='UNVERIFIED';
                const exact=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&
                  a.length===2&&b.length===2&&a.every((n,j)=>n===b[j]);
                return actual?.kind!=='material_face_patch' ||
@@ -2301,6 +2321,7 @@ export async function createCodeModeHost({
                  binding?.visual_verdict!=='UNVERIFIED' ||
                  binding?.face_coverage_verdict!=='UNVERIFIED' ||
                  binding?.view_correspondence!=='NOT_VERIFIED' ||
+                 (workPacket.shadingIntent==='FORM_SHADING' && !validSourceForm) ||
                  (workPacket.shadingIntent==='FORM_SHADING' && (
                    binding?.cluster_footprint?.scope!=='saved_face_local_to_atlas' ||
                    binding?.cluster_footprint?.status!=='within_selected_patch' ||
