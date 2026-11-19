@@ -449,6 +449,17 @@ mod tests{
         let mut bounds=intent();
         bounds.points=vec![[55,55]];
         assert!(s.apply_surface_paint_stroke(&bounds).is_err());
+        let mut stale_selection=intent();
+        stale_selection.selection_seed=Some([0,0]);
+        stale_selection.source_base_rgba=[0,0,0,255];
+        assert_eq!(s.apply_surface_paint_stroke(&stale_selection).unwrap_err(),
+            "SURFACE_SELECTION_SOURCE_MISMATCH");
+        let mut only_island=intent();
+        only_island.selection_seed=Some([3,3]);
+        only_island.points=vec![[0,0]];
+        only_island.protected_regions.clear();
+        assert_eq!(s.apply_surface_paint_stroke(&only_island).unwrap_err(),
+            "SURFACE_SELECTION_SOURCE_MISMATCH");
         let mut no_source=intent();
         no_source.source_base_rgba=[255,255,255,255];
         assert_eq!(s.apply_surface_paint_stroke(&no_source).unwrap_err(),

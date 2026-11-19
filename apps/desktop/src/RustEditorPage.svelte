@@ -271,7 +271,8 @@
     surfaceSelection.textureUuid===snapshot.textureUuids[paintTextureIndex];
   $: surfaceShadeColors=parseShadeRamp(surfaceShadeRamp);
   $: surfacePaintEnabled = workspaceMode==='paint' && surfacePaint3d &&
-    (surfaceInkMode==='color'||!!surfaceShadeColors) &&
+    (surfaceInkMode==='color'||!!surfaceShadeColors||
+      surfaceSampleMode||surfaceSelectMode) &&
     !!snapshot && !busy && !loading && !paintStroke && !surfaceMaskDrag &&
     !validSemanticPreview && !validExternalPreview &&
     !!snapshot.paintEditableTextures[paintTextureIndex] &&

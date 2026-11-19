@@ -58,6 +58,11 @@ export interface MaterialCorrectionIntent {
 export declare function normalizedMaterialCorrectionIntent(
   value?:MaterialCorrectionIntent
 ):Readonly<MaterialCorrectionIntent> | undefined;
+/** Rust internal Shade Ink uses an exact-before RGBA patch operation;
+ * this is deliberately NOT added to Code Mode's guest EditOperation union
+ * or the host's permitted operation list. The UI-only Tauri command checks
+ * source face/selection and runs the single native Paint/Undo transaction.
+ */
 export interface PaintRectangleStep {
   from: Vec2;
   to: Vec2;

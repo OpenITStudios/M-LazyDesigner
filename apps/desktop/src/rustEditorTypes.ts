@@ -187,6 +187,11 @@ export type EditOperation =
   | { op: 'assign_cube_face_texture'; cube_uuid: string; face: 'north' | 'east' | 'south' | 'west' | 'up' | 'down'; texture_uuid: string }
   | { op: 'paint_texture_pixel'; texture_index: number; x: number; y: number; rgba: [number, number, number, number] }
   | { op: 'paint_texture_stroke'; texture_index: number; points: [number, number][]; rgba: [number, number, number, number] }
+  /** Exact before→after guarded pixel cohort, internally used by Rust Shade Ink. */
+  | { op: 'paint_texture_exact_pixels'; texture_index: number; pixels: Array<{
+      at: [number,number];before:[number,number,number,number];
+      after:[number,number,number,number];
+    }> }
   | { op: 'paint_texture_brush'; texture_index: number; points: [number, number][]; radius: number; rgba: [number, number, number, number]; erase: boolean }
   | { op: 'paint_texture_rectangle'; texture_index: number; from: [number, number]; to: [number, number]; rgba: [number, number, number, number]; erase: boolean }
   | { op: 'paint_texture_rectangles'; texture_index: number; rectangles: Array<{ from: [number, number]; to: [number, number]; rgba: [number, number, number, number]; erase: boolean }> }

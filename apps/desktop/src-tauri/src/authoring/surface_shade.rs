@@ -193,6 +193,17 @@ mod tests{
         duplicate.shade_ramp.push([90,100,110,255]);
         assert_eq!(s.shade_surface_stroke(&duplicate).unwrap_err(),
             "SHADE_INK_RAMP_INVALID");
+        let mut broad=intent();
+        broad.points=vec![[0,0]];
+        for i in 0..40u8{
+            broad.shade_ramp.push([i,30,45,255]);
+        }
+        // The texture still contains just its exact existing RGBA8 colors.
+        // Number of proposed artist shades is not capped at 8/16/32.
+        assert_eq!(broad.shade_ramp.len(),43);
+        assert!(s.shade_surface_stroke(&broad).is_ok());
+        s.undo(3).unwrap();
+        assert_eq!(s.export().unwrap(),original);
         let mut unsupported=intent();
         unsupported.shade_ramp[0][3]=0;
         assert_eq!(s.shade_surface_stroke(&unsupported).unwrap_err(),
