@@ -1,3 +1,38 @@
+**2026-11-19 — Rust 3D Surface Paint + operator protection masks (SOURCE_COMMITTED / NOT_EXECUTED)**
+
+Source development branch `Rust`: native
+`authoring/surface_paint.rs` translates a direct-user one-face,
+one-pixel pencil gesture from saved Cube *face-local* texels into physical
+RGBA8 atlas pixels. Existing `face_regions::face_local_pixel_rectangle`,
+`uv_sharing`, `material_face`, `correction_scope`, and
+`PaintTextureStroke` remain the sole authoritative projection,
+source-identity, safety and Undo owners; no second GPU/bitmap/editor pipeline.
+The Svelte `RustViewport` only raycasts and computes a tentative UV hit,
+using the pinned Three.js BoxGeometry face order and Blockbench signed UV,
+90-degree rotations and optional Box UV inset; Rust checks again before Apply.
+One drag is at most 4,096 source face-local texels and ONE native transaction.
+It cannot silently cross Cubes, face edges or textures; imported or
+ambiguous/implicit/shared UV bindings fail closed. The selected original
+opaque RGBA, output opaque alpha, source session epoch/revision, and
+source context key are checked. Existing different-color details and
+a one-texel border around them remain immutable. An operator may mark
+up to 16 transient PHYSICAL atlas rectangles to protect same-color
+artwork that RGB matching cannot identify; these are Rust correction-scope
+preconditions, not stored texture layers. Masked/other-color points are
+skipped, and a stroke with no editable pixels is rejected.
+
+Limitations: P0 is one-face, radius-one, opaque **Pencil** only. It is NOT
+freeform across seams, auto-derived semantic identity masks, an AI guest
+Apply path, visual material QA, or a GPU-alpha-aware raycast selection.
+The existing 2D painter and external editor PNG remain separate,
+unchanged paths. PNG stays exact RGBA8 and losslessly encoded; there is
+no automatic palette-size restriction from this feature. Native Rust/TS
+regression fixtures cover rotated/mirrored UV, mask boundaries, mismatched
+faces/revisions, identity details, and Undo, all TEST_AUTHORED_NOT_RUN.
+Windows/Tauri/WebView, Blockbench/Bedrock, actual image fidelity, response
+latency and codec performance remain NOT_EXECUTED/UNVERIFIED because tests
+are held. No CI, cloud tests, Local/main branch changes or release.
+
 **2026-11-19 — Rust rich color palettes + lossless PNG (SOURCE ONLY / NOT_EXECUTED)**
 Source baseline Rust@b562f265c6907a0f8fec933b90fe8fc20cfd82a8.
 MaterialWorkPacket now accepts multiple independently authored RGB swatches per

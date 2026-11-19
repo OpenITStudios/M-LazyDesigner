@@ -49,6 +49,21 @@ ICC/gamma metadata after editing, WebView/Bedrock colors and visual material
 quality have no native proof. No fixed metal/wood/etc. palette formula and
 no new independent material engine are implied.
 
+**Direct-user Rust 3D surface brush (SOURCE_ONLY):**
+One Pencil drag across ONE explicitly source-bound Cube face is projected
+from rendered Three.js ray/UV evidence into Rust face-local texels. Only
+Rust authoring `surface_paint.rs` admits saved Cube/texture ownership, UV
+alias safety, original RGBA and approved user protection rectangles; the
+canonical PaintStroke+correction scope owns PNG, Undo and source history.
+Non-base original pixels, alpha, outside-face coordinates and a one-texel
+margin around non-base details are not writable. The operator can explicitly
+mark same-color identity masks on the physical atlas in the Svelte UI.
+This is **not** inferred semantic mask correctness, automatic artist approval,
+freehand across multiple faces or an AI guest mutation capability. 3D
+raycasting does not account for actual fragment alpha-test occlusion, and
+native pointer/Bedrock/visual validation remains NOT_EXECUTED. Keep 2D paint,
+reviewed external PNG and Code Mode permissions distinct.
+
 ## Control Context Projection
 
 Start from LazyDesigner Control's stage-specific Texturing projection; do not reload the complete Modelling Profile or Reference Package.

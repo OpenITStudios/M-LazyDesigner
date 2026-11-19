@@ -32,6 +32,23 @@ reencoded; preserve or explicitly verify such semantics before claiming
 native visual/color-managed equality. Image quality and file-size/latency
 improvements are source intentions until authorized PC-local measurements.
 
+## 2026-11-19 Rust 3D Paint addendum — guarded source surface
+
+Three.js 3D picking provides a **tentative** Cube/face/UV coordinate, not
+write authority. On direct artist input, a bounded stroke of face-local texels
+must be reprojected through saved Rust Box/manual UV, face rotation, explicit
+texture identity and atlas alias guards. The only committed pixel edit uses
+existing Rust Paint + correction scope in one Undo transaction. One source
+RGBA swatch may be authorized per gesture; this is a protection rule, NOT a
+global limitation on how many artistic colors an RGBA8 texture may contain.
+Original other-color pixels, alpha and one-texel margins next to identity
+marks are immutable. Same-RGBA emblems need user-marked physical atlas
+protection rectangles. No artistic PASS or renderer proof follows from a
+successful source transaction. Single-face, radius-one opaque Pencil is the
+initial source-only implementation; multi-face seams, brush tip dynamics,
+alpha-aware picking and semantic mask inference are separate acceptance
+gates and not yet supported by this adapter.
+
 ## Canonical Vocabulary
 
 ```text
