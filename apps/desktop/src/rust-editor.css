@@ -902,3 +902,19 @@
 .rust-editor .surface-mask-mark.preview{
   border-style:dashed;background:rgba(226,152,41,.12);
 }
+
+
+/* Purely presentational, source-revision-bound RGB selection rows;
+   no independent canvas or editable bitmap owner. */
+.rust-editor .surface-selection-row{
+  position:absolute;pointer-events:none;box-sizing:border-box;
+  background:rgba(91,177,241,.32);outline:1px solid rgba(134,206,255,.7);
+}
+.rust-editor .surface-paint-panel .surface-ramp-field{
+  display:flex;flex-direction:column;min-width:220px;max-width:100%;
+  flex:1 1 260px;align-items:stretch;
+}
+.rust-editor .surface-ramp-field textarea{
+  width:100%;box-sizing:border-box;max-width:100%;font:inherit;
+  background:#191d25;color:#e1e7ef;border:1px solid #566174;border-radius:4px;
+}

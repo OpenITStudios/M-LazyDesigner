@@ -42,9 +42,11 @@
   export let surfacePaintTextureUuid: string | null = null;
   export let surfacePaintContextKey = '';
   export let surfaceSampleMode=false;
+  export let surfaceSelectMode=false;
   export let surfaceSeamEnabled=false;
   export let onSurfaceStroke:(value:SurfaceGesture)=>void=()=>{};
   export let onSurfaceSample:(value:SurfaceSampleHit)=>void=()=>{};
+  export let onSurfaceSelection:(value:SurfaceSampleHit)=>void=()=>{};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
   type GizmoMode = 'translate' | 'rotate' | 'scale';
   export let onTranslate: (uuid: string, delta: Vec3) => Promise<boolean> = async () => false;
@@ -792,12 +794,14 @@
       const hit=surfacePick(event);
       mouseStart=null;
       if(!hit)return;
-      if(surfaceSampleMode){
+      if(surfaceSampleMode||surfaceSelectMode){
         // Source selection is a read-only native RGBA8 sample, not a
         // WebGL canvas/lighting/texture-image-derived color guess.
-        onSurfaceSample({...hit,epoch:surfacePaintEpoch,
+        const request={...hit,epoch:surfacePaintEpoch,
           revision:surfacePaintRevision,textureUuid:surfacePaintTextureUuid!,
-          contextKey:surfacePaintContextKey});
+          contextKey:surfacePaintContextKey};
+        if(surfaceSelectMode)onSurfaceSelection(request);
+        else onSurfaceSample(request);
         event.preventDefault();
         return;
       }
@@ -951,9 +955,11 @@
     onpointerup={pointerUp} onpointercancel={pointerCancel}
     onlostpointercapture={pointerLost}
     aria-label={surfacePaintEnabled
-      ? (surfaceSampleMode
-        ? 'Sample the original face pixel from Rust with a click. No model change.'
-        : 'Draw an exact hard pixel stroke on a source-bound Cube face. Optional adjacent Cube seam bridge is checked by Rust; right drag pans.')
+      ? (surfaceSelectMode
+        ? 'Select one 4-connected original RGBA region from Rust. No model edit.'
+        : surfaceSampleMode
+          ? 'Sample the original face pixel from Rust with a click. No model edit.'
+          : 'Draw an exact hard pixel stroke on a source-bound Cube face. Optional adjacent Cube seam bridge is checked by Rust; right drag pans.')
       : 'Geometry preview with embedded PNG textures. Select a Cube and use Move, Rotate or Scale gizmo; drag to orbit, scroll to zoom.'} />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>

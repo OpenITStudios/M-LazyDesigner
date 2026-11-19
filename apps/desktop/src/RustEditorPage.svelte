@@ -26,6 +26,8 @@
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import { protectedAtlasRectangle,
     type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
+  import {parseShadeRamp,bindSourceSelection,selectionSeedForStroke,
+    type SourceSelection} from './rustSurfaceTools';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
@@ -74,6 +76,11 @@
   // These rectangles are never persisted as a second bitmap/layer owner.
   let surfacePaint3d=false,surfaceProtectMode=false;
   let surfaceSampleMode=false,surfaceSeamEnabled=false;
+  let surfaceSelectMode=false;
+  let surfaceSelection:SourceSelection|null=null;
+  let surfaceInkMode:'color'|'shade_ink'='color';
+  let surfaceShadeRamp='';
+  let surfaceShadeDirection:'lighten'|'darken'='darken';
   let surfaceBrushRadius=1;
   let surfaceBrushTip:'square'|'diamond'='square';
   let surfaceSourceBase='#5a6e82';
@@ -257,6 +264,11 @@
   $: pendingSurfaceMask = snapshot && surfaceMaskDrag ?
     protectedAtlasRectangle(surfaceMaskDrag.from,surfaceMaskDrag.to,
       snapshot.textureResolution) : null;
+  $: validSurfaceSelection=!!surfaceSelection&&!!snapshot&&
+    surfaceSelection.epoch===snapshot.epoch&&
+    surfaceSelection.revision===snapshot.revision&&
+    surfaceSelection.textureUuid===snapshot.textureUuids[paintTextureIndex];
+  $: surfaceShadeColors=parseShadeRamp(surfaceShadeRamp);
   $: surfacePaintEnabled = workspaceMode==='paint' && surfacePaint3d &&
     !!snapshot && !busy && !loading && !paintStroke && !surfaceMaskDrag &&
     !validSemanticPreview && !validExternalPreview &&
@@ -270,7 +282,10 @@
     snapshot?.epoch,snapshot?.revision,paintTextureIndex,
     snapshot?.textureUuids[paintTextureIndex],paintColor,
     paintAlpha,surfaceSourceBase,guardedSurfaceMasks,
-    surfaceSampleMode,surfaceSeamEnabled,surfaceBrushRadius,surfaceBrushTip,
+    surfaceSampleMode,surfaceSelectMode,surfaceSeamEnabled,
+    surfaceBrushRadius,surfaceBrushTip,surfaceInkMode,
+    surfaceShadeRamp,surfaceShadeDirection,
+    validSurfaceSelection?surfaceSelection?.seed:null,
   ]);
 
   // Source-backed once/loop/hold playback is admitted only for the strict
@@ -371,7 +386,12 @@
     else if (typeof cause === 'string') error = cause;
     else error = 'The native authoring operation could not be completed.';
   }
+  function clearSurfaceSelection(){
+    surfaceSelection=null;
+    surfaceSelectMode=false;
+  }
   function clearSurfaceProtection(){
+    clearSurfaceSelection();
     surfaceProtectedRegions=[];
     surfaceProtectionBinding=null;
     surfaceMaskDrag=null;
@@ -386,6 +406,7 @@
     const next = reconcileEditorSnapshot(snapshot, incoming);
     // A fresh canonical snapshot invalidates all temporary texture overlays.
     clearSemanticPreview();
+    clearSurfaceSelection();
     // Any document receipt invalidates the frame-clock identity. Resume is
     // always explicit; never replay a stale animation after Undo/Open/Save.
     pauseAnimationPlayback();
@@ -1517,6 +1538,50 @@
     }catch(cause){showError(cause);}
     finally{busy=false;}
   }
+  type SurfaceSelectionReceipt={
+    revision:number;cube_uuid:string;texture_uuid:string;face:string;
+    seed:[number,number];source_rgba:[number,number,number,number];
+    pixel_count:number;atlas_rows:Array<{y:number;x0:number;x1:number}>;
+    source_authority:'RUST_SAVED_RGBA8';
+    write_authority:'NOT_GRANTED';visual_verdict:'UNVERIFIED';
+  };
+  async function selectFromViewport(hit:SurfaceSampleHit):Promise<void>{
+    if(!surfacePaintEnabled||!surfaceSelectMode||!snapshot||busy||
+       hit.contextKey!==surfacePaintContextKey||
+       hit.epoch!==snapshot.epoch||hit.revision!==snapshot.revision||
+       snapshot.textureUuids[hit.textureIndex]!==hit.textureUuid)return;
+    busy=true;error='';
+    try{
+      const receipt=await invoke<SurfaceSelectionReceipt>(
+        'rust_editor_select_surface_color',{
+          expectedEpoch:hit.epoch,expectedRevision:hit.revision,
+          request:{
+            source:{
+              expected_revision:hit.revision,cube_uuid:hit.cubeUuid,
+              texture_uuid:hit.textureUuid,face:hit.face,
+              expected_face_uv:hit.sourceUv,
+              expected_face_rotation:hit.sourceRotation,local:hit.texel,
+            },
+            protected_regions:guardedSurfaceMasks,
+          },
+        });
+      if(!snapshot||snapshot.epoch!==hit.epoch||
+         snapshot.revision!==hit.revision)throw new Error('SURFACE_SELECTION_STALE');
+      const selection=bindSourceSelection(hit,receipt,
+        snapshot.textureResolution[0],snapshot.textureResolution[1]);
+      if(!selection)throw new Error('SURFACE_SELECTION_RECEIPT_INVALID');
+      surfaceSelection=selection;
+      surfaceSelectMode=false;
+      if(selection.rgba[3]===255){
+        surfaceSourceBase='#'+selection.rgba.slice(0,3)
+          .map(n=>n.toString(16).padStart(2,'0')).join('');
+      }
+      surfaceSampleStatus=selection.pixelCount+
+        ' source texels selected on '+selection.face+
+        '. Selection is locked to this Cube/face/revision.';
+    }catch(cause){showError(cause);}
+    finally{busy=false;}
+  }
   async function paintFromViewport(gesture:SurfaceGesture):Promise<void>{
     if(!surfacePaintEnabled||surfaceSampleMode||!snapshot||busy||paintAlpha!==255 ||
        snapshot.epoch!==gesture.epoch||
@@ -1526,18 +1591,49 @@
        gesture.contextKey!==surfacePaintContextKey)return;
     const base=sourceRgb(surfaceSourceBase),color=sourceRgb(paintColor);
     if(!base||!color){error='Select valid original and target RGB colors.';return;}
+    // An active selection never degrades to an unrestricted gesture.
+    const selection=validSurfaceSelection?surfaceSelection:null;
+    if(surfaceSelection&&!selection){error='Selection is stale. Clear it or select again.';return;}
+    const selectionSeed=selection?selectionSeedForStroke(selection,gesture):null;
+    if(selection&&!selectionSeed){
+      error='Paint hit is outside the selected Cube, face or source UV.';return;
+    }
+    if(selection&&selection.rgba[3]!==255){
+      error='This connected island contains non-opaque source pixels.';return;
+    }
+    if(selection&&gesture.seam){
+      error='Selection-locked strokes cannot bridge multiple Cubes.';return;
+    }
     selectCube(gesture.cubeUuid);
     selectedFace=gesture.face;
+    const shared={
+      expected_revision:gesture.revision,cube_uuid:gesture.cubeUuid,
+      texture_uuid:gesture.textureUuid,face:gesture.face,
+      expected_face_uv:gesture.sourceUv,
+      expected_face_rotation:gesture.sourceRotation,
+      points:gesture.points,selection_seed:selectionSeed,
+      brush_radius:surfaceBrushRadius,brush_tip:surfaceBrushTip,
+      protected_regions:guardedSurfaceMasks,
+    };
+    if(surfaceInkMode==='shade_ink'){
+      if(!surfaceShadeColors){
+        error='Shade Ink needs two or more distinct authored #RRGGBB swatches.';return;
+      }
+      if(gesture.seam){
+        error='Shade Ink is limited to one source-selected Cube face.';return;
+      }
+      const next=await command('rust_editor_shade_surface_stroke',{
+        expectedEpoch:gesture.epoch,expectedRevision:gesture.revision,
+        intent:{...shared,shade_ramp:surfaceShadeColors,
+          direction:surfaceShadeDirection},
+      });
+      if(next)notice='Shade Ink stepped each eligible original pixel by one exact authored ramp swatch in one Undo.';
+      return;
+    }
     const next=await command('rust_editor_paint_surface_stroke',{
       expectedEpoch:gesture.epoch,expectedRevision:gesture.revision,
       intent:{
-        expected_revision:gesture.revision,cube_uuid:gesture.cubeUuid,
-        texture_uuid:gesture.textureUuid,face:gesture.face,
-        expected_face_uv:gesture.sourceUv,
-        expected_face_rotation:gesture.sourceRotation,
-        source_base_rgba:[...base,255],paint_rgba:[...color,255],
-        points:gesture.points,
-        brush_radius:surfaceBrushRadius,brush_tip:surfaceBrushTip,
+        ...shared,source_base_rgba:[...base,255],paint_rgba:[...color,255],
         ...(gesture.seam?{seam:{
           cube_uuid:gesture.seam.cubeUuid,
           face:gesture.seam.face,
@@ -1545,13 +1641,12 @@
           expected_face_rotation:gesture.seam.sourceRotation,
           points:gesture.seam.points,
         }}:{}),
-        protected_regions:guardedSurfaceMasks,
       },
     });
     if(next){
       notice=gesture.seam
-        ? 'Two adjacent Cube faces painted in one Rust Undo step. Original colors, alpha and protected markings are preserved.'
-        : '3D brush committed in one Rust Undo step. Original colors, alpha and protected markings are preserved.';
+        ? 'Two adjacent Cube faces painted in one Rust Undo step; identity and alpha guards remain.'
+        : '3D brush committed in one Undo with exact original RGB and protected masks.';
     }
   }
   function startSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
@@ -1596,6 +1691,7 @@
         error='Up to 16 protected rectangles per texture. Clear or consolidate masks.';
         return;
       }
+      clearSurfaceSelection();
       surfaceProtectedRegions=[...surfaceProtectedRegions,rect];
     }
     event.preventDefault();
@@ -2389,10 +2485,51 @@
               </select>
             </label>
             <label><input type="checkbox" bind:checked={surfaceSampleMode}
+              onchange={() => {if(surfaceSampleMode)surfaceSelectMode=false;}}
               disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
               Pick original RGB from 3D (Rust)</label>
-            <label><input type="checkbox" bind:checked={surfaceSeamEnabled}
+            <label><input type="checkbox" bind:checked={surfaceSelectMode}
+              onchange={() => {if(surfaceSelectMode)surfaceSampleMode=false;}}
               disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
+              Magic Wand: select connected source color</label>
+            {#if validSurfaceSelection}
+              <button type="button" onclick={clearSurfaceSelection}
+                disabled={busy || !!surfaceMaskDrag}>
+                Clear connected selection ({surfaceSelection?.pixelCount} px)
+              </button>
+            {/if}
+            <label>3D ink mode
+              <select bind:value={surfaceInkMode}
+                disabled={busy || !!paintStroke || !!surfaceMaskDrag}>
+                <option value="color">Opaque original-color Pencil</option>
+                <option value="shade_ink">Shade Ink (exact palette steps)</option>
+              </select>
+            </label>
+            {#if surfaceInkMode==='shade_ink'}
+              <label>Shade direction
+                <select bind:value={surfaceShadeDirection}
+                  disabled={busy || !!surfaceMaskDrag}>
+                  <option value="darken">Darken</option>
+                  <option value="lighten">Lighten</option>
+                </select>
+              </label>
+              <label class="surface-ramp-field">Artist shade ramp
+                (darkest to lightest, comma-separated)
+                <textarea rows="2" bind:value={surfaceShadeRamp}
+                  placeholder="#202a3b, #445870, #8297b0, #c5d8ed"
+                  disabled={busy || !!surfaceMaskDrag}></textarea>
+              </label>
+              <p class="hint">Ramp is artist-supplied, not quantized. Each
+                eligible pixel moves exactly one swatch per gesture. Other
+                colors remain unchanged. No fixed palette-count limit.</p>
+              {#if !surfaceShadeColors}
+                <p class="hint">Enter two or more unique #RRGGBB swatches
+                  to enable Shade Ink painting.</p>
+              {/if}
+            {/if}
+            <label><input type="checkbox" bind:checked={surfaceSeamEnabled}
+              disabled={busy || !surfacePaint3d || !!surfaceMaskDrag ||
+                surfaceInkMode==='shade_ink' || validSurfaceSelection}/>
               Bridge adjacent Cube faces (one Undo)</label>
             <label>Original editable RGB
               <input type="color" bind:value={surfaceSourceBase}
@@ -2493,6 +2630,16 @@
                 onpointerup={finishPaintStroke}
                 onpointercancel={(event) => finishPaintStroke(event, true)}
                 onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
+              {#if validSurfaceSelection}
+                {#each surfaceSelection?.atlasRows ?? [] as region}
+                  <span class="surface-selection-row"
+                    style:left={(region.x0/snapshot.textureResolution[0]*100)+'%'}
+                    style:top={(region.y/snapshot.textureResolution[1]*100)+'%'}
+                    style:width={((region.x1-region.x0)/snapshot.textureResolution[0]*100)+'%'}
+                    style:height={(1/snapshot.textureResolution[1]*100)+'%'}
+                    aria-hidden="true"></span>
+                {/each}
+              {/if}
               {#each guardedSurfaceMasks as rect}
                 <span class="surface-mask-mark"
                   style:left={(rect.from[0]/snapshot.textureResolution[0]*100)+'%'}
@@ -3207,9 +3354,10 @@
           surfacePaintRevision={snapshot.revision}
           surfacePaintTextureUuid={snapshot.textureUuids[paintTextureIndex] ?? null}
           {surfacePaintContextKey}
-          {surfaceSampleMode} {surfaceSeamEnabled}
+          {surfaceSampleMode} {surfaceSelectMode} {surfaceSeamEnabled}
           onSurfaceStroke={(gesture) => {void paintFromViewport(gesture);}}
           onSurfaceSample={(hit) => {void sampleFromViewport(hit);}}
+          onSurfaceSelection={(hit) => {void selectFromViewport(hit);}}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
           canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard && !recoveryDialog && !livePairingDialog}
           onTranslate={moveFromViewport} onRotate={rotateFromViewport}
