@@ -42,9 +42,11 @@ mod external_texture;
 pub use external_texture::ExternalFaceTextureIntent;
 mod surface_paint;
 mod surface_selection;
+mod surface_shade;
 mod surface_seam;
 pub use surface_paint::{SurfacePaintIntent,SurfacePaintSampleRequest,SurfaceSourceSample,SurfaceBrushTip};
 pub use surface_selection::{SurfaceSelectionRequest,SurfaceSelectionReceipt};
+pub use surface_shade::{SurfaceShadeInkIntent,ShadeInkDirection};
 pub use surface_seam::SurfaceSeamPatch;
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;
@@ -251,6 +253,14 @@ pub struct PaintRectangleStep {
     pub rgba: [u8; 4],
     pub erase: bool,
 }
+/// Exact before/after RGBA patch; never quantize/dither or infer a ramp.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExactPixelPatch {
+    pub at:[u32;2],
+    pub before:[u8;4],
+    pub after:[u8;4],
+}
 
 /// Selects one declared Cube face, not a screen-space paint coordinate.
 /// Shared atlas UV islands can still affect other Cubes using those pixels.
@@ -376,6 +386,7 @@ pub enum EditOperation {
     AssignCubeFaceTexture { cube_uuid: String, face: String, texture_uuid: String },
     PaintTexturePixel { texture_index: usize, x: u32, y: u32, rgba: [u8; 4] },
     PaintTextureStroke { texture_index: usize, points: Vec<[u32; 2]>, rgba: [u8; 4] },
+    PaintTextureExactPixels { texture_index:usize, pixels:Vec<ExactPixelPatch> },
     PaintTextureBrush { texture_index: usize, points: Vec<[u32; 2]>, radius: u8, rgba: [u8; 4], erase: bool },
     PaintTextureRectangle { texture_index: usize, from: [u32; 2], to: [u32; 2], rgba: [u8; 4], erase: bool },
     PaintTextureRectangles { texture_index: usize, rectangles: Vec<PaintRectangleStep> },
@@ -3056,6 +3067,14 @@ fn apply_operation(doc: &mut AuthoringDocument, op: &EditOperation) -> Result<St
             Ok(texture.get("uuid").and_then(Value::as_str)
                 .unwrap_or("paint-texture").to_owned())
         }
+        EditOperation::PaintTextureExactPixels {texture_index,pixels}=>{
+            let texture=doc.texture_assets.get_mut(*texture_index)
+                .ok_or_else(||fail("PAINT_TEXTURE_NOT_FOUND"))?;
+            paint::exact_pixels(texture,doc.resolution.width,
+                doc.resolution.height,pixels)?;
+            Ok(texture.get("uuid").and_then(Value::as_str)
+                .unwrap_or("paint-texture").to_owned())
+        }
         EditOperation::PaintTextureRectangle { texture_index, from, to, rgba, erase } => {
             let texture = doc.texture_assets.get_mut(*texture_index)
                 .ok_or_else(|| fail("PAINT_TEXTURE_NOT_FOUND"))?;
@@ -3403,6 +3422,12 @@ impl EditorSession {
         &self,request:&SurfaceSelectionRequest,
     )->Result<SurfaceSelectionReceipt>{
         surface_selection::read(self,request)
+    }
+    /// Exactly one artist-authored source ramp step per painted pixel/Undo.
+    pub fn shade_surface_stroke(
+        &mut self,intent:&SurfaceShadeInkIntent,
+    )->Result<MutationReceipt>{
+        surface_shade::apply(self,intent)
     }
 
     /// G2: propose an explicit same-Bone face alignment with UV-aware Rust

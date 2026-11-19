@@ -25,6 +25,7 @@ use lazydesigner::authoring::{
     SemanticMaterialIntent, SemanticMaterialProposal, ExternalFaceTextureIntent, SurfacePaintIntent,
     SurfacePaintSampleRequest, SurfaceSourceSample,
     SurfaceSelectionRequest, SurfaceSelectionReceipt,
+    SurfaceShadeInkIntent,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -1515,6 +1516,26 @@ pub fn rust_editor_select_surface_color(
     let selection=source.select_surface_source(&request).map_err(model_failure)?;
     let _fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
     Ok(selection)
+}
+
+/// Artist-specified swatch ramp. A native exact-before pixel cohort changes
+/// at most one shade step per pixel in one existing Rust Undo transaction.
+#[tauri::command(async)]
+pub fn rust_editor_shade_surface_stroke(
+    state:State<'_,EditorState>,expected_epoch:u64,
+    expected_revision:u64,intent:SurfaceShadeInkIntent,
+)->Result<EditorSnapshot,DesktopError>{
+    if intent.expected_revision!=expected_revision {
+        return Err(failure("SHADE_INK_REVISION_STALE",
+            "The shading gesture targets another source revision."));
+    }
+    detached_edit(&state.store,&state.pending_edit,
+        expected_epoch,expected_revision,ProjectionReuse::default(),
+        Some("The model changed during the shading gesture."),
+        move |session|{
+            session.shade_surface_stroke(&intent).map_err(model_failure)?;
+            Ok(())
+        })
 }
 
 /// One user gesture on one source-bound 3D Cube face. Selection, atlas UV,

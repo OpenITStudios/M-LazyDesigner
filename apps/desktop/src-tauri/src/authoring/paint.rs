@@ -422,6 +422,44 @@ pub(super) fn stroke(
     Ok(())
 }
 
+/// Commit one exact multi-shade pixel cohort using the SAME RGBA8 encoder.
+pub(super) fn exact_pixels(
+    texture:&mut Value,width:u32,height:u32,
+    patches:&[super::ExactPixelPatch],
+)->Result<()>{
+    if patches.is_empty()||patches.len()>MAX_STROKE_POINTS{
+        return Err("PAINT_EXACT_PIXELS_SIZE_INVALID".into());
+    }
+    let mut original=decode(texture,width,height)?;
+    let mut seen=std::collections::HashSet::new();
+    let mut changed=false;
+    // Check every input before modifying even the temporary bitmap.
+    for patch in patches{
+        if patch.at[0]>=width||patch.at[1]>=height||
+           !seen.insert(patch.at)||
+           patch.before[3]!=patch.after[3]{
+            return Err("PAINT_EXACT_PIXELS_INVALID".into());
+        }
+        let i=((patch.at[1] as usize)*width as usize+
+            patch.at[0] as usize)*4;
+        if original.get(i..i+4)!=Some(patch.before.as_slice()){
+            return Err("PAINT_EXACT_PIXELS_SOURCE_STALE".into());
+        }
+        changed|=patch.before!=patch.after;
+    }
+    if !changed {return Ok(());}
+    for patch in patches{
+        if patch.before==patch.after{continue;}
+        let i=((patch.at[1] as usize)*width as usize+
+            patch.at[0] as usize)*4;
+        original[i..i+4].copy_from_slice(&patch.after);
+    }
+    let source=encode(width,height,&original)?;
+    texture.as_object_mut().ok_or("PAINT_TEXTURE_NOT_OWNED")?
+        .insert("source".into(),Value::String(source));
+    Ok(())
+}
+
 /// One circular pencil/eraser stroke. Radius 1 covers one pixel; radius 8
 /// covers at most a 15x15 neighborhood per path point. Clip at atlas edges.
 pub(super) fn brush(

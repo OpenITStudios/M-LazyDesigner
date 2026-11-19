@@ -157,6 +157,41 @@ pub(super) fn sample(
         write_authority:"NOT_GRANTED",visual_verdict:"UNVERIFIED",
     })
 }
+pub(super) fn hard_footprint(
+    face:&FaceBinding,centers:&[[u32;2]],radius:u8,
+    tip:SurfaceBrushTip,
+)->Result<Vec<[u32;2]>>{
+    if centers.is_empty()||centers.len()>paint::MAX_STROKE_POINTS||
+       radius==0||radius>4{
+        return Err("SURFACE_BRUSH_POINTS_INVALID".into());
+    }
+    let d=i64::from(radius-1);
+    let mut seen=HashSet::new();
+    let mut out=Vec::new();
+    for &center in centers{
+        if center[0]>=face.size[0]||center[1]>=face.size[1]{
+            return Err("SURFACE_BRUSH_TEXEL_INVALID".into());
+        }
+        for dy in -d..=d{
+            for dx in -d..=d{
+                if tip==SurfaceBrushTip::Diamond&&dx.abs()+dy.abs()>d{
+                    continue;
+                }
+                let x=i64::from(center[0])+dx,y=i64::from(center[1])+dy;
+                if x<0||y<0||x>=i64::from(face.size[0])||
+                   y>=i64::from(face.size[1]){continue;}
+                let at=atlas_for_local(face,[x as u32,y as u32])?;
+                if seen.insert(at){
+                    if out.len()>=paint::MAX_STROKE_POINTS{
+                        return Err("SURFACE_BRUSH_OUTPUT_BUDGET_EXCEEDED".into());
+                    }
+                    out.push(at);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
 fn gather(
     source:&[u8],face:&FaceBinding,centers:&[[u32;2]],
     base:[u8;4],radius:u8,tip:SurfaceBrushTip,
