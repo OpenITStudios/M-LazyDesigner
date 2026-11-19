@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {sourceRgb,matchingSemanticCandidate,semanticViewportSources,
-  semanticIntentFingerprint,repeatedRejectedIntent,semanticReviewReady}
+  semanticIntentFingerprint,repeatedRejectedIntent,semanticReviewReady,
+  matchingRenderedMaterialPair}
   from './rustSemanticMaterialPreview.ts';
 const snapshot={epoch:2,revision:5,
   texturePreviewSources:['data:image/png;base64,QUJD','data:image/png;base64,REVG'],
@@ -61,6 +62,20 @@ test('source/candidate comparison must be independently acknowledged before Appl
     [false,true,true,true],[true,false,true,true],
     [true,true,false,true],[true,true,true,false],
   ])assert.equal(semanticReviewReady(...flags),false);
+});
+test('review needs TWO actually rendered PNGs for the same fixed camera',()=>{
+  const original='data:image/png;base64,'+'A'.repeat(64);
+  const changed='data:image/png;base64,'+'B'.repeat(64);
+  assert.equal(matchingRenderedMaterialPair(original,changed,'front','front'),true);
+  for(const [a,b,recorded,current] of [
+    [null,changed,'front','front'],
+    [original,null,'front','front'],
+    [original,original,'front','front'],
+    [original,changed,'front','back'],
+    [original,changed,null,'front'],
+    ['not-a-png',changed,'front','front'],
+    [original,'data:image/png;base64,', 'front','front'],
+  ])assert.equal(matchingRenderedMaterialPair(a,b,recorded,current),false);
 });
 test('UI swatch parsing accepts exact RGB without derived palettes',()=>{
   assert.deepEqual(sourceRgb('#5a6e82'),[90,110,130]);

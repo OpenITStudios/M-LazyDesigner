@@ -460,19 +460,38 @@
    * Bedrock/Blockbench render or independent artistic verdict. No model edit.
    * Synchronous draw/read makes each direction capture the same scene state.
    */
-  export function captureReviewPng(viewId: ReviewViewId): string {
+  export function captureReviewPng(
+    viewId: ReviewViewId,
+    expectedPaintSource?: {index: number; source: string},
+  ): string {
     if (!ready || !renderer || !scene || !camera || !modelRoot ||
         !projectedScene || mutationPending || drag) {
       throw new Error('REVIEW_CAPTURE_VIEWPORT_NOT_READY');
     }
     const axes = reviewCameraAxes(viewId);
     if (!axes) throw new Error('REVIEW_CAPTURE_VIEW_UNKNOWN');
+    // P0-D/E: a before/after comparison must render the precise temporary
+    // or original atlas expected by the UI, never an older cached PNG.
+    if (expectedPaintSource) {
+      const {index,source}=expectedPaintSource;
+      if (!Number.isSafeInteger(index) || index<0 ||
+          !source.startsWith('data:image/png;base64,') ||
+          projectedScene.sources[index]!==source ||
+          !paintMaterialsByTexture.get(index)?.length ||
+          textureCache.get(index)?.source!==source) {
+        throw new Error('REVIEW_CAPTURE_TEXTURE_SOURCE_MISMATCH');
+      }
+    }
     const bounds = new THREE.Box3().setFromObject(modelRoot);
     if (bounds.isEmpty()) throw new Error('REVIEW_CAPTURE_NO_RENDERABLE_MODEL');
     // Never silently export placeholder colors while used GPU textures
     // are still loading. Unsupported imported materials remain UNVERIFIED.
     for (const index of paintMaterialsByTexture.keys()) {
-      if (!textureCache.get(index)?.texture.image) {
+      const entry=textureCache.get(index);
+      const image=entry?.texture.image as HTMLImageElement | undefined;
+      if (!entry || entry.source!==projectedScene.sources[index] ||
+          !image || image.complete!==true || image.naturalWidth<1 ||
+          image.naturalHeight<1) {
         throw new Error('REVIEW_CAPTURE_TEXTURE_NOT_READY');
       }
     }

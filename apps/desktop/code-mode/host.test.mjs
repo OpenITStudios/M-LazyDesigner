@@ -285,6 +285,9 @@ test('semantic material guest only receives Rust read-only face plan, not Apply'
             reference_png_sha256:intent.reference_png_sha256,
             reference_authority:'NOT_VERIFIED_BY_RUST',
             style_quality:'NOT_EVALUATED',
+            detail_boundary_guard:'one_face_local_texel_around_non_base_rgba',
+            skipped_near_existing_detail_pixels:0,
+            candidate_pixels:1,light_pixels:1,shadow_pixels:0,
             write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
           write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
         };

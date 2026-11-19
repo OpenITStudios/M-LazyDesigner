@@ -2,6 +2,7 @@
  * persistent model/bitmap/Undo owner; these helpers never mutate it.
  */
 import type {EditorSnapshot} from './rustEditorTypes';
+import type {ReviewViewId} from './rustReviewCapture';
 export type SemanticMaterialIntent={
   expected_revision:number;reference_png_sha256:string;
   cube_uuid:string;texture_uuid:string;
@@ -51,6 +52,20 @@ export function semanticReviewReady(
   userAcknowledged:boolean,
 ):boolean {
   return candidateValid&&viewedSource&&viewedCandidate&&userAcknowledged;
+}
+/** UI-only evidence that two distinct PNGs were rendered at the SAME
+ * fixed camera. No image semantics, visual PASS or user approval is inferred.
+ */
+export function matchingRenderedMaterialPair(
+  sourcePng:string|null,candidatePng:string|null,
+  capturedView:ReviewViewId|null,currentView:ReviewViewId,
+):boolean {
+  const png=(value:string|null)=>
+    typeof value==='string' &&
+    value.startsWith('data:image/png;base64,') &&
+    value.length>32 && value.length<=3*1024*1024;
+  return Boolean(png(sourcePng) && png(candidatePng) &&
+    capturedView===currentView && sourcePng!==candidatePng);
 }
 export function sourceRgb(hex:string):[number,number,number]|null{
   if(!/^#[0-9a-f]{6}$/i.test(hex))return null;

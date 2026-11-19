@@ -14,7 +14,8 @@
   import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileEditorSnapshot } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { matchingSemanticCandidate, semanticViewportSources, sourceRgb,
-    semanticIntentFingerprint, repeatedRejectedIntent, semanticReviewReady,
+    matchingRenderedMaterialPair, semanticIntentFingerprint,
+    repeatedRejectedIntent, semanticReviewReady,
     type SemanticMaterialIntent, type SemanticMaterialDraft,
     type SemanticMaterialPreviewReceipt, type SemanticMaterialReferenceReceipt,
     type SemanticRejectReason
@@ -73,6 +74,10 @@
   let semanticPreview:SemanticMaterialDraft|null=null;
   let semanticShowCandidate=false,semanticViewedSource=false,
     semanticViewedCandidate=false,semanticReviewed=false;
+  // Fixed-camera, source-bound visual snapshots. Never saved to .bbmodel.
+  let semanticSourceCapture:string|null=null;
+  let semanticCandidateCapture:string|null=null;
+  let semanticCapturedView:ReviewViewId|null=null;
   let semanticRejectReason:SemanticRejectReason='flat_volume';
   let semanticRejected:{fingerprint:string;reason:SemanticRejectReason}|null=null;
   let semanticRejectionNote='';
@@ -112,7 +117,11 @@
   let collapsed = new Set<string>();
   let nameInput: HTMLInputElement;
   let discardCancel: HTMLButtonElement;
-  let viewport: { frameModel: () => void; captureReviewPng: (view: ReviewViewId) => string } | undefined;
+  let viewport: {
+    frameModel:()=>void;
+    captureReviewPng:(view:ReviewViewId,expectedPaintSource?:{
+      index:number;source:string})=>string;
+  } | undefined;
   let editorBody: HTMLDivElement;
   let editorWidth = 980;
   let editorHeight = 550;
@@ -198,7 +207,10 @@
     selectedId,selectedFace,paintTextureIndex,semanticReferenceSha);
   $: modelTextureSources = semanticViewportSources(snapshot,semanticPreview,
     semanticShowCandidate,validSemanticPreview);
-  $: semanticReadyForApply = semanticReviewReady(validSemanticPreview,
+  $: semanticReadyForApply = semanticReviewReady(
+    validSemanticPreview &&
+      matchingRenderedMaterialPair(semanticSourceCapture,semanticCandidateCapture,
+        semanticCapturedView,reviewViewId),
     semanticViewedSource,semanticViewedCandidate,semanticReviewed);
   $: semanticAtlasSource = validSemanticPreview && semanticShowCandidate &&
     semanticPreview ? semanticPreview.candidatePngSource :
@@ -1110,11 +1122,17 @@
     finally { busy = false; }
   }
 
+  function clearSemanticComparison(){
+    semanticSourceCapture=null;
+    semanticCandidateCapture=null;
+    semanticCapturedView=null;
+    semanticViewedSource=false;semanticViewedCandidate=false;
+    semanticReviewed=false;
+  }
   function clearSemanticPreview(){
     semanticPreview=null;
     semanticShowCandidate=false;
-    semanticViewedSource=false;semanticViewedCandidate=false;
-    semanticReviewed=false;
+    clearSemanticComparison();
   }
   async function chooseSemanticReference(){
     if(!snapshot||busy||loading||paintStroke)return;
@@ -1182,17 +1200,52 @@
           paintTextureIndex,semanticReferenceSha))
         throw new Error('SEMANTIC_PREVIEW_SOURCE_STALE');
       semanticPreview=candidate;
-      semanticShowCandidate=false;semanticViewedSource=false;
-      semanticViewedCandidate=false;semanticReviewed=false;
+      semanticShowCandidate=false;
+      clearSemanticComparison();
       notice='Disposable material prepared. Select Source and Candidate to compare both before applying.';
     }catch(cause){clearSemanticPreview();showError(cause);}
     finally{busy=false;}
   }
-  function showSemanticCandidate(value:boolean){
-    if(!validSemanticPreview||busy)return;
+  async function showSemanticCandidate(value:boolean){
+    if(!validSemanticPreview||!semanticPreview||busy||!snapshot||!viewport)return;
+    const expected=semanticPreview,view=reviewViewId;
+    const index=expected.textureIndex;
+    const source=value ? expected.candidatePngSource :
+      snapshot.texturePreviewSources[index];
+    if(!source)return;
+    busy=true;error='';
     semanticShowCandidate=value;
-    if(value)semanticViewedCandidate=true;
-    else semanticViewedSource=true;
+    semanticReviewed=false;
+    if(semanticCapturedView!==null && semanticCapturedView!==view){
+      clearSemanticComparison();
+    }
+    try{
+      // Flush the same-geometry texture swap and one browser frame before
+      // capturing. The viewport independently requires its GPU source to
+      // match this exact PNG and be fully loaded; never count a button
+      // click as a successful view/capture.
+      await tick();
+      await new Promise<void>(resolve=>
+        window.requestAnimationFrame(()=>resolve()));
+      const png=viewport.captureReviewPng(view,{index,source});
+      if(semanticPreview!==expected || !validSemanticPreview ||
+         reviewViewId!==view)throw new Error('SEMANTIC_COMPARISON_STALE');
+      semanticCapturedView=view;
+      if(value){
+        semanticCandidateCapture=png;
+        semanticViewedCandidate=true;
+      }else{
+        semanticSourceCapture=png;
+        semanticViewedSource=true;
+      }
+    }catch(cause){
+      if(value){
+        semanticCandidateCapture=null;semanticViewedCandidate=false;
+      }else{
+        semanticSourceCapture=null;semanticViewedSource=false;
+      }
+      showError(cause);
+    }finally{busy=false;}
   }
   function rejectSemanticCandidate(){
     if(!validSemanticPreview||!semanticPreview||busy)return;
@@ -1881,11 +1934,11 @@
           !snapshot.paintEditableTextures[paintTextureIndex]}
           onclick={() => void previewSemanticMaterial()}>Preview material</button>
         {#if validSemanticPreview}
-          <div class="semantic-material-actions" role="group" aria-label="Compare original and candidate">
+          <div class="semantic-material-actions" role="group" aria-label="Capture matched material comparison">
             <button type="button" aria-pressed={!semanticShowCandidate}
-              disabled={busy} onclick={() => showSemanticCandidate(false)}>Source</button>
+              disabled={busy} onclick={() => void showSemanticCandidate(false)}>Capture Source</button>
             <button type="button" aria-pressed={semanticShowCandidate}
-              disabled={busy} onclick={() => showSemanticCandidate(true)}>Candidate</button>
+              disabled={busy} onclick={() => void showSemanticCandidate(true)}>Capture Candidate</button>
             <button type="button" disabled={busy} onclick={clearSemanticPreview}>Discard</button>
           </div>
           <label>Reason if rejected
@@ -1898,12 +1951,33 @@
           </label>
           <button type="button" disabled={busy}
             onclick={rejectSemanticCandidate}>Reject and revise</button>
-          <p class="hint">Compare both images on the same model. Rejected exact
-            treatment settings cannot be repeated without a meaningful change.</p>
+          <p class="hint">Use the camera selector above, then capture Source and
+            Candidate at that same fixed view. The capture refuses unloaded
+            textures; if an image is still loading, retry its button.
+            Rejected exact treatments cannot be repeated unchanged.</p>
+          {#if semanticSourceCapture || semanticCandidateCapture}
+            <div class="semantic-material-comparison" aria-label="Matched fixed-camera source and candidate">
+              {#if semanticSourceCapture}
+                <figure><img src={semanticSourceCapture} draggable="false"
+                  alt={'Original Rust preview at ' + semanticCapturedView}/>
+                  <figcaption>Source · {semanticCapturedView}</figcaption></figure>
+              {/if}
+              {#if semanticCandidateCapture}
+                <figure><img src={semanticCandidateCapture} draggable="false"
+                  alt={'Candidate Rust preview at ' + semanticCapturedView}/>
+                  <figcaption>Candidate · {semanticCapturedView}</figcaption></figure>
+              {/if}
+            </div>
+          {/if}
+          {#if semanticSourceCapture && semanticCandidateCapture &&
+            semanticSourceCapture===semanticCandidateCapture}
+            <p class="hint">No rendered difference from this camera.
+              Choose a view showing the selected face and capture both again.</p>
+          {/if}
           <label class="semantic-material-review">
             <input type="checkbox" bind:checked={semanticReviewed}
               disabled={busy || !semanticViewedSource || !semanticViewedCandidate}/>
-            I compared source and candidate with the selected reference and checked visible identity markings.
+            I compared both fixed-camera captures with the selected reference and checked visible identity markings.
           </label>
           <button type="button" disabled={busy || !semanticReadyForApply}
             onclick={() => void applySemanticCandidate()}>Apply inspected candidate</button>
@@ -2649,6 +2723,7 @@
     <div class="tool-spacer"></div>
     <button onclick={() => viewport?.frameModel()} disabled={!snapshot || busy}>Frame</button>
     <select bind:value={reviewViewId} aria-label="Review camera direction"
+      onchange={clearSemanticComparison}
       disabled={!snapshot || busy || loading} title="Choose a fixed model camera for a source-bound PNG capture">
       <option value="front">Front</option><option value="back">Back</option>
       <option value="left">Left</option><option value="right">Right</option>
