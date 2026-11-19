@@ -1,3 +1,33 @@
+**2026-11-19 — Rust rich color palettes + lossless PNG (SOURCE ONLY / NOT_EXECUTED)**
+Source baseline Rust@b562f265c6907a0f8fec933b90fe8fc20cfd82a8.
+MaterialWorkPacket now accepts multiple independently authored RGB swatches per
+material role using optional `swatchId`, including explicit Cube-face clusters
+and mask/brush paths. Primary shadow/base/highlight roles keep their
+source-backed luminance admission, while variant colors remain reference-chosen.
+No fixed 8-entry creative palette limit. Each AI plan remains bounded to 64 KiB
+and its existing per-face cluster/span/pixel budgets, not a global texture color
+ceiling. The native RGB recolor and original-RGBA source guards no longer
+refuse a correction solely because it has >16/32 distinct colors: bounds are
+the physical atlas texels and 64 KiB source/plan budget, with hashed exact
+preimage membership. `texture_source_colors` reports the FULL unique RGBA
+histogram count for a crop and returns pages (default 16, maximum 64, with
+`offset`/`next_offset`); pagination is for token and payload efficiency,
+not a palette limit.
+
+Rust-owned authored/edited PNGs stay **RGBA8 truecolor+alpha** and now use
+PNG 0.17 DEFLATE `Best` + adaptive per-scanline lossless filtering. No color
+quantization, indexed-color conversion, lossy downscale, dithering or palette
+truncation is introduced. Existing unchanged embedded PNGs remain byte-identical
+through export; edits may reencode the PNG, preserving **decoded RGBA8 pixels**
+outside the explicitly modified region. Compression settings do NOT certify
+globally minimal PNG size; real encode time, final bytes, WebView/Bedrock color
+appearance and imported ICC/gamma ancillary metadata handling remain
+UNVERIFIED and require separate native review before an end-to-end guarantee.
+The semantic Rust auto-candidate is STILL one painted-metal Cube face;
+other materials use reviewer-authored work packets, NOT a general automatic
+material generator. No new image decoder, external service, CI, PC-local test,
+cross-branch write or release. Rust/JS authored regressions NOT_EXECUTED.
+
 **Rust external editor existing-face PNG (2026-11-19; SOURCE ONLY / NOT_EXECUTED):**
 The Rust source now accepts one local selected RGBA8 PNG as a disposable
 candidate for exactly one mapped, non-shared Cube face of an existing owned

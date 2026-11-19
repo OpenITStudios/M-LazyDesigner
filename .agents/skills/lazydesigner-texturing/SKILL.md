@@ -32,6 +32,23 @@ a full external-editor plugin, native proof or Code Mode guest write access.
 The user may use Aseprite, Pixelorama, Krita or Photoshop externally;
 no app is bundled or launched by the source integration. Local tests held.
 
+**Rust rich-material palette + PNG encoding (SOURCE_ONLY / NOT_EXECUTED):**
+The source-only MaterialWorkPacket may name additional exact artist-chosen
+`swatchId` values for each material role; face-local clusters and selected
+brush strokes reference those swatches without inventing a palette gradient.
+There is no global swatch-count or automatic color reduction of the native
+RGBA8 atlas. One untrusted plan and one reviewed correction still respect
+their serialized-byte, physical-pixel, UV, original-RGBA, identity and
+approval safety checks. Paginated `texture_source_colors` has complete
+histogram counts and exposes every source swatch by `next_offset`; one
+truncated page never grants approval of unseen colors. Native edits encode
+losslessly as truecolor RGBA8 PNG with DEFLATE Best+adaptive filters, not
+indexed PNG. Unchanged original PNG bytes are exported verbatim. Actual
+pixel roundtrip and compression speed tests are AUTHORED_NOT_RUN, and PNG
+ICC/gamma metadata after editing, WebView/Bedrock colors and visual material
+quality have no native proof. No fixed metal/wood/etc. palette formula and
+no new independent material engine are implied.
+
 ## Control Context Projection
 
 Start from LazyDesigner Control's stage-specific Texturing projection; do not reload the complete Modelling Profile or Reference Package.

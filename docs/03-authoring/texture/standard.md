@@ -10,6 +10,28 @@ Define durable UV Layout, Texture Atlas, Texture Styling, and Texture Verify rul
 
 This policy separates concepts that must not be collapsed into a generic “texture” step.
 
+## 2026-11-19 Rust source-only precision addendum — palette and PNG
+
+The native editor's RGBA8 pixel canvas does **not** impose a fixed number of
+artist palette swatches. Hand-painted material plans may use multiple named
+`swatchId` variants per base/shadow/highlight/material role, with actual
+reference and surface-form evidence; a 64 KiB untrusted plan limit is a
+transport/transaction safety bound, not an art-style restriction. Original
+source-color inspection is paged, so a first 16-color page is never interpreted
+as a complete palette unless `complete=true`; `unique_rgba` counts the whole
+bounded crop and `next_offset` exposes remaining entries.
+
+Native-generated/edited PNG uses 8-bit RGBA channel samples and reversible
+DEFLATE+adaptive scanline filtering. Pixel identity is defined by exact decoded
+RGBA8 bytes, including alpha and hidden RGB, not compressed file-byte equality
+after an edit. No quantization, automatic palette indexing, lossy resampling or
+noise is allowed as a file-size shortcut. Unchanged supported imports/exported
+PNGs retain original compressed bytes. Photoshop/Krita/Aseprite ICC/gamma
+ancillary metadata may affect color-managed display after a changed PNG is
+reencoded; preserve or explicitly verify such semantics before claiming
+native visual/color-managed equality. Image quality and file-size/latency
+improvements are source intentions until authorized PC-local measurements.
+
 ## Canonical Vocabulary
 
 ```text
