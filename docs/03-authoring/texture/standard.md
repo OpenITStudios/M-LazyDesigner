@@ -546,7 +546,14 @@ from independent image-capable review of the approved
 reference and all relevant model angles. The material
 formula may still be visually worse than the original:
 on rejection discard or diagnose a new treatment instead
-of reapplying the same generic shade mask. No verified
+of reapplying the same generic shade mask. The explicit
+Source/Candidate toggles and review checkbox do not prove
+an independent image assessment. A rejected exact intent
+(source revision, part, face, swatches and parameters) is
+not regenerated unchanged in that local UI session.
+The direct Rust Apply stages a checksum-verified candidate
+before updating any model/history state; a stale source or
+changed candidate fails without publishing it. No verified
 Rust > Local image-quality or latency evidence exists yet.
 Reference marks using the permitted original RGB value
 still need exact protected regions; palette equality

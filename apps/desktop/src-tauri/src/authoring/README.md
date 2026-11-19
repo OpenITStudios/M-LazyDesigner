@@ -20,6 +20,23 @@ is discarded. No new material storage, layer system,
 GPU renderer, unrestricted IPC listener or guest
 authorization is introduced.
 
+On a direct user Apply, the Tauri adapter stages the same
+candidate in a separate copy of the current EditorSession.
+It verifies source SHA, the disposable preflight candidate
+SHA and the final candidate SHA before it replaces even the
+temporary pending EditorSession. Native test source asserts
+the original model bytes, epoch/revision and Undo remain
+unchanged after preview or stale-candidate rejection.
+A successful mutation is a single guarded Rust transaction.
+Source-authored tests remain NOT_EXECUTED.
+
+The local UI additionally refuses unchanged *rejected*
+semantic proposals, and requires a deliberate Source and
+Candidate toggle before enabling user acknowledgment.
+These checks improve correction discipline but are not an
+independent image-capable reviewer or security permission
+boundary.
+
 The selected reference image is NOT independently approved.
 A syntactically valid source-RGBA mask or user-inspected
 candidate is not equivalent to professional pixel-art

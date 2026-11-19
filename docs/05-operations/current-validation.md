@@ -18,6 +18,21 @@ or authoritative snapshot clears candidate. A saved-model
 review Capture is denied while candidate overlay is
 active. No preview action modifies original model,
 disk asset or Rust Undo history.
+Source follow-through includes explicit Source/Candidate
+view selection and an ephemeral exact rejected-intent
+memo to prevent repeating the same bad material formula.
+`apply_checked_semantic_candidate` stages a second
+in-memory Rust candidate, rejects incorrect source SHA,
+preflight SHA or final native SHA and only then replaces
+the pending EditorSession; the existing detached_edit
+remains the sole published editor commit boundary.
+Authored native test fixture checks original bytes,
+no Undo during preview, stale source/candidate refusal,
+exact commit and Undo restoration. A UI regression
+checks both-view acknowledgment and same-intent replay.
+All are TEST_AUTHORED_NOT_RUN and cannot prove visual
+quality. Changing an RGB swatch does not by itself prove
+a distinct or better artistic treatment.
 
 A direct UI-user reviewed Apply is separate and
 recomputes exact source model SHA, revision, current

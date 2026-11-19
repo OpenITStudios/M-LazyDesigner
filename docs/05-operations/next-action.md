@@ -32,6 +32,21 @@ the actually approved reference. No screenshot,
 Blockbench/Windows execution, measured speed or
 accepted Pillager improvement has occurred.
 
+P0-D/E follow-through (Rust@b2afa03f92aea9c8942aee27dcd1957c676559d1 →
+Rust@266c16257064550d9efd9153357163532080d9c0 →
+Rust@d0fd8a43ed5a1ac090636b7d9c31ad62e0ba0096):
+the local candidate now begins with neither Source nor
+Candidate marked as viewed. The user must deliberately
+select both views before acknowledging a review, or reject
+the candidate with a reason and revise its semantic intent.
+Exact rejected plans cannot be resubmitted unchanged in
+the same UI session. The native explicit-Apply helper
+validates source and candidate SHAs, stages the protected
+Paint in a cloned EditorSession, and only replaces pending
+state after checksum equivalence; source-authored Rust and
+UI tests cover stale/rejected paths and Undo. No test was
+executed, and no final artistic PASS was inferred.
+
 Current ceiling: SOURCE_COMMITTED / SOURCE_REVIEWED /
 TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED. Existing
 localtest and CI hold remains; no release, new renderer,

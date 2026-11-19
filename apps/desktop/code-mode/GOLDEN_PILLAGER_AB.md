@@ -172,6 +172,30 @@ independently accepted art**. No candidate image, actual review
 or cost-to-accepted measurement was executed in this GitHub-only
 source phase.
 
+### P0-D/E acceptance of a rejected candidate (SOURCE ONLY)
+
+The comparison UI now requires explicit selection of both
+Source and Candidate before a separate user acknowledgment
+can enable the SHA-bound desktop Apply. The user may instead
+choose *Reject and revise*, with a defect classification for
+flat value masses, approved identity risk, incorrect material
+style, or another observed failure. The exact same semantic
+intent (current model/revision, reference SHA, Cube/face,
+base/palette, corner and contrast) cannot be regenerated
+unmodified in that UI session. This is a bounded correction
+loop to discourage repeating the same generic wedge mask,
+not an automated evaluation of image quality.
+
+A separate native source regression records the immutable
+original PNG/model/Undo after ephemeral preview, rejection
+of mismatched source or candidate SHA, and an exact accepted
+transaction whose Undo restores the original. The tests are
+AUTHORED_NOT_RUN. Neither the visual-review checkbox nor
+the test source proves that a human actually compared the
+saved reference against all affected mapped views. Evidence
+of Rust > Local visual improvement, shadow placement and
+cost to accepted artist result remains NOT_EVALUATED.
+
 ## Frozen acceptance cases
 
 | Case ID | Prior user feedback | Acceptance evidence to obtain |

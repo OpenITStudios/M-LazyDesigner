@@ -30,6 +30,16 @@ independent artistic review.
 When finalizing a model, use fresh approved-reference captures,
 the original source and the new saved candidate under the
 existing Golden Pillager/Texture acceptance contract.
+The source-only Paint UI now begins on Source and requires
+a deliberate Source/Candidate comparison before the user
+acknowledges the observed treatment. A rejected exact
+material intent is blocked from replay in the same UI
+session until its input changes; no extra guest RPC or
+persistent rejection database was added. Native Apply
+stages and checks the exact final candidate before
+publishing even the temporary Rust session state.
+Source-only Rust/JS regressions were authored, not run.
+
 A checkbox that the user inspected both modes is not
 the independent reviewer. Source code cannot establish
 the visual quality of the generated corner treatment.
