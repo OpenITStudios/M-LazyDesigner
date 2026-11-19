@@ -24,6 +24,7 @@ use lazydesigner::authoring::{
     AuthoringDocument, Bone, Cube, EditOperation, EditPlan, EditorSession,
     SemanticMaterialIntent, SemanticMaterialProposal, ExternalFaceTextureIntent, SurfacePaintIntent,
     SurfacePaintSampleRequest, SurfaceSourceSample,
+    SurfaceSelectionRequest, SurfaceSelectionReceipt,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -1497,6 +1498,23 @@ pub fn rust_editor_sample_surface_color(
     let sample=source.sample_surface_source(&request).map_err(model_failure)?;
     let _fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
     Ok(sample)
+}
+
+/// A source-revision-bound Magic Wand selection; only a read-only atlas
+/// row-span preview is returned. The seed is recomputed on every later Apply.
+#[tauri::command(async)]
+pub fn rust_editor_select_surface_color(
+    state:State<'_,EditorState>,expected_epoch:u64,
+    expected_revision:u64,request:SurfaceSelectionRequest,
+)->Result<SurfaceSelectionReceipt,DesktopError>{
+    if request.source.expected_revision!=expected_revision{
+        return Err(failure("SURFACE_SELECTION_REVISION_STALE",
+            "The source selection belongs to another model revision."));
+    }
+    let source=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    let selection=source.select_surface_source(&request).map_err(model_failure)?;
+    let _fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    Ok(selection)
 }
 
 /// One user gesture on one source-bound 3D Cube face. Selection, atlas UV,

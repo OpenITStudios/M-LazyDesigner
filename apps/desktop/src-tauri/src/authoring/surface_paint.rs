@@ -60,6 +60,10 @@ pub struct SurfacePaintIntent {
     pub paint_rgba:[u8;4],
     /// Up to 4096 source face-local points in one 3D pointer gesture.
     pub points:Vec<[u32;2]>,
+    /// Source-local seed for exact 4-connected original RGBA selection.
+    /// None means the original unrestricted-by-island guarded mode.
+    #[serde(default)]
+    pub selection_seed:Option<[u32;2]>,
     /// The artist's hard pixel-tip only; clipping never spills across faces.
     #[serde(default="one_pixel")]
     pub brush_radius:u8,
@@ -72,12 +76,14 @@ pub struct SurfacePaintIntent {
     #[serde(default)]
     pub protected_regions:Vec<CorrectionRectangle>,
 }
-struct FaceBinding{
-    texture_index:usize,
-    from:[u32;2],to:[u32;2],uv:[f64;4],rotation:u16,
-    size:[u32;2],width:u32,height:u32,
+pub(super) struct FaceBinding{
+    pub(super) texture_index:usize,
+    pub(super) from:[u32;2],pub(super) to:[u32;2],
+    pub(super) uv:[f64;4],pub(super) rotation:u16,
+    pub(super) size:[u32;2],
+    pub(super) width:u32,pub(super) height:u32,
 }
-fn admit_face(doc:&AuthoringDocument,cube_uuid:&str,texture_uuid:&str,
+pub(super) fn admit_face(doc:&AuthoringDocument,cube_uuid:&str,texture_uuid:&str,
     face:&str,expected_uv:[f64;4],expected_rotation:u16)->Result<FaceBinding>{
     if !super::valid_uuid(cube_uuid)||!super::valid_uuid(texture_uuid)||
        !FACE_NAMES.contains(&face){
@@ -114,7 +120,7 @@ fn admit_face(doc:&AuthoringDocument,cube_uuid:&str,texture_uuid:&str,
     }else{[to[0]-from[0],to[1]-from[1]]};
     Ok(FaceBinding{texture_index:index,from,to,uv,rotation,size,width,height})
 }
-fn atlas_for_local(face:&FaceBinding,at:[u32;2])->Result<[u32;2]>{
+pub(super) fn atlas_for_local(face:&FaceBinding,at:[u32;2])->Result<[u32;2]>{
     let next=[at[0].checked_add(1)
             .ok_or_else(||"SURFACE_PAINT_TEXEL_INVALID".to_string())?,
         at[1].checked_add(1)
@@ -155,6 +161,7 @@ fn gather(
     source:&[u8],face:&FaceBinding,centers:&[[u32;2]],
     base:[u8;4],radius:u8,tip:SurfaceBrushTip,
     protected:&[CorrectionRectangle],
+    selection:Option<&HashSet<[u32;2]>>,
     seen:&mut HashSet<[u32;2]>,out:&mut Vec<[u32;2]>,
 )->Result<()>{
     if centers.is_empty()||centers.len()>paint::MAX_STROKE_POINTS{
@@ -178,7 +185,8 @@ fn gather(
                 if !seen.insert(at){continue;}
                 let idx=((at[1] as usize)*face.width as usize+
                     at[0] as usize)*4;
-                if source.get(idx..idx+4)!=Some(base.as_slice())||
+                if selection.is_some_and(|set|!set.contains(&at))||
+                   source.get(idx..idx+4)!=Some(base.as_slice())||
                    protected.iter().any(|r|
                        at[0]>=r.from[0]&&at[0]<r.to[0]&&
                        at[1]>=r.from[1]&&at[1]<r.to[1]){continue;}
@@ -237,17 +245,28 @@ pub(super) fn apply(
         }
         Ok(admitted)
     }).transpose()?;
+    if intent.selection_seed.is_some()&&second.is_some(){
+        return Err("SURFACE_SELECTION_SEAM_UNSUPPORTED".into());
+    }
     let rgba=paint::decode_for_uv_inspection(
         &doc.texture_assets[first.texture_index],first.width,first.height)?;
+    let selected=intent.selection_seed.map(|seed|{
+        let mask=super::surface_selection::compute(
+            &first,&rgba,seed,&intent.protected_regions)?;
+        if mask.source_rgba!=intent.source_base_rgba{
+            return Err("SURFACE_SELECTION_SOURCE_MISMATCH".into());
+        }
+        Ok(mask.physical)
+    }).transpose()?;
     let mut seen=HashSet::new();
     let mut points=Vec::new();
     gather(&rgba,&first,&intent.points,intent.source_base_rgba,
         intent.brush_radius,intent.brush_tip,&intent.protected_regions,
-        &mut seen,&mut points)?;
+        selected.as_ref(),&mut seen,&mut points)?;
     if let (Some(bridge),Some(face))=(&intent.seam,&second){
         gather(&rgba,face,&bridge.points,intent.source_base_rgba,
             intent.brush_radius,intent.brush_tip,&intent.protected_regions,
-            &mut seen,&mut points)?;
+            None,&mut seen,&mut points)?;
     }
     if points.is_empty(){
         return Err("SURFACE_PAINT_NO_EDITABLE_PIXELS".into());
@@ -310,6 +329,7 @@ mod tests{
             source_base_rgba:[80,100,120,255],
             paint_rgba:[140,150,160,255],
             points:vec![[0,0],[1,1],[2,2],[3,3]],
+            selection_seed:None,
             brush_radius:1,brush_tip:SurfaceBrushTip::Square,seam:None,
             protected_regions:vec![CorrectionRectangle{
                 from:[1,1],to:[2,2],
