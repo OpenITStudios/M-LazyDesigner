@@ -174,8 +174,16 @@ source phase.
 
 ### P0-D/E acceptance of a rejected candidate (SOURCE ONLY)
 
-The comparison UI now requires explicit selection of both
-Source and Candidate before a separate user acknowledgment
+The comparison UI now requires two **actually rendered fixed-camera
+PNG captures**, not merely button clicks. The existing Three.js
+viewport verifies the exact active atlas source, loaded HTML image
+and material consumer before each capture. Both PNGs are shown
+side by side for the same selected camera direction; missing,
+identical, mismatched-camera or stale captures cannot unlock Apply.
+A view change invalidates both captures, and none are saved to
+the user's .bbmodel. This is not an independent reviewer or
+Minecraft renderer proof.
+The comparison UI also requires a separate user acknowledgment
 can enable the SHA-bound desktop Apply. The user may instead
 choose *Reject and revise*, with a defect classification for
 flat value masses, approved identity risk, incorrect material

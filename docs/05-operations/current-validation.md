@@ -50,6 +50,46 @@ real reference-approved quality comparison and
 necessary exact protected regions for original-base
 markings remain explicit.
 
+## 2026-11-19 — Rust P0-D/E original-detail preservation and matched render gate (SOURCE ONLY)
+
+Source work on selected Rust baseline
+`8f6aa86b10b54b687000b27f445e13820ceca753`:
+- `bfa6a66178485122125491f9d27bbb37230447fc`:
+  the native semantic composer samples at most 32² actual
+  face-local original RGBA texels, excludes a one-texel
+  margin adjacent to different original pixels and refuses
+  if no candidate light or shadow remains. The existing
+  guarded Rust UV/alias, alpha/source-color, original
+  document SHA, Undo and approval paths are unchanged.
+  Native tests for rotated detail borders, safe remaining
+  highlights and all-corners refusal are AUTHORED_NOT_RUN.
+- `df275506b4da6fc3471aa100f5283865330f705c`:
+  the existing Three.js viewport checks exact expected
+  texture source/index and loaded HTML image; Paint UI now
+  captures fixed-camera PNG Source and Candidate separately,
+  displays them side by side, and requires both non-identical
+  images at the same selected view before a user
+  acknowledgment can enable native Apply. These captures
+  are transient UI data, not saved source screenshots.
+  Source-only JS helper regressions AUTHORED_NOT_RUN.
+- `7ce95b30fa35fa6ce2ec188844ed6fbdde8c0a45`:
+  Code Mode typed native receipt demands both actual
+  nonzero shade masses; host and SDK mocked receipts
+  aligned and forged zero-highlight response added as
+  a negative control. Code Mode guest remains read-only.
+
+PROOF CEILING: SOURCE_COMMITTED / SOURCE_REVIEWED /
+TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED. No
+Cargo, Node, Svelte, browser, Blockbench, Windows,
+artist comparison or Golden Pillager A/B executed.
+Real front/side/back/underside acceptance and
+Rust>Local quality/cost remain UNVERIFIED.
+Same-RGBA identity marks cannot be recognized
+automatically by the source-color margin; the
+reviewer-protected original regions remain essential.
+No CI, release, extra editor, data publisher or
+cross-branch mutation.
+
 ## 2026-11-19 — Rust P0 semantic material intent/mask/native plan (SOURCE ONLY)
 
 Source user goal: AI no longer hand-assembles pixel-by-pixel Texture;

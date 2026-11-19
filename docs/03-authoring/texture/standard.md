@@ -494,7 +494,15 @@ rectangles, strokes, atlas UV or mandatory procedural noise.
 
 Rust `material_synthesis.rs` uses the actual face UV
 mapping and original PNG bitmap to propose sparse, tapering
-corner form masks. Nonmatching RGB/alpha is not touched.
+corner form masks. Nonmatching RGB/alpha is not touched. To protect detail next
+to the allowed base shade, Rust excludes candidate mask pixels
+within one face-local texel of observed non-base source pixels
+(including under native rotated/signed UV) and refuses when
+either candidate light or shadow region is no longer available.
+This is a conservative original-pixel boundary, NOT automatic
+reference/identity segmentation. Approved markings that use
+exactly the same connected base RGBA still need explicit
+reviewer-protected regions.
 The compiler returns only an existing guarded
 `PaintCubeFaceRegionsGuarded` EditPlan with a
 source-original-RGBA whitelist, allowed face UV rectangle,

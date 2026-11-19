@@ -179,6 +179,13 @@ The reference SHA is unverified caller context until the
 independent reviewer/host confirms the real image; a source
 candidate is never an approved finish or a substitute for
 artistically chosen masks on complex/curved surfaces.
+P0 now keeps a one-texel face-local margin around actually observed
+non-base marks; this is not enough to recognize same-color symbols.
+The UI requires both Source/Candidate fixed-camera PNGs from loaded
+exact atlas sources, not merely clicks, before user Apply acknowledgment.
+If either image is missing or visually unchanged at that camera, reject
+or choose a view that actually shows the selected face. Do not call
+any such screenshot an independent professional texture review.
 Respect intentional flatness, approved identity, original alpha,
 protected details and source image style; one-face read
 does not imply all-face complete. If the formula does not

@@ -1,3 +1,27 @@
+**Rust P0-D/E source guard + matched rendered comparison (2026-11-19; SOURCE ONLY):**
+Pinned baseline `Rust@8f6aa86b10b54b687000b27f445e13820ceca753`.
+Source increments `bfa6a66178485122125491f9d27bbb37230447fc`,
+`df275506b4da6fc3471aa100f5283865330f705c`
+and `7ce95b30fa35fa6ce2ec188844ed6fbdde8c0a45`
+now (1) preserve a one-texel Cube-face-local perimeter
+around originally observed non-base marks, using the
+existing UV rotation projector and rejecting missing safe
+light/shadow regions; (2) capture real Source/Candidate PNGs
+from an exact active Three.js texture URI/index only after
+its HTML image has loaded; and (3) require a non-identical
+matched-camera pair plus explicit user acknowledgement
+before direct user Apply. View/source/revision changes
+invalidate temporary captures. Code Mode native read-only
+receipt fixtures match the new detail guard and refuse
+forged zero-role evidence.
+A screenshot does not authenticate an approved reference,
+recognize a same-RGBA emblem, prove whole-model/Bedrock
+material fidelity or constitute independent artist PASS.
+SOURCE_COMMITTED / SOURCE_REVIEWED /
+TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED.
+No runtime tests, screenshot, CI, release, Local branch
+write, or Golden Pillager A/B acceptance was performed.
+
 **Active Rust P0-D/E — local ephemeral source/candidate texture preview (2026-11-19; SOURCE ONLY):**
 From \`Rust@b57d6b6fa6b5a21574a2067fc252c570272972c6\`,
 the P0-D/E Tauri/Svelte source adds three local-native

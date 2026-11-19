@@ -33,6 +33,23 @@ Source-authored tests remain NOT_EXECUTED.
 The local UI additionally refuses unchanged *rejected*
 semantic proposals, and requires a deliberate Source and
 Candidate toggle before enabling user acknowledgment.
+A clicked Source/Candidate mode is no longer treated as a viewed
+image: the original RustViewport fixed-camera capture requires
+the active exact atlas URI and a fully loaded texture, then
+returns transient PNG data to the local UI. A matched pair of
+non-identical Source/Candidate screenshots at the selected view,
+plus a separate user acknowledgment, gates the direct user Apply.
+Changing the review camera invalidates the pair. The capture
+does not save a PNG or provide an independent artist verdict.
+
+The P0 source compiler also excludes one face-local texel
+around observed non-base pixels (including under native
+rotated/signed UV), preserving adjacent base-colored outlines
+and refusing cases where either shadow or highlight becomes
+unavailable. Approved same-color markings can still be
+unknown without a separately reviewed protected region.
+Source-authored Rust/Node regressions were not executed.
+
 These checks improve correction discipline but are not an
 independent image-capable reviewer or security permission
 boundary.

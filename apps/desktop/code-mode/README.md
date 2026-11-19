@@ -40,9 +40,26 @@ stages and checks the exact final candidate before
 publishing even the temporary Rust session state.
 Source-only Rust/JS regressions were authored, not run.
 
-A checkbox that the user inspected both modes is not
-the independent reviewer. Source code cannot establish
-the visual quality of the generated corner treatment.
+The Rust compiler now keeps one face-local texel clear around
+each originally observed non-base pixel, including on supported
+rotated/signed UV. If no safe highlight/shadow mass remains,
+the proposal refuses. Code Mode read-only receipts require
+the same guard status and bounded count and reject empty
+shade components. A same-RGBA symbol embedded in the base
+still needs reviewed protected-area evidence.
+
+The existing RustViewport uses an optional exact expected
+atlas URI/index guard and requires its active HTML texture
+to have finished loading before fixed-camera capture. Source
+and Candidate PNGs are transient local UI data, not files or
+canonical model state. Both must exist, differ, and match the
+selected camera direction before a separate user checkbox
+can enable the direct reviewed Apply. Unready texture requires
+a retry; no background polling or second renderer is added.
+
+A checkbox and screenshots do not constitute independent
+reference approval, a six-view assessment, native Bedrock
+fidelity or proof that material is artistically better.
 
 ## First-read map
 
