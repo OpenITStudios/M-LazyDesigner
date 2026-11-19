@@ -1,3 +1,41 @@
+**Active Rust Texture T1/T2 — source-grounded form and pixel craft (2026-11-19; SOURCE ONLY):**
+The selected user priority moved from Geometry G3.7 to Texturing. Latest
+source HEAD from this workstream is Rust@94f42bde (T2) and the follow-on
+T1.1 footprint evidence commit recorded below. T1 reuses the canonical
+Rust `AuthoringDocument` and existing Code Mode `material_face_patch` /
+`texture_styling_face` reads to expose Cube-local face normals,
+conditional model-axis normals, UV-mapped texel density and bounded
+static direct-parent Cube contact candidates. Contact overlap has
+explicit model-plane bounds; it is NOT atlas paint coordinates, global
+occlusion, dynamic lighting or known shaded appearance. Rotated/nonrigid
+Cube contact is refused and nonzero ancestor Bone rotation prevents
+unjustified model-axis normals. Trusted Code Mode FORM_SHADING preflight
+requires matching native form evidence before independently authorized
+guarded Rust Paint. T2 adds role-ordered linear-sRGB luminance admission
+(shadow < base < highlight; optional deep_shadow < shadow) without
+a fixed hue, uniform brightness step or generated shading. The existing
+Texturing Skill, Code Mode readme, standard and authored Rust/Node
+regressions describe source/ref evidence, material-specific cluster
+hypotheses, quiet zones and preserved artwork. A numeric ramp, contact
+candidate, or cluster connection is NEVER professional pixel-art PASS.
+One native Paint/UV/Undo authority; no duplicate pipeline, installed
+model, dependency, CI, release, branch promotion or Local write.
+
+State: SOURCE_COMMITTED / SOURCE_REVIEWED; Rust/Node tests
+AUTHORED_NOT_RUN; native Blockbench, editor screenshots, real reference
+image comparison, model-material fidelity and performance relative to
+Local remain NOT_EXECUTED / UNVERIFIED under the existing hold.
+The next distinct Texture knowledge gap is truly mapped, physically
+adjacent **visible surface edges across Cubes**, not the often-hidden
+contact faces. Any T3 seam proposal must establish exact face/edge,
+model-space adjacency, UV/rotation/source bitmap ownership and
+intentional-boundary exceptions before claiming continuity. T4
+must reuse the existing Pillager Golden A/B and independent user
+review; do not fabricate style acceptance from source receipts.
+No automatic T3/T4 implementation or native test authorization
+is conferred by this status. The earlier Geometry history below is
+preserved, not reactivated.
+
 **Active Rust Geometry G3.7 — operator-bound semantic Cube reframe (2026-11-19; SOURCE ONLY):**
 Building from Rust@0deefa0, the existing trusted Code Mode host
 accepts at most ONE operator-chosen Geometry landmark: exact Cube

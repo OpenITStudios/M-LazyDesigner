@@ -896,6 +896,8 @@ export interface SourceCubeFaceFormEvidence {
     checked_scope:"static_direct_parent_cube_siblings_only";
     contact_count:number;unsupported_neighbor_count:number;
     contacts:Array<{cube_uuid:string;face_overlap_fraction:number;
+      /** Native model-plane bounds ordered by plane_axes; NOT atlas pixels. */
+      plane_overlap_model_bounds:{from:[number,number];to:[number,number]};
       relationship:"coplanar_outward_face_contact"}>;
     samples_truncated:boolean;
   };

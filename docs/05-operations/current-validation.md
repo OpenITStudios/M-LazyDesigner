@@ -1,3 +1,40 @@
+## 2026-11-19 — Rust T1/T2 Texturing source integration (SOURCE ONLY)
+
+Branch `Rust` moved from G3.7 geometry work at
+`c554039aaf7c0cc15566a209f600ce598b89d244` to
+`6233e16d7ac19a029dffc51fee6ca40de19e4c42`
+(T1) and `94f42bde0ead58963e2f2b9eb536fa1a113ee055`
+(T2), followed by a source-only T1.1 model-plane contact-footprint
+clarification. Verified GitHub commit/branch operations and changed
+paths establish SOURCE_COMMITTED, not native execution.
+
+T1 attaches read-only `source_form` to native Rust
+`material_face_patch` and `texture_styling_face` inspections:
+exact selected Cube/face, normal in Cube local coordinates,
+conditional unrotated model-axis normal, face-local pixel density,
+and up to 8 direct-parent static coplanar contact observations.
+The footprint records native model-plane dimensions and partial
+contact locations only. It is NOT a UV rectangle, shading recipe,
+world visibility, animated/rotated geometry evidence or a visual
+acceptance verdict. The Code Mode reviewer-bound FORM_SHADING host
+rejects missing/mismatched Rust form receipts; it still requires
+source SHA, real reference/capture, sample review, scoped Paint,
+protected pixels and independent authorization.
+
+T2 rejects inverted shadow/base/highlight FORM_SHADING palette
+roles using linear-sRGB relative luminance, without fixed step,
+forced RGB ramps or a material-name painting preset. Source tests
+cover rotated parent/target/sibling, partial contacts, static read
+immutability, missing native form receipt, valid hue-shifted ramps
+and inverted/deep-shadow role errors. Tests AUTHORED_NOT_RUN;
+Cargo/Node/typecheck/Tauri/Windows/Blockbench, saved actual rendered
+model acceptance, user/Pillager reference match and speed/quality
+vs Local all NOT_EXECUTED/UNVERIFIED. Existing project hold
+`lazydesigner-codex-localtest-hold` remains in force. T3 cross-Cube
+visible surface-edge seam and T4 blinded visual A/B are not implemented
+by these source changes. No cloud CI, release, dependency, permission
+change or direct Local/other branch write.
+
 ## 2026-11-17 — Rust session Dirty hashing and Code Mode intra-batch reads (SOURCE ONLY)
 
 Pinned baseline `Rust@17fd569eea6df5d28ed713dc5251e82d94dcc829`. Source changes through `1415cea838cb81affa9fa78bfec07c549fad66fe` remove one redundant full-document validation from the canonical Dirty SHA **only** for the validated `EditorSession` state: constructor, imports, accepted mutations and Undo/Redo retain the accepted-data invariant; direct .bbmodel encoding and input admission still perform full validation. The bounded streaming SHA still hashes the same pretty JSON and final newline, and preserves a 16 MiB output limit. Positive/negative Rust source regressions require equality with actual saved-file SHA and reject constructing sessions from malformed assets.

@@ -384,7 +384,10 @@ reference/current views. The existing native inspected face now carries
 saved ancestral rotations permit it, face-plane model extents, face-local
 texel density, and bounded same-direct-parent static coplanar contacts.
 The face-local styling inspector returns the same evidence beside its
-color/noise hints. These are **source measurements**, not generated
+color/noise hints. Reported partial contacts include two-dimensional
+**model-plane bounds** in the reported `plane_axes` order; they are
+**not UV/atlas rectangles** and must not be painted directly. These
+are **source measurements**, not generated
 shading commands, global occlusion detection, real lighting, animation
 pose, inferred material or artistic PASS. Contact evidence refuses
 transformed individual Cubes and labels rotated Bone/world directions

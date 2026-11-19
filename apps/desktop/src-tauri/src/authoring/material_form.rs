@@ -56,21 +56,26 @@ fn direct_cube_siblings<'a>(
     None
 }
 fn face_contact_fraction(target: &Cube, other: &Cube,
-    axis: usize, sign: i8, plane_axes: [usize; 2]) -> Option<f64> {
+    axis: usize, sign: i8, plane_axes: [usize; 2],
+) -> Option<(f64,[f64;2],[f64;2])> {
     let plane = if sign < 0 { target.from[axis] } else { target.to[axis] };
     let other_plane = if sign < 0 { other.to[axis] } else { other.from[axis] };
     if (plane-other_plane).abs() > EPS { return None; }
     let mut intersection = 1.0;
     let mut face_area = 1.0;
-    for tangent in plane_axes {
+    let mut from=[0.0;2];
+    let mut to=[0.0;2];
+    for (i,tangent) in plane_axes.into_iter().enumerate() {
         let extent = target.to[tangent]-target.from[tangent];
-        let common = target.to[tangent].min(other.to[tangent])
-            - target.from[tangent].max(other.from[tangent]);
+        from[i]=target.from[tangent].max(other.from[tangent]);
+        to[i]=target.to[tangent].min(other.to[tangent]);
+        let common=to[i]-from[i];
         if extent <= EPS || common <= EPS { return None; }
         face_area *= extent;
         intersection *= common;
     }
-    (face_area > EPS).then_some((intersection/face_area).clamp(0.0,1.0))
+    (face_area > EPS).then_some((
+        (intersection/face_area).clamp(0.0,1.0),from,to))
 }
 
 /// Called only after native document validation and an explicit Cube-face
@@ -84,7 +89,7 @@ pub(super) fn inspect_source_form(
     let extent: [f64;2] = tangents.map(|axis|cube.to[axis]-cube.from[axis]);
     let density: [Option<f64>;2] = face_texels.map(|pixels|
         std::array::from_fn(|i| (extent[i] > EPS)
-            .then_some(pixels[i] as f64 / extent[i]))
+            .then(||pixels[i] as f64 / extent[i]))
     ).unwrap_or([None,None]);
     let hierarchy = direct_cube_siblings(
         &doc.hierarchy, &cube.uuid, &mut Vec::new());
@@ -107,12 +112,13 @@ pub(super) fn inspect_source_form(
         for other in &doc.cubes {
             if !ids.contains(other.uuid.as_str()) { continue; }
             if !axis_cube(other) { unsupported_neighbors+=1; continue; }
-            if let Some(fraction) = face_contact_fraction(
+            if let Some((fraction,from,to)) = face_contact_fraction(
                 cube,other,normal_axis,normal_sign,tangents) {
                 contact_count+=1;
                 if contacts.len()<MAX_CONTACT_SAMPLES {
                     contacts.push(json!({"cube_uuid":other.uuid,
                         "face_overlap_fraction":fraction,
+                        "plane_overlap_model_bounds":{"from":from,"to":to},
                         "relationship":"coplanar_outward_face_contact"}));
                 }
             }
@@ -186,7 +192,17 @@ mod tests {
         assert_eq!(r["contact_analysis"]["contacts"][0]["face_overlap_fraction"],json!(1.0));
         assert_eq!(r["contact_analysis"]["contacts"][0]["cube_uuid"],
             json!("00000000-0000-4000-8000-000000009999"));
+        assert_eq!(r["contact_analysis"]["contacts"][0]["plane_overlap_model_bounds"],
+            json!({"from":[0.0,0.0],"to":[4.0,4.0]}));
         assert_eq!(r["world_visibility_verdict"],"UNVERIFIED");
+        // A partial contact must localize the shared model plane, not
+        // hallucinate a UV crop or whole-face contact shadow.
+        d.cubes[1].from=[4.0,1.0,1.0];
+        d.cubes[1].to=[8.0,3.0,3.0];
+        let partial=inspect_source_form(&d,&d.cubes[0],"east",Some([4,4]));
+        assert_eq!(partial["contact_analysis"]["contacts"][0]["face_overlap_fraction"],json!(0.25));
+        assert_eq!(partial["contact_analysis"]["contacts"][0]["plane_overlap_model_bounds"],
+            json!({"from":[1.0,1.0],"to":[3.0,3.0]}));
         // Rotate the sibling: an AABB is no longer a truthful contact test.
         d.cubes[1].extra.insert("rotation".into(),json!([0,45,0]));
         let unsafe_neighbor=inspect_source_form(&d,&d.cubes[0],"east",Some([4,4]));
