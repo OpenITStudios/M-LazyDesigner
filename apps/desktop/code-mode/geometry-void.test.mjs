@@ -6,14 +6,18 @@ import {createRustCodeModeClient} from './client.mjs';
 import {normalizedGeometryVoidZones,validGeometryVoidEvidence} from './geometry-void.mjs';
 const SHA='a'.repeat(64);
 const bone={uuid:'bone-one',name:'body',origin:[0,0,0]};
-const cube={uuid:'cube-one',name:'panel',from:[0,0,0],to:[2,10,10],
+// The fixture must actually describe a vacant region: two side walls
+// delimit a space without overlapping it. Mocked Rust cannot prove that.
+const left={uuid:'cube-left',name:'left',from:[0,0,0],to:[2,10,10],
   type:'cube',faces:{}};
-const voids=[{bone_uuid:bone.uuid,from:[0.5,2,2],to:[1,8,8]}];
-const assembly={expected_revision:0,parts:[{bone,parent_uuid:null,cubes:[cube]}],
+const right={uuid:'cube-right',name:'right',from:[8,0,0],to:[10,10,10],
+  type:'cube',faces:{}};
+const voids=[{bone_uuid:bone.uuid,from:[3,2,2],to:[7,8,8]}];
+const assembly={expected_revision:0,parts:[{bone,parent_uuid:null,cubes:[left,right]}],
   void_zones:voids};
 const evidence={
  scope:'new_bone_saved_cube_bounds_empty_zone',
- zones:voids,zones_checked:1,tested_cube_checks:1,
+ zones:voids,zones_checked:1,tested_cube_checks:2,
  local_bounds_verdict:'CLEAR_OF_PROPOSED_AXIS_ALIGNED_CUBES',
  whole_model_contact_verdict:'UNVERIFIED',through_hole_verdict:'UNVERIFIED',
  visual_verdict:'UNVERIFIED',write_authority:'NOT_GRANTED',
@@ -22,10 +26,11 @@ const response=()=>({
  status:'OK',sha256:SHA,summary:{revision:0},
  plan:{expected_revision:0,operations:[
    {op:'add_bone',bone,parent_uuid:null},
-   {op:'add_cube',cube,bone_uuid:bone.uuid},
+   {op:'add_cube',cube:left,bone_uuid:bone.uuid},
+   {op:'add_cube',cube:right,bone_uuid:bone.uuid},
  ],correction_scope:null},
  preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
-   mutation:{revision:1,operation_count:2,changed_uuids:[bone.uuid,cube.uuid]},
+   mutation:{revision:1,operation_count:3,changed_uuids:[bone.uuid,left.uuid,right.uuid]},
    candidate_sha256:'c'.repeat(64),candidate_summary:{revision:1},
    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
  write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
