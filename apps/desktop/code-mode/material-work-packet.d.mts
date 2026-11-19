@@ -14,6 +14,10 @@ export interface MaterialWorkPacket {
   palette:Array<{
     role:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light"|
       "accent"|"detail";
+    /** Optional unique swatch identity for another hue of the same role.
+     * An omitted swatchId is the primary swatch for that role. No global
+     * palette-count restriction: one untrusted packet is byte-bounded. */
+    swatchId?:string;
     rgb:[number,number,number];
     purpose:string;
   }>;
@@ -46,6 +50,8 @@ export interface MaterialWorkPacket {
          */
         role?:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light"|
           "accent"|"detail";
+        /** Optional exact approved swatch; cannot be combined with shadeWalk. */
+        swatchId?:string;
         shadeWalk?:{from:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light";
           steps:-1|1};
         formReason:string;
@@ -67,6 +73,8 @@ export interface MaterialWorkPacket {
       id:string;
       role:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light"|
         "accent"|"detail";
+      /** Exact approved swatch ID, otherwise use primary role swatch. */
+      swatchId?:string;
       formReason:string;
       /** Integer pixel runs in Cube FACE-LOCAL coordinates, not atlas UV. */
       spans:Array<{y:number;x0:number;x1:number}>;

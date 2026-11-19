@@ -482,3 +482,44 @@ test('operator approval sees the plan digest and description but cannot bypass t
   assert.equal(approvals,1);
   assert.equal(runs,0);
 });
+
+
+// SOURCE_AUTHORED_NOT_RUN: rich hand-painted material palette, no artificial
+// 8-entry cap. Swatch selection must still be explicit and source-bound.
+test('rich artist palette accepts many exact unique swatches per shade role',()=>{
+  const p=packet();
+  for(let i=0;i<36;i++)p.palette.push({
+    role:'highlight',swatchId:'glint-'+i,
+    rgb:[100+i,40+i,180-i],
+    purpose:'Preserve a distinct artist-selected reflected metal glint.',
+  });
+  p.facePlans[0].clusters[1].swatchId='glint-35';
+  const normalized=normalizedMaterialWorkPacket(p);
+  assert.equal(normalized.palette.length,39);
+  const compiled=compileMaterialClusterPaint(p);
+  assert.deepEqual(compiled[0].regions[2].rgba,[135,75,145,255]);
+  assert.equal(validateMaterialWorkPacketOperations(normalized,scope(),compiled),true);
+  const unknown=structuredClone(p);
+  unknown.facePlans[0].clusters[1].swatchId='unknown-glint';
+  assert.throws(()=>normalizedMaterialWorkPacket(unknown),/MATERIAL_WORK_PACKET_INVALID/);
+  const conflicting=structuredClone(p);
+  conflicting.palette.at(-1).swatchId='glint-0';
+  assert.throws(()=>normalizedMaterialWorkPacket(conflicting),/MATERIAL_WORK_PACKET_INVALID/);
+  const wrongRole=structuredClone(p);
+  wrongRole.facePlans[0].clusters[0].swatchId='glint-0';
+  assert.throws(()=>normalizedMaterialWorkPacket(wrongRole),/MATERIAL_WORK_PACKET_INVALID/);
+});
+test('brush-selected additional swatch remains distinct from role shadeWalk',()=>{
+  const p=brushPacket();
+  p.palette.push({role:'highlight',swatchId:'cloth-glint',
+    rgb:[180,140,110],purpose:'Add an artist-selected alternate glint.'});
+  p.facePlans[0].brushComposition.strokes[1].swatchId='cloth-glint';
+  const normalized=normalizedMaterialWorkPacket(p);
+  assert.equal(normalized.facePlans[0].brushComposition.strokes[1]
+    .swatchId,'cloth-glint');
+  assert.equal(compileMaterialClusterPaint(p)[0].regions.at(-1).rgba[0],180);
+  const bad=structuredClone(p);
+  bad.facePlans[0].brushComposition.strokes[1].shadeWalk={from:'base',steps:1};
+  assert.throws(()=>normalizedMaterialWorkPacket(bad),
+    /MATERIAL_BRUSH_COMPOSITION_INVALID/);
+});

@@ -101,7 +101,10 @@ export function prepareMaterialBrushComposition(value,roles){
      value.strokes.length>MAX_STROKES)invalid();
   const ids=new Set();
   const strokes=value.strokes.map(stroke=>{
-    object(stroke,['id','role','shadeWalk','formReason','points','pathKind','radius','tip','taper']);
+    object(stroke,['id','role','swatchId','shadeWalk','formReason','points','pathKind','radius','tip','taper']);
+    if(stroke.swatchId!==undefined &&
+       (typeof stroke.swatchId!=='string' ||
+        !TOKEN.test(stroke.swatchId) || stroke.shadeWalk!==undefined))invalid();
     if(typeof stroke.id!=='string' || !TOKEN.test(stroke.id) ||
        ids.has(stroke.id) ||
        !Number.isInteger(stroke.radius) || stroke.radius<0 ||
@@ -118,6 +121,7 @@ export function prepareMaterialBrushComposition(value,roles){
       ...(stroke.role!==undefined?{role:stroke.role}:{
         shadeWalk:Object.freeze({from:stroke.shadeWalk.from,steps:stroke.shadeWalk.steps}),
       }),
+      ...(stroke.swatchId!==undefined?{swatchId:stroke.swatchId}:{}),
       formReason:reason(stroke.formReason),points,
       ...(stroke.pathKind?{pathKind:stroke.pathKind}:{}),
       radius:stroke.radius,tip:stroke.tip,taper:stroke.taper});
@@ -219,6 +223,7 @@ function draw(composition,roles){
     for(const i of pixels)used.add(i);
     clusters.push(Object.freeze({
       id:stroke.id,role:resolveShadeRole(stroke,roles),
+      ...(stroke.swatchId!==undefined?{swatchId:stroke.swatchId}:{}),
       formReason:stroke.formReason,
       spans:spansFromPixels(pixels),
     }));

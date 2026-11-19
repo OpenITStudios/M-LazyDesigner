@@ -62,13 +62,17 @@ const key=rect=>JSON.stringify([rect.from,rect.to]);
 function normalizedFaceClusters(value,palette,shadingIntent){
   if(!Array.isArray(value) || value.length<1 ||
      value.length>MAX_CLUSTERS)fail();
-  const roles=new Set(palette.map(entry=>entry.role));
+  const swatches=new Map(palette.map(entry=>[
+    entry.swatchId??entry.role,entry,
+  ]));
   const occupied=new Set(), clusterIds=new Set();
   let totalSpans=0,totalPixels=0;
   const clusters=value.map(cluster=>{
-    object(cluster,['id','role','formReason','spans']);
+    object(cluster,['id','role','swatchId','formReason','spans']);
+    const selected=swatches.get(cluster.swatchId??cluster.role);
     if(typeof cluster.id!=='string' || !TOKEN.test(cluster.id) ||
-       clusterIds.has(cluster.id) || !roles.has(cluster.role) ||
+       clusterIds.has(cluster.id) || !selected ||
+       selected.role!==cluster.role ||
        typeof cluster.role!=='string' ||
        !Array.isArray(cluster.spans) ||
        cluster.spans.length<1 || cluster.spans.length>MAX_SPANS)fail();
@@ -114,6 +118,7 @@ function normalizedFaceClusters(value,palette,shadingIntent){
     if(totalSpans>MAX_SPANS)fail();
     return Object.freeze({
       id:cluster.id,role:cluster.role,
+      ...(cluster.swatchId!==undefined?{swatchId:cluster.swatchId}:{}),
       formReason:statement(cluster.formReason),
       spans:Object.freeze(spans),
     });
@@ -162,31 +167,40 @@ export function normalizedMaterialWorkPacket(value){
     lightDirection:statement(value.lightDirection),
     lightRationale:statement(value.lightRationale),
   };
-  if(!Array.isArray(value.palette) ||
-     value.palette.length<1 || value.palette.length>8)fail();
+  // Palette entries are not limited to a fixed count or one hue per role.
+  // Each additional artist-approved swatch has its own stable identifier.
+  // The entire source-only packet still has a 64KiB transport budget.
+  if(!Array.isArray(value.palette) || value.palette.length<1)fail();
   plan.palette=Object.freeze(value.palette.map(entry=>{
-    object(entry,['role','rgb','purpose']);
-    if(!ROLES.has(entry.role))fail();
-    return Object.freeze({role:entry.role,rgb:rgb(entry.rgb),
-      purpose:statement(entry.purpose,12)});
+    object(entry,['role','swatchId','rgb','purpose']);
+    if(!ROLES.has(entry.role) ||
+       (entry.swatchId!==undefined &&
+        (typeof entry.swatchId!=='string'||!TOKEN.test(entry.swatchId))))
+       fail();
+    return Object.freeze({role:entry.role,
+      ...(entry.swatchId!==undefined?{swatchId:entry.swatchId}:{}),
+      rgb:rgb(entry.rgb),purpose:statement(entry.purpose,12)});
   }));
-  const roles=plan.palette.map(x=>x.role);
+  const roles=[...new Set(plan.palette.map(x=>x.role))];
+  const swatchKeys=plan.palette.map(x=>x.swatchId??x.role);
   const colors=plan.palette.map(x=>x.rgb.join(','));
-  if(new Set(roles).size!==roles.length ||
+  if(new Set(swatchKeys).size!==swatchKeys.length ||
      new Set(colors).size!==colors.length)fail();
+  const primary=new Map(plan.palette
+    .filter(x=>x.swatchId===undefined).map(x=>[x.role,x]));
   if(value.shadingIntent==='FORM_SHADING'){
-    if(!['shadow','base','highlight'].every(r=>roles.includes(r)))fail();
-    const triple=plan.palette.filter(p=>
-      ['shadow','base','highlight'].includes(p.role)).map(x=>x.rgb.join(','));
+    if(!['shadow','base','highlight'].every(r=>primary.has(r)))fail();
+    const triple=['shadow','base','highlight']
+      .map(role=>primary.get(role).rgb.join(','));
     if(new Set(triple).size!==3)fail();
     // Distinct swatches alone allowed inverted or same-value 'shadows'.
     // A deliberately flat/hue-only surface is a separate artistic intent,
     // not a fake FORM_SHADING triple. No mandatory minimum step or hue.
     const lightness=role=>relativeLuminance(
-      plan.palette.find(p=>p.role===role).rgb);
+      primary.get(role).rgb);
     if(!(lightness('shadow')<lightness('base') &&
          lightness('base')<lightness('highlight')))fail();
-    if(roles.includes('deep_shadow') &&
+    if(primary.has('deep_shadow') &&
        !(lightness('deep_shadow')<lightness('shadow')))fail();
   }
   if(!Array.isArray(value.facePlans) ||
@@ -240,7 +254,7 @@ export function normalizedMaterialWorkPacket(value){
      new Set(rectKeys).size!==rectKeys.length)fail();
   if(plannedSpanCount>MAX_SPANS)fail();
   const normalized=Object.freeze(plan);
-  if(Buffer.byteLength(JSON.stringify(normalized),'utf8')>12000)fail();
+  if(Buffer.byteLength(JSON.stringify(normalized),'utf8')>64*1024)fail();
   return normalized;
 }
 
@@ -293,7 +307,7 @@ export function materialFaceClusters(face,palette){
       throw new TypeError('MATERIAL_WORK_PACKET_INVALID');
     }
     return compileMaterialBrushComposition(face.brushComposition,
-      palette.map(swatch=>swatch.role));
+      [...new Set(palette.map(swatch=>swatch.role))]);
   }
   return face.clusters??[];
 }
@@ -307,13 +321,15 @@ export function compileMaterialClusterPaint(packet){
   if(!plan || plan.shadingIntent!=='FORM_SHADING'){
     throw new Error('CODE_MODE_MATERIAL_CLUSTER_FORM_SHADING_REQUIRED');
   }
-  const palette=new Map(plan.palette.map(entry=>[entry.role,entry.rgb]));
+  const palette=new Map(plan.palette.map(entry=>[
+    entry.swatchId??entry.role,entry.rgb,
+  ]));
   const groups=new Map();
   for(const face of plan.facePlans){
     let regions=groups.get(face.cubeUuid);
     if(!regions){regions=[];groups.set(face.cubeUuid,regions);}
     for(const cluster of materialFaceClusters(face,plan.palette)){
-      const rgba=[...palette.get(cluster.role),255];
+      const rgba=[...palette.get(cluster.swatchId??cluster.role),255];
       for(const span of cluster.spans){
         regions.push({
           face:face.face,from:[span.x0,span.y],
