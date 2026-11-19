@@ -26,3 +26,16 @@ test('source selection binds full native identity and cannot silently detach',()
   assert.equal(selectionSeedForStroke(selection,{...hit,face:'east'}),null);
   assert.equal(bindSourceSelection(hit,{...result,pixel_count:3},128,128),null);
 });
+
+// SOURCE_AUTHORED_NOT_RUN: malformed overlap row markers cannot masquerade
+// as a clean unique selection overlay, even with the expected pixel count.
+test('selection receipt rejects unordered or overlapping row spans',()=>{
+  const hit={cubeUuid:'a',textureUuid:'texture',face:'north',
+    epoch:1,revision:2,sourceUv:[0,0,4,4],sourceRotation:0,
+    texel:[0,0],textureIndex:0,size:[4,4],contextKey:'key'};
+  const receipt={revision:2,cube_uuid:'a',texture_uuid:'texture',
+    face:'north',seed:[0,0],source_rgba:[80,100,110,255],
+    pixel_count:4,atlas_rows:[{y:0,x0:0,x1:2},{y:0,x0:1,x1:3}],
+    source_authority:'RUST_SAVED_RGBA8',write_authority:'NOT_GRANTED'};
+  assert.equal(bindSourceSelection(hit,receipt,16,16),null);
+});

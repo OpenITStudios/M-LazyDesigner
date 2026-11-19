@@ -44,6 +44,9 @@
   export let surfaceSampleMode=false;
   export let surfaceSelectMode=false;
   export let surfaceSeamEnabled=false;
+  // Read-only display effect; exported RGBA8 data and review capture are
+  // untouched. CSS grayscale is a visual aid, not a linear-luma proof.
+  export let grayscalePreview=false;
   export let onSurfaceStroke:(value:SurfaceGesture)=>void=()=>{};
   export let onSurfaceSample:(value:SurfaceSampleHit)=>void=()=>{};
   export let onSurfaceSelection:(value:SurfaceSampleHit)=>void=()=>{};
@@ -950,7 +953,7 @@
 </script>
 
 <div class="view" bind:this={host} aria-label="3D model viewport">
-  <canvas bind:this={canvas} tabindex="0"
+  <canvas bind:this={canvas} tabindex="0" class:grayscale={grayscalePreview}
     onpointerdown={pointerDown} onpointermove={pointerMove}
     onpointerup={pointerUp} onpointercancel={pointerCancel}
     onlostpointercapture={pointerLost}
@@ -970,5 +973,6 @@
   .view { min-width: 0; min-height: 0; width: 100%; height: 100%; position: relative; overflow: hidden; background: #181b1f; }
   canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; outline-offset: -3px; }
   canvas:focus-visible { outline: 2px solid #3e90ff; }
+  canvas.grayscale { filter: grayscale(1); }
   .viewer-unavailable { position: absolute; left: 16px; right: 16px; top: 16px; padding: 12px; border: 1px solid #896a42; background: #302923; color: #efcd9e; }
 </style>

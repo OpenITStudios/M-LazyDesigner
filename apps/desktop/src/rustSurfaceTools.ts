@@ -59,11 +59,14 @@ export function bindSourceSelection(
      response.pixel_count<1||response.pixel_count>width*height||
      !Array.isArray(response.atlas_rows)||
      response.atlas_rows.length<1||response.atlas_rows.length>1024)return null;
-  let count=0;
+  let count=0,previousY=-1,previousX1=0;
   for(const row of response.atlas_rows){
     if(!row||!Number.isInteger(row.x0)||!Number.isInteger(row.x1)||
        !Number.isInteger(row.y)||row.x0<0||row.x0>=row.x1||
-       row.x1>width||row.y<0||row.y>=height)return null;
+       row.x1>width||row.y<0||row.y>=height||
+       row.y<previousY||
+       (row.y===previousY&&row.x0<=previousX1))return null;
+    previousY=row.y;previousX1=row.x1;
     count+=row.x1-row.x0;
     if(count>response.pixel_count)return null;
   }

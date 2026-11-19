@@ -77,6 +77,7 @@
   let surfacePaint3d=false,surfaceProtectMode=false;
   let surfaceSampleMode=false,surfaceSeamEnabled=false;
   let surfaceSelectMode=false;
+  let surfaceGrayscalePreview=false;
   let surfaceSelection:SourceSelection|null=null;
   let surfaceInkMode:'color'|'shade_ink'='color';
   let surfaceShadeRamp='';
@@ -270,6 +271,7 @@
     surfaceSelection.textureUuid===snapshot.textureUuids[paintTextureIndex];
   $: surfaceShadeColors=parseShadeRamp(surfaceShadeRamp);
   $: surfacePaintEnabled = workspaceMode==='paint' && surfacePaint3d &&
+    (surfaceInkMode==='color'||!!surfaceShadeColors) &&
     !!snapshot && !busy && !loading && !paintStroke && !surfaceMaskDrag &&
     !validSemanticPreview && !validExternalPreview &&
     !!snapshot.paintEditableTextures[paintTextureIndex] &&
@@ -361,7 +363,10 @@
     if (menu && event.target instanceof Element && !event.target.closest('.rust-menu-bar')) closeMenus();
   }
   function selectCube(id: string | null) {
-    if(id!==selectedId)clearSemanticPreview();
+    if(id!==selectedId){
+      clearSemanticPreview();
+      clearSurfaceSelection();
+    }
     selectedId = id;
     selectedBoneId = null;
   }
@@ -389,6 +394,7 @@
   function clearSurfaceSelection(){
     surfaceSelection=null;
     surfaceSelectMode=false;
+    surfaceSampleStatus='';
   }
   function clearSurfaceProtection(){
     clearSurfaceSelection();
@@ -2484,6 +2490,9 @@
                 <option value="diamond">Diamond</option>
               </select>
             </label>
+            <label><input type="checkbox" bind:checked={surfaceGrayscalePreview}
+              disabled={busy || !surfacePaint3d}/>
+              Grayscale viewport (read-only)</label>
             <label><input type="checkbox" bind:checked={surfaceSampleMode}
               onchange={() => {if(surfaceSampleMode)surfaceSelectMode=false;}}
               disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
@@ -3354,7 +3363,10 @@
           surfacePaintRevision={snapshot.revision}
           surfacePaintTextureUuid={snapshot.textureUuids[paintTextureIndex] ?? null}
           {surfacePaintContextKey}
-          {surfaceSampleMode} {surfaceSelectMode} {surfaceSeamEnabled}
+          {surfaceSampleMode} {surfaceSelectMode}
+          grayscalePreview={workspaceMode==='paint' && surfaceGrayscalePreview}
+          surfaceSeamEnabled={surfaceSeamEnabled &&
+            surfaceInkMode==='color' && !validSurfaceSelection}
           onSurfaceStroke={(gesture) => {void paintFromViewport(gesture);}}
           onSurfaceSample={(hit) => {void sampleFromViewport(hit);}}
           onSurfaceSelection={(hit) => {void selectFromViewport(hit);}}
