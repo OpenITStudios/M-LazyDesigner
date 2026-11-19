@@ -1,3 +1,24 @@
+## 2026-11-19 — Rust TC2.1 brush preparation reuse (SOURCE ONLY)
+
+Selected Rust source increment
+`6784b516fc97a76587c4f8c5f9ba314c54c0f977`
+reuses one source-normalized `prepareMaterialBrushComposition`
+result (validated input and compiled connected pixel cluster
+spans) per face during `normalizedMaterialWorkPacket`.
+Packet span budget uses the already inspected cluster list
+rather than an additional compiler pass. The ordinary
+`normalizedMaterialBrushComposition` and
+`compileMaterialBrushComposition` exports remain strict
+and do not cache untrusted source across plans. Authored
+positive fixture compares prepared vs independently
+compiled/normalized output and verifies immutable output.
+No source rules, native pixel bytes, renderer, UV mapping,
+reviewer authority, CI or protected asset changes.
+Proof: GitHub selected-source/commit review, source-authored
+Node test NOT_EXECUTED; no confirmed speedup or visual
+quality improvement over Local. Existing PC-local test hold
+remains active.
+
 ## 2026-11-19 — Rust TC2 material painter curve + sparse composition (SOURCE ONLY)
 
 Selected source baseline `Rust@94121f9aa05f675cd0234792d21af8c9d9c11419`.

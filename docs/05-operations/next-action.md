@@ -1,3 +1,24 @@
+**Rust Texture Craft TC2.1 — source-only single-preparation efficiency (2026-11-19):**
+From TC2 curve source `86e046649a25295e8c46d840489497d98ce77e34`,
+follow-on `6784b516fc97a76587c4f8c5f9ba314c54c0f977` now
+prepares normalized reviewer-selected `brushComposition` and its
+exact compiled row-span clusters together within one packet-face
+admission. This avoids repeated full path/raster validation inside
+the same plan and reuses the already-validated per-face span total
+for the 64-span budget. Direct standalone normalization and
+compilation remain independently checked, so user/guest input
+does not acquire a cached or unvalidated write bypass.
+Unchanged: native Rust Paint owner, source/UV/alpha protections,
+source SHA, reviewer-authorized sample, user approval, Undo and
+verified visual acceptance requirements. No long-lived cache or
+other model authority.
+
+Status: SOURCE_COMMITTED / SOURCE_REVIEWED / TEST_AUTHORED_NOT_RUN /
+LOCAL_TEST_DEFERRED. Algorithmic work avoided is source-observed;
+actual wall-clock, CPU, token/correction and output visual
+improvement are NOT_MEASURED/UNVERIFIED. TC2 and original
+Local boundaries remain unchanged. No test/CI/release activated.
+
 **Active Rust Texture Craft TC2 — curated curved brush + sparse source composition (2026-11-19; SOURCE ONLY):**
 At `Rust@86e046649a25295e8c46d840489497d98ce77e34`
 (the TC2 source commit), existing reviewer-selected
