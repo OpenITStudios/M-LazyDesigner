@@ -416,7 +416,7 @@ styling intent and approved reference, not relabelled fake form
 shading. Verify palette hue movement, cluster placement, model
 lighting and visible surface material independently.
 
-### T3 — reviewer-shaped mask and pixel brush composition (SOURCE ONLY)
+### Texture Craft TC1 — reviewer-shaped mask and pixel brush composition (SOURCE ONLY)
 
 For a source-bound FORM_SHADING sample, the first-party Code Mode
 \`materialWorkPacket.facePlans\` may use **either** explicit row-span

@@ -1,3 +1,41 @@
+**Active Rust Texture Craft TC1 — artist mask/brush/palette composition (2026-11-19; SOURCE ONLY):**
+Building on T1/T2/T1.1, Rust commits
+`6e036c4fea32ff43601aab7b4ecf68d15990d1b4`,
+`bf84b8f94f8309cffec14adacab54574774c5bbe`, and
+`9bef0a3d844117535d63badf7fc26aacf1e666da`
+integrate a bounded source-only reviewed material-work-packet
+alternative to hand-written pixel row clusters. An explicit
+Cube-face-local `brushComposition` uses hard square/diamond
+centerline strokes (0–2 px radius, optional taper), an
+editable/rest mask, and an optional Aseprite-like one-role
+`shadeWalk` that selects ONLY existing artist-specified palette
+swatches. No automatic RGB generation, normal-to-shadow mapping,
+curvature/AO inference, painter engine or separate texture state.
+The Code Mode host compiles exact bounded connected row-span
+clusters to the pre-existing Rust `paint_cube_face_regions_guarded`
+operation, then checks exact model SHA/reference review,
+reviewer-selected sample, native signed/rotated face/UV ownership,
+source-color/alpha/region protections and independent approval.
+`brushComposition` is admitted only in `FORM_SHADING`;
+`SURFACE_DETAIL`/alpha edits retain their older contracts, not a
+new operation bypass. Competing `clusters` and `brushComposition`
+or wrong shade roles are rejected. Original Local/Blockbench
+MCP toolchain and 12 Skills remain preserved.
+
+State: SOURCE_COMMITTED / SOURCE_REVIEWED /
+NODE_REGRESSIONS_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED.
+The new Source TC1 does not yet prove how an image-capable agent
+chooses correct form-following strokes from a real reference,
+actual brush aesthetics, native Blockbench result, or superior
+quality/cost to Local. Use the existing
+`apps/desktop/code-mode/GOLDEN_PILLAGER_AB.md` for real
+PILL-03/PILL-05/PILL-06/PILL-07 A/B only after independently
+authorized PC-local validation. The previously named "T3 seam"
+track is separate: **visible cross-Cube surface-edge continuity**
+remains NOT_IMPLEMENTED and is not superseded by TC1.
+No permission, CI, release, dependency, agent-host or
+cross-repo change; active test hold remains.
+
 **Active Rust Texture T1/T2 — source-grounded form and pixel craft (2026-11-19; SOURCE ONLY):**
 The selected user priority moved from Geometry G3.7 to Texturing. Latest
 source HEAD from this workstream is Rust@94f42bde (T2) and the follow-on

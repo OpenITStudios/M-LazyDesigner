@@ -25,6 +25,48 @@ Do not infer that Rust reproduces those defects or has fixed their appearance. D
 
 Baseline and candidate must use comparable model, viewer, reference and work scope. Do not compare a Blockbench-hosted Local runtime with Rust and assume an equivalent renderer or native feature surface.
 
+## Texture Craft TC1 — mask/stroke/shade-walk A/B probes (SOURCE ONLY)
+
+Extend existing PILL-03, PILL-05, PILL-06, PILL-07 and PILL-09,
+**not** a new benchmark, model or separate acceptance authority.
+
+- **Same source and reference**: pin Local and Rust model/reference PNG
+  SHAs, identical material/part/pose, selected face UUID, atlas/UV,
+  light setup and matched front/side/back closeups. A Rust-only candidate
+  must not silently change Geometry, its native shading preview, or the
+  user-approved source artwork before the A/B comparison.
+- **Professional cluster composition** (PILL-03): compare a controlled
+  shadow/bevel highlight painted through an explicitly selected
+  face-local `brushComposition` (mask+stroke) with the earlier repeated
+  stripes/noise. The independent reviewer must describe actual form
+  readability, hard-edge continuity, material character and quiet
+  resting areas, not number of pixels/brushes or code features.
+- **Protected identity and palette** (PILL-01/PILL-05): a source-swatch
+  `shadeWalk` may move only one adjacent **declared** material role;
+  its actual host Paint must preserve source alpha, current reviewed
+  editable RGBA and protected logos/neutral iron. Missing shade role,
+  unknown reference RGB or source mismatch means STOP before Paint.
+- **UV/face mapping** (PILL-06): use native rotated/signed face-local
+  projection and exact physical atlas source guards; ambiguous alias,
+  missing mapped backside or invalid source contact cannot count as
+  reviewed. A row-span mask is not the reference-image bounding box.
+- **No repeat-failure loop** (PILL-07): when the reviewer rejects one
+  stroke family or sees the same visual artifact after a second attempt,
+  require a new cause/selected evidence rather than changing only
+  brush radius, palette naming or seed. A new plan fingerprint is not
+  itself visual improvement.
+- **Approval boundary** (PILL-09): the authored unit/host regression
+  fixtures check exact compiled guarded operations, mask exclusion,
+  overlapping/fragmented clusters, shade roles and missing native
+  form receipt. Only a fresh native image reviewer can judge artistic
+  success and user approval; source-only tests are NOT_EXECUTED.
+
+The new composer is a deterministic source-authoring helper. It does
+not infer the correct stroke from an image, bake AO/curvature, sample
+unknown original bitmap colors, simulate native GPU shading or certify
+its result better than `Local`. Its alternate brush path remains
+reviewer-selected and sample-first.
+
 ## Frozen acceptance cases
 
 | Case ID | Prior user feedback | Acceptance evidence to obtain |

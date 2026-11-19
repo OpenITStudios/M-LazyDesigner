@@ -312,7 +312,7 @@ test('rest mask, off-mask strokes, overlapping shade roles and unsafe brush cont
     {...b,strokes:[{...b.strokes[0],points:[[0,0],[1,1]]},
       {...b.strokes[1],points:[[1,1],[2,1]]}]},
     {...b,strokes:[{...b.strokes[0],points:[[3,0],[2,0]]},b.strokes[1]]},
-    {...b,strokes:[{...b.strokes[0],points:[[0,0],[0,3]],radius:1},
+    {...b,strokes:[{...b.strokes[0],points:[[0,0],[0,3]],radius:2},
       {...b.strokes[1],points:[[3,2],[3,3]],radius:1}]},
   ];
   for(const bad of cases){

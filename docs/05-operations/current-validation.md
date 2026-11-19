@@ -1,3 +1,46 @@
+## 2026-11-19 — Rust Texture Craft TC1 source integration (SOURCE ONLY)
+
+Commit chain from `Rust@186ba623e1660cd7dd6e193bef29d3706c66bf0c`:
+`6e036c4fea32ff43601aab7b4ecf68d15990d1b4` →
+`bf84b8f94f8309cffec14adacab54574774c5bbe` →
+`9bef0a3d844117535d63badf7fc26aacf1e666da`.
+GitHub commit-object parent chain, changed paths and selected
+Rust ref were inspected. This is source control evidence, NOT
+run/test proof.
+
+TC1 introduces `material-brush-composition.mjs` as a bounded
+pure composer for **reviewer-selected** face-local mask and
+hard-edged pixel brush paths, with mandatory paintable and
+optional protected-rest pixel regions; stroke centerline,
+square/diamond tip, 0–2 radius and two-ended taper. It compiles
+only 4-connected role-named clusters with global 64-span /
+4096-pixel and existing Rust face-plan limits. The optional
+`shadeWalk` selects one adjacent already supplied swatch by
+canonical deep-shadow/shadow/base/highlight/edge-light order;
+no invented color or sampled source pixel. Typed packet and
+trusted Code Mode host route the result through existing
+SHA-/review-bound `material_face_patch`, signed/rotated UV,
+trusted source-pixel correction scope, native
+`paint_cube_face_regions_guarded`, Undo/Redo and separate
+authorization; ordinary explicit clusters are unchanged.
+
+Source-authored positive/negative Node cases cover compiled
+Paint equivalence with the original accepted row spans,
+mask rest/exclusions, off-mask centerlines, duplicate/overlap
+of stroke roles, invalid palette shades and shade-walk bounds,
+type/budget limits, and a host-level accepted propagation
+proposal after sample review and native form preflight.
+Static source review does NOT establish those tests pass;
+Node/TypeScript/Cargo/Windows/Blockbench execution, native
+pixel-accuracy, actual material perception/artist review,
+Rust-vs-Local appearance or efficiency all NOT_EXECUTED /
+UNVERIFIED under `lazydesigner-codex-localtest-hold`.
+No separate benchmark or applied user asset was created.
+Cross-Cube *visible* seam continuity remains a separate
+deferred/unimplemented area. The existing Golden Pillager
+benchmark now records discriminating TC1 visual cases;
+it was not executed. No CI, release or cross-branch write.
+
 ## 2026-11-19 — Rust T1/T2 Texturing source integration (SOURCE ONLY)
 
 Branch `Rust` moved from G3.7 geometry work at
