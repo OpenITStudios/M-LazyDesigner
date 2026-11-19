@@ -40,6 +40,8 @@ mod material_synthesis;
 pub use material_synthesis::{SemanticMaterialIntent, SemanticMaterialProposal};
 mod external_texture;
 pub use external_texture::ExternalFaceTextureIntent;
+mod surface_paint;
+pub use surface_paint::SurfacePaintIntent;
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;
 pub use visual_pair::{inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES};
@@ -3377,6 +3379,14 @@ impl EditorSession {
         &mut self, intent: &ExternalFaceTextureIntent, candidate_png_source: &str,
     ) -> Result<MutationReceipt> {
         external_texture::apply(self,intent,candidate_png_source)
+    }
+
+    /// Direct-user 3D stroke, compiled against immutable source Cube/UV and
+    /// exact RGBA. The bitmap/Undo still belong to the canonical Paint owner.
+    pub fn apply_surface_paint_stroke(
+        &mut self, intent:&SurfacePaintIntent,
+    )->Result<MutationReceipt>{
+        surface_paint::apply(self,intent)
     }
 
     /// G2: propose an explicit same-Bone face alignment with UV-aware Rust

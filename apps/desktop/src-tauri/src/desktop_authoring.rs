@@ -22,7 +22,7 @@ use lazydesigner::authoring::{
     saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
     BezierKeyframeHandles,
     AuthoringDocument, Bone, Cube, EditOperation, EditPlan, EditorSession,
-    SemanticMaterialIntent, SemanticMaterialProposal, ExternalFaceTextureIntent,
+    SemanticMaterialIntent, SemanticMaterialProposal, ExternalFaceTextureIntent, SurfacePaintIntent,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -1480,6 +1480,27 @@ pub async fn rust_editor_open(
         dirty: false,
     });
     current_detached(guard, ProjectionReuse::default()).map(Some)
+}
+
+/// One user gesture on one source-bound 3D Cube face. Selection, atlas UV,
+/// original RGBA and identity masks are admitted again in the Rust engine;
+/// the WebGL raycaster never receives authority to write atlas coordinates.
+#[tauri::command(async)]
+pub fn rust_editor_paint_surface_stroke(
+    state:State<'_,EditorState>,expected_epoch:u64,
+    expected_revision:u64,intent:SurfacePaintIntent,
+)->Result<EditorSnapshot,DesktopError>{
+    if intent.expected_revision!=expected_revision {
+        return Err(failure("SURFACE_PAINT_REVISION_STALE",
+            "The 3D paint gesture targets another revision."));
+    }
+    detached_edit(&state.store,&state.pending_edit,
+        expected_epoch,expected_revision,ProjectionReuse::default(),
+        Some("The model changed during the 3D paint gesture."),
+        move |session|{
+            session.apply_surface_paint_stroke(&intent).map_err(model_failure)?;
+            Ok(())
+        })
 }
 
 #[tauri::command(async)]
