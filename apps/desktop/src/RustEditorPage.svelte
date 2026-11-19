@@ -13,6 +13,10 @@
   import { reconcilePaintTextureSelection } from './rustPaintSelection';
   import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileEditorSnapshot } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
+  import { matchingSemanticCandidate, semanticViewportSources, sourceRgb,
+    type SemanticMaterialIntent, type SemanticMaterialDraft,
+    type SemanticMaterialPreviewReceipt, type SemanticMaterialReferenceReceipt
+  } from './rustSemanticMaterialPreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
@@ -58,6 +62,14 @@
   let paintAlpha = 255;
   let paintTool: 'pencil' | 'eraser' | 'rectangle' = 'pencil';
   let paintRadius = 1;
+  // Temporary 3D presentation only; Rust owns the actual model and Undo.
+  let semanticReferenceSha:string|null=null,semanticReferenceStatus='';
+  let semanticBase='#5a6e82',semanticShadow='#343e50',semanticHighlight='#a0afc3';
+  let semanticCorner:SemanticMaterialIntent['light_corner']='upper_left';
+  let semanticContrast:SemanticMaterialIntent['contrast']='subtle';
+  let semanticPreview:SemanticMaterialDraft|null=null;
+  let semanticShowCandidate=true,semanticViewedSource=false,
+    semanticViewedCandidate=false,semanticReviewed=false;
   let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number]; radius: number; erase: boolean; rectangle: boolean; overflow: boolean } | null = null;
   let menu: Menu = null;
   let loading = true;
@@ -176,6 +188,13 @@
   $: rows = makeRows(snapshot?.hierarchy ?? [], snapshot?.cubes ?? [], snapshot?.bones ?? [], collapsed);
   $: faceUv = selectedCube?.faces[selectedFace]?.uv ?? [0, 0, 0, 0];
   $: faceRotation = supportedFaceUvRotation(selectedCube?.faces[selectedFace]);
+  $: validSemanticPreview = matchingSemanticCandidate(snapshot,semanticPreview,
+    selectedId,selectedFace,paintTextureIndex,semanticReferenceSha);
+  $: modelTextureSources = semanticViewportSources(snapshot,semanticPreview,
+    semanticShowCandidate,validSemanticPreview);
+  $: semanticAtlasSource = validSemanticPreview && semanticShowCandidate &&
+    semanticPreview ? semanticPreview.candidatePngSource :
+    snapshot?.texturePreviewSources[paintTextureIndex] ?? null;
 
   // Source-backed once/loop/hold playback is admitted only for the strict
   // numeric-linear projection. Stale snapshots and unknown clips pause.
@@ -239,6 +258,7 @@
   }
   function selectWorkspace(mode: WorkspaceMode) {
     if (!canChangeWorkspace(Boolean(snapshot), busy, loading, Boolean(paintStroke))) return;
+    if(mode!=='paint')clearSemanticPreview();
     if (mode !== workspaceMode) pauseAnimationPlayback();
     workspaceMode = mode;
     closeMenus();
@@ -248,6 +268,7 @@
     if (menu && event.target instanceof Element && !event.target.closest('.rust-menu-bar')) closeMenus();
   }
   function selectCube(id: string | null) {
+    if(id!==selectedId)clearSemanticPreview();
     selectedId = id;
     selectedBoneId = null;
   }
@@ -280,6 +301,8 @@
     }
     // A missing image body is valid only with the exact prior epoch and key.
     const next = reconcileEditorSnapshot(snapshot, incoming);
+    // A fresh canonical snapshot invalidates all temporary texture overlays.
+    clearSemanticPreview();
     // Any document receipt invalidates the frame-clock identity. Resume is
     // always explicit; never replay a stale animation after Undo/Open/Save.
     pauseAnimationPlayback();
@@ -596,7 +619,8 @@
   };
   async function exportReviewCapture() {
     if (!snapshot || snapshot.dirty || !snapshot.sourceName ||
-        busy || loading || paintStroke || workspaceMode === 'animate') return;
+        busy || loading || paintStroke || validSemanticPreview ||
+        workspaceMode === 'animate') return;
     const epoch = snapshot.epoch;
     const revision = snapshot.revision;
     busy = true; closeMenus(); error = '';
@@ -1074,6 +1098,93 @@
     finally { busy = false; }
   }
 
+  function clearSemanticPreview(){
+    semanticPreview=null;
+    semanticShowCandidate=true;
+    semanticViewedSource=false;semanticViewedCandidate=false;
+    semanticReviewed=false;
+  }
+  async function chooseSemanticReference(){
+    if(!snapshot||busy||loading||paintStroke)return;
+    const {epoch,revision}=snapshot;
+    busy=true;error='';closeMenus();
+    try{
+      const r=await invoke<SemanticMaterialReferenceReceipt|null>(
+        'rust_editor_choose_semantic_reference',{
+          expectedEpoch:epoch,expectedRevision:revision,
+        });
+      if(r){
+        if(snapshot?.epoch!==epoch||snapshot.revision!==revision)
+          throw new Error('SEMANTIC_REFERENCE_SOURCE_STALE');
+        semanticReferenceSha=r.pngSha256;
+        semanticReferenceStatus='Selected PNG '+r.pngSha256.slice(0,12)+
+          ' (not verified as approved artwork).';
+        clearSemanticPreview();
+      }
+    }catch(cause){showError(cause);}
+    finally{busy=false;}
+  }
+  function sourceSemanticIntent():SemanticMaterialIntent|null{
+    if(!snapshot||!selectedId||!semanticReferenceSha||
+       !/^[a-f0-9]{64}$/i.test(semanticReferenceSha)||
+       !snapshot.paintEditableTextures[paintTextureIndex]||
+       !snapshot.texturePreviewSources[paintTextureIndex])return null;
+    const textureUuid=snapshot.textureUuids[paintTextureIndex];
+    const base=sourceRgb(semanticBase),shadow=sourceRgb(semanticShadow),
+      highlight=sourceRgb(semanticHighlight);
+    if(!textureUuid||!base||!shadow||!highlight)return null;
+    return {expected_revision:snapshot.revision,
+      reference_png_sha256:semanticReferenceSha,
+      cube_uuid:selectedId,texture_uuid:textureUuid,
+      face:selectedFace as SemanticMaterialIntent['face'],
+      material:'painted_metal',light_corner:semanticCorner,
+      contrast:semanticContrast,
+      source_base_rgba:[base[0],base[1],base[2],255],
+      shadow_rgb:shadow,highlight_rgb:highlight,
+      protected_regions:[],expected_before_pixels:[],
+    };
+  }
+  async function previewSemanticMaterial(){
+    if(!snapshot||busy||loading||paintStroke||workspaceMode!=='paint')return;
+    const intent=sourceSemanticIntent();
+    if(!intent){error='Select an editable atlas, Cube, face and reference PNG.';return;}
+    const {epoch,revision}=snapshot;
+    clearSemanticPreview();busy=true;error='';
+    try{
+      const r=await invoke<SemanticMaterialPreviewReceipt>(
+        'rust_editor_preview_semantic_material',{
+          expectedEpoch:epoch,expectedRevision:revision,intent,
+        });
+      const candidate={...r,intent};
+      if(!matchingSemanticCandidate(snapshot,candidate,selectedId,selectedFace,
+          paintTextureIndex,semanticReferenceSha))
+        throw new Error('SEMANTIC_PREVIEW_SOURCE_STALE');
+      semanticPreview=candidate;
+      semanticShowCandidate=true;semanticViewedCandidate=true;
+      notice='Disposable 3D candidate. Compare original and candidate before applying.';
+    }catch(cause){clearSemanticPreview();showError(cause);}
+    finally{busy=false;}
+  }
+  function showSemanticCandidate(value:boolean){
+    if(!validSemanticPreview||busy)return;
+    semanticShowCandidate=value;
+    if(value)semanticViewedCandidate=true;
+    else semanticViewedSource=true;
+  }
+  async function applySemanticCandidate(){
+    if(!semanticPreview||!validSemanticPreview||busy||
+       !semanticViewedSource||!semanticViewedCandidate||!semanticReviewed)return;
+    const candidate=semanticPreview;
+    const next=await command('rust_editor_apply_preview_semantic_material',{
+      expectedEpoch:candidate.epoch,expectedRevision:candidate.revision,
+      intent:candidate.intent,
+      expectedSourceSha256:candidate.sourceModelSha256,
+      expectedCandidateSha256:candidate.candidateSha256,
+    });
+    if(next)notice='Candidate applied with one Rust Undo step. Independent artistic quality is still unverified.';
+    else clearSemanticPreview();
+  }
+
   type PaintPngExportReceipt = { sha256: string; byteCount: number };
   async function exportPngTexture() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
@@ -1133,7 +1244,7 @@
   }
 
   function startPaintStroke(event: PointerEvent) {
-    if (!snapshot || busy || paintStroke || event.button !== 0 ||
+    if (!snapshot || busy || validSemanticPreview || paintStroke || event.button !== 0 ||
         !snapshot.paintEditableTextures[paintTextureIndex]) return;
     const target = event.currentTarget;
     if (!(target instanceof HTMLImageElement)) return;
@@ -1680,6 +1791,67 @@
         ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
+      <section class="paint-starter semantic-material-panel" aria-label="Semantic painted-metal candidate">
+        <div class="dock-title"><span>SEMANTIC PAINTED METAL</span></div>
+        <p class="hint">Source-aware candidate only. Select a reference PNG and the actual
+          Cube, face, base RGB and approved shade colors; the reference is not automatically verified.</p>
+        <button type="button" disabled={busy || loading || !!paintStroke}
+          onclick={() => void chooseSemanticReference()}>Choose reference PNG…</button>
+        {#if semanticReferenceStatus}<p class="hint">{semanticReferenceStatus}</p>{/if}
+        <div class="semantic-material-fields">
+          <label>Face
+            <select bind:value={selectedFace} disabled={busy || !!paintStroke}
+              onchange={clearSemanticPreview}>
+              {#each FACES as face}<option value={face}>{face}</option>{/each}
+            </select>
+          </label>
+          <label>Base RGB <input type="color" bind:value={semanticBase}
+            disabled={busy || !!paintStroke} onchange={clearSemanticPreview}/></label>
+          <label>Shadow RGB <input type="color" bind:value={semanticShadow}
+            disabled={busy || !!paintStroke} onchange={clearSemanticPreview}/></label>
+          <label>Highlight RGB <input type="color" bind:value={semanticHighlight}
+            disabled={busy || !!paintStroke} onchange={clearSemanticPreview}/></label>
+          <label>Light corner
+            <select bind:value={semanticCorner} disabled={busy || !!paintStroke}
+              onchange={clearSemanticPreview}>
+              <option value="upper_left">Upper left</option>
+              <option value="upper_right">Upper right</option>
+            </select>
+          </label>
+          <label>Contrast
+            <select bind:value={semanticContrast} disabled={busy || !!paintStroke}
+              onchange={clearSemanticPreview}>
+              <option value="subtle">Subtle</option>
+              <option value="balanced">Balanced</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" disabled={busy || loading || !!paintStroke ||
+          !selectedId || !semanticReferenceSha ||
+          !snapshot.paintEditableTextures[paintTextureIndex]}
+          onclick={() => void previewSemanticMaterial()}>Preview material</button>
+        {#if validSemanticPreview}
+          <div class="semantic-material-actions" role="group" aria-label="Compare original and candidate">
+            <button type="button" aria-pressed={!semanticShowCandidate}
+              disabled={busy} onclick={() => showSemanticCandidate(false)}>Source</button>
+            <button type="button" aria-pressed={semanticShowCandidate}
+              disabled={busy} onclick={() => showSemanticCandidate(true)}>Candidate</button>
+            <button type="button" disabled={busy} onclick={clearSemanticPreview}>Discard</button>
+          </div>
+          <p class="hint">Compare the same 3D model. Change controls and regenerate if
+            this treatment does not improve the material.</p>
+          <label class="semantic-material-review">
+            <input type="checkbox" bind:checked={semanticReviewed}
+              disabled={busy || !semanticViewedSource || !semanticViewedCandidate}/>
+            I inspected the source, candidate and visible identity markings.
+          </label>
+          <button type="button" disabled={busy || !semanticReviewed ||
+            !semanticViewedSource || !semanticViewedCandidate}
+            onclick={() => void applySemanticCandidate()}>Apply inspected candidate</button>
+          <p class="hint">This is a user-selected treatment, not an independent artistic PASS.
+            Full-face review remains required.</p>
+        {/if}
+      </section>
       <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
           <div class="dock-title"><span>ATLAS &amp; BRUSH</span></div>
           {#if snapshot.atlasResolutionEditable}
@@ -1724,7 +1896,8 @@
           {/if}
           {#if snapshot.textureNames.length}
             <label>Texture
-              <select bind:value={paintTextureIndex} disabled={busy || !!paintStroke}>
+              <select bind:value={paintTextureIndex} disabled={busy || !!paintStroke}
+                onchange={clearSemanticPreview}>
                 {#each snapshot.textureNames as name, i}
                   <option value={i}>{name}</option>
                 {/each}
@@ -1773,7 +1946,7 @@
               <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
             <img class="paint-atlas paint-workspace-atlas" draggable="false"
-              src={snapshot.texturePreviewSources[paintTextureIndex] ?? ''}
+              src={semanticAtlasSource ?? ''}
               alt="Editable texture atlas; drag to paint one Rust-owned stroke"
               onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
               onpointerup={finishPaintStroke}
@@ -2421,7 +2594,7 @@
     </select>
     <button onclick={() => void exportReviewCapture()}
       disabled={!snapshot || snapshot.dirty || !snapshot.sourceName ||
-        busy || loading || !!paintStroke || workspaceMode === 'animate'}
+        busy || loading || !!paintStroke || validSemanticPreview || workspaceMode === 'animate'}
       title="Save a new source-bound Rust preview PNG. Save Copy first; this is not Bedrock rendering proof.">
       Capture PNG
     </button>
@@ -2461,7 +2634,7 @@
       {#if snapshot}
         <RustViewport bind:this={viewport} cubes={snapshot.cubes} bones={snapshot.bones}
           hierarchy={snapshot.hierarchy}
-          texturePreviewSources={snapshot.texturePreviewSources}
+          texturePreviewSources={modelTextureSources}
           texturePreviewSides={snapshot.texturePreviewSides}
           texturePreviewResolutions={snapshot.texturePreviewResolutions}
           scopedTexturePreview={snapshot.scopedTexturePreview}
