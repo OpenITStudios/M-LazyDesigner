@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use super::geometry_sweep::{self, GeometrySphereSweep};
 use super::geometry_profile_sweep::{self, GeometryProfileSweep};
+use super::geometry_axial::{self, GeometryAxialLoft, GeometryAxialRevolve};
 use std::collections::HashSet;
 
 /// The parent is an existing or simultaneously declared Bone UUID.
@@ -38,6 +39,11 @@ pub struct GeometryAssemblyPart {
     /// G3.4b explicit profile and initial frame, native Cube voxel blockout.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub profile_sweeps: Vec<GeometryProfileSweep>,
+    /// Bounded axis-aligned, source-authored loft and volume-of-revolution blockouts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lofts: Vec<GeometryAxialLoft>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revolves: Vec<GeometryAxialRevolve>,
 }
 
 /// Source-authored through-opening. Axis is the normal to its opening;
@@ -395,6 +401,8 @@ pub(super) fn compile(
                     count.checked_add(arch.cube_uuids.len())))
             .and_then(|panels| panels.checked_add(part.sweeps.len()))
             .and_then(|panels| panels.checked_add(part.profile_sweeps.len()))
+            .and_then(|panels| panels.checked_add(part.lofts.len()))
+            .and_then(|panels| panels.checked_add(part.revolves.len()))
             .and_then(|panels| 1usize.checked_add(part.cubes.len())?
                 .checked_add(panels))
             .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
@@ -418,6 +426,9 @@ pub(super) fn compile(
             }
             if !part.profile_sweeps.is_empty() {
                 return Err(fail("GEOMETRY_PROFILE_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
+            if !part.lofts.is_empty() || !part.revolves.is_empty() {
+                return Err(fail("GEOMETRY_AXIAL_TEXTURED_PROJECT_UNSUPPORTED"));
             }
         }
         let mut panels = Vec::with_capacity(additions - 1 - part.cubes.len());
@@ -476,6 +487,35 @@ pub(super) fn compile(
             }
             panels.extend(cubes);
         }
+        let loft_start = panels.len();
+        if part.lofts.len() > 4 || part.revolves.len() > 4 {
+            return Err(fail("GEOMETRY_AXIAL_COUNT_INVALID"));
+        }
+        for loft in &part.lofts {
+            let remaining = MAX_OPERATIONS - count + 1;
+            let cubes = geometry_axial::compile_loft(loft,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?, remaining)?;
+            count = count.checked_add(cubes.len() - 1)
+                .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
+            if count > MAX_OPERATIONS {
+                return Err(fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
+            }
+            panels.extend(cubes);
+        }
+        let revolve_start = panels.len();
+        for revolve in &part.revolves {
+            let remaining = MAX_OPERATIONS - count + 1;
+            let cubes = geometry_axial::compile_revolve(revolve,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?, remaining)?;
+            count = count.checked_add(cubes.len() - 1)
+                .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
+            if count > MAX_OPERATIONS {
+                return Err(fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
+            }
+            panels.extend(cubes);
+        }
         // Bind UUID membership to the source request, not temporary Cubes.
         // These IDs outlive the generated operation buffer and preflight.
         for uuid in part.cubes.iter().map(|cube| cube.uuid.as_str())
@@ -517,7 +557,11 @@ pub(super) fn compile(
                     "GEOMETRY_ARCH_UV_ATLAS_TOO_SMALL"
                 } else if index < profile_start {
                     "GEOMETRY_SWEEP_UV_ATLAS_TOO_SMALL"
-                } else { "GEOMETRY_PROFILE_UV_ATLAS_TOO_SMALL" };
+                } else if index < loft_start {
+                    "GEOMETRY_PROFILE_UV_ATLAS_TOO_SMALL"
+                } else if index < revolve_start {
+                    "GEOMETRY_LOFT_UV_ATLAS_TOO_SMALL"
+                } else { "GEOMETRY_REVOLVE_UV_ATLAS_TOO_SMALL" };
                 return Err(fail(code));
             }
         }
@@ -603,7 +647,7 @@ mod tests {
             bone, parent_uuid: parent.map(str::to_owned), cubes: vec![cube],
             frames: Vec::new(), hollow_boxes: Vec::new(),
             arches: Vec::new(), sweeps: Vec::new(),
-            profile_sweeps: Vec::new(),
+            profile_sweeps: Vec::new(), lofts: Vec::new(), revolves: Vec::new(),
         }
     }
 
@@ -1597,6 +1641,112 @@ mod tests {
         assert!(serde_json::from_value::<GeometryProfileSweep>(invalid).is_err());
         let legacy=serde_json::to_value(part(CHILD,"legacy",None,CUBE_B)).unwrap();
         assert!(legacy.get("profile_sweeps").is_none());
+    }
+
+    #[test]
+    fn axial_loft_and_revolve_share_one_undoable_source_bound_plan() {
+        use super::super::geometry_axial::{
+            GeometryAxialLoft, GeometryAxialRevolve,
+            GeometryLoftSection, GeometryRevolveSection,
+        };
+        const SEED: &str = "00000000-0000-4000-8000-000000005501";
+        let mut part = part(ROOT,"axial_bone",None,CUBE_A);
+        part.cubes.clear();
+        part.lofts.push(GeometryAxialLoft {
+            name:"tower".into(),uuid_seed:SEED.into(),
+            origin:[0,0,0],axis:"Y".into(),sections:vec![
+                GeometryLoftSection{height:0,center:[0.0,0.0],size:[6,6]},
+                GeometryLoftSection{height:8,center:[2.0,0.0],size:[4,4]},
+            ],
+        });
+        part.revolves.push(GeometryAxialRevolve {
+            name:"ring".into(),uuid_seed:SEED.into(),
+            origin:[20,0,0],axis:"Y".into(),sections:vec![
+                GeometryRevolveSection{height:0,outer_radius:6,inner_radius:2},
+                GeometryRevolveSection{height:8,outer_radius:6,inner_radius:2},
+            ],
+        });
+        let mut session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Axial","axial").unwrap()
+        ).unwrap();
+        let before=session.document().clone();
+        let request=GeometryAssemblyRequest{expected_revision:0,parts:vec![part]};
+        let proposed=compile(&session,&request).unwrap();
+        assert_eq!(proposed.preflight["status"],"VALIDATED_NOT_APPLIED");
+        assert_eq!(proposed.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(proposed.preflight["visual_verdict"],"UNVERIFIED");
+        assert_eq!(session.document(),&before);
+        assert!(!session.can_undo());
+        assert!(proposed.plan.operations.len()>2);
+        let mut loft_count=0;
+        let mut revolve_count=0;
+        for op in proposed.plan.operations.iter().skip(1) {
+            let EditOperation::AddCube{cube,bone_uuid}=op else {
+                panic!("Axial blockouts must use native AddCube");
+            };
+            assert_eq!(bone_uuid,ROOT);
+            assert_eq!(cube.extra.get("box_uv"),Some(&Value::Bool(true)));
+            assert!(cube.faces.values().all(|v|v.get("texture").is_none()));
+            if cube.name.as_deref().is_some_and(|v|v.starts_with("tower_v_")) {
+                assert_eq!(cube.uuid,geometry_axial::cube_uuid("loft",SEED,loft_count));
+                loft_count+=1;
+            } else {
+                assert_eq!(cube.uuid,geometry_axial::cube_uuid("revolve",SEED,revolve_count));
+                revolve_count+=1;
+            }
+        }
+        assert!(loft_count>0 && revolve_count>0);
+        session.apply(0,&proposed.plan.operations).unwrap();
+        let after=session.document().clone();
+        let saved=session.export().unwrap();
+        assert_eq!(proposed.preflight["candidate_sha256"],sha256(&saved));
+        assert_eq!(EditorSession::open(&saved).unwrap().document(),&after);
+        assert!(geometry::export_bedrock_geometry(&after).is_ok());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(),&before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(),&after);
+    }
+    #[test]
+    fn axial_shapes_reject_uuid_collision_stale_and_unsafe_texture() {
+        use super::super::geometry_axial::{GeometryAxialLoft,GeometryLoftSection};
+        const SEED: &str = "00000000-0000-4000-8000-000000005501";
+        let mut part=part(ROOT,"loft_bone",None,CUBE_A);
+        part.cubes.clear();
+        part.lofts.push(GeometryAxialLoft {
+            name:"tower".into(),uuid_seed:SEED.into(),
+            origin:[0,0,0],axis:"Y".into(),sections:vec![
+                GeometryLoftSection{height:0,center:[0.0,0.0],size:[6,6]},
+                GeometryLoftSection{height:8,center:[0.0,0.0],size:[4,4]},
+            ],
+        });
+        let session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Axial","axial").unwrap()
+        ).unwrap();
+        let original=session.document().clone();
+        let request=GeometryAssemblyRequest{expected_revision:0,parts:vec![part]};
+        let mut duplicate=request.clone();
+        duplicate.parts[0].lofts.push(duplicate.parts[0].lofts[0].clone());
+        assert_eq!(compile(&session,&duplicate).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+        let mut explicit=request.clone();
+        let mut cube=self::part(CHILD,"other",None,CUBE_B).cubes.remove(0);
+        cube.uuid=geometry_axial::cube_uuid("loft",SEED,0);
+        explicit.parts[0].cubes.push(cube);
+        assert_eq!(compile(&session,&explicit).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+        let mut textured=session.clone();
+        textured.apply(0,&[EditOperation::CreatePaintTexture {
+            uuid:"00000000-0000-4000-8000-000000005502".into(),
+            name:"atlas".into(),
+        }]).unwrap();
+        assert_eq!(compile(&textured,&GeometryAssemblyRequest{
+            expected_revision:1,..request.clone()
+        }).err().as_deref(),Some("GEOMETRY_AXIAL_TEXTURED_PROJECT_UNSUPPORTED"));
+        assert_eq!(compile(&session,&GeometryAssemblyRequest{
+            expected_revision:1,..request
+        }).err().as_deref(),Some("DOCUMENT_REVISION_STALE"));
+        assert_eq!(session.document(),&original);
     }
 
 }

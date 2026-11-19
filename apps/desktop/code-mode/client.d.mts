@@ -176,6 +176,19 @@ export interface GeometryProfileSweep {
   up_axis: "X"|"Y"|"Z";
   cross_section: "ELLIPSE"|"RECTANGLE";
 }
+/** G3.5 source-authored rectangular cross-section LOFT, along X/Y/Z.
+ * Origin and section heights are exact model units. Section centres can vary.
+ * Generates disjoint native Cube blockouts; no mesh or texture packing. */
+export interface GeometryAxialLoft {
+  name: string; uuid_seed: string; origin: Vec3; axis: "X"|"Y"|"Z";
+  sections: {height:number;center:[number,number];size:[number,number]}[];
+}
+/** G3.5 solid or annular volume of revolution. The cavity must survive
+ * voxelization as a connected, non-leaking ring in every represented slice. */
+export interface GeometryAxialRevolve {
+  name: string; uuid_seed: string; origin: Vec3; axis: "X"|"Y"|"Z";
+  sections: {height:number;outer_radius:number;inner_radius:number}[];
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
@@ -185,6 +198,8 @@ export interface GeometryAssemblyPart {
   arches?: GeometryArch[];
   sweeps?: GeometrySphereSweep[];
   profile_sweeps?: GeometryProfileSweep[];
+  lofts?: GeometryAxialLoft[];
+  revolves?: GeometryAxialRevolve[];
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */

@@ -1,3 +1,22 @@
+**Active Rust Geometry G3.5 — bounded LOFT + REVOLVE blockouts (2026-11-19; SOURCE ONLY):**
+Building from Rust@17bab2f and Local@422e4d7, two opt-in axial
+constructions now compile inside one G1 EditPlan. Rectangular LOFT
+interpolates explicit section centre/size; REVOLVE interpolates
+solid/annular radii and refuses disconnected rings, leaked or fully
+lost authored holes on the 1-unit raster. Both reuse G3.3's same
+bounded grid and disjoint Cube partition; retain per-shape 64 Cube
+and shared 128-operation budgets, separate versioned generated UUIDs,
+Box UV and texture/atlas safety, source SHA/preflight/Undo and
+independently authorized Apply. One local Rust helper module and
+existing typed Code Mode SDK/host carry the complete integration.
+Source regressions authored for valid/invalid geometry, UUID/authority,
+editable save/Undo and guest transport. No second model authority,
+dependency, binary, CLI command, renderer, test runner, CI, release,
+mesh engine or automatic UV/painter. Tests AUTHORED_NOT_RUN;
+Cargo/Node/Windows/Blockbench/performance/actual reference fidelity
+remain NOT_EXECUTED/UNVERIFIED. Full surface/OBB diagnostics and
+artist-accepted geometry remain gaps. Geometry remains prioritized.
+
 **Active Rust Geometry G3.4d — optional transported profile twist (2026-11-19; SOURCE ONLY):**
 From Rust@c1af977 and Local@422e4d7, the existing G3.4b LINEAR
 RECTANGLE/ELLIPSE profile sweep now accepts optional per-station

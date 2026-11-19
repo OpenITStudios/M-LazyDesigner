@@ -605,6 +605,84 @@ test('G3.4b profile sweep binds versioned IDs and keeps mutation unapproved',asy
   assert.equal(approvals,0);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: G3.5 axial blockouts reuse the SHA-bound G1
+// planner. Mock receipts verify ID/permission checks, not voxel fidelity.
+test('G3.5 LOFT and REVOLVE bind one Rust plan without write grant',async()=>{
+  const seed='00000000-0000-4000-8000-000000005501';
+  const id=(kind,i)=>{
+    const h=createHash('sha256').update(
+      'lazydesigner:geometry-'+kind+'-v1\\0'+seed+'\\0'+i).digest('hex');
+    return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+
+      '-8'+h.slice(17,20)+'-'+h.slice(20,32);
+  };
+  const ids=[id('loft',0),id('loft',1),id('revolve',0),id('revolve',1)];
+  const loft={name:'tower',uuid_seed:seed,origin:[0,0,0],axis:'Y',
+    sections:[{height:0,center:[0,0],size:[6,6]},
+      {height:8,center:[2,0],size:[4,4]}]};
+  const revolve={name:'ring',uuid_seed:seed,origin:[20,0,0],axis:'Y',
+    sections:[{height:0,outer_radius:6,inner_radius:2},
+      {height:8,outer_radius:6,inner_radius:2}]};
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'axial-bone',name:'axial_bone',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],lofts:[loft],revolves:[revolve],
+  }]};
+  const operations=[
+    {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+    ...ids.map((uuid,i)=>({op:'add_cube',bone_uuid:'axial-bone',
+      cube:{uuid,name:(i<2?'tower_v_':'ring_v_')+(i%2),box_uv:true}})),
+  ];
+  const receipt={status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:operations.length,
+        changed_uuids:['axial-bone',...ids]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+  let calls=0,approvals=0;
+  const build=runner=>createRustCodeModeClient({
+    binary:BIN,runner,authorizeMutation:async()=>{approvals++;return true;},
+  });
+  const client=build(async argv=>{
+    calls++;
+    assert.equal(argv[0],'plan-geometry-assembly');
+    assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+    assert.deepEqual(JSON.parse(await readFile(
+      argv[argv.indexOf('--assembly')+1],'utf8')),assembly);
+    return receipt;
+  });
+  const planned=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.equal(planned.preflight.write_authority,'NOT_GRANTED');
+  assert.equal(calls,1);
+  for(const forged of [
+    {...receipt,write_authority:'GRANTED'},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],bone_uuid:'other'},...operations.slice(2)]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      operations[0],{...operations[1],cube:{
+        ...operations[1].cube,uuid:'unclaimed'}},...operations.slice(2)]}},
+  ]){
+    await assert.rejects(build(async()=>forged).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  for(const mutation of [
+    {lofts:[{...loft,axis:'INVALID'}]},
+    {lofts:[{...loft,sections:[loft.sections[0]]}]},
+    {revolves:[{...revolve,origin:[0,0,100]}]},
+    {revolves:[{...revolve,sections:[
+      revolve.sections[0],{height:8,outer_radius:2,inner_radius:2}]}]},
+  ]){
+    const invalid={...assembly,parts:[{...assembly.parts[0],...mutation}]};
+    await assert.rejects(build(async()=>receipt).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:invalid,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  assert.equal(approvals,0);
+});
+
 // SOURCE_AUTHORED_NOT_RUN: G2 face alignment uses only a read-only Rust
 // plan. No host write approval is requested, and fabricated grants refuse.
 test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',async()=>{

@@ -945,7 +945,9 @@ export function createRustCodeModeClient({
               (part.sweeps !== undefined &&
                 !Array.isArray(part.sweeps)) ||
               (part.profile_sweeps !== undefined &&
-                !Array.isArray(part.profile_sweeps))) {
+                !Array.isArray(part.profile_sweeps)) ||
+              (part.lofts !== undefined && !Array.isArray(part.lofts)) ||
+              (part.revolves !== undefined && !Array.isArray(part.revolves))) {
             declarationValid = false;
             break;
           }
@@ -1055,6 +1057,49 @@ export function createRustCodeModeClient({
               count++;
             }
             if (count === 0) declarationValid = false;
+          }
+          // LOFT and REVOLVE reuse the canonical Rust voxel partition.
+          // This checks transport limits and source UUID identities only.
+          for (const [kind, shapes] of [
+            ['loft',part.lofts ?? []], ['revolve',part.revolves ?? []],
+          ]) {
+            if (shapes.length > 4) { declarationValid=false; break; }
+            for (const shape of shapes) {
+              const valid = shape &&
+                typeof shape.name === 'string' &&
+                typeof shape.uuid_seed === 'string' &&
+                ['X','Y','Z'].includes(shape.axis) &&
+                Array.isArray(shape.origin) && shape.origin.length === 3 &&
+                shape.origin.every(n => Number.isInteger(n) && Math.abs(n) <= 64) &&
+                Array.isArray(shape.sections) &&
+                shape.sections.length >= 2 && shape.sections.length <= 12 &&
+                shape.sections.every(section =>
+                  section && Number.isInteger(section.height) &&
+                  section.height >= 0 && section.height <= 32 &&
+                  (kind === 'loft' ?
+                    Array.isArray(section.center) && section.center.length === 2 &&
+                    section.center.every(n => Number.isFinite(n) && Math.abs(n) <= 16) &&
+                    Array.isArray(section.size) && section.size.length === 2 &&
+                    section.size.every(n => Number.isInteger(n) && n >= 1 && n <= 32) :
+                    Number.isInteger(section.outer_radius) &&
+                    section.outer_radius >= 1 && section.outer_radius <= 12 &&
+                    Number.isInteger(section.inner_radius) &&
+                    section.inner_radius >= 0 &&
+                    section.inner_radius + 1 <= section.outer_radius));
+              if (!valid) { declarationValid=false; break; }
+              let count=0;
+              while (count < 64) {
+                const uuid=generatedBlockoutCubeUuid(
+                  'geometry-'+kind+'-v1',shape.uuid_seed,count);
+                if (!proposedOperations.some(op =>
+                  op?.op === 'add_cube' && op.cube?.uuid === uuid)) break;
+                declare(uuid,'add_cube',part.bone.uuid,
+                  shape.name+'_v_'+count,true);
+                count++;
+              }
+              if (count === 0) { declarationValid=false; break; }
+            }
+            if (!declarationValid) break;
           }
         }
         const used = new Set();

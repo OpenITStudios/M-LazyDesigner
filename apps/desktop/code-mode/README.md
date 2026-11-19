@@ -130,6 +130,21 @@ process, trusted write permission or automatic Apply is introduced.
 SDK and host fixture regressions AUTHORED_NOT_RUN; no artistic or
 Blockbench-native acceptance is implied.
 
+**G3.5 axial LOFT/REVOLVE through existing read-only G1 plan (2026-11-19; SOURCE ONLY):**
+Optional `assembly.parts[].lofts` and `assembly.parts[].revolves` carry
+exact `name`, `uuid_seed`, `origin`, `axis` and 2–12 `sections`.
+LOFT stations provide `height`, `center: [u,v]`, `size: [w,h]`.
+REVOLVE stations provide `height`, `outer_radius`, `inner_radius`.
+All distances are model units. Rust alone constructs the voxel solid,
+checks hollow ring topology, partitions Cube blocks, admits Box UV
+bounds and runs the source-SHA-bound G1 disposable preflight.
+Code Mode validates bounded input and verifies returned contiguous
+`geometry-loft-v1` / `geometry-revolve-v1` Cube IDs, names, Bone
+ownership and unapproved status. No JS geometry kernel, separate
+CLI command, hidden writer, material/atlas allocation or Apply grant.
+Source fixture tests AUTHORED_NOT_RUN; actual native/visual quality
+and measurable performance remain UNVERIFIED.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

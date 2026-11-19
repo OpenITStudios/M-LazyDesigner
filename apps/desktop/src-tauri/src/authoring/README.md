@@ -175,6 +175,26 @@ preflight, Undo, independent Apply approval and untextured Box UV
 limits remain intact. Rust source regressions AUTHORED_NOT_RUN;
 artist/native quality and Rust>Local parity remain UNVERIFIED.
 
+**G3.5 source-authored axial LOFT and REVOLVE (2026-11-19; SOURCE ONLY):**
+The existing `GeometryAssemblyPart` accepts opt-in `lofts` and
+`revolves` using explicit `origin`, X/Y/Z axis, 2–12 ascending
+axial sections (start height 0, final height 1–32), a name and UUID seed.
+LOFT interpolates authored rectangular width/depth and lateral centre,
+sampling each axial layer once and using half-open 1-unit voxel membership.
+REVOLVE interpolates outer/inner radii (outer 1–12, at least one-unit wall),
+then checks per-layer four-connected ring material and eight-connected
+background so a requested through-channel cannot silently leak or vanish.
+Both use the existing G3.3 bounded 32,768-cell grid, shared 64-Cube
+partition, G1 128-operation plan, Box UV preflight and Undo/Redo.
+`geometry_axial.rs` owns both small source-local constructors;
+generated Cube UUID namespaces are `geometry-loft-v1` and
+`geometry-revolve-v1`, separate from Sweep/Profile identities.
+This is a voxelized untextured blockout, not mesh/CAD, atlas packing,
+native reference fidelity, global contact solving or visual acceptance.
+Rust and Node regression sources AUTHORED_NOT_RUN; Windows/Blockbench
+native, artistic and performance results UNVERIFIED. No new process,
+persistent Recipe or alternate authoring engine.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and
