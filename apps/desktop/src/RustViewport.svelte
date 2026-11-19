@@ -13,7 +13,7 @@
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
   import { reviewCameraAxes, type ReviewViewId } from './rustReviewCapture';
-  import { extendPaintStroke } from './rustPaintStroke';
+  import { appendPaintStrokeInPlace } from './rustPaintStroke';
   import { SURFACE_FACE_ORDER,hitFaceLocalTexel,sameSurface,
     type SurfaceHit,type SurfaceGesture } from './rustSurfacePaint';
 
@@ -689,11 +689,10 @@
       surfaceGesture={...current,stopped:true};
       return;
     }
-    const expanded=extendPaintStroke(current.points,hit.texel,
-      current.size[0],current.size[1]);
-    surfaceGesture=expanded
-      ? {...current,points:expanded}
-      : {...current,stopped:true,overflow:true};
+    if(!appendPaintStrokeInPlace(current.points,hit.texel,
+      current.size[0],current.size[1])){
+      surfaceGesture={...current,stopped:true,overflow:true};
+    }
   }
   function finishSurfacePointer(event:PointerEvent,cancelled=false){
     const held=surfaceGesture;
