@@ -320,7 +320,7 @@ mod tests {
         wrong=intent();wrong.expected_revision=1;
         assert_eq!(compile(&s,&wrong).unwrap_err(),"DOCUMENT_REVISION_STALE");
         wrong=intent();wrong.face="south".into();
-        assert_eq!(compile(&s,&wrong).unwrap_err(),"SEMANTIC_MATERIAL_UV_UNSUPPORTED");
+        assert_eq!(compile(&s,&wrong).unwrap_err(),"MATERIAL_FACE_TEXTURE_NOT_EXPLICIT");
         let mut shared=doc();
         shared.cubes[0].faces.get_mut("east").unwrap().as_object_mut().unwrap()
             .insert("uv".into(),json!([1,2,5,6]));

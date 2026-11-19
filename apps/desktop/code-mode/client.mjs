@@ -278,6 +278,56 @@ function serializeGeometryAssembly(assembly) {
   return payload;
 }
 
+/** Transport validation only. Rust owns surface geometry, source pixels,
+ * region synthesis, correction safety and the disposable preflight.
+ * This request intentionally has no pixel rows, strokes or freehand UV.
+ */
+function serializeSemanticMaterialIntent(intent) {
+  const fields=['expected_revision','reference_png_sha256','cube_uuid',
+    'texture_uuid','face','material','light_corner','contrast',
+    'source_base_rgba','shadow_rgb','highlight_rgb',
+    'protected_regions','expected_before_pixels'];
+  const invalid=()=>{throw new TypeError('CODE_MODE_SEMANTIC_MATERIAL_INPUT_INVALID');};
+  if (!intent || typeof intent!=='object' || Array.isArray(intent) ||
+      Object.keys(intent).some(key=>!fields.includes(key)) ||
+      intent.expected_revision!==0 ||
+      typeof intent.reference_png_sha256!=='string' ||
+      !SHA256.test(intent.reference_png_sha256) ||
+      !['north','east','south','west','up','down'].includes(intent.face) ||
+      intent.material!=='painted_metal' ||
+      !['upper_left','upper_right'].includes(intent.light_corner) ||
+      !['subtle','balanced'].includes(intent.contrast))invalid();
+  for(const name of ['cube_uuid','texture_uuid']) {
+    const id=intent[name];
+    if(typeof id!=='string' || id.length<1 || id.length>128 ||
+       /[\s\x00-\x1f\x7f]/.test(id))invalid();
+  }
+  const rgba=(v,n)=>Array.isArray(v)&&v.length===n &&
+    v.every(x=>Number.isInteger(x)&&x>=0&&x<=255);
+  if(!rgba(intent.source_base_rgba,4) || intent.source_base_rgba[3]!==255 ||
+     !rgba(intent.shadow_rgb,3) || !rgba(intent.highlight_rgb,3))invalid();
+  const rect=r=>r && typeof r==='object' && !Array.isArray(r) &&
+    Object.keys(r).length===2 &&
+    Object.keys(r).every(k=>['from','to'].includes(k)) &&
+    [r.from,r.to].every(pt=>Array.isArray(pt) && pt.length===2 &&
+      pt.every(v=>Number.isInteger(v)&&v>=0&&v<=256)) &&
+    r.from.every((v,i)=>v<r.to[i]);
+  const protectedRegions=intent.protected_regions??[];
+  const expectedPixels=intent.expected_before_pixels??[];
+  if(!Array.isArray(protectedRegions) || protectedRegions.length>16 ||
+     !protectedRegions.every(rect) ||
+     !Array.isArray(expectedPixels) || expectedPixels.length>64 ||
+     !expectedPixels.every(v=>v && typeof v==='object' &&
+       !Array.isArray(v) && Object.keys(v).length===2 &&
+       Object.keys(v).every(k=>['at','rgba'].includes(k)) &&
+       Array.isArray(v.at) && v.at.length===2 &&
+       v.at.every(n=>Number.isInteger(n)&&n>=0&&n<256) &&
+       rgba(v.rgba,4)))invalid();
+  const payload=JSON.stringify(intent);
+  if(Buffer.byteLength(payload,'utf8')>PLAN_LIMIT)invalid();
+  return payload;
+}
+
 /** G2 transport only: Rust owns every geometric validity decision. */
 function serializeGeometryAttachment(attachment) {
   if (!attachment || typeof attachment !== 'object' ||
@@ -1199,6 +1249,75 @@ export function createRustCodeModeClient({
         await rm(directory, { recursive:true, force:true });
       }
     },
+    async planSemanticMaterial({ input, expectedSha256, intent }) {
+      const digest=hash(expectedSha256).toLowerCase();
+      const payload=serializeSemanticMaterialIntent(intent);
+      const folder=await mkdtemp(join(tmpdir(),'lazydesigner-material-plan-'));
+      const file=join(folder,'semantic-intent.json');
+      try {
+        await writeFile(file,payload,{encoding:'utf8',mode:0o600,flag:'wx'});
+        const receipt=await call('plan-semantic-material',{
+          input:absolute(input,'input'),'expected-sha256':digest,intent:file,
+        });
+        const plan=receipt.plan,preview=receipt.preflight;
+        const scope=plan?.correction_scope;
+        const op=plan?.operations?.[0];
+        const e=receipt.material_evidence;
+        const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+        const chosenColors=[...intent.shadow_rgb,255].join(',')+'|'+
+          [...intent.highlight_rgb,255].join(',');
+        if(receipt.sha256?.toLowerCase()!==digest ||
+           receipt.summary?.revision!==0 ||
+           plan?.expected_revision!==0 ||
+           !Array.isArray(plan.operations) || plan.operations.length!==1 ||
+           op?.op!=='paint_cube_face_regions_guarded' ||
+           op?.cube_uuid!==intent.cube_uuid ||
+           op?.texture_uuid!==intent.texture_uuid ||
+           !Array.isArray(op.regions) || op.regions.length<1 ||
+           op.regions.length>64 ||
+           op.regions.some(r=>r?.face!==intent.face ||
+             r.erase!==false || !Array.isArray(r.rgba) ||
+             ![[...intent.shadow_rgb,255],[...intent.highlight_rgb,255]]
+               .some(color=>equal(color,r.rgba)) ||
+             !Array.isArray(r.from) || !Array.isArray(r.to) ||
+             !r.from.every((v,i)=>Number.isInteger(v)&&v>=0&&v<r.to[i]&&
+               Number.isInteger(r.to[i])&&r.to[i]<=256)) ||
+           scope?.texture_uuid!==intent.texture_uuid ||
+           scope.preserve_alpha!==true ||
+           !equal(scope.editable_before_rgba,[intent.source_base_rgba]) ||
+           !equal(scope.protected_regions,intent.protected_regions??[]) ||
+           !equal(scope.expected_before_pixels,intent.expected_before_pixels??[]) ||
+           !Array.isArray(scope.allowed_regions) ||
+           scope.allowed_regions.length!==1 ||
+           preview?.status!=='VALIDATED_NOT_APPLIED' ||
+           preview?.base_revision!==0 ||
+           preview.mutation?.revision!==1 ||
+           preview.mutation?.operation_count!==1 ||
+           !Array.isArray(preview.mutation?.changed_uuids) ||
+           preview.candidate_summary?.revision!==1 ||
+           typeof preview.candidate_sha256!=='string' ||
+           !SHA256.test(preview.candidate_sha256) ||
+           preview.write_authority!=='NOT_GRANTED' ||
+           preview.visual_verdict!=='UNVERIFIED' ||
+           e?.scope!=='source_selected_face_semantic_metal_candidate' ||
+           e?.material!=='painted_metal' ||
+           e?.cube_uuid!==intent.cube_uuid ||
+           e?.texture_uuid!==intent.texture_uuid ||
+           e?.face!==intent.face ||
+           e?.reference_png_sha256!==intent.reference_png_sha256 ||
+           e?.reference_authority!=='NOT_VERIFIED_BY_RUST' ||
+           e?.visual_verdict!=='UNVERIFIED' ||
+           e?.style_quality!=='NOT_EVALUATED' ||
+           e?.write_authority!=='NOT_GRANTED' ||
+           receipt.write_authority!=='NOT_GRANTED' ||
+           receipt.visual_verdict!=='UNVERIFIED') {
+          throw new Error('CODE_MODE_SEMANTIC_MATERIAL_RECEIPT_INVALID');
+        }
+        return receipt;
+      } finally {
+        await rm(folder,{recursive:true,force:true});
+      }
+    },
     async preflight({ input, expectedSha256, operations, correctionScope }) {
       const digest = hash(expectedSha256).toLowerCase();
       const payload = serializePlan(
@@ -1456,6 +1575,8 @@ export async function openRustCodeModeProject(client, input) {
       client.preflight({ input: path, expectedSha256, operations, correctionScope }),
     planGeometryAssembly: (assembly) =>
       client.planGeometryAssembly({ input:path, expectedSha256, assembly }),
+    planSemanticMaterial: (intent) =>
+      client.planSemanticMaterial({ input:path, expectedSha256, intent }),
     planGeometryAttachment: (attachment) =>
       client.planGeometryAttachment({ input:path, expectedSha256, attachment }),
     planGeometryResizePropagation: (propagation) =>

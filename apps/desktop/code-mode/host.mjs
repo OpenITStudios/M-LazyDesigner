@@ -1210,6 +1210,10 @@ export async function createCodeModeHost({
     preflight: async (args) => selected(args).preflight({
       operations: args.operations, correctionScope: args.correctionScope,
     }),
+    // P0 read-only semantic material plan: Rust decides pixel masks/UV;
+    // the guest may not use this as visual acceptance or write authority.
+    planSemanticMaterial: async (args) =>
+      selected(args).planSemanticMaterial(args.intent),
     // Structure-first G1 composition is a SHA-pinned read-only Rust plan.
     // No trusted-host approval, output path, live write, or implicit Apply.
     planGeometryAssembly: async (args) =>

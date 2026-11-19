@@ -1182,6 +1182,50 @@ export interface OutputReceipt {
   sha256?: string;
   summary?: DocumentSummary;
 }
+/** P0 read-only material intent: one reference-selected painted-metal face.
+ * Swatches/source base must come from approved current source evidence;
+ * a caller string does not establish actual image or material approval.
+ * No pixel, stroke, or UV coordinates are requested from the AI.
+ */
+export interface SemanticMaterialIntent {
+  expected_revision:0;
+  reference_png_sha256:string;
+  cube_uuid:string; texture_uuid:string;
+  face:"north"|"east"|"south"|"west"|"up"|"down";
+  material:"painted_metal";
+  light_corner:"upper_left"|"upper_right";
+  contrast:"subtle"|"balanced";
+  source_base_rgba:[number,number,number,255];
+  shadow_rgb:[number,number,number];
+  highlight_rgb:[number,number,number];
+  protected_regions?:Array<{from:[number,number];to:[number,number]}>;
+  expected_before_pixels?:Array<{at:[number,number];rgba:[number,number,number,number]}>;
+}
+/** Exact Rust existing Paint plan, NEVER an art-quality or Apply authorization. */
+export interface SemanticMaterialProposalReceipt {
+  status:"OK";sha256:string;summary:DocumentSummary;
+  plan:{expected_revision:0;
+    operations:Array<Extract<EditOperation,{op:"paint_cube_face_regions_guarded"}>>;
+    correction_scope:TextureCorrectionScope;
+  };
+  preflight:PreflightReceipt["preflight"];
+  material_evidence:{
+    scope:"source_selected_face_semantic_metal_candidate";
+    material:"painted_metal";
+    cube_uuid:string;texture_uuid:string;
+    face:SemanticMaterialIntent["face"];
+    face_local_size:[number,number];
+    selected_source_base_rgba:[number,number,number,number];
+    candidate_pixels:number;light_pixels:number;shadow_pixels:number;
+    mask_strategy:"face_local_tapered_opposed_edge_masses";
+    reference_png_sha256:string;
+    reference_authority:"NOT_VERIFIED_BY_RUST";
+    style_quality:"NOT_EVALUATED";
+    rendered_model_review:"REQUIRED";
+    visual_verdict:"UNVERIFIED";write_authority:"NOT_GRANTED";
+  };
+  write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
+}
 export interface RustCodeModeClient {
   newModel(input: { output: string; name: string; modelIdentifier: string }): Promise<OutputReceipt>;
   inspect(input: { input: string; uuid?: string; expectedSha256?: string }): Promise<InspectReceipt>;
@@ -1206,6 +1250,9 @@ export interface RustCodeModeClient {
   planGeometryAssembly(input: {
     input: string; expectedSha256: string; assembly: GeometryAssemblyRequest;
   }): Promise<GeometryAssemblyReceipt>;
+  planSemanticMaterial(input: {
+    input:string;expectedSha256:string;intent:SemanticMaterialIntent;
+  }):Promise<SemanticMaterialProposalReceipt>;
   planGeometryAttachment(input: {
     input: string; expectedSha256: string; attachment: GeometryFaceAttachmentRequest;
   }): Promise<GeometryFaceAttachmentReceipt>;
@@ -1309,6 +1356,7 @@ export interface RustCodeModeProject {
   semanticMap(category: CatalogPage["kind"], options?: {offset?: number; limit?: number}): Promise<SemanticMapReceipt>;
   preflight(input: {operations: EditOperation[]; correctionScope?: TextureCorrectionScope}): Promise<PreflightReceipt>;
   planGeometryAssembly(assembly: GeometryAssemblyRequest): Promise<GeometryAssemblyReceipt>;
+  planSemanticMaterial(intent:SemanticMaterialIntent):Promise<SemanticMaterialProposalReceipt>;
   planGeometryAttachment(attachment: GeometryFaceAttachmentRequest): Promise<GeometryFaceAttachmentReceipt>;
   planGeometryResizePropagation(propagation: GeometryResizePropagationRequest): Promise<GeometryResizePropagationReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
