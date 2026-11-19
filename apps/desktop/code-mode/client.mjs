@@ -1312,6 +1312,13 @@ export function createRustCodeModeClient({
            e?.reference_authority!=='NOT_VERIFIED_BY_RUST' ||
            e?.visual_verdict!=='UNVERIFIED' ||
            e?.style_quality!=='NOT_EVALUATED' ||
+           e?.detail_boundary_guard!=='one_face_local_texel_around_non_base_rgba' ||
+           !Number.isSafeInteger(e?.skipped_near_existing_detail_pixels) ||
+           e.skipped_near_existing_detail_pixels<0 ||
+           !Number.isSafeInteger(e?.candidate_pixels) ||
+           !Number.isSafeInteger(e?.light_pixels) ||
+           !Number.isSafeInteger(e?.shadow_pixels) ||
+           e.candidate_pixels!==e.light_pixels+e.shadow_pixels ||
            e?.write_authority!=='NOT_GRANTED' ||
            receipt.write_authority!=='NOT_GRANTED' ||
            receipt.visual_verdict!=='UNVERIFIED') {

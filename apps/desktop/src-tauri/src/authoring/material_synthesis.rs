@@ -142,6 +142,40 @@ pub(super) fn compile(
     let rgba=paint::decode_for_uv_inspection(
         texture,doc.resolution.width,doc.resolution.height)
         .map_err(|_|"SEMANTIC_MATERIAL_SOURCE_BITMAP_UNSUPPORTED".to_string())?;
+    // Material masks must preserve a one-pixel clearance from *observed*
+    // non-base artwork in the same face-local grid, even when the adjacent
+    // pixel has exactly the allowed base RGB. This protects the silhouettes
+    // of markings/face tracers and avoids painting right against an opaque
+    // emblem. Same-RGBA artwork inside a contiguous base still requires a
+    // reviewer-supplied protected region; this is not semantic segmentation.
+    //
+    // At most 32 x 32 face-local samples; the Rust UV projector owns all
+    // signed/rotated atlas coordinates. Do this once instead of guessing
+    // neighbors by their physical PNG row/column orientation.
+    let mut editable=vec![false;(width*height) as usize];
+    for y in 0..height {
+        for x in 0..width {
+            let (a,b)=face_regions::face_local_pixel_rectangle(
+                doc.resolution.width,doc.resolution.height,
+                uv,rotation,[x,y],[x+1,y+1],
+            ).map_err(|_|"SEMANTIC_MATERIAL_UV_UNSUPPORTED".to_string())?;
+            if b!=[a[0]+1,a[1]+1] {
+                return Err("SEMANTIC_MATERIAL_UV_UNSUPPORTED".into());
+            }
+            editable[(y*width+x) as usize]=is_source_base(
+                &rgba,doc.resolution.width,a,request.source_base_rgba);
+        }
+    }
+    let clear_of_detail=|x:u32,y:u32|{
+        let min_y=y.saturating_sub(1);
+        let min_x=x.saturating_sub(1);
+        for yy in min_y..=(y+1).min(height-1) {
+            for xx in min_x..=(x+1).min(width-1) {
+                if !editable[(yy*width+xx) as usize] {return false;}
+            }
+        }
+        true
+    };
     // Edges are chosen according to an explicit *face-local* direction
     // provided by the approved reference workflow, not a guessed world sun.
     let rows=(match request.contrast {
@@ -155,6 +189,7 @@ pub(super) fn compile(
     let mut cells:Vec<(u32,u32,[u8;4])>=Vec::new();
     let mut light_pixels=0usize;
     let mut shadow_pixels=0usize;
+    let mut skipped_near_existing_detail_pixels=0usize;
     for step in 0..rows {
         // Non-rectangular, tapering corner masses preserve a large quiet
         // central face. Never fill full-width material bands/noise.
@@ -170,15 +205,12 @@ pub(super) fn compile(
                     (SemanticLightCorner::UpperRight,false) => k,
                     _ => width-1-k,
                 };
-                let (a,b)=face_regions::face_local_pixel_rectangle(
-                    doc.resolution.width,doc.resolution.height,
-                    uv,rotation,[x,y],[x+1,y+1]
-                ).map_err(|_|"SEMANTIC_MATERIAL_UV_UNSUPPORTED".to_string())?;
-                if b!=[a[0]+1,a[1]+1] {
-                    return Err("SEMANTIC_MATERIAL_UV_UNSUPPORTED".into());
+                if !editable[(y*width+x) as usize] {
+                    continue; // Non-base detail and transparent pixels unchanged.
                 }
-                if !is_source_base(&rgba,doc.resolution.width,a,request.source_base_rgba){
-                    continue; // Non-base detail and transparent pixels unchanged
+                if !clear_of_detail(x,y) {
+                    skipped_near_existing_detail_pixels+=1;
+                    continue; // One face-local texel margin near observed detail.
                 }
                 let rgb=if is_light{request.highlight_rgb}else{request.shadow_rgb};
                 if is_light{light_pixels+=1;}else{shadow_pixels+=1;}
@@ -234,6 +266,8 @@ pub(super) fn compile(
         "selected_source_base_rgba":request.source_base_rgba,
         "candidate_pixels":light_pixels+shadow_pixels,
         "light_pixels":light_pixels,"shadow_pixels":shadow_pixels,
+        "skipped_near_existing_detail_pixels":skipped_near_existing_detail_pixels,
+        "detail_boundary_guard":"one_face_local_texel_around_non_base_rgba",
         "mask_strategy":"face_local_tapered_opposed_edge_masses",
         "untouched_non_base_pixels":"preserved_by_exact_original_rgba",
         "source_form":binding["surface_form"],
@@ -294,20 +328,65 @@ mod tests {
         s.undo(1).unwrap();
         assert_eq!(s.export().unwrap(),before);
     }
+    fn face_pixel(d:&AuthoringDocument, x:u32, y:u32)->[u32;2]{
+        let cube=d.cubes.iter().find(|item|item.uuid==CUBE).unwrap();
+        let p=uv_sharing::project_supported_uv(d,cube).unwrap();
+        let uv=face_uv(&p,"north").unwrap();
+        let rotation=face_regions::face_region_rotation(
+            p.faces["north"].as_object().unwrap()).unwrap();
+        let (a,b)=face_regions::face_local_pixel_rectangle(
+            d.resolution.width,d.resolution.height,
+            uv,rotation,[x,y],[x+1,y+1]).unwrap();
+        assert_eq!(b,[a[0]+1,a[1]+1]);
+        a
+    }
+    fn rgba_at(pixels:&[u8], w:u32,at:[u32;2])->[u8;4]{
+        let i=((at[1]*w+at[0])*4) as usize;
+        pixels[i..i+4].try_into().unwrap()
+    }
     #[test]
-    fn original_non_base_identity_pixels_are_not_painted(){
+    fn source_non_base_mark_and_its_nearby_base_border_are_preserved(){
         let mut d=doc();
-        paint::pixel(&mut d.texture_assets[0],64,32,1,5,[220,25,20,255]).unwrap();
+        // North UV is rotated 90°. Local [2,1] is next to the would-be
+        // highlight at [1,0], but NOT next to [0,0].
+        let mark=face_pixel(&d,2,1);
+        let bordering_base=face_pixel(&d,1,0);
+        let safe_highlight=face_pixel(&d,0,0);
+        paint::pixel(&mut d.texture_assets[0],64,32,mark[0],mark[1],
+            [220,25,20,255]).unwrap();
         let source=paint::decode_for_uv_inspection(&d.texture_assets[0],64,32).unwrap();
         let s=EditorSession::from_document(d).unwrap();
         let plan=compile(&s,&intent()).unwrap();
-        let mut painted=EditorSession::from_document(s.document().clone()).unwrap();
+        assert_eq!(plan.material_evidence["detail_boundary_guard"],
+            "one_face_local_texel_around_non_base_rgba");
+        assert!(plan.material_evidence["skipped_near_existing_detail_pixels"]
+            .as_u64().unwrap()>=1);
+        let mut painted=s.clone();
         painted.apply_with_correction_scope(
             0,&plan.plan.operations,plan.plan.correction_scope.as_ref()).unwrap();
-        let output=paint::decode_for_uv_inspection(&painted.document().texture_assets[0],64,32).unwrap();
-        let offset=(5usize*64+1)*4;
-        assert_eq!(&output[offset..offset+4],&source[offset..offset+4]);
-        assert_eq!(&output[offset..offset+4],&[220,25,20,255]);
+        let output=paint::decode_for_uv_inspection(
+            &painted.document().texture_assets[0],64,32).unwrap();
+        assert_eq!(rgba_at(&output,64,mark),[220,25,20,255]);
+        assert_eq!(rgba_at(&output,64,bordering_base),
+            rgba_at(&source,64,bordering_base));
+        assert_eq!(rgba_at(&output,64,safe_highlight),
+            [160,175,195,255]);
+    }
+    #[test]
+    fn refuses_when_every_candidate_is_adjacent_to_existing_detail(){
+        let mut d=doc();
+        for y in [1,2] {
+            for x in 0..4 {
+                let at=face_pixel(&d,x,y);
+                paint::pixel(&mut d.texture_assets[0],64,32,
+                    at[0],at[1],[220,25,20,255]).unwrap();
+            }
+        }
+        let s=EditorSession::from_document(d).unwrap();
+        let before=s.export().unwrap();
+        assert_eq!(compile(&s,&intent()).unwrap_err(),
+            "SEMANTIC_MATERIAL_SOURCE_BASE_UNAVAILABLE");
+        assert_eq!(s.export().unwrap(),before);
     }
     #[test]
     fn refuses_shared_uv_missing_source_and_unapproved_shade_ramps(){

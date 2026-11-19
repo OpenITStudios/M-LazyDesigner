@@ -1224,6 +1224,12 @@ export interface SemanticMaterialProposalReceipt {
     face_local_size:[number,number];
     selected_source_base_rgba:[number,number,number,number];
     candidate_pixels:number;light_pixels:number;shadow_pixels:number;
+    /** Neighboring accepted artwork must not be overpainted merely
+     * because the next pixel uses the permitted original base swatch.
+     * Neither count nor margin proves that all markings are known.
+     */
+    skipped_near_existing_detail_pixels:number;
+    detail_boundary_guard:"one_face_local_texel_around_non_base_rgba";
     mask_strategy:"face_local_tapered_opposed_edge_masses";
     reference_png_sha256:string;
     reference_authority:"NOT_VERIFIED_BY_RUST";
