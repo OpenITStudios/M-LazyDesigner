@@ -990,10 +990,19 @@ export function createRustCodeModeClient({
                 arch.name+'_curve_'+(i+1),true));
           }
           for (const sweep of part.sweeps ?? []) {
+            const mode=sweep?.interpolation ?? 'LINEAR';
+            const curved=mode === 'CENTRIPETAL_CATMULL_ROM';
+            const tolerance=sweep?.max_chord_error;
             if (!sweep || typeof sweep.uuid_seed !== 'string' ||
                 typeof sweep.name !== 'string' ||
                 !Array.isArray(sweep.stations) ||
-                sweep.stations.length < 2 || sweep.stations.length > 8) {
+                sweep.stations.length < (curved ? 3 : 2) ||
+                sweep.stations.length > 8 ||
+                (mode !== 'LINEAR' && !curved) ||
+                (curved ?
+                  !Number.isFinite(tolerance) ||
+                    tolerance < 0.25 || tolerance > 1 :
+                  tolerance !== undefined)) {
               declarationValid = false;
               break;
             }

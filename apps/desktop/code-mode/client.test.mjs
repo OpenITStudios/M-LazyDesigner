@@ -424,6 +424,88 @@ test('G3.3 variable-radius sweep binds seed-derived IDs and remains read-only',a
   assert.equal(approvals,0);
 });
 
+// SOURCE_AUTHORED_NOT_RUN: Catmull–Rom is an opt-in source declaration.
+// Rust alone computes interpolation; Node validates the selected route,
+// source SHA, output UUID/parent binding and absence of write authority.
+test('G3.4a adaptive Catmull-Rom sweep is opt-in and keeps G1 read-only',async()=>{
+  const seed='00000000-0000-4000-8000-000000003501';
+  const uuid=index=>{
+    const h=createHash('sha256').update(
+      'lazydesigner:geometry-sweep-v1\0'+seed+'\0'+index).digest('hex');
+    return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+
+      '-8'+h.slice(17,20)+'-'+h.slice(20,32);
+  };
+  const ids=[uuid(0),uuid(1)];
+  const base={name:'branch',uuid_seed:seed,
+    stations:[
+      {position:[-4,0,0],radius:2},
+      {position:[0,2,0],radius:3},
+      {position:[4,3,1],radius:2},
+    ]};
+  const curved={...base,interpolation:'CENTRIPETAL_CATMULL_ROM',
+    max_chord_error:0.5};
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'curve-bone',name:'curve_bone',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],sweeps:[curved],
+  }]};
+  const operations=[
+    {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+    ...ids.map((id,i)=>({op:'add_cube',bone_uuid:'curve-bone',
+      cube:{uuid:id,name:'branch_v_'+i,box_uv:true}})),
+  ];
+  const receipt={status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:3,
+        changed_uuids:['curve-bone',...ids]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+  let approvals=0,calls=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,
+    authorizeMutation:async()=>{approvals++;return true;},
+    runner:async argv=>{
+      calls++;
+      assert.equal(argv[0],'plan-geometry-assembly');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+      assert.deepEqual(JSON.parse(await readFile(
+        argv[argv.indexOf('--assembly')+1],'utf8')),assembly);
+      return receipt;
+    },
+  });
+  const result=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.deepEqual(result.plan.operations.map(op=>
+    op.op==='add_bone'?op.bone.uuid:op.cube.uuid),['curve-bone',...ids]);
+  assert.equal(result.write_authority,'NOT_GRANTED');
+  assert.equal(result.visual_verdict,'UNVERIFIED');
+  assert.equal(calls,1);
+  assert.equal(approvals,0);
+
+  // A successful fake Rust reply cannot bypass the Code Mode contract.
+  const forged=createRustCodeModeClient({binary:BIN,runner:async()=>({
+    ...receipt,write_authority:'GRANTED',
+  })});
+  await assert.rejects(forged.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  for(const input of [
+    {...curved,max_chord_error:undefined},
+    {...curved,max_chord_error:0.1},
+    {...curved,interpolation:'CATMULL_UNBOUNDED'},
+    {...curved,stations:curved.stations.slice(0,2)},
+    {...base,interpolation:'LINEAR',max_chord_error:0.5},
+  ]){
+    const invalid={...assembly,parts:[{...assembly.parts[0],sweeps:[input]}]};
+    const fake=createRustCodeModeClient({binary:BIN,runner:async()=>receipt});
+    await assert.rejects(fake.planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:invalid,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+});
+
 // SOURCE_AUTHORED_NOT_RUN: G2 face alignment uses only a read-only Rust
 // plan. No host write approval is requested, and fabricated grants refuse.
 test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',async()=>{

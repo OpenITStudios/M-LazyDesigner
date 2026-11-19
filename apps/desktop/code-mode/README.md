@@ -88,6 +88,22 @@ generated IDs: do not treat the seed as a persisted Recipe identity.
 Source-only SDK/guest fixture checks AUTHORED_NOT_RUN; native quality
 and relative performance remain UNVERIFIED.
 
+**G3.4a Catmull–Rom opt-in through existing G1 Code Mode (2026-11-19; SOURCE ONLY):**
+The already-supported `assembly.parts[].sweeps` accepts optional
+`interpolation:"CENTRIPETAL_CATMULL_ROM"` and required
+`max_chord_error` of 0.25–1.0 model units (with at least three
+source stations). If omitted, the original G3.3 LINEAR behavior
+and source JSON representation remain unchanged. Node checks the
+transport-level option and independently binds the returned Cube
+UUID/owner to the existing versioned seed; Rust alone computes curve
+sampling, voxel membership, native disjoint-Cube operations and
+the disposable source-SHA-bound preflight.
+The tolerance bounds centerline approximation only: it never asserts
+silhouette, material, reference, motion or artist acceptance.
+No extra process, new permission, new Apply route, default-on feature
+or independent JavaScript solver. Node guest/SDK regression source
+AUTHORED_NOT_RUN; native Blockbench acceptance UNVERIFIED.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

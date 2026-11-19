@@ -151,6 +151,11 @@ export interface GeometrySphereSweep {
   name: string;
   uuid_seed: string;
   stations: GeometrySweepStation[];
+  /** G3.4a opt-in. Omitted and LINEAR preserve original G3.3 behavior. */
+  interpolation?: "LINEAR" | "CENTRIPETAL_CATMULL_ROM";
+  /** Required for Catmull–Rom; conservative centerline chord bound,
+   * 0.25..1 model units. Not a final voxel/visual fidelity guarantee. */
+  max_chord_error?: number;
 }
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };

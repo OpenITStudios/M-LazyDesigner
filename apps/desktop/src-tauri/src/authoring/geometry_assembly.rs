@@ -1288,6 +1288,7 @@ mod tests {
                     position:[4,3,1],radius:2,
                 },
             ],
+            interpolation: None, max_chord_error: None,
         });
         GeometryAssemblyRequest{expected_revision:0,parts:vec![part]}
     }
@@ -1397,6 +1398,46 @@ mod tests {
         })).is_err());
         let legacy=serde_json::to_value(part(CHILD,"legacy",None,CUBE_B)).unwrap();
         assert!(legacy.get("sweeps").is_none());
+    }
+
+
+    #[test]
+    fn g34_adaptive_curved_sweep_keeps_g1_preflight_identity_export_and_undo(){
+        let mut session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Curved Sweep","curved_sweep").unwrap()
+        ).unwrap();
+        let before=session.document().clone();
+        let mut request=sweep_request();
+        let sweep=&mut request.parts[0].sweeps[0];
+        sweep.interpolation=Some("CENTRIPETAL_CATMULL_ROM".into());
+        sweep.max_chord_error=Some(0.5);
+        let planned=compile(&session,&request).unwrap();
+        assert_eq!(planned.preflight["status"],"VALIDATED_NOT_APPLIED");
+        assert_eq!(planned.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(planned.preflight["visual_verdict"],"UNVERIFIED");
+        assert_eq!(session.document(),&before);
+        assert!(!session.can_undo());
+        let count=planned.plan.operations.len();
+        assert!((3..=65).contains(&count));
+        for (i,op) in planned.plan.operations[1..].iter().enumerate() {
+            let EditOperation::AddCube{cube,bone_uuid}=op
+                else{panic!("Curved Sweep must remain ordinary native Cubes");};
+            assert_eq!(bone_uuid,ROOT);
+            assert_eq!(cube.uuid,super::super::geometry_sweep::cube_uuid(SWEEP_SEED,i));
+            assert_eq!(cube.extra.get("box_uv"),Some(&Value::Bool(true)));
+            assert!(cube.faces.values().all(|f|f.get("texture").is_none()));
+            assert_eq!(cube.origin,Some([0.0;3]));
+        }
+        session.apply(0,&planned.plan.operations).unwrap();
+        let after=session.document().clone();
+        let bytes=session.export().unwrap();
+        assert_eq!(planned.preflight["candidate_sha256"],sha256(&bytes));
+        assert_eq!(EditorSession::open(&bytes).unwrap().document(),&after);
+        assert!(geometry::export_bedrock_geometry(&after).is_ok());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(),&before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(),&after);
     }
 
 }

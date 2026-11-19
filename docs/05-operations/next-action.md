@@ -1,3 +1,22 @@
+**Active Rust Geometry G3.4a — bounded curved centerline, not full profile sweep (2026-11-19; SOURCE ONLY):**
+Building on Rust@206be91 and Local baseline@422e4d7, optional
+centripetal Catmull–Rom interpolation now supplements the existing
+G3.3 variable-radius LINEAR swept spheres. The source requires
+an explicit conservative cubic chord tolerance and at least three
+knots. Sampling is capped (depth 8, 96 samples); the voxel envelope
+uses sampled positions, not original knot-only bounds. Each adaptive
+piece remains tied to its caller-authored source segment for
+representability checks. The G1 EditPlan, Cube identity namespace,
+single AuthoringDocument, SHA-bound Code Mode and original independent
+Apply authorization are retained. Earlier LINEAR requests serialize
+without new fields. No new renderer, mesh, path store, parametric
+revision engine, CI/cloud/local test or release was introduced.
+Rust/Node source regression authored NOT_EXECUTED; actual Cargo/Node/
+Windows/Blockbench compatibility and artist-accepted quality UNVERIFIED.
+G3.4 remains incomplete: anisotropic cross-section, explicit
+orientation/parallel-transport frame and twist still need separate
+scoped source work and native proof. Rust > Local is NOT ESTABLISHED.
+
 **Active Rust Geometry G3.3 — bounded varying-radius LINEAR Sweep (2026-11-19; SOURCE ONLY):**
 Building on Rust@16d0c9d8 and comparing Local@422e4d7, one pure
 `geometry_sweep.rs` source helper now proposes a connected 3D

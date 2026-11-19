@@ -102,6 +102,26 @@ accepted 3D silhouette or visual quality.
 Source regressions AUTHORED_NOT_RUN. Local/Blockbench comparison and native
 Windows/Cargo/Node execution remain DEFERRED/UNVERIFIED.
 
+**G3.4a opt-in curved centerline for the existing G3.3 Sweep (2026-11-19; SOURCE ONLY):**
+The same `geometry_sweep.rs` now accepts `interpolation:
+"CENTRIPETAL_CATMULL_ROM"` plus explicit `max_chord_error` in
+0.25–1.0 model units, with at least three stations. Default
+`LINEAR` remains the byte-compatible G3.3 source contract.
+Barry–Goldman centripetal interpolation constructs the centerline with
+extrapolated endpoint controls. Radius still interpolates linearly.
+Adaptive subdivision derives a conservative cubic Bézier control-point
+distance bound plus 1.5-unit chord and 0.75-radius-change limits.
+Subdivisions are capped at 96 samples, depth eight, and retain their
+original source-segment identity. Rust computes the voxel grid from
+the resulting path samples to avoid silently clipping spline overshoot.
+The original 32,768-cell grid, 64-disjoint-Cube limit, connectivity,
+source UUIDs, G1 preflight, UV admission and separately approved Apply
+remain the only native Geometry authority. No new CLI or shape store.
+This is an isotropic radius sweep, NOT anisotropic rectangular/elliptic
+PROFILE_SWEEP, tangent-frame transport, twist, mesh generation or
+reference-verified quality. Rust/Node source regressions authored
+NOT_EXECUTED; no claims of artistic/PC-native superiority.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and
