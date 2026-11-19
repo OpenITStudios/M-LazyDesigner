@@ -20,3 +20,14 @@ test('alpha threshold selects deeper face only for actual transparent texels',()
   assert.equal(isVisibleAlphaTexel(new Uint8Array(4),[.25,.25],4,4),false);
   assert.equal(alphaFromImageData(new Uint8ClampedArray(3),4,4),null);
 });
+
+// SOURCE_AUTHORED_NOT_RUN: 2K input guards, not WebView/renderer proof.
+test('2048 atlas alpha lookup remains bounded at the last texel',()=>{
+  assert.equal(atlasAlphaIndex([2047.5/2048,0.5/2048],2048,2048),2048*2048-1);
+  assert.equal(atlasAlphaIndex([.5,.5],2049,2048),null);
+  const alpha=new Uint8Array(2048*2048*4);
+  alpha[alpha.length-1]=255;
+  const mask=alphaFromImageData(new Uint8ClampedArray(alpha),2048,2048);
+  assert.equal(mask?.length,2048*2048);
+  assert.equal(mask?.[2048*2048-1],255);
+});

@@ -2,7 +2,7 @@
  * The saved UV, atlas pixels, approvals, and Paint/Undo remain Rust-owned.
  * 3D is a view and gesture surface, NEVER an atlas write authority.
  */
-import type {CubeFace} from './rustEditorTypes';
+import {MAX_PAINT_ATLAS_SIDE,type CubeFace} from './rustEditorTypes';
 import {supportedFaceUvRotation} from './rustTextureProjection';
 export type SurfaceFace='east'|'west'|'up'|'down'|'south'|'north';
 export const SURFACE_FACE_ORDER:readonly SurfaceFace[]=
@@ -45,7 +45,7 @@ export function hitFaceLocalTexel(
   if(rotation===null)return null;
   const [faceU0,faceV0,faceU1,faceV1]=face.uv;
   const natural=[Math.abs(faceU1-faceU0),Math.abs(faceV1-faceV0)];
-  if(!natural.every(x=>Number.isInteger(x)&&x>0&&x<=256))return null;
+  if(!natural.every(x=>Number.isInteger(x)&&x>0&&x<=MAX_PAINT_ATLAS_SIDE))return null;
   const size:[number,number]=rotation===90||rotation===270?
     [natural[1],natural[0]]:[natural[0],natural[1]];
   const [u0,v0,u1,v1,u2,v2]=renderedCorners;
@@ -72,7 +72,7 @@ export function protectedAtlasRectangle(
   a:readonly [number,number],b:readonly [number,number],
   dimensions:readonly [number,number],
 ):ProtectionRect|null{
-  if(!dimensions.every(n=>Number.isInteger(n)&&n>0&&n<=256)||
+  if(!dimensions.every(n=>Number.isInteger(n)&&n>0&&n<=MAX_PAINT_ATLAS_SIDE)||
      ![...a,...b].every(Number.isInteger))return null;
   if([a,b].some(point=>point[0]<0||point[1]<0||
       point[0]>=dimensions[0]||point[1]>=dimensions[1]))return null;

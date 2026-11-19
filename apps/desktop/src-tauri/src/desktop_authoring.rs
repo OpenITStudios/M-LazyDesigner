@@ -424,7 +424,7 @@ fn texture_preview_side(texture: &Value) -> Option<&'static str> {
 // A bounded WebView preview candidate. This never changes Rust-owned assets.
 fn embedded_png_preview_candidate(texture: &Value) -> Option<(&str, u32, u32)> {
     const PREFIX: &str = "data:image/png;base64,";
-    const MAX_BASE64: usize = 2 * 1024 * 1024;
+    const MAX_BASE64: usize = 28 * 1024 * 1024;
     const MAX_DIMENSION: u32 = 2048;
     const MAX_PIXELS_PER_IMAGE: u64 = 4 * 1024 * 1024;
     texture_preview_side(texture)?;
@@ -518,7 +518,7 @@ fn texture_preview_assets_in_mode(
     doc: &AuthoringDocument, mode: PreviewUvMode,
 ) -> Vec<Option<(&str, [u32; 2])>> {
     const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
-    let mut remaining_source_bytes = 4 * 1024 * 1024;
+    let mut remaining_source_bytes = 28 * 1024 * 1024;
     let mut remaining_pixels = MAX_PROJECTED_PIXELS;
     let mut admitted = 0usize;
     doc.texture_assets.iter().map(|texture| {

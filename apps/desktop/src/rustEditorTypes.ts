@@ -1,5 +1,6 @@
 // Read-only view contract from the Rust authoring session.
 // This module does not own authored model data or edit history.
+export const MAX_PAINT_ATLAS_SIDE = 2048;
 export type Vec3 = [number, number, number];
 export type Vec4 = [number, number, number, number];
 

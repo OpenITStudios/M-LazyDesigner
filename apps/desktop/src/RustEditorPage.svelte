@@ -28,7 +28,8 @@
     type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
   import {parseShadeRamp,bindSourceSelection,selectionSeedForStroke,
     type SourceSelection} from './rustSurfaceTools';
-  import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
+  import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
+import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
     measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
@@ -1179,8 +1180,8 @@
         workspaceMode !== 'paint' || !snapshot.atlasResolutionEditable) return;
     const width = requestedAtlasWidth, height = requestedAtlasHeight;
     if (!Number.isInteger(width) || !Number.isInteger(height) ||
-        width < 1 || height < 1 || width > 256 || height > 256) {
-      error = 'Atlas width and height must each be integers from 1 to 256.';
+        width < 1 || height < 1 || width > MAX_PAINT_ATLAS_SIDE || height > MAX_PAINT_ATLAS_SIDE) {
+      error = 'Atlas width and height must each be integers from 1 to 2048.';
       return;
     }
     if (width === snapshot.textureResolution[0] &&
@@ -2278,7 +2279,7 @@
   <section class="paint-workspace" aria-label="Paint workspace">
     <div class="paint-workspace-heading">
       <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
-      <span>RGBA8 · 256 × 256 maximum · {snapshot?.scopedTexturePreview
+      <span>RGBA8 · up to 2048 × 2048 · {snapshot?.scopedTexturePreview
         ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
@@ -2447,18 +2448,18 @@
           {#if snapshot.atlasResolutionEditable}
             <div class="paint-atlas-resolution" role="group" aria-label="New empty model atlas size">
               <label>Atlas width
-                <input type="number" min="1" max="256" step="1"
+                <input type="number" min="1" max={MAX_PAINT_ATLAS_SIDE} step="1"
                   bind:value={requestedAtlasWidth} disabled={busy || loading}/>
               </label>
               <label>Atlas height
-                <input type="number" min="1" max="256" step="1"
+                <input type="number" min="1" max={MAX_PAINT_ATLAS_SIDE} step="1"
                   bind:value={requestedAtlasHeight} disabled={busy || loading}/>
               </label>
               <button type="button" onclick={setEmptyAtlasResolution}
                 disabled={busy || loading || !Number.isInteger(requestedAtlasWidth) ||
                   !Number.isInteger(requestedAtlasHeight) ||
-                  requestedAtlasWidth < 1 || requestedAtlasWidth > 256 ||
-                  requestedAtlasHeight < 1 || requestedAtlasHeight > 256}
+                  requestedAtlasWidth < 1 || requestedAtlasWidth > MAX_PAINT_ATLAS_SIDE ||
+                  requestedAtlasHeight < 1 || requestedAtlasHeight > MAX_PAINT_ATLAS_SIDE}
                 title="Apply project atlas dimensions before creating Cubes, textures or animations">
                 Set Atlas Size
               </button>
@@ -2474,7 +2475,7 @@
             title="Choose a local RGBA8 PNG with the same dimensions as this project; the source file is never modified">
             Import PNG…
           </button>
-          <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 1 MiB); the local file is not modified.</p>
+          <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 20 MiB); the local file is not modified.</p>
           <div class="surface-paint-panel" aria-label="Source-bound 3D pixel painting">
             <label><input type="checkbox" bind:checked={surfacePaint3d}
               disabled={busy || loading || !!paintStroke || !!surfaceMaskDrag}/>

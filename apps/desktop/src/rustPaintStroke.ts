@@ -1,4 +1,5 @@
 // Transient pointer path only. Rust owns the committed pixel bitmap.
+import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 export type PaintPoint = [number, number];
 export const MAX_STROKE_POINTS = 4096;
 
@@ -9,7 +10,7 @@ export const MAX_STROKE_POINTS = 4096;
 export function appendPaintStrokeInPlace(points: PaintPoint[], next: PaintPoint,
   width: number, height: number): boolean {
   if (!Number.isInteger(width) || !Number.isInteger(height) ||
-      width < 1 || height < 1 || width > 256 || height > 256 ||
+      width < 1 || height < 1 || width > MAX_PAINT_ATLAS_SIDE || height > MAX_PAINT_ATLAS_SIDE ||
       next.length !== 2 || !next.every(Number.isInteger) ||
       next[0] < 0 || next[1] < 0 || next[0] >= width || next[1] >= height ||
       points.length > MAX_STROKE_POINTS) return false;

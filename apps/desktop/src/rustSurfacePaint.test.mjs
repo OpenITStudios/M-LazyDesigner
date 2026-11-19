@@ -77,3 +77,11 @@ test('material role brush variants never change signed UV sampling coordinates',
   const target=hitFaceLocalTexel(face,corners,uvAt(corners,.45,.75));
   assert.deepEqual(target,{size:[4,8],texel:[1,6]});
 });
+
+// SOURCE_AUTHORED_NOT_RUN: 2K face coordinate admission.
+test('2K face supports exact last pixel without exceeding atlas bounds',()=>{
+  const face={uv:[0,0,2048,2048],rotation:0,texture:'atlas'};
+  const corners=faceUvCoordinates(face,[2048,2048],false);
+  assert.deepEqual(hitFaceLocalTexel(face,corners,uvAt(corners,2047.5/2048,2047.5/2048)),
+    {size:[2048,2048],texel:[2047,2047]});
+});

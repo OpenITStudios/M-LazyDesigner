@@ -2,6 +2,7 @@
  * texture preview. Alpha bytes are presentation evidence, never authoritative
  * source Paint pixels, document state or semantic selection permission.
  */
+import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 export const PREVIEW_ALPHA_THRESHOLD = 0.01;
 /** Three.js UV origin is bottom-left; PNG raster rows are top-to-bottom.
  * Refuse exact boundary/invalid UV samples rather than guessing a texel.
@@ -10,7 +11,7 @@ export function atlasAlphaIndex(
   uv:readonly [number,number],width:number,height:number,
 ):number|null{
   if(!Number.isInteger(width)||!Number.isInteger(height)||
-     width<1||height<1||width>256||height>256||
+     width<1||height<1||width>MAX_PAINT_ATLAS_SIDE||height>MAX_PAINT_ATLAS_SIDE||
      uv.length!==2||!uv.every(Number.isFinite)||
      uv[0]<=0||uv[0]>=1||uv[1]<=0||uv[1]>=1)return null;
   const x=Math.floor(uv[0]*width);
@@ -32,7 +33,7 @@ export function alphaFromImageData(
   rgba:Uint8ClampedArray,width:number,height:number,
 ):Uint8Array|null{
   if(!Number.isInteger(width)||!Number.isInteger(height)||
-     width<1||height<1||width>256||height>256||
+     width<1||height<1||width>MAX_PAINT_ATLAS_SIDE||height>MAX_PAINT_ATLAS_SIDE||
      rgba.length!==width*height*4)return null;
   const alpha=new Uint8Array(width*height);
   for(let i=0;i<alpha.length;i++)alpha[i]=rgba[4*i+3];

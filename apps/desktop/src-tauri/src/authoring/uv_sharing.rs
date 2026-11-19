@@ -3,7 +3,7 @@
 use super::{
     AuthoringDocument, Cube, FACE_NAMES, Result, check_box_uv_repack_rules,
     cube_auto_uv, cube_box_uv, face_uv, has_per_texture_uv_rules,
-    refresh_box_uv, paint,
+    refresh_box_uv, paint, MAX_PAINT_ATLAS_SIDE,
 };
 use serde_json::{json, Value};
 
@@ -26,7 +26,7 @@ pub(super) fn plan_box_uv_isolation(
         return Err("UV_ATLAS_RULESET_UNSUPPORTED".into());
     }
     let (w,h) = (doc.resolution.width, doc.resolution.height);
-    if w == 0 || h == 0 || w > 256 || h > 256 {
+    if w == 0 || h == 0 || w > MAX_PAINT_ATLAS_SIDE || h > MAX_PAINT_ATLAS_SIDE {
         return Err("UV_ATLAS_DIMENSIONS_UNSUPPORTED".into());
     }
     let ids: Vec<_> = doc.texture_assets.iter().enumerate()

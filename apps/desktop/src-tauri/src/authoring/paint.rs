@@ -5,12 +5,12 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Map, Value};
 use std::io::Cursor;
-use super::{MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, PaintRectangleStep};
+use super::{MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_ATLAS_SIDE, PaintRectangleStep};
 
 type Result<T> = std::result::Result<T, String>;
 const PREFIX: &str = "data:image/png;base64,";
 const MAX_PNG_BYTES: usize = MAX_EXPORT_PNG_BYTES;
-const MAX_SIDE: u32 = 256;
+const MAX_SIDE: u32 = MAX_PAINT_ATLAS_SIDE;
 pub(super) const OWNER: &str = "lazydesigner-rgba8-v1";
 
 // Conversion and editing have one identical field whitelist. Keep supported
@@ -218,7 +218,10 @@ fn encode(width: u32, height: u32, pixels: &[u8]) -> Result<String> {
         encoder.set_depth(png::BitDepth::Eight);
         // Both DEFLATE and adaptive scanline filters are lossless. No color
         // quantization, indexed PNG conversion, downscale or dithering.
-        encoder.set_compression(png::Compression::Best);
+        // Large 2K stroke edits prioritize responsiveness; both modes are lossless.
+        encoder.set_compression(if u64::from(width)*u64::from(height)>1024*1024 {
+            png::Compression::Fast
+        } else { png::Compression::Best });
         encoder.set_adaptive_filter(png::AdaptiveFilterType::Adaptive);
         let mut writer = encoder.write_header().map_err(|_| "PAINT_PNG_ENCODE_FAILED")?;
         writer.write_image_data(pixels).map_err(|_| "PAINT_PNG_ENCODE_FAILED")?;
@@ -710,7 +713,7 @@ pub(super) fn fill(
     // it can no longer match target on any later worklist entry. Do not also
     // allocate a width*height visited map for the same bounded RGBA8 bitmap.
     // Each accepted pixel queues at most four neighbors, so the iterative
-    // worklist remains bounded by 4 * the existing 256² pixel limit.
+    // worklist remains bounded by 4 * the existing bounded atlas pixel limit.
     let mut stack = vec![seed];
     while let Some(index) = stack.pop() {
         let offset = index * 4;

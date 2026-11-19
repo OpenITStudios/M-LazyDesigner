@@ -2,6 +2,7 @@
  * Does not sample images, mutate bitmaps, infer light or auto-author colors.
  */
 import type {SurfaceSampleHit} from './rustSurfacePaint';
+import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 export type ShadeDirection='lighten'|'darken';
 export type ShadeRamp=Array<[number,number,number,255]>;
 export type SelectionRow={y:number;x0:number;x1:number};
@@ -44,7 +45,7 @@ export function bindSourceSelection(
   width:number,height:number,
 ):SourceSelection|null{
   if(!Number.isInteger(width)||!Number.isInteger(height)||
-     width<1||height<1||width>256||height>256||
+     width<1||height<1||width>MAX_PAINT_ATLAS_SIDE||height>MAX_PAINT_ATLAS_SIDE||
      response.revision!==hit.revision||
      response.cube_uuid!==hit.cubeUuid||
      response.texture_uuid!==hit.textureUuid||
