@@ -1,3 +1,9 @@
+**2026-11-20 — Native Texturing scale continuation (SOURCE_COMMITTED / NOT_EXECUTED)**
+
+- Source-connected selection is bit-packed and span-traversed, not bounded by row-overlay complexity. Read-only downsampled occupancy is only a visual fallback.
+- Selected, valid ProjectAtlas PNGs omitted from aggregate eager preview can be requested explicitly. Tauri verifies model epoch/revision, texture UUID, embedded source and UV, and returns the PNG body only if its current SHA-256 differs from the known previous source. All source Paint/Undo authority remains in Rust.
+- Renderer and native Windows/Bedrock memory, latency, visual quality and compatibility have not been executed. Physical PNG/project and transaction safety limits remain.
+
 **2026-11-20 — Native large-atlas Texturing (SOURCE_COMMITTED / NOT_EXECUTED)**
 
 - Dimensions follow the existing .bbmodel project range up to 4096 per axis, including the requested 2K atlas. Color count remains unrestricted by palette quotas; bounded compressed files and display transport are separate safety checks.

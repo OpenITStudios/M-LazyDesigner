@@ -4,6 +4,10 @@ description: In-use LazyDesigner Asset Authoring specialist for Texture Atlas, m
 ---
 # LazyDesigner Bedrock Texturing
 
+**2026-11-20 Rust source-efficiency continuation (NOT_EXECUTED):**
+Native compound selections use bit-packed member coordinates and span flood processing. A complex selection still edits at full source resolution, but its read-only display may be an approximate occupancy thumbnail. The direct-user UI can request one omitted ProjectAtlas PNG on demand with current UUID/epoch/revision and may reuse cached presentation bytes only after a native SHA-256 match. Exiting Paint evicts the optional display. Neither these previews nor the local Brush Preset Manager grant Paint or guest AI mutation authority. No native PC performance, build or visual tests were run.
+
+
 ## Activation Contract
 
 ```text

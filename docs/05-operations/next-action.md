@@ -1,3 +1,10 @@
+**2026-11-20 — Rust Texturing source-efficiency continuation (SOURCE_COMMITTED / NOT_EXECUTED)**
+
+- Native source selection uses one-bit-per-texel membership and scanline connected flood traversal rather than several full byte-per-pixel masks and queued pixels. Highly fragmented full selections retain their native mask; read-only WebView overlays may use a compact, downsampled occupancy raster instead of losing the visual indication.
+- Eager WebView texture projection remains resource-bounded, but any selected valid ProjectAtlas PNG omitted by its aggregate budget may be explicitly loaded through a user-only Tauri read. A source SHA-256 check reuses previous display bytes only when the current native PNG is unchanged across model revisions; changing the selected texture or leaving Paint releases that optional cache.
+- Painter controls retain source RGBA8, original alpha, protected regions, deterministic procedural brush and the one authoritative Rust Paint/Undo transaction. File/transport/plan safety budgets remain, not artistic color or material palette ceilings.
+- Regression fixtures are AUTHORED_NOT_RUN. Rust/Node compilation, WebView2 GPU/RAM/CPU latency, Bedrock round-trip and artistic output remain NOT_EXECUTED. No CI, user-PC tests, Local/main writes or release. STOP at source proof ceiling.
+
 **2026-11-20 — Rust Texturing scale and artist workflow (SOURCE_COMMITTED / NOT_EXECUTED)**
 
 - **Atlas:** The requested 2048×2048 workflow is within the current source-supported Paint/UV/PNG path. The native Paint dimension policy now follows the existing 4096-per-axis .bbmodel contract; it does not cap artist colors, quantize or dither original RGBA8. Real compressed PNG (80 MiB), serialized model (128 MiB), preview transport and source transaction safety budgets remain; these protect finite resources, NOT a style or palette choice.

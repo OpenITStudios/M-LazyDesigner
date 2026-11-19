@@ -10,6 +10,12 @@ Define durable UV Layout, Texture Atlas, Texture Styling, and Texture Verify rul
 
 This policy separates concepts that must not be collapsed into a generic “texture” step.
 
+### 2026-11-20 continuation — compact selection and on-demand atlas preview
+
+Compound selection membership now uses packed one-bit-per-texel source masks and span-oriented connectivity. A highly fragmented region can use a small, view-only OR-occupancy preview, but the authoritative selected source coordinates and original RGBA remain full-resolution and rechecked by Rust on Apply.
+
+The eager WebView PNG projection is a resource budget, not an atlas-count capability limit. A user may explicitly load one omitted ProjectAtlas texture via a native epoch/revision/UUID-bound read. Its current source SHA-256 permits reusing display bytes only if Rust verifies that the source is unchanged. That cache is evicted when leaving Paint or selecting a different texture. This does not extend scoped-attachable preview semantics, write permissions, or guarantee low-end GPU performance.
+
 ## 2026-11-20 Rust large-atlas/compound-selection checkpoint — source only
 
 The requested 2048×2048 texture atlas is not an arbitrary global color
