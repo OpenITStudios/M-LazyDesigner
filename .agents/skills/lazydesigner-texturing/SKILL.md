@@ -78,6 +78,21 @@ material-style inference, alpha-aware raycasting, AI guest write access,
 or independently verified artistic quality. Keep sampled source RGBA,
 reviewed swatches and user-authored mask evidence distinct.
 
+**2026-11-20 — Rust large-atlas, compound-selection, deterministic-pattern and brush-preset source boundary (NOT_EXECUTED):**
+The requested 2K atlas is a compatibility target, not a fixed artistic-color or
+brush-capability ceiling. Native Paint dimensions now follow the current
+4096-axis model contract while file and transport budgets remain explicit
+resource-safety guards. Exact connected source-RGBA selection may combine
+Replace/Add/Subtract/Intersect/Invert within ONE original Cube face and is
+recomputed at direct-user Apply. Native bitmask membership retains full
+selection even when UI overlay presentation is omitted; no UI mask authorizes
+writes. Deterministic face-local pattern masks filter Pencil and Shade Ink,
+with no new bitmap engine, color quantization, random noise or seam promise.
+Versioned UI brush presets store settings only, never assets or permission.
+Large PNG compression stays lossless and guarded correction comparison
+streams decoded source/candidate rows to reduce designed peak allocations.
+WebView, native build, quality/latency/RAM benchmarks are NOT_EXECUTED.
+
 **Rust alpha/selection/Shade Ink P0 (SOURCE ONLY / NOT_EXECUTED):**
 The direct-user 3D picker uses disposable nearest-filter alpha preview
 to avoid selecting invisible geometric hits; only Rust original PNG/UV

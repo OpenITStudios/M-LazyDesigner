@@ -1,3 +1,11 @@
+**2026-11-20 — Native large-atlas Texturing (SOURCE_COMMITTED / NOT_EXECUTED)**
+
+- Dimensions follow the existing .bbmodel project range up to 4096 per axis, including the requested 2K atlas. Color count remains unrestricted by palette quotas; bounded compressed files and display transport are separate safety checks.
+- Rust source selection is a one-face, exact RGBA connected operation supporting Replace/Add/Subtract/Intersect/Invert. It stores temporary compact bitmap membership and recompiles it on Apply; preview omission never creates a truncated paint mask.
+- Pattern Brush uses deterministic face-local Checker/Dots/Diagonal, period and phase, with the existing Pencil/Shade Ink and single Rust Paint/Undo ownership.
+- Strict original/candidate correction verification is decoded one RGBA8 row at a time; large source PNG edits use lossless Fast compression. No new automatic history eviction or duplicate bitmap authority.
+- UI brush presets store only validated versioned settings locally. Cargo, WebView, memory/latency benchmarks, artistic quality and Bedrock parity remain NOT_EXECUTED.
+
 **2026-11-19 — Rust pixel-artist workflow P0 (SOURCE_COMMITTED / NOT_EXECUTED)**
 
 - Alpha-aware 3D face picking now has a disposable, source-keyed **alpha-only** preview cache. Nearest-filter UV sampling and Blockbench-style alpha test skip transparent geometric hits; unsupported foreground materials refuse paint rather than targeting a hidden face. The cache is not editable image state; WebView/Bedrock parity is unverified.

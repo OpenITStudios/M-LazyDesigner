@@ -1,3 +1,12 @@
+**2026-11-20 — Rust Texturing scale and artist workflow (SOURCE_COMMITTED / NOT_EXECUTED)**
+
+- **Atlas:** The requested 2048×2048 workflow is within the current source-supported Paint/UV/PNG path. The native Paint dimension policy now follows the existing 4096-per-axis .bbmodel contract; it does not cap artist colors, quantize or dither original RGBA8. Real compressed PNG (80 MiB), serialized model (128 MiB), preview transport and source transaction safety budgets remain; these protect finite resources, NOT a style or palette choice.
+- **Compound selection:** exact, original-RGBA connected islands on one Cube face can Replace, Add, Subtract, Intersect and Invert, with a source-recomputed native bitmask on Apply. The full source selection remains usable even when a highly fragmented read-only overlay cannot be transported. A single small Svelte canvas replaces thousands of selection-row DOM elements.
+- **Pattern Brush:** deterministic Checker/Dots/Diagonal stencils with stable face-local period and phase. Direct Pencil and Shade Ink still use original UV, alpha, source-color, landmark masks and single Paint/Undo ownership; no automatic cross-Cube pattern continuity.
+- **Presets:** versioned local UI settings for hard tip/radius, Shade Ink ramp/direction and pattern only. No original PNG, Cube, selection, approval or edit authority is stored, and no arbitrary preset-count ceiling is imposed beyond real local storage capacity.
+- **Source-level efficiency:** large PNG edits use lossless Fast compression above one million pixels; guarded original/candidate RGBA8 correction compares decoded rows instead of retaining two full verification bitmap buffers. The recently added aggregate embedded-PNG cap and silent Undo history eviction were removed. Existing source-preserving history remains owned by EditorSession.
+- **Proof ceiling:** All Rust and TypeScript fixtures are TEST_AUTHORED_NOT_RUN. Compilation, Windows/WebView2 GPU memory, 2K/4K multi-atlas behavior, latency measurements, PNG/Bedrock parity and artist QA are NOT_EXECUTED/UNVERIFIED. No CI, PC-local tests, Local/main changes or release.
+
 **2026-11-19 — Rust pixel-artist workflow P0 (SOURCE_COMMITTED / NOT_EXECUTED)**
 
 - Alpha-aware 3D face picking now has a disposable, source-keyed **alpha-only** preview cache. Nearest-filter UV sampling and Blockbench-style alpha test skip transparent geometric hits; unsupported foreground materials refuse paint rather than targeting a hidden face. The cache is not editable image state; WebView/Bedrock parity is unverified.

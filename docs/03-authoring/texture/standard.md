@@ -10,6 +10,31 @@ Define durable UV Layout, Texture Atlas, Texture Styling, and Texture Verify rul
 
 This policy separates concepts that must not be collapsed into a generic “texture” step.
 
+## 2026-11-20 Rust large-atlas/compound-selection checkpoint — source only
+
+The requested 2048×2048 texture atlas is not an arbitrary global color
+ceiling. Native Paint follows the existing 1..4096-per-axis .bbmodel
+resolution range. Real PNG/file limits, untrusted request budgets and
+partial preview resource admission still apply; they are necessary safety
+constraints, not evidence of low-end-device performance. An unsupported
+view must be reported as unsupported, never mislabeled complete.
+
+Compound Replace/Add/Subtract/Intersect/Invert computes source-exact
+RGBA8 face-local islands and source-recomputed native bitmaps. A missing
+high-complexity display overlay does not truncate actual native selection
+or permit unrestricted edits. Deterministic procedural pattern stencils
+(Checker, Dots, Diagonal) filter face-local Pencil and Shade Ink only.
+The preset manager persists versioned parameters in UI storage; it never
+persists source PNG bytes, protected masks or editing permission.
+
+PNG output remains lossless and alpha/hidden RGB are preserved. Above
+1 million pixels encoding selects lossless Fast rather than Best, and the
+correction verifier compares strict PNG source/candidate decoded rows
+instead of materializing two full verification buffers. Geometry, UV,
+reviewer masking, correction scope and native Undo remain the only write
+owners. These are source-reviewed designs, NOT measured RAM/latency,
+WebView2 behavior or independent visual-quality proof.
+
 ## 2026-11-19 Rust source-only precision addendum — palette and PNG
 
 The native editor's RGBA8 pixel canvas does **not** impose a fixed number of

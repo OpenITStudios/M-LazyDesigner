@@ -1,3 +1,5 @@
+**2026-11-20 — Texturing extension (SOURCE_ONLY / NOT_EXECUTED):** Native compound selection, deterministic face-local pattern masks and high-resolution PNG correction use the existing Rust Paint/Undo authority. Brush presets are browser-local settings only, not Code Mode guest bitmap tools or edit privileges. Original user approval and the operation whitelist remain unchanged. No native memory or quality PASS is implied.
+
 **2026-11-19 — Rust pixel-artist workflow P0 (SOURCE_COMMITTED / NOT_EXECUTED)**
 
 - Alpha-aware 3D face picking now has a disposable, source-keyed **alpha-only** preview cache. Nearest-filter UV sampling and Blockbench-style alpha test skip transparent geometric hits; unsupported foreground materials refuse paint rather than targeting a hidden face. The cache is not editable image state; WebView/Bedrock parity is unverified.

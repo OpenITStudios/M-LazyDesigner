@@ -1,3 +1,5 @@
+**2026-11-20 — Rust Texturing artist workflow (SOURCE_ONLY / NOT_EXECUTED):** Paint source accepts the requested 2048×2048 atlas and aligns with the existing model resolution contract up to 4096 per axis, subject to physical PNG/project/preview safety budgets. Compound source-RGBA selection, deterministic Checker/Dots/Diagonal pattern stencils, and a local parameter-only Brush Preset Manager are integrated into the direct-user Paint UI. Compact selection display and decoded-row correction comparison target lower resource overhead without claiming benchmark PASS. No native build, Windows/WebView2 preview, artist QA, local tests, CI or release was performed.
+
 # LazyDesigner Desktop
 
 ## Start here — Rust editor and retained legacy Desktop
