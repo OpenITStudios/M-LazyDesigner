@@ -24,6 +24,8 @@
     type ExternalFaceTextureIntent,type ExternalFaceTextureDraft,
     type ExternalFaceTextureReceipt } from './rustExternalTexturePreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
+  import { protectedAtlasRectangle,
+    type ProtectionRect,type SurfaceGesture } from './rustSurfacePaint';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
@@ -68,6 +70,14 @@
   let paintAlpha = 255;
   let paintTool: 'pencil' | 'eraser' | 'rectangle' = 'pencil';
   let paintRadius = 1;
+  // Ephemeral user-review mask, bound to the atlas UUID and model epoch.
+  // These rectangles are never persisted as a second bitmap/layer owner.
+  let surfacePaint3d=false,surfaceProtectMode=false;
+  let surfaceSourceBase='#5a6e82';
+  let surfaceProtectedRegions:ProtectionRect[]=[];
+  let surfaceProtectionBinding:{epoch:number;textureUuid:string}|null=null;
+  let surfaceMaskDrag:{pointerId:number;from:PaintPoint;to:PaintPoint;
+    epoch:number;textureUuid:string}|null=null;
   // Temporary 3D presentation only; Rust owns the actual model and Undo.
   let semanticReferenceSha:string|null=null,semanticReferenceStatus='';
   let semanticReferenceImage:string|null=null;
@@ -237,6 +247,23 @@
     : validSemanticPreview && semanticShowCandidate && semanticPreview
       ? semanticPreview.candidatePngSource
       : snapshot?.texturePreviewSources[paintTextureIndex] ?? null;
+  $: guardedSurfaceMasks = snapshot && surfaceProtectionBinding?.epoch===snapshot.epoch &&
+    surfaceProtectionBinding.textureUuid===snapshot.textureUuids[paintTextureIndex]
+    ? surfaceProtectedRegions : [];
+  $: pendingSurfaceMask = snapshot && surfaceMaskDrag ?
+    protectedAtlasRectangle(surfaceMaskDrag.from,surfaceMaskDrag.to,
+      snapshot.textureResolution) : null;
+  $: surfacePaintEnabled = workspaceMode==='paint' && surfacePaint3d &&
+    !!snapshot && !busy && !loading && !paintStroke && !surfaceMaskDrag &&
+    !validSemanticPreview && !validExternalPreview &&
+    !!snapshot.paintEditableTextures[paintTextureIndex] &&
+    !!snapshot.texturePreviewSources[paintTextureIndex] &&
+    !!snapshot.textureUuids[paintTextureIndex] && paintAlpha===255;
+  $: surfacePaintContextKey=JSON.stringify([
+    snapshot?.epoch,snapshot?.revision,paintTextureIndex,
+    snapshot?.textureUuids[paintTextureIndex],paintColor,
+    paintAlpha,surfaceSourceBase,guardedSurfaceMasks,
+  ]);
 
   // Source-backed once/loop/hold playback is admitted only for the strict
   // numeric-linear projection. Stale snapshots and unknown clips pause.
@@ -299,6 +326,7 @@
     if (document.hidden) pauseAnimationPlayback();
   }
   function selectWorkspace(mode: WorkspaceMode) {
+    if(surfaceMaskDrag)return;
     if (!canChangeWorkspace(Boolean(snapshot), busy, loading, Boolean(paintStroke))) return;
     if(mode!=='paint')clearSemanticPreview();
     if (mode !== workspaceMode) pauseAnimationPlayback();
@@ -335,6 +363,11 @@
     else if (typeof cause === 'string') error = cause;
     else error = 'The native authoring operation could not be completed.';
   }
+  function clearSurfaceProtection(){
+    surfaceProtectedRegions=[];
+    surfaceProtectionBinding=null;
+    surfaceMaskDrag=null;
+  }
   function accept(incoming: EditorSnapshot): EditorSnapshot {
     // Detached native projections are immutable but can complete out of order.
     // Never replace a newer Rust epoch/revision with an older IPC response.
@@ -354,6 +387,7 @@
       snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
     );
     if (snapshot && snapshot.epoch !== next.epoch) {
+      clearSurfaceProtection();
       semanticReferenceSha=null;
       semanticReferenceStatus='';
       semanticReferenceImage=null;
@@ -1432,6 +1466,76 @@
     if (next) notice = 'Imported RGBA8 PNG validated for painting; the original bitmap is unchanged until the first stroke.';
   }
 
+  async function paintFromViewport(gesture:SurfaceGesture):Promise<void>{
+    if(!surfacePaintEnabled||!snapshot||busy||paintAlpha!==255 ||
+       snapshot.epoch!==gesture.epoch||
+       snapshot.revision!==gesture.revision||
+       snapshot.textureUuids[gesture.textureIndex]!==gesture.textureUuid||
+       paintTextureIndex!==gesture.textureIndex ||
+       gesture.contextKey!==surfacePaintContextKey)return;
+    const base=sourceRgb(surfaceSourceBase),color=sourceRgb(paintColor);
+    if(!base||!color){error='Select valid original and target RGB colors.';return;}
+    selectCube(gesture.cubeUuid);
+    selectedFace=gesture.face;
+    const next=await command('rust_editor_paint_surface_stroke',{
+      expectedEpoch:gesture.epoch,expectedRevision:gesture.revision,
+      intent:{
+        expected_revision:gesture.revision,cube_uuid:gesture.cubeUuid,
+        texture_uuid:gesture.textureUuid,face:gesture.face,
+        source_base_rgba:[...base,255],paint_rgba:[...color,255],
+        points:gesture.points,protected_regions:guardedSurfaceMasks,
+      },
+    });
+    if(next){
+      notice='3D face stroke committed in one Rust Undo step. Other original colors, alpha, nearby details and review masks remain protected.';
+    }
+  }
+  function startSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
+    if(!snapshot||busy||loading||paintStroke||event.button!==0)return;
+    const point=paintPoint(event,target),uuid=snapshot.textureUuids[paintTextureIndex];
+    if(!point||!uuid||!snapshot.paintEditableTextures[paintTextureIndex])return;
+    if(surfaceProtectionBinding?.epoch!==snapshot.epoch||
+       surfaceProtectionBinding.textureUuid!==uuid){
+      surfaceProtectedRegions=[];
+      surfaceProtectionBinding={epoch:snapshot.epoch,textureUuid:uuid};
+    }
+    surfaceMaskDrag={pointerId:event.pointerId,from:point,to:point,
+      epoch:snapshot.epoch,textureUuid:uuid};
+    target.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function moveSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
+    const drag=surfaceMaskDrag;
+    if(!drag||drag.pointerId!==event.pointerId||!snapshot)return;
+    const point=paintPoint(event,target);
+    if(point)surfaceMaskDrag={...drag,to:point};
+  }
+  function finishSurfaceProtection(event:PointerEvent,target:HTMLImageElement,
+    cancelled:boolean){
+    const held=surfaceMaskDrag;
+    if(!held||held.pointerId!==event.pointerId)return;
+    if(!cancelled)moveSurfaceProtection(event,target);
+    const completed=surfaceMaskDrag??held;
+    surfaceMaskDrag=null;
+    if(target.hasPointerCapture(event.pointerId))
+      target.releasePointerCapture(event.pointerId);
+    if(cancelled||!snapshot||
+       completed.epoch!==snapshot.epoch||
+       completed.textureUuid!==snapshot.textureUuids[paintTextureIndex])return;
+    const rect=protectedAtlasRectangle(completed.from,completed.to,
+      snapshot.textureResolution);
+    if(!rect)return;
+    if(surfaceProtectedRegions.length>=16){
+      error='Up to 16 protected rectangles per stroke. Clear or consolidate masks.';
+      return;
+    }
+    if(!surfaceProtectedRegions.some(r=>
+      JSON.stringify(r)===JSON.stringify(rect))){
+      surfaceProtectedRegions=[...surfaceProtectedRegions,rect];
+    }
+    event.preventDefault();
+  }
+
   function paintPoint(event: PointerEvent, target: HTMLImageElement): PaintPoint | null {
     if (!snapshot) return null;
     const rect = target.getBoundingClientRect();
@@ -1443,6 +1547,11 @@
   }
 
   function startPaintStroke(event: PointerEvent) {
+    if(surfaceProtectMode){
+      if(event.currentTarget instanceof HTMLImageElement)
+        startSurfaceProtection(event,event.currentTarget);
+      return;
+    }
     if (!snapshot || busy || validSemanticPreview || validExternalPreview || paintStroke || event.button !== 0 ||
         !snapshot.paintEditableTextures[paintTextureIndex]) return;
     const target = event.currentTarget;
@@ -1466,6 +1575,11 @@
   }
 
   function movePaintStroke(event: PointerEvent) {
+    if(surfaceMaskDrag){
+      if(event.currentTarget instanceof HTMLImageElement)
+        moveSurfaceProtection(event,event.currentTarget);
+      return;
+    }
     const stroke = paintStroke;
     if (!stroke || stroke.pointerId !== event.pointerId || !snapshot || stroke.overflow) return;
     const target = event.currentTarget;
@@ -1484,6 +1598,11 @@
   }
 
   function finishPaintStroke(event: PointerEvent, cancelled = false) {
+    if(surfaceMaskDrag){
+      if(event.currentTarget instanceof HTMLImageElement)
+        finishSurfaceProtection(event,event.currentTarget,cancelled);
+      return;
+    }
     const captured = paintStroke;
     if (!captured || captured.pointerId !== event.pointerId) return;
     // A quick drag may have no final pointermove. Include its pointerup
@@ -1969,8 +2088,10 @@
           {#each snapshot.textureNames as name, index}
             <button type="button" class="texture-item" class:active={paintTextureIndex === index}
               aria-pressed={paintTextureIndex === index} title={name}
-              disabled={!!paintStroke} onclick={() => {
-                if(paintTextureIndex!==index)clearSemanticPreview();
+              disabled={!!paintStroke || !!surfaceMaskDrag} onclick={() => {
+                if(paintTextureIndex!==index){
+                  clearSemanticPreview();clearSurfaceProtection();
+                }
                 paintTextureIndex=index;
               }}>
               <span class="texture-square"></span><span>{name}</span><small>{index + 1}</small>
@@ -2186,6 +2307,31 @@
             Import PNG…
           </button>
           <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 1 MiB); the local file is not modified.</p>
+          <div class="surface-paint-panel" aria-label="Source-bound 3D pixel painting">
+            <label><input type="checkbox" bind:checked={surfacePaint3d}
+              disabled={busy || loading || !!paintStroke || !!surfaceMaskDrag}/>
+              Paint directly on 3D Cube (1 pixel)</label>
+            <label>Original editable RGB
+              <input type="color" bind:value={surfaceSourceBase}
+                disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+            </label>
+            <label><input type="checkbox" bind:checked={surfaceProtectMode}
+              disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+              Mark protected rectangle on atlas</label>
+            <button type="button" onclick={clearSurfaceProtection}
+              disabled={busy || !!surfaceMaskDrag || !guardedSurfaceMasks.length}>
+              Clear protected areas ({guardedSurfaceMasks.length})
+            </button>
+            <p class="hint">3D drawing is one-face-per-drag and opaque RGB only.
+              The exact original RGB is the paintable source selection; other
+              original colors, adjacent detail pixels, alpha and shared UV
+              cannot be altered. Use protected rectangles for same-color
+              emblems or markings before painting.</p>
+            {#if surfacePaint3d && !surfacePaintEnabled}
+              <p class="hint">3D Paint needs an editable texture, opaque Alpha
+                (255), no preview candidate, and an idle Rust session.</p>
+            {/if}
+          </div>
           {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
             snapshot.texturePreviewSources[paintTextureIndex]}
             <button type="button" onclick={() => void enableImportedPaintTexture()}
@@ -2198,7 +2344,7 @@
           {#if snapshot.textureNames.length}
             <label>Texture
               <select bind:value={paintTextureIndex} disabled={busy || !!paintStroke}
-                onchange={clearSemanticPreview}>
+                onchange={() => {clearSemanticPreview();clearSurfaceProtection();}}>
                 {#each snapshot.textureNames as name, i}
                   <option value={i}>{name}</option>
                 {/each}
@@ -2246,15 +2392,35 @@
             <label>Alpha
               <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
-            <img class="paint-atlas paint-workspace-atlas" draggable="false"
-              src={paintAtlasSource ?? ''}
-              alt={validSemanticPreview || validExternalPreview ?
-                'Read-only source/candidate material atlas for comparison' :
-                'Editable texture atlas; drag to paint one Rust-owned stroke'}
-              onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
-              onpointerup={finishPaintStroke}
-              onpointercancel={(event) => finishPaintStroke(event, true)}
-              onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
+            <div class="surface-atlas-frame">
+              <img class="paint-atlas paint-workspace-atlas" draggable="false"
+                src={paintAtlasSource ?? ''}
+                alt={validSemanticPreview || validExternalPreview ?
+                  'Read-only source/candidate material atlas for comparison' :
+                  surfaceProtectMode ?
+                    'Drag on the source atlas to protect a rectangle against 3D painting' :
+                    'Editable texture atlas; drag to paint one Rust-owned stroke'}
+                onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
+                onpointerup={finishPaintStroke}
+                onpointercancel={(event) => finishPaintStroke(event, true)}
+                onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
+              {#each guardedSurfaceMasks as rect}
+                <span class="surface-mask-mark"
+                  style:left={(rect.from[0]/snapshot.textureResolution[0]*100)+'%'}
+                  style:top={(rect.from[1]/snapshot.textureResolution[1]*100)+'%'}
+                  style:width={((rect.to[0]-rect.from[0])/snapshot.textureResolution[0]*100)+'%'}
+                  style:height={((rect.to[1]-rect.from[1])/snapshot.textureResolution[1]*100)+'%'}
+                  aria-hidden="true"></span>
+              {/each}
+              {#if pendingSurfaceMask}
+                <span class="surface-mask-mark preview"
+                  style:left={(pendingSurfaceMask.from[0]/snapshot.textureResolution[0]*100)+'%'}
+                  style:top={(pendingSurfaceMask.from[1]/snapshot.textureResolution[1]*100)+'%'}
+                  style:width={((pendingSurfaceMask.to[0]-pendingSurfaceMask.from[0])/snapshot.textureResolution[0]*100)+'%'}
+                  style:height={((pendingSurfaceMask.to[1]-pendingSurfaceMask.from[1])/snapshot.textureResolution[1]*100)+'%'}
+                  aria-hidden="true"></span>
+              {/if}
+            </div>
             <p class="dock-note">Pencil and Eraser use circular strokes. Filled Rectangle uses two corners. Each completed gesture is one Rust Undo step. Atlas selection changes only the Paint preview, not saved model face references.</p>
           {:else}
             <p class="dock-note">Only LazyDesigner-owned or explicitly enabled embedded RGBA8 PNGs can be painted. External paths, layers and unsupported formats stay read-only.</p>
@@ -2947,6 +3113,12 @@
           previewTextureIndex={paintTextureIndex}
           previewBoneTransforms={previewBoneTransforms}
           {selectedId} onSelect={selectCube}
+          {surfacePaintEnabled}
+          surfacePaintEpoch={snapshot.epoch}
+          surfacePaintRevision={snapshot.revision}
+          surfacePaintTextureUuid={snapshot.textureUuids[paintTextureIndex]}
+          {surfacePaintContextKey}
+          onSurfaceStroke={(gesture) => {void paintFromViewport(gesture);}}
           transformMode={workspaceMode === 'edit' ? transformTool : null}
           canTransform={workspaceMode === 'edit' && transformTool !== null && !busy && !loading && !newDialog && !confirmDiscard && !recoveryDialog && !livePairingDialog}
           onTranslate={moveFromViewport} onRotate={rotateFromViewport}
