@@ -1318,6 +1318,7 @@ export function createRustCodeModeClient({
            !Number.isSafeInteger(e?.candidate_pixels) ||
            !Number.isSafeInteger(e?.light_pixels) ||
            !Number.isSafeInteger(e?.shadow_pixels) ||
+           e.light_pixels<1 || e.shadow_pixels<1 ||
            e.candidate_pixels!==e.light_pixels+e.shadow_pixels ||
            e?.write_authority!=='NOT_GRANTED' ||
            receipt.write_authority!=='NOT_GRANTED' ||
