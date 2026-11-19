@@ -703,6 +703,31 @@ mod lossless_png_palette_tests {
     use super::*;
     // SOURCE_AUTHORED_NOT_RUN: exact 4096-color RGBA (including hidden RGB).
     #[test]
+    fn multicolor_recolor_preserves_more_than_32_swatches_and_alpha() {
+        let (w,h)=(64u32,64u32);
+        let mut pixels=vec![0u8;(w*h*4) as usize];
+        for x in 0..40u32 {
+            let at=((2*w+x)*4) as usize;
+            pixels[at..at+4].copy_from_slice(&[x as u8,2,3,255]);
+        }
+        // A transparent texel with meaningful hidden RGB must stay exact.
+        pixels[((5*w+7)*4) as usize..((5*w+7)*4+4) as usize]
+            .copy_from_slice(&[23,45,67,0]);
+        let mut texture=authored_asset("rgba","swatches.png",&encode(w,h,&pixels).unwrap());
+        let swaps=(0..40u32).map(|x|super::super::PaletteRgbSwap{
+            from:[x as u8,2,3],to:[x as u8,4,5],
+        }).collect::<Vec<_>>();
+        recolor_regions(&mut texture,w,h,&[([0,0],[64,4])],&swaps).unwrap();
+        let changed=decode(&texture,w,h).unwrap();
+        for x in 0..40u32 {
+            let at=((2*w+x)*4) as usize;
+            assert_eq!(&changed[at..at+4],&[x as u8,4,5,255]);
+        }
+        let hidden=((5*w+7)*4) as usize;
+        assert_eq!(&changed[hidden..hidden+4],&[23,45,67,0]);
+    }
+
+    #[test]
     fn compressed_png_round_trip_preserves_unique_rgba_and_alpha() {
         let (w,h)=(64u32,64u32);
         let mut pixels=vec![0u8;(w*h*4) as usize];
