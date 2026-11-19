@@ -1142,7 +1142,13 @@ selected image/view, not Minecraft or Blockbench material PASS.
 
 The `inspectSelectedVisualPair` receipt preserves its original primary
 `comparison` and adds `view_evidence` (per-view source/capture SHA,
-source revision and UNVERIFIED visual quality) plus `view_scope`.
+source revision, UNVERIFIED visual quality, and an optional compact
+`mask_mismatch` source-pixel summary) plus `view_scope`.
+The G3.6 mask summary uses only Rust's existing SHA-bound alpha
+comparison: missing/excess pixels and up to four bounded 4×4 mismatch
+regions. It cannot identify a Cube, prove camera alignment, or
+authorize editing. Unassessed/older reports remain clearly marked
+UNASSESSED/UNAVAILABLE, not treated as a model PASS.
 `review_feedback.viewReviews` contains validated **declarations**.
 Do not confuse `six_cardinal_source_pairs_selected` with verified
 camera calibration or finished-art acceptance. The separate

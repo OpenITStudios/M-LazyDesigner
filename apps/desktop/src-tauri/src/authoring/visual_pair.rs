@@ -7,6 +7,8 @@ use serde_json::{json, Value};
 use std::io::Cursor;
 
 pub const MAX_VISUAL_PNG_BYTES: usize = 8 * 1024 * 1024;
+const FOCUS_GRID: usize = 4;
+const MAX_FOCUS_REGIONS: usize = 4;
 const MAX_VISUAL_SIDE: u32 = 2048;
 const MAX_VISUAL_PIXELS: u64 = 2_097_152;
 
@@ -66,6 +68,19 @@ fn decode(bytes: &[u8]) -> Result<Raster> {
     Ok(Raster { width, height, rgba, has_alpha: channels == 4 })
 }
 
+// Exclusive end coordinates. These are source-pixel positions, not Cube IDs
+// or authorized 3D corrections; every update reuses the existing PNG scan.
+fn include_pixel(bounds: &mut Option<[u32; 4]>, x: u32, y: u32) {
+    if let Some(rect) = bounds {
+        rect[0] = rect[0].min(x);
+        rect[1] = rect[1].min(y);
+        rect[2] = rect[2].max(x + 1);
+        rect[3] = rect[3].max(y + 1);
+    } else {
+        *bounds = Some([x, y, x + 1, y + 1]);
+    }
+}
+
 /// Compare two unmodified operator-selected image files. The caller must bind
 /// each file's exact SHA to the source .bbmodel revision and to one compatible
 /// view/framing. Numeric comparison does not load images into the AI vision
@@ -82,9 +97,38 @@ pub fn inspect_visual_png_pair(reference: &[u8], capture: &[u8]) -> Result<Value
     let mut union = 0u64;
     let mut differing_rgba = 0u64;
     let mut differing_rgb = 0u64;
-    for (a, b) in source.rgba.chunks_exact(4).zip(candidate.rgba.chunks_exact(4)) {
+    let mut reference_bounds = None;
+    let mut capture_bounds = None;
+    let mut missing_bounds = None;
+    let mut excess_bounds = None;
+    let mut missing = 0u64;
+    let mut excess = 0u64;
+    let mut missing_tiles = [0u64; FOCUS_GRID * FOCUS_GRID];
+    let mut excess_tiles = [0u64; FOCUS_GRID * FOCUS_GRID];
+    for (index, (a, b)) in source.rgba.chunks_exact(4)
+        .zip(candidate.rgba.chunks_exact(4)).enumerate() {
         let sa = a[3] != 0;
         let sb = b[3] != 0;
+        if source.has_alpha && candidate.has_alpha {
+            let x = (index as u32) % source.width;
+            let y = (index as u32) / source.width;
+            if sa { include_pixel(&mut reference_bounds, x, y); }
+            if sb { include_pixel(&mut capture_bounds, x, y); }
+            if sa != sb {
+                let tx = (x as usize * FOCUS_GRID) / source.width as usize;
+                let ty = (y as usize * FOCUS_GRID) / source.height as usize;
+                let tile = ty * FOCUS_GRID + tx;
+                if sa {
+                    missing += 1;
+                    missing_tiles[tile] += 1;
+                    include_pixel(&mut missing_bounds, x, y);
+                } else {
+                    excess += 1;
+                    excess_tiles[tile] += 1;
+                    include_pixel(&mut excess_bounds, x, y);
+                }
+            }
+        }
         reference_visible += u64::from(sa);
         capture_visible += u64::from(sb);
         intersection += u64::from(sa && sb);
@@ -103,11 +147,48 @@ pub fn inspect_visual_png_pair(reference: &[u8], capture: &[u8]) -> Result<Value
         } else {
             "alpha_overlap_measured"
         };
-    let alpha_iou = if silhouette_state == "alpha_overlap_measured" {
-        Some(intersection as f64 / union as f64)
-    } else {
-        None
-    };
+    let measured = silhouette_state == "alpha_overlap_measured";
+    let alpha_iou = measured.then(|| intersection as f64 / union as f64);
+    // Compact, stable top-four 4x4 regions. The grid is only a coarse
+    // pointer to pixel mismatch; it cannot identify an offending Cube.
+    let mut regions = Vec::new();
+    if measured {
+        let mut ranked = Vec::new();
+        for tile in 0..missing_tiles.len() {
+            if missing_tiles[tile] > 0 {
+                ranked.push((missing_tiles[tile], tile, "missing"));
+            }
+            if excess_tiles[tile] > 0 {
+                ranked.push((excess_tiles[tile], tile, "excess"));
+            }
+        }
+        ranked.sort_by(|a, b| b.0.cmp(&a.0)
+            .then(a.1.cmp(&b.1)).then(a.2.cmp(b.2)));
+        for (pixel_count, tile, kind) in ranked.into_iter().take(MAX_FOCUS_REGIONS) {
+            let tx = (tile % FOCUS_GRID) as u32;
+            let ty = (tile / FOCUS_GRID) as u32;
+            let n = FOCUS_GRID as u32;
+            let bounds = [
+                (tx * source.width).div_ceil(n),
+                (ty * source.height).div_ceil(n),
+                ((tx + 1) * source.width).div_ceil(n),
+                ((ty + 1) * source.height).div_ceil(n),
+            ];
+            regions.push(json!({
+                "kind":kind,"pixel_count":pixel_count,"bounds":bounds
+            }));
+        }
+    }
+    let localization = json!({
+        "status":if measured { "pixel_mask_mismatch_measured" } else { "unassessed" },
+        "missing_from_capture_pixels":measured.then_some(missing),
+        "excess_in_capture_pixels":measured.then_some(excess),
+        "reference_foreground_bounds":if measured { reference_bounds } else { None },
+        "capture_foreground_bounds":if measured { capture_bounds } else { None },
+        "missing_bounds":if measured { missing_bounds } else { None },
+        "excess_bounds":if measured { excess_bounds } else { None },
+        "priority_regions":regions
+    });
     Ok(json!({
         "scope":"operator_selected_saved_png_pair",
         "reference_png_sha256":sha256(reference),
@@ -123,7 +204,8 @@ pub fn inspect_visual_png_pair(reference: &[u8], capture: &[u8]) -> Result<Value
             "capture_foreground_pixels":capture_visible,
             "intersection_pixels":intersection,
             "union_pixels":union,
-            "alpha_iou":alpha_iou
+            "alpha_iou":alpha_iou,
+            "localization":localization
         },
         "reference_approval":"NOT_VERIFIED_BY_INSPECTOR",
         "capture_provenance":"CALLER_ASSERTED_NOT_NATIVE_VERIFIED",
@@ -180,6 +262,63 @@ mod tests {
         assert_eq!(same["silhouette"]["status"],"unassessed_opaque_background");
         assert_eq!(same["different_rgba_pixels"],0);
         assert_eq!(same["visual_verdict"],"UNVERIFIED");
+    }
+    #[test]
+    fn localizes_missing_and_excess_alpha_without_assigning_a_cube() {
+        // One foreground pair matches; missing at (0,1), extra at (3,0).
+        // Different regions have the same count: scan-tile order is stable.
+        let mut ref_mask = vec![0u8; 4 * 4 * 4];
+        let mut current_mask = ref_mask.clone();
+        for (buffer, points) in [
+            (&mut ref_mask, [(0usize,0usize),(0,1),(3,3)]),
+            (&mut current_mask, [(0usize,0usize),(3,0),(3,3)]),
+        ] {
+            for (x,y) in points {
+                buffer[(y * 4 + x) * 4 + 3] = 255;
+            }
+        }
+        let reference = encoded(4,4,true,&ref_mask);
+        let capture = encoded(4,4,true,&current_mask);
+        let report = inspect_visual_png_pair(&reference,&capture).unwrap();
+        let local = &report["silhouette"]["localization"];
+        assert_eq!(local["status"],"pixel_mask_mismatch_measured");
+        assert_eq!(local["missing_from_capture_pixels"],1);
+        assert_eq!(local["excess_in_capture_pixels"],1);
+        assert_eq!(local["reference_foreground_bounds"],json!([0,0,4,4]));
+        assert_eq!(local["capture_foreground_bounds"],json!([0,0,4,4]));
+        assert_eq!(local["missing_bounds"],json!([0,1,1,2]));
+        assert_eq!(local["excess_bounds"],json!([3,0,4,1]));
+        assert_eq!(local["priority_regions"][0]["kind"],"excess");
+        assert_eq!(local["priority_regions"][0]["bounds"],json!([3,0,4,1]));
+        assert_eq!(local["priority_regions"][1]["kind"],"missing");
+        assert_eq!(local["priority_regions"][1]["bounds"],json!([0,1,1,2]));
+        assert_eq!(report["silhouette"]["alpha_iou"],0.5);
+        assert_eq!(report["visual_verdict"],"UNVERIFIED");
+    }
+    #[test]
+    fn unassessed_images_never_expose_actionable_mask_hotspots() {
+        let rgb = encoded(1,1,false,&[1,2,3]);
+        let transparent = encoded(1,1,true,&[1,2,3,0]);
+        let report = inspect_visual_png_pair(&rgb,&transparent).unwrap();
+        let local = &report["silhouette"]["localization"];
+        assert_eq!(local["status"],"unassessed");
+        assert!(local["missing_from_capture_pixels"].is_null());
+        assert!(local["reference_foreground_bounds"].is_null());
+        assert_eq!(local["priority_regions"],json!([]));
+        assert_eq!(report["visual_verdict"],"UNVERIFIED");
+    }
+    #[test]
+    fn same_mask_reports_no_mismatch_and_tiny_images_have_bounded_tiles() {
+        let rgba = encoded(1,2,true,&[
+            0,0,0,255, 0,0,0,0
+        ]);
+        let report = inspect_visual_png_pair(&rgba,&rgba).unwrap();
+        let local = &report["silhouette"]["localization"];
+        assert_eq!(local["status"],"pixel_mask_mismatch_measured");
+        assert_eq!(local["missing_from_capture_pixels"],0);
+        assert_eq!(local["excess_in_capture_pixels"],0);
+        assert!(local["missing_bounds"].is_null());
+        assert_eq!(local["priority_regions"],json!([]));
     }
     #[test]
     fn rejects_dimension_mismatch_and_unsupported_images() {

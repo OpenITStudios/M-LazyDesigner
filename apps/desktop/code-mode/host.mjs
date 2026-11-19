@@ -120,6 +120,104 @@ async function pinnedVisualPng(path, label) {
     path:selected, sha256:createHash('sha256').update(bytes).digest('hex'),
   });
 }
+// Compact source-pixel localization from Rust's existing SHA-pinned PNG
+// comparison. This is NOT a source Cube selector or camera-framing proof.
+function compactMaskMismatch(comparison) {
+  const empty = status => Object.freeze({
+    status, missing_from_capture_pixels:null,
+    excess_in_capture_pixels:null,
+    reference_foreground_bounds:null,capture_foreground_bounds:null,
+    missing_bounds:null,excess_bounds:null,
+    priority_regions:Object.freeze([]),
+  });
+  const silhouette = comparison?.silhouette;
+  const loc = silhouette?.localization;
+  if (loc === undefined) return empty('UNAVAILABLE'); // older receipts
+  const invalid = () => { throw new Error('CODE_MODE_VISUAL_MASK_LOCALIZATION_INVALID'); };
+  if (!loc || typeof loc !== 'object' || Array.isArray(loc) ||
+      !Array.isArray(loc.priority_regions)) invalid();
+  if (loc.status === 'unassessed') {
+    if (!['unassessed_no_alpha_channel','unassessed_empty_foreground',
+          'unassessed_opaque_background'].includes(silhouette?.status) ||
+        loc.missing_from_capture_pixels !== null ||
+        loc.excess_in_capture_pixels !== null ||
+        loc.reference_foreground_bounds !== null ||
+        loc.capture_foreground_bounds !== null ||
+        loc.missing_bounds !== null || loc.excess_bounds !== null ||
+        loc.priority_regions.length !== 0) invalid();
+    return empty('UNASSESSED');
+  }
+  const width = comparison?.width, height = comparison?.height;
+  const count = n => Number.isSafeInteger(n) && n >= 0;
+  if (loc.status !== 'pixel_mask_mismatch_measured' ||
+      silhouette.status !== 'alpha_overlap_measured' ||
+      !count(width) || !count(height) || width === 0 || height === 0 ||
+      width > 2048 || height > 2048 || width * height > 2097152 ||
+      !count(loc.missing_from_capture_pixels) ||
+      !count(loc.excess_in_capture_pixels) ||
+      !count(silhouette.reference_foreground_pixels) ||
+      !count(silhouette.capture_foreground_pixels) ||
+      !count(silhouette.intersection_pixels) ||
+      !count(silhouette.union_pixels) ||
+      silhouette.union_pixels > width * height ||
+      silhouette.reference_foreground_pixels > width * height ||
+      silhouette.capture_foreground_pixels > width * height ||
+      silhouette.intersection_pixels > silhouette.reference_foreground_pixels ||
+      silhouette.intersection_pixels > silhouette.capture_foreground_pixels ||
+      loc.missing_from_capture_pixels !==
+        silhouette.reference_foreground_pixels - silhouette.intersection_pixels ||
+      loc.excess_in_capture_pixels !==
+        silhouette.capture_foreground_pixels - silhouette.intersection_pixels ||
+      loc.missing_from_capture_pixels + loc.excess_in_capture_pixels !==
+        silhouette.union_pixels - silhouette.intersection_pixels ||
+      loc.priority_regions.length > 4 ||
+      ((loc.missing_from_capture_pixels + loc.excess_in_capture_pixels > 0) !==
+        (loc.priority_regions.length > 0))) invalid();
+  const bounds = region => Array.isArray(region) && region.length === 4 &&
+    region.every(Number.isSafeInteger) &&
+    region[0] >= 0 && region[1] >= 0 &&
+    region[2] > region[0] && region[3] > region[1] &&
+    region[2] <= width && region[3] <= height;
+  const countBound = (rect, n) =>
+    n === 0 ? rect === null : bounds(rect);
+  if (!countBound(loc.missing_bounds,loc.missing_from_capture_pixels) ||
+      !countBound(loc.excess_bounds,loc.excess_in_capture_pixels) ||
+      !countBound(loc.reference_foreground_bounds,
+        silhouette.reference_foreground_pixels) ||
+      !countBound(loc.capture_foreground_bounds,
+        silhouette.capture_foreground_pixels)) invalid();
+  const totals = {missing:0,excess:0}, pairs = new Set();
+  let prior = Number.POSITIVE_INFINITY;
+  for (const region of loc.priority_regions) {
+    if (!region || !['missing','excess'].includes(region.kind) ||
+        !count(region.pixel_count) || region.pixel_count === 0 ||
+        region.pixel_count > prior || !bounds(region.bounds)) invalid();
+    prior = region.pixel_count;
+    const key=region.kind+':'+region.bounds.join(',');
+    if(pairs.has(key)) invalid();
+    pairs.add(key);
+    totals[region.kind] += region.pixel_count;
+  }
+  if(totals.missing > loc.missing_from_capture_pixels ||
+     totals.excess > loc.excess_in_capture_pixels) invalid();
+  return Object.freeze({
+    status:'MEASURED',
+    missing_from_capture_pixels:loc.missing_from_capture_pixels,
+    excess_in_capture_pixels:loc.excess_in_capture_pixels,
+    reference_foreground_bounds:loc.reference_foreground_bounds ?
+      Object.freeze([...loc.reference_foreground_bounds]) : null,
+    capture_foreground_bounds:loc.capture_foreground_bounds ?
+      Object.freeze([...loc.capture_foreground_bounds]) : null,
+    missing_bounds:loc.missing_bounds ?
+      Object.freeze([...loc.missing_bounds]) : null,
+    excess_bounds:loc.excess_bounds ?
+      Object.freeze([...loc.excess_bounds]) : null,
+    priority_regions:Object.freeze(loc.priority_regions.map(region=>
+      Object.freeze({kind:region.kind,pixel_count:region.pixel_count,
+        bounds:Object.freeze([...region.bounds])}))),
+  });
+}
+
 async function pinnedVisualPair(source, options, modelSha, approvedReferencePackagePath) {
   if (options === undefined) return null;
   if (!options || typeof options !== 'object' || Array.isArray(options) ||
@@ -1185,6 +1283,7 @@ export async function createCodeModeHost({
         source_model_sha256:model.expectedSha256,
         visual_verdict:'UNVERIFIED',
         silhouette_status:measured[index].comparison?.silhouette?.status ?? 'UNVERIFIED',
+        mask_mismatch:compactMaskMismatch(measured[index].comparison),
       })));
       // Freeze the first reviewer decision for one source SHA/view. The
       // guest must not downgrade ACCEPTED with a repeated review request.

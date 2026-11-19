@@ -811,6 +811,25 @@ Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.
 
 
+**G3.6 source-pixel silhouette focus in existing multi-view review (2026-11-19; SOURCE ONLY):**
+Each SHA-pinned `inspect-visual-pair` Rust read now includes
+`comparison.silhouette.localization`: measured missing/excess mask
+pixels, foreground and difference bounds, and up to four ranked
+4×4 source-pixel regions. The existing `inspectSelectedVisualPair`
+host returns a bounded `view_evidence[].mask_mismatch` summary per
+selected view (MEASURED / UNASSESSED / UNAVAILABLE). Invalid counts,
+out-of-image rectangles, duplicate regions, and fabricated 3D/visual
+claims are rejected at the trusted host boundary. No additional
+read/process per view, PNG bytes or paths in guest context, separate
+reviewer, classifier, camera calibration, automatic Cube mapping,
+EditPlan, approval path or renderer.
+These are **pixel-mask hints only**: unless reference approval,
+compatible view/framing and current asset provenance are observed
+independently, do not interpret a missing pixel as wrong Geometry.
+Targeted corrections still require verified Cube UUID and explicit
+source-bound Rust preflight/Apply. Native/rendered fidelity and
+quality gains UNVERIFIED; Rust/Node regressions AUTHORED_NOT_RUN.
+
 **Operator-selected reference/capture binding (2026-11-16; SOURCE_ONLY):**
 Code Mode host now supports an optional `preselectedVisualPair` made of
 two operator-selected still PNGs, their exact SHA-256, a view label and a

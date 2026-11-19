@@ -1,3 +1,31 @@
+**Active Rust Geometry G3.6 — reference-mask discrepancy localization (2026-11-19; SOURCE ONLY):**
+From Rust@bf61d684 and current single-session G1 plan/visual_pair,
+the SHA-bound Rust `inspect-visual-pair` now uses its existing PNG
+scan to count reference-only versus capture-only foreground and
+source-pixel bounding rectangles. At most four largest coarse 4×4
+mismatch regions are reported per reference/capture pair; RGB-only,
+empty/opaque-background and other unassessable silhouette cases
+publish null counts, no hotspots and no false Geometry verdict.
+The existing Code Mode `inspectSelectedVisualPair` returns
+per-view `mask_mismatch` within the same bounded SHA-pinned,
+operator-selected multi-view workflow. Host checks numeric invariants,
+valid bounds and samples before admitting the read, without granting
+a new photo/Geometry permission or exposing PNG bytes/private paths.
+The diagnostic cannot identify an offending Cube or infer approved
+shape: framing/provenance and real image review are independent.
+Corrections remain explicitly UUID-owned Rust operations through
+existing G1 EditPlan, preflight and separately authorized Apply;
+no automatic shape edits, new engine/service/runner, dependency,
+pipeline, GUI, branch, CI, release or UV/Texture/Animation change.
+Three Rust positive/negative image-source regressions and Node
+pinned-host positive/adversarial fixtures AUTHORED_NOT_RUN.
+Cargo/Node/Windows/Blockbench native execution, actual matched
+reference-to-model fidelity, artistic acceptance and relative
+Rust>Local performance/quality remain NOT_EXECUTED/UNVERIFIED.
+Geometry source next gap: bind source-confirmed semantic part
+landmarks to visual review before proposing local corrections, not
+guess 3D edits from alpha alone.
+
 **Active Rust Geometry G2.4 — scoped rotated-neighbor OBB review (2026-11-19; SOURCE ONLY):**
 From Rust@cf0d11b and Local@422e4d7, G2/G2.2 plans now
 supplement unchanged same-Bone AABB diagnostics with advisory OBB

@@ -1095,6 +1095,23 @@ export interface ApplyReceipt {
     visual_verdict: "UNVERIFIED";
   } | null;
 }
+/** Bounded source-pixel mismatch. It never identifies a 3D Cube owner. */
+export interface VisualPairMaskLocalization {
+  status:"pixel_mask_mismatch_measured"|"unassessed";
+  missing_from_capture_pixels:number|null;
+  excess_in_capture_pixels:number|null;
+  /** Image coordinates [left,top,right,bottom]; right/bottom exclusive. */
+  reference_foreground_bounds:[number,number,number,number]|null;
+  capture_foreground_bounds:[number,number,number,number]|null;
+  missing_bounds:[number,number,number,number]|null;
+  excess_bounds:[number,number,number,number]|null;
+  /** Top four 4×4 pixel-mask regions; not attribution to a Cube. */
+  priority_regions:Array<{
+    kind:"missing"|"excess";
+    pixel_count:number;
+    bounds:[number,number,number,number];
+  }>;
+}
 /** Raw PNG comparison. No pixels enter the guest; visual PASS is not inferred. */
 export interface VisualPairReceipt {
   status: "OK";
@@ -1118,6 +1135,7 @@ export interface VisualPairReceipt {
       intersection_pixels: number;
       union_pixels: number;
       alpha_iou: number | null;
+      localization: VisualPairMaskLocalization;
     };
     reference_approval: "NOT_VERIFIED_BY_INSPECTOR";
     capture_provenance: "CALLER_ASSERTED_NOT_NATIVE_VERIFIED";

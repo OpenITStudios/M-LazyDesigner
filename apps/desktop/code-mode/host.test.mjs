@@ -1044,6 +1044,78 @@ test('missing operator-selected material master refuses comparative claims', () 
     assert.equal(result.value.unbound,true);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: selected source-pixel mismatch is a bounded
+// per-view reading only. Malformed numeric localization cannot assert PASS.
+test('visual pair exposes pinned mismatch focus but no Cube attribution',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'mask-reference.png');
+    const capture=join(folder,'mask-capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);
+    await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const comparison={scope:'operator_selected_saved_png_pair',
+      reference_png_sha256:digest,capture_png_sha256:digest,
+      width:4,height:4,visual_verdict:'UNVERIFIED',
+      silhouette:{status:'alpha_overlap_measured',
+        reference_foreground_pixels:3,capture_foreground_pixels:3,
+        intersection_pixels:2,union_pixels:4,alpha_iou:0.5,
+        localization:{status:'pixel_mask_mismatch_measured',
+          missing_from_capture_pixels:1,excess_in_capture_pixels:1,
+          reference_foreground_bounds:[0,0,4,4],
+          capture_foreground_bounds:[0,0,4,4],
+          missing_bounds:[0,1,1,2],excess_bounds:[3,0,4,1],
+          priority_regions:[
+            {kind:'excess',pixel_count:1,bounds:[3,0,4,1]},
+            {kind:'missing',pixel_count:1,bounds:[0,1,1,2]},
+          ]}}};
+    for (const corrupt of [null,'wrong-count','bad-bounds']) {
+      const changed=structuredClone(comparison);
+      if(corrupt==='wrong-count') {
+        changed.silhouette.localization.missing_from_capture_pixels=2;
+      }
+      if(corrupt==='bad-bounds') {
+        changed.silhouette.localization.priority_regions[0].bounds=[0,0,6,1];
+      }
+      const host=await createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{referencePngPath:ref,capturePngPath:capture,
+          captureModelSha256:HASH,viewId:'front'},
+        runner:async argv=>{
+          if(argv[0]==='inspect') {
+            return {status:'OK',sha256:HASH,summary:SUMMARY};
+          }
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison:changed};
+        },
+        spawnImpl:()=>fakeGuest({method:'inspectSelectedVisualPair',
+          args:{project:'p0'}},response=>{
+          if(corrupt===null) {
+            assert.equal(response.ok,true);
+            const focus=response.result.view_evidence[0].mask_mismatch;
+            assert.equal(focus.status,'MEASURED');
+            assert.equal(focus.missing_from_capture_pixels,1);
+            assert.equal(focus.excess_in_capture_pixels,1);
+            assert.equal(focus.priority_regions.length,2);
+            assert.deepEqual(focus.reference_foreground_bounds,[0,0,4,4]);
+            assert.deepEqual(focus.missing_bounds,[0,1,1,2]);
+            assert.equal(response.result.comparison.visual_verdict,'UNVERIFIED');
+            assert.equal(JSON.stringify(response.result).includes(folder),false);
+            return {missing:focus.missing_from_capture_pixels};
+          }
+          assert.equal(response.ok,false);
+          assert.equal(response.code,'CODE_MODE_VISUAL_MASK_LOCALIZATION_INVALID');
+          return {rejected:true};
+        }),
+      });
+      const report=await host.execute({
+        code:'return codemode.inspectSelectedVisualPair({project:"p0"});'});
+      assert.deepEqual(report.value,corrupt===null?{missing:1}:{rejected:true});
+    }
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: pinned source/image evidence and fail-closed claims.
 test('operator-bound visual pair is a read-only preflight, never visual PASS', () =>
   fixture(async input=>{

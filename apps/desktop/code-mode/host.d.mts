@@ -237,6 +237,20 @@ export interface CodeModeGuestAPI {
       reference_png_sha256:string;capture_png_sha256:string;
       source_model_sha256:string;visual_verdict:"UNVERIFIED";
       silhouette_status:string;
+      mask_mismatch:Readonly<{
+        status:"MEASURED"|"UNASSESSED"|"UNAVAILABLE";
+        missing_from_capture_pixels:number|null;
+        excess_in_capture_pixels:number|null;
+        reference_foreground_bounds:Readonly<[number,number,number,number]>|null;
+        capture_foreground_bounds:Readonly<[number,number,number,number]>|null;
+        missing_bounds:Readonly<[number,number,number,number]>|null;
+        excess_bounds:Readonly<[number,number,number,number]>|null;
+        priority_regions:ReadonlyArray<Readonly<{
+          kind:"missing"|"excess";
+          pixel_count:number;
+          bounds:Readonly<[number,number,number,number]>;
+        }>>;
+      }>;
     }>>;
     view_scope:"six_cardinal_source_pairs_selected"|"selected_source_pairs_only";
     evidence_binding:{

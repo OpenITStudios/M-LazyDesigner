@@ -257,6 +257,22 @@ are unchanged. No new process, CLI command, mutation, dependency,
 model store or second geometry engine; Rust/Node positive/negative
 source regressions AUTHORED_NOT_RUN.
 
+**G3.6 bounded reference-mask geometry focus (2026-11-19; SOURCE ONLY):**
+The existing `visual_pair.rs` SHA-pinned PNG read now localizes missing
+(reference-only foreground) and excess (capture-only foreground) alpha
+pixels, retaining existing IoU, SHA and UNVERIFIED visual verdicts.
+An in-pass 4×4 pixel-mask tally emits up to four stable, largest
+mismatch regions with source-pixel exclusive-end bounds, plus optional
+foreground and difference bounding rectangles for proportion checks.
+No new raster, file writer, renderer, image model, capture assumption,
+Cube identifier inference, geometry mutation or independent approval.
+Opaque/RGB/empty/unassessable pairs expose null counts and no focus.
+This diagnostic is only a prompt for reference/camera-aligned visual
+review and **cannot** prove a silhouette or select a Cube; an exact
+UUID-owned correction must still use the existing G1 EditPlan, source
+SHA preflight and independent Apply authorization. Rust/Node regression
+source AUTHORED_NOT_RUN; actual native views and craft UNVERIFIED.
+
 ## Dated source history (preserved)
 
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**
