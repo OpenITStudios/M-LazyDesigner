@@ -29,6 +29,9 @@
   import {parseShadeRamp,bindSourceSelection,selectionStepsForStroke,
     type SourceSelection,type SelectionStep,type SelectionMode,type SelectionRow} from './rustSurfaceTools';
   import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
+import {BRUSH_PRESET_STORAGE_KEY,planSurfacePattern,readBrushPresets,
+    serializeBrushPresets,upsertBrushPreset,validBrushSettings,
+    type PatternMode,type BrushPreset,type BrushSettings} from './rustBrushPresets';
 import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
@@ -86,6 +89,10 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   let surfaceShadeDirection:'lighten'|'darken'='darken';
   let surfaceBrushRadius=1;
   let surfaceBrushTip:'square'|'diamond'='square';
+  let surfacePatternMode:PatternMode='none';
+  let surfacePatternPeriod=2,surfacePatternPhaseX=0,surfacePatternPhaseY=0;
+  let brushPresets:BrushPreset[]=[];
+  let brushPresetName='',selectedBrushPresetId='',brushPresetError='';
   let surfaceSourceBase='#5a6e82';
   let surfaceSampleStatus='';
   let surfaceProtectedRegions:ProtectionRect[]=[];
@@ -272,6 +279,9 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     surfaceSelection.revision===snapshot.revision&&
     surfaceSelection.textureUuid===snapshot.textureUuids[paintTextureIndex];
   $: surfaceShadeColors=parseShadeRamp(surfaceShadeRamp);
+  $: surfacePattern=planSurfacePattern(surfacePatternMode,surfacePatternPeriod,
+    surfacePatternPhaseX,surfacePatternPhaseY);
+  $: surfacePatternReady=surfacePatternMode==='none'||!!surfacePattern;
   $: surfacePaintEnabled = workspaceMode==='paint' && surfacePaint3d &&
     (surfaceInkMode==='color'||!!surfaceShadeColors||
       surfaceSampleMode||surfaceSelectMode) &&
@@ -282,7 +292,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     !!snapshot.textureUuids[paintTextureIndex] &&
     paintTool==='pencil' && paintAlpha===255 &&
     Number.isInteger(surfaceBrushRadius) &&
-    surfaceBrushRadius>=1 && surfaceBrushRadius<=4;
+    surfaceBrushRadius>=1 && surfaceBrushRadius<=4 && surfacePatternReady;
   $: surfacePaintContextKey=JSON.stringify([
     snapshot?.epoch,snapshot?.revision,paintTextureIndex,
     snapshot?.textureUuids[paintTextureIndex],paintColor,
@@ -290,6 +300,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     surfaceSampleMode,surfaceSelectMode,surfaceSeamEnabled,
     surfaceBrushRadius,surfaceBrushTip,surfaceInkMode,
     surfaceShadeRamp,surfaceShadeDirection,
+    surfacePatternMode,surfacePatternPeriod,surfacePatternPhaseX,surfacePatternPhaseY,
     validSurfaceSelection?surfaceSelection?.seed:null,
   ]);
 
@@ -1636,6 +1647,49 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     draw(settings);
     return {update:draw};
   }
+  function currentBrushSettings():BrushSettings{
+    return {radius:surfaceBrushRadius,tip:surfaceBrushTip,inkMode:surfaceInkMode,
+      shadeRamp:surfaceShadeRamp,shadeDirection:surfaceShadeDirection,
+      patternMode:surfacePatternMode,patternPeriod:surfacePatternPeriod,
+      patternPhaseX:surfacePatternPhaseX,patternPhaseY:surfacePatternPhaseY};
+  }
+  function persistBrushPresets(next:BrushPreset[]):boolean{
+    try{
+      window.localStorage.setItem(BRUSH_PRESET_STORAGE_KEY,serializeBrushPresets(next));
+      brushPresets=next;brushPresetError='';return true;
+    }catch{
+      brushPresetError='Could not save presets to local app storage.';
+      return false;
+    }
+  }
+  function saveBrushPreset(){
+    const settings=currentBrushSettings();
+    if(!validBrushSettings(settings)){
+      brushPresetError='Choose valid brush, ramp, and pattern settings first.';return;
+    }
+    const next=upsertBrushPreset(brushPresets,crypto.randomUUID(),brushPresetName,settings);
+    if(!next){brushPresetError='Enter a preset name (up to 80 characters).';return;}
+    if(persistBrushPresets(next)){
+      selectedBrushPresetId=next.find(p=>p.name.toLocaleLowerCase()===
+        brushPresetName.trim().toLocaleLowerCase())?.id??'';
+    }
+  }
+  function applyBrushPreset(){
+    const selected=brushPresets.find(p=>p.id===selectedBrushPresetId);
+    if(!selected||!validBrushSettings(selected.settings)||busy||paintStroke)return;
+    const p=selected.settings;
+    surfaceBrushRadius=p.radius;surfaceBrushTip=p.tip;
+    surfaceInkMode=p.inkMode;surfaceShadeRamp=p.shadeRamp;
+    surfaceShadeDirection=p.shadeDirection;
+    surfacePatternMode=p.patternMode;surfacePatternPeriod=p.patternPeriod;
+    surfacePatternPhaseX=p.patternPhaseX;surfacePatternPhaseY=p.patternPhaseY;
+    brushPresetName=selected.name;brushPresetError='';
+  }
+  function deleteBrushPreset(){
+    if(!selectedBrushPresetId||busy||paintStroke)return;
+    const next=brushPresets.filter(p=>p.id!==selectedBrushPresetId);
+    if(persistBrushPresets(next)){selectedBrushPresetId='';brushPresetName='';}
+  }
   async function paintFromViewport(gesture:SurfaceGesture):Promise<void>{
     if(!surfacePaintEnabled||surfaceSampleMode||!snapshot||busy||paintAlpha!==255 ||
        snapshot.epoch!==gesture.epoch||
@@ -1658,6 +1712,9 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     if(selection&&gesture.seam){
       error='Selection-locked strokes cannot bridge multiple Cubes.';return;
     }
+    if(surfacePattern&&gesture.seam){
+      error='Pattern Brush currently paints one Cube face at a time.';return;
+    }
     selectCube(gesture.cubeUuid);
     selectedFace=gesture.face;
     const shared={
@@ -1669,6 +1726,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       selection_steps:selectionSteps??[],
       brush_radius:surfaceBrushRadius,brush_tip:surfaceBrushTip,
       protected_regions:guardedSurfaceMasks,
+      pattern:surfacePattern,
     };
     if(surfaceInkMode==='shade_ink'){
       if(!surfaceShadeColors){
@@ -2214,6 +2272,10 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     } catch {
       dockPersistenceError = true;
     }
+    try{
+      brushPresets=readBrushPresets(window.localStorage.getItem(
+        BRUSH_PRESET_STORAGE_KEY));
+    }catch{brushPresetError='Could not read presets from local app storage.';}
     const observer = new ResizeObserver((records) => {
       const width = records[0]?.contentRect.width;
       const height = records[0]?.contentRect.height;
@@ -2539,6 +2601,61 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
                 <option value="diamond">Diamond</option>
               </select>
             </label>
+            <label>Pattern stencil
+              <select bind:value={surfacePatternMode}
+                disabled={busy || !!paintStroke || !!surfaceMaskDrag}>
+                <option value="none">Solid (no pattern)</option>
+                <option value="checker">Checker</option>
+                <option value="dots">Dots</option>
+                <option value="diagonal">Diagonal</option>
+              </select>
+            </label>
+            {#if surfacePatternMode!=='none'}
+              <label>Period (texels)
+                <input type="number" min="1" step="1"
+                  bind:value={surfacePatternPeriod}
+                  disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+              </label>
+              <label>Offset X
+                <input type="number" min="0" step="1"
+                  bind:value={surfacePatternPhaseX}
+                  disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+              </label>
+              <label>Offset Y
+                <input type="number" min="0" step="1"
+                  bind:value={surfacePatternPhaseY}
+                  disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+              </label>
+              {#if !surfacePatternReady}
+                <p class="hint">Pattern requires whole-number period and offsets.</p>
+              {/if}
+            {/if}
+            <details class="brush-presets">
+              <summary>Brush presets</summary>
+              <div class="brush-presets-fields">
+                <label>Saved preset
+                  <select bind:value={selectedBrushPresetId} disabled={busy}>
+                    <option value="">Choose preset…</option>
+                    {#each brushPresets as preset (preset.id)}
+                      <option value={preset.id}>{preset.name}</option>
+                    {/each}
+                  </select>
+                </label>
+                <button type="button" disabled={busy || !selectedBrushPresetId}
+                  onclick={applyBrushPreset}>Apply preset</button>
+                <label>Preset name
+                  <input type="text" maxlength="80" bind:value={brushPresetName}
+                    placeholder="e.g. Soft highlight" disabled={busy}/>
+                </label>
+                <button type="button" disabled={busy || !!paintStroke}
+                  onclick={saveBrushPreset}>Save / Update</button>
+                <button type="button" disabled={busy || !selectedBrushPresetId}
+                  onclick={deleteBrushPreset}>Delete preset</button>
+              </div>
+              <p class="hint">Saved locally: brush, Shade Ink and pattern settings only.
+                No image, Cube identity, selection or Paint permission is stored.</p>
+              {#if brushPresetError}<p class="hint" role="status">{brushPresetError}</p>{/if}
+            </details>
             <label><input type="checkbox" bind:checked={surfaceGrayscalePreview}
               disabled={busy || !surfacePaint3d}/>
               Grayscale viewport (read-only)</label>
@@ -2600,7 +2717,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
             {/if}
             <label><input type="checkbox" bind:checked={surfaceSeamEnabled}
               disabled={busy || !surfacePaint3d || !!surfaceMaskDrag ||
-                surfaceInkMode==='shade_ink' || validSurfaceSelection}/>
+                surfaceInkMode==='shade_ink' || validSurfaceSelection || !!surfacePattern}/>
               Bridge adjacent Cube faces (one Undo)</label>
             <label>Original editable RGB
               <input type="color" bind:value={surfaceSourceBase}
@@ -3426,7 +3543,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
           {surfaceSampleMode} {surfaceSelectMode}
           grayscalePreview={workspaceMode==='paint' && surfaceGrayscalePreview}
           surfaceSeamEnabled={surfaceSeamEnabled &&
-            surfaceInkMode==='color' && !validSurfaceSelection}
+            surfaceInkMode==='color' && !validSurfaceSelection && !surfacePattern}
           onSurfaceStroke={(gesture) => {void paintFromViewport(gesture);}}
           onSurfaceSample={(hit) => {void sampleFromViewport(hit);}}
           onSurfaceSelection={(hit) => {void selectFromViewport(hit);}}

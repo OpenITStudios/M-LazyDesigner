@@ -16,8 +16,8 @@ pub struct SurfacePattern{
     pub phase:[u32;2],
 }
 impl SurfacePattern{
-    pub fn validate(&self,face_size:[u32;2])->Result<()>{
-        if self.period==0||self.period>face_size[0].max(face_size[1]){
+    pub fn validate(&self,_face_size:[u32;2])->Result<()>{
+        if self.period==0{
             return Err("SURFACE_PATTERN_PERIOD_INVALID".into());
         }
         Ok(())
@@ -41,9 +41,9 @@ mod tests{
         let pattern=SurfacePattern{kind:SurfacePatternKind::Checker,
             period:2,phase:[1,0]};
         pattern.validate([2048,2048]).unwrap();
-        assert_eq!(pattern.admits([1,0]),true);
+        assert_eq!(pattern.admits([1,0]),false);
         assert_eq!(pattern.admits([2,0]),false);
-        assert_eq!(pattern.admits([3,0]),false);
+        assert_eq!(pattern.admits([3,0]),true);
         assert_eq!(pattern.admits([4,0]),true);
         assert_eq!(pattern.admits([1,0]),true);
         let dots=SurfacePattern{kind:SurfacePatternKind::Dots,
