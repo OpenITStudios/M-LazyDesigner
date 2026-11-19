@@ -30,6 +30,8 @@
     type SourceSelection,type SelectionStep,type SelectionMode,type SelectionRow,
     type SelectionRaster} from './rustSurfaceTools';
   import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
+  import {matchingSelectedTexturePreview,selectedTexturePreviewSources,
+    type SelectedTexturePreview} from './rustSelectedTexturePreview';
 import {BRUSH_PRESET_STORAGE_KEY,planSurfacePattern,readBrushPresets,
     serializeBrushPresets,upsertBrushPreset,validBrushSettings,
     type PatternMode,type BrushPreset,type BrushSettings} from './rustBrushPresets';
@@ -50,6 +52,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   type Row = { uuid: string; name: string; depth: number; kind: 'cube' | 'bone'; visible: boolean };
 
   let snapshot: EditorSnapshot | null = null;
+  // One optional, revision-bound, native-owned PNG shown only on request.
+  let selectedTexturePreview:SelectedTexturePreview|null=null;
   let selectedId: string | null = null;
   let selectedBoneId: string | null = null;
   // UI-only tool selection. Geometry and history remain Rust-owned.
@@ -250,10 +254,16 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     selectedId,selectedFace,paintTextureIndex,semanticReferenceSha);
   $: validExternalPreview = matchingExternalTextureCandidate(snapshot,
     externalPreview,selectedId,selectedFace,paintTextureIndex);
+  $: validSelectedTexturePreview=matchingSelectedTexturePreview(
+    snapshot,selectedTexturePreview,paintTextureIndex);
+  $: selectedTextureSource=snapshot?.texturePreviewSources[paintTextureIndex] ??
+    (validSelectedTexturePreview?selectedTexturePreview?.textureSource:null) ?? null;
+  $: baseTextureSources=selectedTexturePreviewSources(
+    snapshot,selectedTexturePreview,paintTextureIndex);
   $: modelTextureSources = externalTextureViewportSources(
     snapshot,externalPreview,externalShowCandidate,validExternalPreview,
     semanticViewportSources(snapshot,semanticPreview,
-      semanticShowCandidate,validSemanticPreview));
+      semanticShowCandidate,validSemanticPreview,baseTextureSources));
   $: externalReadyForApply = semanticReviewReady(
     validExternalPreview &&
       matchingRenderedMaterialPair(externalSourceCapture,externalCandidateCapture,
@@ -268,7 +278,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     ? externalPreview.candidatePngSource
     : validSemanticPreview && semanticShowCandidate && semanticPreview
       ? semanticPreview.candidatePngSource
-      : snapshot?.texturePreviewSources[paintTextureIndex] ?? null;
+      : selectedTextureSource;
   $: guardedSurfaceMasks = snapshot && surfaceProtectionBinding?.epoch===snapshot.epoch &&
     surfaceProtectionBinding.textureUuid===snapshot.textureUuids[paintTextureIndex]
     ? surfaceProtectedRegions : [];
@@ -289,7 +299,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     !!snapshot && !busy && !loading && !paintStroke && !surfaceMaskDrag &&
     !validSemanticPreview && !validExternalPreview &&
     !!snapshot.paintEditableTextures[paintTextureIndex] &&
-    !!snapshot.texturePreviewSources[paintTextureIndex] &&
+    !!selectedTextureSource &&
     !!snapshot.textureUuids[paintTextureIndex] &&
     paintTool==='pencil' && paintAlpha===255 &&
     Number.isInteger(surfaceBrushRadius) &&
@@ -428,6 +438,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     // A fresh canonical snapshot invalidates all temporary texture overlays.
     clearSemanticPreview();
     clearSurfaceSelection();
+    // A native edit/new/open also evicts previously materialized image URLs.
+    selectedTexturePreview=null;
     // Any document receipt invalidates the frame-clock identity. Resume is
     // always explicit; never replay a stale animation after Undo/Open/Save.
     pauseAnimationPlayback();
@@ -1202,6 +1214,30 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     apply([{ op: 'set_empty_atlas_resolution', width, height }]);
   }
 
+  async function loadSelectedTexturePreview():Promise<void>{
+    if(!snapshot||busy||loading||workspaceMode!=='paint'||
+       snapshot.scopedTexturePreview||selectedTextureSource)return;
+    const index=paintTextureIndex;
+    const textureUuid=snapshot.textureUuids[index];
+    if(!textureUuid)return;
+    const {epoch,revision}=snapshot;
+    busy=true;error='';
+    try{
+      const receipt=await invoke<SelectedTexturePreview>(
+        'rust_editor_read_texture_preview',{
+          expectedEpoch:epoch,expectedRevision:revision,
+          textureIndex:index,textureUuid,
+        });
+      if(!snapshot||snapshot.epoch!==epoch||snapshot.revision!==revision||
+         paintTextureIndex!==index||
+         !matchingSelectedTexturePreview(snapshot,receipt,index))
+        throw new Error('SELECTED_PREVIEW_SOURCE_STALE');
+      selectedTexturePreview=receipt;
+      notice='Selected atlas loaded for this view only. Source PNG and Undo remain in Rust.';
+    }catch(cause){selectedTexturePreview=null;showError(cause);}
+    finally{busy=false;}
+  }
+
   async function importPngTexture() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
         !snapshot.paintTextureAddable) return;
@@ -1492,7 +1528,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   async function assignSelectedTexture() {
     if (!snapshot || busy || loading || paintStroke || workspaceMode !== 'paint' ||
         snapshot.scopedTexturePreview ||
-        !selectedId || !snapshot.texturePreviewSources[paintTextureIndex]) return;
+        !selectedId || !selectedTextureSource) return;
     const textureUuid = snapshot.textureUuids[paintTextureIndex];
     if (!textureUuid) return;
     const next = await command('rust_editor_apply', {
@@ -1507,7 +1543,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   async function enableImportedPaintTexture() {
     if (!snapshot || busy || loading || paintStroke ||
         !snapshot.paintAdoptableTextures[paintTextureIndex] ||
-        !snapshot.texturePreviewSources[paintTextureIndex]) return;
+        !selectedTextureSource) return;
     const index = paintTextureIndex;
     const next = await command('rust_editor_apply', {
       expectedEpoch: snapshot.epoch, expectedRevision: snapshot.revision,
@@ -1719,6 +1755,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
        snapshot.textureUuids[gesture.textureIndex]!==gesture.textureUuid||
        paintTextureIndex!==gesture.textureIndex ||
        gesture.contextKey!==surfacePaintContextKey)return;
+    const refreshManualPreview=validSelectedTexturePreview;
     const base=sourceRgb(surfaceSourceBase),color=sourceRgb(paintColor);
     if(!base||!color){error='Select valid original and target RGB colors.';return;}
     // An active selection never degrades to an unrestricted gesture.
@@ -1762,7 +1799,10 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
         intent:{...shared,shade_ramp:surfaceShadeColors,
           direction:surfaceShadeDirection},
       });
-      if(next)notice='Shade Ink stepped each eligible original pixel by one exact authored ramp swatch in one Undo.';
+      if(next){
+        notice='Shade Ink stepped each eligible original pixel by one exact authored ramp swatch in one Undo.';
+        if(refreshManualPreview)void loadSelectedTexturePreview();
+      }
       return;
     }
     const next=await command('rust_editor_paint_surface_stroke',{
@@ -1782,6 +1822,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       notice=gesture.seam
         ? 'Two adjacent Cube faces painted in one Rust Undo step; identity and alpha guards remain.'
         : '3D brush committed in one Undo with exact original RGB and protected masks.';
+      if(refreshManualPreview)void loadSelectedTexturePreview();
     }
   }
   function startSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
@@ -2391,6 +2432,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
               disabled={!!paintStroke || !!surfaceMaskDrag} onclick={() => {
                 if(paintTextureIndex!==index){
                   clearSemanticPreview();clearSurfaceProtection();
+                  selectedTexturePreview=null;
                 }
                 paintTextureIndex=index;
               }}>
@@ -2414,6 +2456,15 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
         ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
+      {#if !snapshot.scopedTexturePreview &&
+        !selectedTextureSource && snapshot.textureUuids[paintTextureIndex]}
+        <div class="surface-paint-panel">
+          <p class="hint">This atlas is not in the eager 3D preview. You can
+            load just the selected PNG without loading every atlas into WebView.</p>
+          <button type="button" onclick={() => void loadSelectedTexturePreview()}
+            disabled={busy || loading || !!paintStroke}>Load selected atlas preview</button>
+        </div>
+      {/if}
       <section class="paint-starter semantic-material-panel" aria-label="External pixel editor PNG">
         <div class="dock-title"><span>EXTERNAL PIXEL EDITOR</span></div>
         <p class="hint">Export the current atlas PNG and edit it in Aseprite,
@@ -2769,7 +2820,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
             {/if}
           </div>
           {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
-            snapshot.texturePreviewSources[paintTextureIndex]}
+            selectedTextureSource}
             <button type="button" onclick={() => void enableImportedPaintTexture()}
               disabled={busy || loading || !!paintStroke}
               title="Validate this embedded RGBA8 PNG before enabling direct edits">
@@ -2780,7 +2831,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
           {#if snapshot.textureNames.length}
             <label>Texture
               <select bind:value={paintTextureIndex} disabled={busy || !!paintStroke}
-                onchange={() => {clearSemanticPreview();clearSurfaceProtection();}}>
+                onchange={() => {clearSemanticPreview();clearSurfaceProtection();
+                  selectedTexturePreview=null;}}>
                 {#each snapshot.textureNames as name, i}
                   <option value={i}>{name}</option>
                 {/each}
@@ -2797,7 +2849,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
               disabled={busy || loading || !!paintStroke || !selectedId ||
                 snapshot.scopedTexturePreview ||
                 !snapshot.textureUuids[paintTextureIndex] ||
-                !snapshot.texturePreviewSources[paintTextureIndex]}
+                !selectedTextureSource}
               title="Assign this texture to all non-null faces of the selected Cube; keep face UV and invisible faces unchanged">
               Apply Texture to Cube
             </button>
@@ -2809,7 +2861,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
             {/if}
           {/if}
           {#if snapshot.paintEditableTextures[paintTextureIndex] &&
-            snapshot.texturePreviewSources[paintTextureIndex]}
+            selectedTextureSource}
             <label>Tool
               <select bind:value={paintTool} disabled={busy || !!paintStroke}>
                 <option value="pencil">Pencil</option>
