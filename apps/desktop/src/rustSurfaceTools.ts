@@ -4,6 +4,7 @@ import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 export type ShadeDirection='lighten'|'darken';
 export type ShadeRamp=Array<[number,number,number,255]>;
 export type SelectionRow={y:number;x0:number;x1:number};
+export type SelectionRaster={width:number;height:number;packed_mask_base64:string};
 export type SelectionMode='replace'|'add'|'subtract'|'intersect'|'invert';
 export type SelectionStep={mode:SelectionMode;seed?:[number,number]};
 export type SourceSelection={
@@ -12,6 +13,7 @@ export type SourceSelection={
   sourceUv:[number,number,number,number];
   sourceRotation:number;seed:[number,number];rgba:[number,number,number,number];
   pixelCount:number;atlasRows:SelectionRow[];previewComplete:boolean;
+  previewRaster:SelectionRaster|null;
   steps:SelectionStep[];
 };
 /** Ordered artist colors. There is no fixed artistic palette count. */
@@ -73,7 +75,8 @@ export function bindSourceSelection(
     revision:number;cube_uuid:string;texture_uuid:string;
     face:string;seed:[number,number];source_rgba:[number,number,number,number];
     pixel_count:number;atlas_rows:SelectionRow[];
-    preview_complete?:boolean;selection_steps?:SelectionStep[];
+    preview_complete?:boolean;preview_raster?:SelectionRaster|null;
+    selection_steps?:SelectionStep[];
     source_authority:string;write_authority:string;
   },
   width:number,height:number,expectedSteps?:SelectionStep[],
@@ -107,6 +110,19 @@ export function bindSourceSelection(
   if(!validSelectionSteps(steps,hit.size)||!samePlan)return null;
   const complete=response.preview_complete??true;
   if(typeof complete!=='boolean'||response.atlas_rows.length>(complete?4096:0))return null;
+  // The thumbnail is presentation only. Guard transport byte length; never
+  // reinterpret it as a native selection mask or Paint authorization.
+  const raster=response.preview_raster??null;
+  if(raster!==null){
+    if(complete||!Number.isInteger(raster.width)||!Number.isInteger(raster.height)||
+       raster.width<1||raster.height<1||
+       raster.width>Math.min(width,512)||raster.height>Math.min(height,512)||
+       typeof raster.packed_mask_base64!=='string')return null;
+    const bytes=Math.ceil(raster.width*raster.height/8);
+    const encodedLength=4*Math.ceil(bytes/3);
+    if(raster.packed_mask_base64.length!==encodedLength||
+       !/^[A-Za-z0-9+/]*={0,2}$/.test(raster.packed_mask_base64))return null;
+  }
   let count=0,previousY=-1,previousX1=0;
   for(const row of response.atlas_rows){
     if(!row||!Number.isInteger(row.x0)||!Number.isInteger(row.x1)||
@@ -127,6 +143,8 @@ export function bindSourceSelection(
     seed:[...response.seed],rgba:[...response.source_rgba],
     pixelCount:response.pixel_count,previewComplete:complete,
     atlasRows:response.atlas_rows.map(r=>({...r})),
+    previewRaster:raster&&{width:raster.width,height:raster.height,
+      packed_mask_base64:raster.packed_mask_base64},
     steps:steps.map(s=>({mode:s.mode,...(s.seed?{seed:[...s.seed] as [number,number]}:{})})),
   };
 }

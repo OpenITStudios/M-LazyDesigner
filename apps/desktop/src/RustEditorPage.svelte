@@ -27,7 +27,8 @@
   import { protectedAtlasRectangle,
     type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
   import {parseShadeRamp,bindSourceSelection,selectionStepsForStroke,
-    type SourceSelection,type SelectionStep,type SelectionMode,type SelectionRow} from './rustSurfaceTools';
+    type SourceSelection,type SelectionStep,type SelectionMode,type SelectionRow,
+    type SelectionRaster} from './rustSurfaceTools';
   import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 import {BRUSH_PRESET_STORAGE_KEY,planSurfacePattern,readBrushPresets,
     serializeBrushPresets,upsertBrushPreset,validBrushSettings,
@@ -301,7 +302,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     surfaceBrushRadius,surfaceBrushTip,surfaceInkMode,
     surfaceShadeRamp,surfaceShadeDirection,
     surfacePatternMode,surfacePatternPeriod,surfacePatternPhaseX,surfacePatternPhaseY,
-    validSurfaceSelection?surfaceSelection?.seed:null,
+    validSurfaceSelection?surfaceSelection?.steps:null,
   ]);
 
   // Source-backed once/loop/hold playback is admitted only for the strict
@@ -1562,7 +1563,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     revision:number;cube_uuid:string;texture_uuid:string;face:string;
     seed:[number,number];source_rgba:[number,number,number,number];
     pixel_count:number;atlas_rows:Array<{y:number;x0:number;x1:number}>;
-    preview_complete:boolean;selection_steps:SelectionStep[];
+    preview_complete:boolean;preview_raster:SelectionRaster|null;
+    selection_steps:SelectionStep[];
     source_authority:'RUST_SAVED_RGBA8';
     write_authority:'NOT_GRANTED';visual_verdict:'UNVERIFIED';
   };
@@ -1609,7 +1611,9 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       }
       surfaceSampleStatus=selection.pixelCount+
         ' source texels selected on '+selection.face+
-        (selection.previewComplete?'':' (overlay omitted for complex region)')+
+        (selection.previewComplete?'':selection.previewRaster?
+          ' (compact overview; native selection remains full-resolution)':
+          ' (overlay unavailable; native selection is complete)')+
         '. Native Rust recomputes the complete selection at Apply.';
     }catch(cause){showError(cause);}
     finally{busy=false;}
@@ -1632,12 +1636,30 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   }
   // Transient downscaled overlay: never bitmap, UV or Paint authority.
   function drawSurfaceSelectionOverlay(canvas:HTMLCanvasElement,settings:{
-    rows:SelectionRow[];width:number;height:number
+    rows:SelectionRow[];width:number;height:number;
+    raster:SelectionRaster|null;
   }){
     const draw=(data:typeof settings)=>{
       const context=canvas.getContext('2d');
       if(!context)return;
       context.clearRect(0,0,canvas.width,canvas.height);
+      if(data.raster){
+        // Small view-only OR-occupancy overview, not an editable PNG layer.
+        try{
+          if(canvas.width!==data.raster.width||canvas.height!==data.raster.height)return;
+          const bytes=atob(data.raster.packed_mask_base64);
+          if(bytes.length!==Math.ceil(canvas.width*canvas.height/8))return;
+          const pixels=context.createImageData(canvas.width,canvas.height);
+          for(let i=0;i<canvas.width*canvas.height;i++){
+            if((bytes.charCodeAt(i>>3)&(1<<(i&7)))===0)continue;
+            const at=i*4;
+            pixels.data[at]=91;pixels.data[at+1]=177;
+            pixels.data[at+2]=241;pixels.data[at+3]=120;
+          }
+          context.putImageData(pixels,0,0);
+        }catch{/* Unsupported WebView preview never grants native edit permission. */}
+        return;
+      }
       context.fillStyle='rgba(91,177,241,0.38)';
       const sx=canvas.width/data.width,sy=canvas.height/data.height;
       for(const row of data.rows){
@@ -2818,12 +2840,17 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
                 onpointerup={finishPaintStroke}
                 onpointercancel={(event) => finishPaintStroke(event, true)}
                 onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
-              {#if validSurfaceSelection && surfaceSelection?.previewComplete}
+              {#if validSurfaceSelection &&
+                (surfaceSelection?.previewComplete || surfaceSelection?.previewRaster)}
                 <canvas class="surface-selection-overlay"
-                  width={Math.min(snapshot.textureResolution[0],512)}
-                  height={Math.min(snapshot.textureResolution[1],512)}
+                  width={surfaceSelection?.previewRaster?.width ??
+                    Math.min(snapshot.textureResolution[0],512)}
+                  height={surfaceSelection?.previewRaster?.height ??
+                    Math.min(snapshot.textureResolution[1],512)}
                   use:drawSurfaceSelectionOverlay={{rows:surfaceSelection?.atlasRows ?? [],
-                    width:snapshot.textureResolution[0],height:snapshot.textureResolution[1]}}
+                    width:snapshot.textureResolution[0],
+                    height:snapshot.textureResolution[1],
+                    raster:surfaceSelection?.previewRaster ?? null}}
                   aria-hidden="true"></canvas>
               {/if}
               {#each guardedSurfaceMasks as rect}

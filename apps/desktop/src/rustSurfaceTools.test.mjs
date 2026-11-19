@@ -77,3 +77,25 @@ test('native invert step with null seed matches UI-authored seed omission',()=>{
     selection_steps:[{mode:'replace',seed:[0,0]},{mode:'invert',seed:null}]};
   assert.ok(bindSourceSelection(hit,response,16,16,expected));
 });
+
+// SOURCE_AUTHORED_NOT_RUN: view-only fallback for highly fragmented 2K atlas.
+test('packed selection overview is read-only and length validated',()=>{
+  const hit={cubeUuid:'cube',textureUuid:'tex',face:'north',
+    epoch:1,revision:2,sourceUv:[0,0,2048,2048],sourceRotation:0,
+    texel:[0,0],size:[2048,2048],textureIndex:0,contextKey:'stable'};
+  const raster={width:4,height:4,
+    packed_mask_base64:Buffer.from([0b00000011,0b10000000]).toString('base64')};
+  const receipt={revision:2,cube_uuid:'cube',texture_uuid:'tex',
+    face:'north',seed:[0,0],source_rgba:[3,4,5,255],
+    pixel_count:100000,atlas_rows:[],preview_complete:false,
+    preview_raster:raster,selection_steps:[{mode:'replace',seed:[0,0]}],
+    source_authority:'RUST_SAVED_RGBA8',write_authority:'NOT_GRANTED'};
+  const selected=bindSourceSelection(hit,receipt,2048,2048);
+  assert.deepEqual(selected?.previewRaster,raster);
+  assert.equal(selected?.pixelCount,100000);
+  assert.equal(bindSourceSelection(hit,{...receipt,preview_raster:{
+    ...raster,packed_mask_base64:'AA=='
+  }},2048,2048),null);
+  assert.equal(bindSourceSelection(hit,{...receipt,preview_complete:true},
+    2048,2048),null);
+});
