@@ -36,8 +36,17 @@ export function validBrushSettings(v:unknown):v is BrushSettings{
     (o.inkMode!=='shade_ink'||!!parseShadeRamp(o.shadeRamp))&&
     (o.shadeDirection==='darken'||o.shadeDirection==='lighten')&&
     ['none','checker','dots','diagonal'].includes(o.patternMode??'')&&
-    (o.patternMode==='none'||!!planSurfacePattern(o.patternMode!,
-      o.patternPeriod!,o.patternPhaseX!,o.patternPhaseY!));
+    // Presets always carry complete numeric settings. Otherwise an imported
+    // "no pattern" preset could inject undefined inputs when switching mode.
+    typeof o.patternPeriod==='number'&&
+    typeof o.patternPhaseX==='number'&&
+    typeof o.patternPhaseY==='number'&&
+    (o.patternMode==='none'
+      ?Number.isInteger(o.patternPeriod)&&o.patternPeriod>=1&&o.patternPeriod<=U32_MAX&&
+       Number.isInteger(o.patternPhaseX)&&o.patternPhaseX>=0&&o.patternPhaseX<=U32_MAX&&
+       Number.isInteger(o.patternPhaseY)&&o.patternPhaseY>=0&&o.patternPhaseY<=U32_MAX
+      :!!planSurfacePattern(o.patternMode!,
+        o.patternPeriod,o.patternPhaseX,o.patternPhaseY));
 }
 export function readBrushPresets(text:string|null):BrushPreset[]{
   if(!text)return [];

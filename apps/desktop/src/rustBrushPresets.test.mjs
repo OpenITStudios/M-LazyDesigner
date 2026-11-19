@@ -29,3 +29,21 @@ test('invalid local-storage versions and settings never enter Paint',()=>{
   assert.deepEqual(planSurfacePattern('checker',2,1,2),
     {kind:'checker',period:2,phase:[1,2]});
 });
+
+// SOURCE_AUTHORED_NOT_RUN: disabled-pattern presets must still carry valid
+// configuration, because later choosing a pattern reuses these numeric values.
+test('a solid preset cannot persist missing or malformed pattern settings',()=>{
+  const solid={...settings,patternMode:'none'};
+  assert.ok(upsertBrushPreset([],'solid','Solid brush',solid));
+  for(const broken of [
+    {...solid,patternPeriod:undefined},
+    {...solid,patternPhaseX:undefined},
+    {...solid,patternPhaseY:-1},
+    {...solid,patternPeriod:1.5},
+  ]){
+    assert.equal(upsertBrushPreset([],'invalid','Invalid',broken),null);
+    assert.deepEqual(readBrushPresets(serializeBrushPresets([
+      {id:'invalid',name:'Invalid',settings:broken}
+    ])),[]);
+  }
+});
