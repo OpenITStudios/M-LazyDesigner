@@ -1482,12 +1482,15 @@ mod tests {
             stations:vec![
                 super::super::geometry_profile_sweep::GeometryProfileStation {
                     position:[-5,0,0],half_width:2,half_height:2,
+                    twist_degrees:0.0,
                 },
                 super::super::geometry_profile_sweep::GeometryProfileStation {
                     position:[0,0,0],half_width:3,half_height:2,
+                    twist_degrees:0.0,
                 },
                 super::super::geometry_profile_sweep::GeometryProfileStation {
                     position:[0,0,5],half_width:3,half_height:2,
+                    twist_degrees:0.0,
                 },
             ],
         });

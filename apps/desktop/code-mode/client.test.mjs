@@ -523,8 +523,8 @@ test('G3.4b profile sweep binds versioned IDs and keeps mutation unapproved',asy
       name:'vent',uuid_seed:seed,up_axis:'Y',cross_section:'RECTANGLE',
       stations:[
         {position:[-5,0,0],half_width:2,half_height:2},
-        {position:[0,0,0],half_width:3,half_height:2},
-        {position:[0,0,5],half_width:3,half_height:2},
+        {position:[0,0,0],half_width:3,half_height:2,twist_degrees:90},
+        {position:[0,0,5],half_width:3,half_height:2,twist_degrees:90},
       ],
     }],
   }]};
@@ -590,6 +590,16 @@ test('G3.4b profile sweep binds versioned IDs and keeps mutation unapproved',asy
       profile_sweeps:[{...assembly.parts[0].profile_sweeps[0],...changed}]}]};
     await assert.rejects(build(async()=>receipt).planGeometryAssembly({
       input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:input,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  for (const twist_degrees of [-181,181,'90',null]) {
+    const original=assembly.parts[0].profile_sweeps[0];
+    const stations=original.stations.map((s,i)=>
+      i===1?{...s,twist_degrees}:s);
+    const invalid={...assembly,parts:[{...assembly.parts[0],
+      profile_sweeps:[{...original,stations}]}]};
+    await assert.rejects(build(async()=>receipt).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:invalid,
     }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
   }
   assert.equal(approvals,0);

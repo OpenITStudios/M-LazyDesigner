@@ -157,16 +157,17 @@ export interface GeometrySphereSweep {
    * 0.25..1 model units. Not a final voxel/visual fidelity guarantee. */
   max_chord_error?: number;
 }
-/** G3.4b explicit anisotropic, flat-ended LINEAR profile along 3D
- * stations. The initial X/Y/Z up-axis fixes roll; subsequent segment
- * frames follow the minimum tangent-to-tangent rotation.
- * The section is RECTANGLE or ELLIPSE; no twist/mesh/smooth spline
- * is accepted, and the raster is not native/visual fidelity proof.
+/** G3.4d extends the existing flat-ended LINEAR profile with optional
+ * authored station twist. The initial X/Y/Z up-axis fixes roll, then
+ * segment frames use parallel transport and interpolate local twist.
+ * No native mesh, smooth spline or visual-fidelity proof.
  */
 export interface GeometryProfileStation {
   position: [number,number,number];
   half_width: number;
   half_height: number;
+  /** Explicit roll degrees in [-180, 180]; omitted means zero. */
+  twist_degrees?: number;
 }
 export interface GeometryProfileSweep {
   name: string;

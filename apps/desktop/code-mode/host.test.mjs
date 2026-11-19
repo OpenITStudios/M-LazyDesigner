@@ -560,8 +560,8 @@ test('G3.4b profile guest RPC remains one SHA-bound read-only G1 plan',()=>
         name:'vent',uuid_seed:seed,up_axis:'Y',
         cross_section:'ELLIPSE',stations:[
           {position:[-5,0,0],half_width:2,half_height:2},
-          {position:[0,0,0],half_width:3,half_height:2},
-          {position:[0,0,5],half_width:3,half_height:2},
+          {position:[0,0,0],half_width:3,half_height:2,twist_degrees:90},
+          {position:[0,0,5],half_width:3,half_height:2,twist_degrees:90},
         ],
       }],
     }]};

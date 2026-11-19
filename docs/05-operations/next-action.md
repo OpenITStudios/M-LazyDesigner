@@ -1,3 +1,23 @@
+**Active Rust Geometry G3.4d — optional transported profile twist (2026-11-19; SOURCE ONLY):**
+From Rust@c1af977 and Local@422e4d7, the existing G3.4b LINEAR
+RECTANGLE/ELLIPSE profile sweep now accepts optional per-station
+twist_degrees in [-180,180], default zero with old request serialization
+and zero-twist occupancy preserved. The minimum-rotation transported
+frame stays authoritative; one interpolated roll alters local section
+axes and the existing G3.4c taper observation. For material anisotropic
+turns (>=45 degrees, >=1 unit half-extent difference), the single
+raster compares occupancy against the fixed starting angle only until
+a meaningful difference is observed; absent evidence refuses before
+Cube partition. No extra raster, geometry engine, CLI, dependency,
+publisher, renderer, texture/UV packer, OS process, or authorization
+path. Typed Code Mode, native Rust constructors, RPC fixtures and
+owner READMEs updated in one source integration.
+Regressions AUTHORED_NOT_RUN. Cargo, Node, Windows, Blockbench,
+performance, actual twist visibility, visual/reference quality and
+Rust>Local superiority are NOT_EXECUTED/UNVERIFIED.
+Full anisotropic Catmull profile, revolve/loft/OBB/advanced QA remain
+gaps; Geometry remains primary. No CI, release or promotion.
+
 **Active Rust Geometry G3.4c — source-local voxel-visible taper (2026-11-19; SOURCE ONLY):**
 Building on Rust@c38edd09 and Local@422e4d7, G3.4b profile sweeps
 reuse the SAME occupied-cell raster to check meaningful authored

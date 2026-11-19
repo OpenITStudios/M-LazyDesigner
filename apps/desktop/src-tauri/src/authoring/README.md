@@ -158,6 +158,23 @@ No request fields, UUIDs, Code Mode permissions, Box UV allocation,
 existing untapered output, or artist/native acceptance change.
 One Rust positive/negative regression is AUTHORED_NOT_RUN.
 
+**G3.4d optional authored profile twist (2026-11-19; SOURCE ONLY):**
+The existing `GeometryProfileStation` now accepts optional
+`twist_degrees` in [-180, 180]. Omitted/zero preserves the original
+G3.4b source serialization and zero-twist voxel path. Each segment
+linearly interpolates the authored roll around its parallel-transported
+tangent, without a second mesh, scene store, or raster. The G3.4c
+endpoint-band taper observer uses the actual rotated section axes.
+For >=45-degree changes on materially anisotropic profiles (half-width
+versus half-height differs by >=1), the same raster compares occupancy
+against the fixed starting angle until one voxel differs;
+if none does, it refuses `GEOMETRY_PROFILE_TWIST_UNREPRESENTED`.
+Circular/symmetric sections and subtle turns are not falsely claimed
+to have visibly distinct twist. The immutable G1 plan, UUID namespace,
+preflight, Undo, independent Apply approval and untextured Box UV
+limits remain intact. Rust source regressions AUTHORED_NOT_RUN;
+artist/native quality and Rust>Local parity remain UNVERIFIED.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and

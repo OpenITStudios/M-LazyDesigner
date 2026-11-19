@@ -119,6 +119,17 @@ PROFILE_SWEEP, automatic material/UV layout, artist-quality PASS.
 Rust/SDK/guest regression source AUTHORED_NOT_RUN; Blockbench native
 fidelity, performance and geometry-vs-Local parity UNVERIFIED.
 
+**G3.4d optional twist on the same Code Mode profile (2026-11-19; SOURCE ONLY):**
+Each profile `stations[]` entry may set `twist_degrees` in
+[-180, 180], defaulting to zero when absent. Rust alone interpolates
+the authored section roll, reuses the existing voxel partition and
+G3.4c taper guard, and rejects material twist that produces no voxel
+occupancy difference. Code Mode only transports the typed field and
+checks its bounded numeric shape; no JavaScript Geometry solver, extra
+process, trusted write permission or automatic Apply is introduced.
+SDK and host fixture regressions AUTHORED_NOT_RUN; no artistic or
+Blockbench-native acceptance is implied.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

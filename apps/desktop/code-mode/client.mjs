@@ -1034,7 +1034,11 @@ export function createRustCodeModeClient({
                 !['X','Y','Z'].includes(profile.up_axis) ||
                 !['ELLIPSE','RECTANGLE'].includes(profile.cross_section) ||
                 !Array.isArray(profile.stations) ||
-                profile.stations.length < 2 || profile.stations.length > 8) {
+                profile.stations.length < 2 || profile.stations.length > 8 ||
+                profile.stations.some(station => !station ||
+                  (station.twist_degrees !== undefined &&
+                    (!Number.isFinite(station.twist_degrees) ||
+                      Math.abs(station.twist_degrees) > 180)))) {
               declarationValid = false;
               break;
             }
