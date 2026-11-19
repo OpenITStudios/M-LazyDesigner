@@ -241,6 +241,70 @@ test('Code Mode exposes a single host-side code tool, with read-only RPC', () =>
     assert.deepEqual(calls.map((args) => args[0]), ['inspect', 'inspect-batch']);
   }));
 
+test('semantic material guest only receives Rust read-only face plan, not Apply',() =>
+  fixture(async input=>{
+    const intent={
+      expected_revision:0,reference_png_sha256:'b'.repeat(64),
+      cube_uuid:REVIEW_CUBE,texture_uuid:'tier2-atlas',
+      face:'north',material:'painted_metal',
+      light_corner:'upper_left',contrast:'subtle',
+      source_base_rgba:[90,110,130,255],
+      shadow_rgb:[52,62,80],highlight_rgb:[160,175,195],
+    };
+    let writes=0,native=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:()=>{writes++;return true;},
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        native++;
+        assert.equal(argv[0],'plan-semantic-material');
+        const submitted=JSON.parse(await readFile(
+          argv[argv.indexOf('--intent')+1],'utf8'));
+        assert.deepEqual(submitted,intent);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          plan:{expected_revision:0,
+            operations:[{op:'paint_cube_face_regions_guarded',
+              cube_uuid:intent.cube_uuid,texture_uuid:intent.texture_uuid,
+              regions:[{face:'north',from:[0,0],to:[1,1],
+                rgba:[160,175,195,255],erase:false}]}],
+            correction_scope:{texture_uuid:intent.texture_uuid,
+              allowed_regions:[{from:[1,2],to:[5,6]}],
+              preserve_alpha:true,protected_regions:[],
+              expected_before_pixels:[],
+              editable_before_rgba:[intent.source_base_rgba]}},
+          preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+            mutation:{revision:1,operation_count:1,
+              changed_uuids:[intent.texture_uuid]},
+            candidate_sha256:'c'.repeat(64),
+            candidate_summary:{revision:1},
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          material_evidence:{scope:'source_selected_face_semantic_metal_candidate',
+            material:'painted_metal',cube_uuid:intent.cube_uuid,
+            texture_uuid:intent.texture_uuid,face:intent.face,
+            reference_png_sha256:intent.reference_png_sha256,
+            reference_authority:'NOT_VERIFIED_BY_RUST',
+            style_quality:'NOT_EVALUATED',
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+        };
+      },
+      spawnImpl:()=>fakeGuest({method:'planSemanticMaterial',
+        args:{project:'p0',intent}},r=>{
+        assert.equal(r.ok,true);
+        assert.equal(r.result.plan.operations[0].op,'paint_cube_face_regions_guarded');
+        assert.equal(r.result.material_evidence.style_quality,'NOT_EVALUATED');
+        return {planOnly:true};
+      }),
+    });
+    const r=await host.execute({
+      code:'return codemode.planSemanticMaterial({project:"p0"});',
+    });
+    assert.equal(r.value.planOnly,true);
+    assert.equal(native,1);
+    assert.equal(writes,0);
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: the Deno guest may request a bounded G1 plan
 // but has no new file publisher, permitWriteLaunch or model authority.
 test('G1 assembly guest RPC is read-only and keeps apply authorization distinct', () =>

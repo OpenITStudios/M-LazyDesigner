@@ -1264,8 +1264,6 @@ export function createRustCodeModeClient({
         const op=plan?.operations?.[0];
         const e=receipt.material_evidence;
         const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-        const chosenColors=[...intent.shadow_rgb,255].join(',')+'|'+
-          [...intent.highlight_rgb,255].join(',');
         if(receipt.sha256?.toLowerCase()!==digest ||
            receipt.summary?.revision!==0 ||
            plan?.expected_revision!==0 ||
@@ -1289,6 +1287,11 @@ export function createRustCodeModeClient({
            !equal(scope.expected_before_pixels,intent.expected_before_pixels??[]) ||
            !Array.isArray(scope.allowed_regions) ||
            scope.allowed_regions.length!==1 ||
+           !scope.allowed_regions.every(rect=>
+             rect && Array.isArray(rect.from) && Array.isArray(rect.to) &&
+             rect.from.length===2 && rect.to.length===2 &&
+             rect.from.every((v,i)=>Number.isInteger(v)&&v>=0&&
+               Number.isInteger(rect.to[i])&&rect.to[i]>v&&rect.to[i]<=256)) ||
            preview?.status!=='VALIDATED_NOT_APPLIED' ||
            preview?.base_revision!==0 ||
            preview.mutation?.revision!==1 ||

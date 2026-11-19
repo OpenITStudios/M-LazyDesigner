@@ -1206,7 +1206,14 @@ export interface SemanticMaterialProposalReceipt {
   status:"OK";sha256:string;summary:DocumentSummary;
   plan:{expected_revision:0;
     operations:Array<Extract<EditOperation,{op:"paint_cube_face_regions_guarded"}>>;
-    correction_scope:TextureCorrectionScope;
+    correction_scope:{
+      texture_uuid:string;
+      allowed_regions:Array<{from:[number,number];to:[number,number]}>;
+      preserve_alpha:true;
+      protected_regions:Array<{from:[number,number];to:[number,number]}>;
+      expected_before_pixels:Array<{at:[number,number];rgba:[number,number,number,number]}>;
+      editable_before_rgba:Array<[number,number,number,number]>;
+    };
   };
   preflight:PreflightReceipt["preflight"];
   material_evidence:{

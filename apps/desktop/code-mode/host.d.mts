@@ -10,6 +10,7 @@ import type {
   GeometryAssemblyRequest, GeometryAssemblyReceipt,
   GeometryFaceAttachmentRequest, GeometryFaceAttachmentReceipt,
   GeometryResizePropagationRequest, GeometryResizePropagationReceipt,
+  SemanticMaterialIntent, SemanticMaterialProposalReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -147,6 +148,12 @@ export interface CodeModeGuestAPI {
   planGeometryAssembly(args: {
     project:string; assembly:GeometryAssemblyRequest;
   }): Promise<GeometryAssemblyReceipt>;
+  /** Read-only semantic painted-metal proposal. Source/reference string
+   * is NOT artistic approval. No material/texture mutation occurs here.
+   */
+  planSemanticMaterial(args:{
+    project:string;intent:SemanticMaterialIntent;
+  }):Promise<SemanticMaterialProposalReceipt>;
   /** G2 read-only same-Bone face alignment, never a persistent relation. */
   planGeometryAttachment(args: {
     project:string; attachment:GeometryFaceAttachmentRequest;

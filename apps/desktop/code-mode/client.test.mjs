@@ -64,6 +64,92 @@ test('Code Mode forwards only SHA-bound reference/capture paths from trusted SDK
   assert.equal(calls.length,1);
 });
 
+test('P0 semantic material SDK obtains one native guarded source-only proposal, never requests approval', async () => {
+  const intent={
+    expected_revision:0,reference_png_sha256:'b'.repeat(64),
+    cube_uuid:'cube-a',texture_uuid:'texture-a',
+    face:'north',material:'painted_metal',
+    light_corner:'upper_left',contrast:'balanced',
+    source_base_rgba:[90,110,130,255],
+    shadow_rgb:[52,62,80],highlight_rgb:[160,175,195],
+    protected_regions:[],expected_before_pixels:[],
+  };
+  const operation={
+    op:'paint_cube_face_regions_guarded',cube_uuid:intent.cube_uuid,
+    texture_uuid:intent.texture_uuid,
+    regions:[{face:'north',from:[0,0],to:[1,1],
+      rgba:[160,175,195,255],erase:false},
+      {face:'north',from:[3,3],to:[4,4],
+        rgba:[52,62,80,255],erase:false}],
+  };
+  const receipt={
+    status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations:[operation],
+      correction_scope:{texture_uuid:intent.texture_uuid,
+        allowed_regions:[{from:[1,2],to:[5,6]}],
+        preserve_alpha:true,protected_regions:[],
+        expected_before_pixels:[],
+        editable_before_rgba:[intent.source_base_rgba]}},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:1,changed_uuids:['texture-a']},
+      candidate_sha256:'c'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    material_evidence:{scope:'source_selected_face_semantic_metal_candidate',
+      material:'painted_metal',cube_uuid:intent.cube_uuid,
+      texture_uuid:intent.texture_uuid,face:intent.face,
+      reference_png_sha256:intent.reference_png_sha256,
+      reference_authority:'NOT_VERIFIED_BY_RUST',
+      style_quality:'NOT_EVALUATED',visual_verdict:'UNVERIFIED',
+      write_authority:'NOT_GRANTED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+  };
+  let nativeCalls=0,approvedCalls=0;
+  const client=createRustCodeModeClient({
+    binary:BIN,authorizeMutation:()=>{approvedCalls++;return true;},
+    runner:async argv=>{
+      nativeCalls++;
+      assert.equal(argv[0],'plan-semantic-material');
+      assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+      const request=JSON.parse(await readFile(argv[argv.indexOf('--intent')+1],'utf8'));
+      assert.deepEqual(request,intent);
+      return receipt;
+    },
+  });
+  const proposal=await client.planSemanticMaterial({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,intent,
+  });
+  assert.equal(proposal.plan.operations.length,1);
+  assert.equal(proposal.preflight.write_authority,'NOT_GRANTED');
+  assert.equal(proposal.material_evidence.reference_authority,'NOT_VERIFIED_BY_RUST');
+  for(const invalid of [
+    {...intent,face:'front'}, {...intent,material:'wood'},
+    {...intent,shadow_rgb:[8,9,256]},
+    {...intent,source_base_rgba:[90,110,130,0]},
+    {...intent,expected_revision:1},
+    {...intent,untrusted_approval:true},
+  ]){
+    await assert.rejects(client.planSemanticMaterial({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,intent:invalid,
+    }),/CODE_MODE_SEMANTIC_MATERIAL_INPUT_INVALID/);
+  }
+  assert.equal(nativeCalls,1);
+  assert.equal(approvedCalls,0);
+  for(const forged of [
+    {...receipt,material_evidence:{...receipt.material_evidence,
+      reference_authority:'APPROVED'}},
+    {...receipt,plan:{...receipt.plan,operations:[{...operation,
+      regions:[{...operation.regions[0],rgba:[1,1,1,255]}]}]}},
+    {...receipt,preflight:{...receipt.preflight,write_authority:'GRANTED'}},
+    {...receipt,plan:{...receipt.plan,
+      correction_scope:{...receipt.plan.correction_scope,editable_before_rgba:[]}}},
+  ]){
+    const client=createRustCodeModeClient({binary:BIN,runner:async()=>forged});
+    await assert.rejects(client.planSemanticMaterial({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,intent,
+    }),/CODE_MODE_SEMANTIC_MATERIAL_RECEIPT_INVALID/);
+  }
+});
+
 // SOURCE_AUTHORED_NOT_RUN: G1 assembly is a read-only, SHA-pinned
 // temporary Rust request and never asks a trusted host for write approval.
 test('G1 Geometry assembly composes an exact Rust plan without mutation permission', async () => {
