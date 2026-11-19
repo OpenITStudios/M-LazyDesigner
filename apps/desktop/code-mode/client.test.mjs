@@ -2616,8 +2616,8 @@ test('reviewed source-color allowlist is sent as exact RGBA preimage guard',asyn
     {...base,editableBeforeRgba:[[80,90,100,300]]},
     {...base,editableBeforeRgba:[[80,90,100]]},
     {...base,editableBeforeRgba:17},
-    {...base,editableBeforeRgba:Array.from({length:17},
-      (_,i)=>[i,90,100,255])},
+    {...base,editableBeforeRgba:Array.from({length:8192},
+      (_,i)=>[i%256,Math.floor(i/256),100,255])},
   ]) {
     await assert.rejects(apply(bad),/CORRECTION_SCOPE_INVALID/);
   }
@@ -2804,4 +2804,17 @@ test('failing native observer cannot change Rust command results', async () => {
   });
   const result=await client.inspect({input:'/abs/source.bbmodel'});
   assert.equal(result.status,'OK');
+});
+
+
+// SOURCE_AUTHORED_NOT_RUN: exact original-color guard supports many swatches
+// but never treats a page as approval to change any unobserved source pixel.
+test('source correction transport admits many reviewed RGBAs without a 16-slot ceiling',()=>{
+  const swatches=Array.from({length:36},(_,i)=>[i,50,90,255]);
+  const scope=normalizedCorrectionScope({
+    textureUuid:'00000000-0000-4000-8000-000000007101',
+    allowedRegions:[{from:[0,0],to:[64,64]}],preserveAlpha:true,
+    editableBeforeRgba:swatches,
+  });
+  assert.deepEqual(scope.editable_before_rgba,swatches);
 });

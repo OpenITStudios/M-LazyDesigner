@@ -33,7 +33,7 @@ pub use correction_scope::{TextureCorrectionScope, CorrectionRectangle, Expected
 mod material_pair;
 pub use material_pair::{inspect_material_pair, MaterialPatchRegion};
 mod material_styling;
-pub use material_styling::{inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors};
+pub use material_styling::{inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_texture_source_colors_page};
 mod material_face;
 mod material_form;
 mod material_synthesis;

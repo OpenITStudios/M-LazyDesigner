@@ -158,10 +158,20 @@ pub fn inspect_texture_styling_region(doc:&AuthoringDocument,
 /// This allows a trusted reviewer to CHOOSE explicit overwrite preconditions
 /// from actual source colors instead of guessing RGBs from a lit 3D render.
 /// It is not a permission/approval list, source-reference match or artistic
-/// verdict. More than 16 original colors makes the returned palette partial.
+/// verdict. The legacy first page remains small for low tool usage, but
+/// all exact original colors can be inspected through deterministic pages.
 pub fn inspect_texture_source_colors(
     doc:&AuthoringDocument, texture_uuid:&str, region:&MaterialPatchRegion
 )->Result<Value>{
+    inspect_texture_source_colors_page(doc,texture_uuid,region,0,16)
+}
+pub fn inspect_texture_source_colors_page(
+    doc:&AuthoringDocument, texture_uuid:&str, region:&MaterialPatchRegion,
+    offset:usize,limit:usize,
+)->Result<Value>{
+    if offset>4096 || limit==0 || limit>64{
+        return Err("SOURCE_COLORS_PAGE_INVALID".into());
+    }
     doc.validate()?;
     if !super::valid_uuid(texture_uuid) {
         return Err("SOURCE_COLORS_UUID_INVALID".into());
@@ -199,11 +209,11 @@ pub fn inspect_texture_source_colors(
     let unique=counts.len();
     let mut colors:Vec<_>=counts.into_iter().collect();
     colors.sort_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
-    colors.truncate(16);
-    let entries=colors.into_iter().map(|(rgba,pixels)|json!({
-        "rgba":rgba,"pixels":pixels
-    })).collect::<Vec<_>>();
-    let complete=unique<=16;
+    let end=offset.saturating_add(limit).min(unique);
+    let entries=colors.into_iter().skip(offset).take(limit)
+        .map(|(rgba,pixels)|json!({"rgba":rgba,"pixels":pixels}))
+        .collect::<Vec<_>>();
+    let complete=offset==0 && end==unique;
     Ok(json!({
         "scope":"saved_physical_atlas_original_rgba_colors",
         "texture_uuid":texture_uuid,
@@ -211,10 +221,14 @@ pub fn inspect_texture_source_colors(
         "sampled_pixels":w*h,
         "unique_rgba":unique,
         "colors":entries,
+        "offset":offset,"limit":limit,
+        "next_offset":if end<unique{Some(end)}else{None},
+        "histogram_complete":true,
         "complete":complete,
-        "reason":if complete {Value::Null}else{
-            json!("SOURCE_COLORS_MORE_THAN_16_UNIQUE")
-        },
+        "reason":if complete {Value::Null}
+            else if offset==0 && limit==16 {
+                json!("SOURCE_COLORS_MORE_THAN_16_UNIQUE")
+            }else{json!("SOURCE_COLORS_PAGED")},
         "visual_verdict":"UNVERIFIED",
         "texture_completion_attested":false,
         "note":"Measured original saved texture RGBA only. The reviewer must independently choose which colors may be overwritten; these counts grant no paint permission."
@@ -450,6 +464,18 @@ mod tests{
         assert_eq!(detailed["colors"].as_array().unwrap().len(),16);
         assert_eq!(detailed["complete"],false);
         assert_eq!(detailed["reason"],"SOURCE_COLORS_MORE_THAN_16_UNIQUE");
+        assert_eq!(detailed["next_offset"],16);
+        assert_eq!(detailed["histogram_complete"],true);
+        let rest=inspect_texture_source_colors_page(s.document(),TEX,
+            &MaterialPatchRegion{from:[1,3],to:[18,4]},16,64).unwrap();
+        assert_eq!(rest["unique_rgba"],17);
+        assert_eq!(rest["colors"].as_array().unwrap().len(),1);
+        assert_eq!(rest["offset"],16);
+        assert_eq!(rest["next_offset"],Value::Null);
+        assert_eq!(rest["reason"],"SOURCE_COLORS_PAGED");
+        assert_eq!(inspect_texture_source_colors_page(s.document(),TEX,
+            &MaterialPatchRegion{from:[1,3],to:[18,4]},0,65).unwrap_err(),
+            "SOURCE_COLORS_PAGE_INVALID");
         assert_eq!(detailed["visual_verdict"],"UNVERIFIED");
     }
 

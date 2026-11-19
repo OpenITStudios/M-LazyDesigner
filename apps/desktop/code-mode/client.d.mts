@@ -983,8 +983,11 @@ export interface TextureSourceColorsEvidence {
   texture_uuid:string;region:MaterialPatchRegion;
   sampled_pixels:number;unique_rgba:number;
   colors:Array<{rgba:[number,number,number,number];pixels:number}>;
+  /** Complete histogram counts; colors is a bounded page, not a color cap. */
+  histogram_complete:true;
+  offset:number;limit:number;next_offset:number|null;
   complete:boolean;
-  reason:null|"SOURCE_COLORS_MORE_THAN_16_UNIQUE";
+  reason:null|"SOURCE_COLORS_MORE_THAN_16_UNIQUE"|"SOURCE_COLORS_PAGED";
   visual_verdict:"UNVERIFIED";texture_completion_attested:false;
   note:string;
 }
@@ -1026,7 +1029,8 @@ export type InspectBatchQuery =
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
   | { kind: "material_face_patch"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"]; region: MaterialPatchRegion; face_spans?:Array<{y:number;x0:number;x1:number}> }
   | { kind: "texture_styling"; texture_uuid: string; region: MaterialPatchRegion }
-  | { kind: "texture_source_colors"; texture_uuid: string; region: MaterialPatchRegion }
+  | { kind: "texture_source_colors"; texture_uuid: string; region: MaterialPatchRegion;
+      offset?:number;limit?:number }
   | { kind: "texture_styling_face"; texture_uuid: string; cube_uuid: string; face: CubeFaceSurface["side"] }
   | { kind: "catalog"; category: CatalogPage["kind"]; offset?: number; limit?: number }
   | { kind: "texture"; index: number }

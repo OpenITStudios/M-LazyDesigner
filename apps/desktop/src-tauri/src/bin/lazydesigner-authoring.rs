@@ -4,7 +4,7 @@
 use lazydesigner::authoring::{
     sha256, export_paint_png, export_bedrock_geometry, inspect_rotation_track, inspect_transform_track, inspect_cube_surfaces, inspect_paint_alpha, inspect_cube_uv_alpha, inspect_cube_uv_sharing, inspect_model_texture_coverage_filtered, inspect_animation_effect_events,
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
-    inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession, ValidatedInspection,
+    inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors_page, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession, ValidatedInspection,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
     GeometryAssemblyRequest, GeometryFaceAttachmentRequest,
     GeometryResizePropagationRequest, SemanticMaterialIntent,
@@ -470,7 +470,8 @@ enum InspectBatchQuery {
     MaterialFacePatch { texture_uuid: String, cube_uuid: String, face: String,
         region: MaterialPatchRegion, face_spans: Option<Vec<FaceLocalRowSpan>> },
     TextureStyling { texture_uuid: String, region: MaterialPatchRegion },
-    TextureSourceColors { texture_uuid: String, region: MaterialPatchRegion },
+    TextureSourceColors { texture_uuid: String, region: MaterialPatchRegion,
+        offset:Option<usize>,limit:Option<usize> },
     TextureStylingFace { texture_uuid: String, cube_uuid: String, face: String },
     Catalog { category: String, offset: Option<usize>, limit: Option<usize> },
     Texture { index: usize },
@@ -593,9 +594,10 @@ fn inspect_batch_with_view(
                     doc,batch_id(&texture_uuid)?,&region)?;
                 json!({"kind":"texture_styling","styling":styling})
             },
-            InspectBatchQuery::TextureSourceColors {texture_uuid,region} => {
-                let colors=inspect_texture_source_colors(
-                    doc,batch_id(&texture_uuid)?,&region)?;
+            InspectBatchQuery::TextureSourceColors {texture_uuid,region,offset,limit} => {
+                let colors=inspect_texture_source_colors_page(
+                    doc,batch_id(&texture_uuid)?,&region,
+                    offset.unwrap_or(0),limit.unwrap_or(16))?;
                 json!({"kind":"texture_source_colors","colors":colors})
             },
             InspectBatchQuery::TextureStylingFace {texture_uuid,cube_uuid,face} => {

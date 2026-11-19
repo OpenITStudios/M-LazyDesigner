@@ -163,7 +163,8 @@ export function normalizedCorrectionScope(scope) {
   if(scope.editableBeforeRgba!==undefined){
     if(!Array.isArray(scope.editableBeforeRgba) ||
        scope.editableBeforeRgba.length<1 ||
-       scope.editableBeforeRgba.length>16){
+       scope.editableBeforeRgba.length>256*256 ||
+       Buffer.byteLength(JSON.stringify(scope.editableBeforeRgba),'utf8')>PLAN_LIMIT){
       throw new TypeError('CORRECTION_SCOPE_INVALID');
     }
     const seen=new Set();
@@ -505,7 +506,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
   material_face_patch: ['texture_uuid','cube_uuid','face','region','face_spans'],
   texture_styling: ['texture_uuid','region'],
-  texture_source_colors: ['texture_uuid','region'],
+  texture_source_colors: ['texture_uuid','region','offset','limit'],
   texture_styling_face: ['texture_uuid','cube_uuid','face'],
   catalog: ['category', 'offset', 'limit'],
   texture: ['index'],
