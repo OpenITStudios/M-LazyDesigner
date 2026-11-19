@@ -3,7 +3,8 @@
 use super::{EditorSession,Result,MAX_PLAN_BYTES,
     correction_scope::{CorrectionRectangle,TextureCorrectionScope},
     surface_paint::{SurfaceBrushTip,admit_face,hard_footprint},
-    surface_selection::{self,SelectionStep},paint,EditOperation,ExactPixelPatch};
+    surface_selection::{self,SelectionStep},surface_pattern::SurfacePattern,
+    paint,EditOperation,ExactPixelPatch};
 use serde::{Deserialize,Serialize};
 use std::collections::{HashMap,HashSet};
 
@@ -23,6 +24,8 @@ pub struct SurfaceShadeInkIntent{
     pub points:Vec<[u32;2]>,
     pub brush_radius:u8,
     pub brush_tip:SurfaceBrushTip,
+    #[serde(default)]
+    pub pattern:Option<SurfacePattern>,
     #[serde(default)]
     pub selection_seed:Option<[u32;2]>,
     #[serde(default)]
@@ -69,7 +72,7 @@ pub(super) fn apply(
             &face,&original,seed,&intent.protected_regions)).transpose()?
     };
     let candidates=hard_footprint(&face,&intent.points,
-        intent.brush_radius,intent.brush_tip)?;
+        intent.brush_radius,intent.brush_tip,intent.pattern.as_ref())?;
     let mut patches=Vec::new();
     let mut seen=HashSet::new();
     for at in candidates{
@@ -173,7 +176,7 @@ mod tests{
             expected_face_uv:[0.0,0.0,4.0,4.0],
             expected_face_rotation:0,points:vec![[0,0],[0,0],[2,2]],
             brush_radius:1,brush_tip:SurfaceBrushTip::Square,
-            selection_seed:None,selection_steps:vec![],protected_regions:vec![],
+            selection_seed:None,selection_steps:vec![],pattern:None,protected_regions:vec![],
             shade_ramp:vec![[40,50,60,255],[90,100,110,255],
                 [150,160,170,255]],
             direction:ShadeInkDirection::Lighten,

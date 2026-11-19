@@ -7,6 +7,7 @@ use super::{
     face_regions, face_uv, material_face, paint, uv_sharing, EditOperation,
     EditorSession, MaterialPatchRegion, MutationReceipt, Result, FACE_NAMES,
     AuthoringDocument, surface_seam, surface_selection::{self,SelectionStep},
+    surface_pattern::SurfacePattern,
     MAX_PLAN_BYTES,
 };
 use serde::{Deserialize,Serialize};
@@ -72,6 +73,9 @@ pub struct SurfacePaintIntent {
     pub brush_radius:u8,
     #[serde(default)]
     pub brush_tip:SurfaceBrushTip,
+    /// Optional, face-local procedural stencil; never a second bitmap owner.
+    #[serde(default)]
+    pub pattern:Option<SurfacePattern>,
     /// Optional second source-verified, coplanar adjacent Cube face.
     #[serde(default)]
     pub seam:Option<surface_seam::SurfaceSeamPatch>,
@@ -162,12 +166,13 @@ pub(super) fn sample(
 }
 pub(super) fn hard_footprint(
     face:&FaceBinding,centers:&[[u32;2]],radius:u8,
-    tip:SurfaceBrushTip,
+    tip:SurfaceBrushTip,pattern:Option<&SurfacePattern>,
 )->Result<Vec<[u32;2]>>{
     if centers.is_empty()||centers.len()>paint::MAX_STROKE_POINTS||
        radius==0||radius>4{
         return Err("SURFACE_BRUSH_POINTS_INVALID".into());
     }
+    if let Some(p)=pattern{p.validate(face.size)?;}
     let d=i64::from(radius-1);
     let mut seen=HashSet::new();
     let mut out=Vec::new();
@@ -183,6 +188,7 @@ pub(super) fn hard_footprint(
                 let x=i64::from(center[0])+dx,y=i64::from(center[1])+dy;
                 if x<0||y<0||x>=i64::from(face.size[0])||
                    y>=i64::from(face.size[1]){continue;}
+                if pattern.is_some_and(|p|!p.admits([x as u32,y as u32])){continue;}
                 let at=atlas_for_local(face,[x as u32,y as u32])?;
                 if seen.insert(at){
                     if out.len()>=paint::MAX_STROKE_POINTS{
@@ -200,11 +206,12 @@ fn gather(
     base:[u8;4],radius:u8,tip:SurfaceBrushTip,
     protected:&[CorrectionRectangle],
     selection:Option<&surface_selection::ComputedSelection>,
-    seen:&mut HashSet<[u32;2]>,out:&mut Vec<[u32;2]>,
+    pattern:Option<&SurfacePattern>,seen:&mut HashSet<[u32;2]>,out:&mut Vec<[u32;2]>,
 )->Result<()>{
     if centers.is_empty()||centers.len()>paint::MAX_STROKE_POINTS{
         return Err("SURFACE_PAINT_POINTS_INVALID".into());
     }
+    if let Some(p)=pattern{p.validate(face.size)?;}
     let around=i64::from(radius-1);
     for &center in centers{
         if center[0]>=face.size[0]||center[1]>=face.size[1] {
@@ -219,6 +226,7 @@ fn gather(
                 let y=i64::from(center[1])+dy;
                 if x<0||y<0||x>=i64::from(face.size[0])||
                    y>=i64::from(face.size[1]){continue;}
+                if pattern.is_some_and(|p|!p.admits([x as u32,y as u32])){continue;}
                 let at=atlas_for_local(face,[x as u32,y as u32])?;
                 if !seen.insert(at){continue;}
                 let idx=((at[1] as usize)*face.width as usize+
@@ -283,6 +291,9 @@ pub(super) fn apply(
         }
         Ok(admitted)
     }).transpose()?;
+    if intent.pattern.is_some()&&second.is_some(){
+        return Err("SURFACE_PATTERN_SEAM_UNSUPPORTED".into());
+    }
     if (intent.selection_seed.is_some()||!intent.selection_steps.is_empty())&&second.is_some(){
         return Err("SURFACE_SELECTION_SEAM_UNSUPPORTED".into());
     }
@@ -307,11 +318,11 @@ pub(super) fn apply(
     let mut points=Vec::new();
     gather(&rgba,&first,&intent.points,intent.source_base_rgba,
         intent.brush_radius,intent.brush_tip,&intent.protected_regions,
-        selected.as_ref(),&mut seen,&mut points)?;
+        selected.as_ref(),intent.pattern.as_ref(),&mut seen,&mut points)?;
     if let (Some(bridge),Some(face))=(&intent.seam,&second){
         gather(&rgba,face,&bridge.points,intent.source_base_rgba,
             intent.brush_radius,intent.brush_tip,&intent.protected_regions,
-            None,&mut seen,&mut points)?;
+            None,None,&mut seen,&mut points)?;
     }
     if points.is_empty(){
         return Err("SURFACE_PAINT_NO_EDITABLE_PIXELS".into());
@@ -374,7 +385,7 @@ mod tests{
             source_base_rgba:[80,100,120,255],
             paint_rgba:[140,150,160,255],
             points:vec![[0,0],[1,1],[2,2],[3,3]],
-            selection_seed:None,selection_steps:vec![],
+            selection_seed:None,selection_steps:vec![],pattern:None,
             brush_radius:1,brush_tip:SurfaceBrushTip::Square,seam:None,
             protected_regions:vec![CorrectionRectangle{
                 from:[1,1],to:[2,2],
