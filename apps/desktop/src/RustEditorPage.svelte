@@ -20,6 +20,9 @@
     type SemanticMaterialPreviewReceipt, type SemanticMaterialReferenceReceipt,
     type SemanticRejectReason
   } from './rustSemanticMaterialPreview';
+  import { matchingExternalTextureCandidate,externalTextureViewportSources,
+    type ExternalFaceTextureIntent,type ExternalFaceTextureDraft,
+    type ExternalFaceTextureReceipt } from './rustExternalTexturePreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
@@ -81,6 +84,14 @@
   let semanticRejectReason:SemanticRejectReason='flat_volume';
   let semanticRejected:{fingerprint:string;reason:SemanticRejectReason}|null=null;
   let semanticRejectionNote='';
+  // View-only external editor candidate; Rust owns the bitmap and history.
+  let externalBase='#5a6e82';
+  let externalPreview:ExternalFaceTextureDraft|null=null;
+  let externalShowCandidate=false,externalViewedSource=false,
+    externalViewedCandidate=false,externalReviewed=false;
+  let externalSourceCapture:string|null=null;
+  let externalCandidateCapture:string|null=null;
+  let externalCapturedView:ReviewViewId|null=null;
   let paintStroke: { pointerId: number; textureIndex: number; epoch: number; revision: number; points: PaintPoint[]; rgba: [number, number, number, number]; radius: number; erase: boolean; rectangle: boolean; overflow: boolean } | null = null;
   let menu: Menu = null;
   let loading = true;
@@ -205,16 +216,27 @@
   $: faceRotation = supportedFaceUvRotation(selectedCube?.faces[selectedFace]);
   $: validSemanticPreview = matchingSemanticCandidate(snapshot,semanticPreview,
     selectedId,selectedFace,paintTextureIndex,semanticReferenceSha);
-  $: modelTextureSources = semanticViewportSources(snapshot,semanticPreview,
-    semanticShowCandidate,validSemanticPreview);
+  $: validExternalPreview = matchingExternalTextureCandidate(snapshot,
+    externalPreview,selectedId,selectedFace,paintTextureIndex);
+  $: modelTextureSources = externalTextureViewportSources(
+    snapshot,externalPreview,externalShowCandidate,validExternalPreview,
+    semanticViewportSources(snapshot,semanticPreview,
+      semanticShowCandidate,validSemanticPreview));
+  $: externalReadyForApply = semanticReviewReady(
+    validExternalPreview &&
+      matchingRenderedMaterialPair(externalSourceCapture,externalCandidateCapture,
+        externalCapturedView,reviewViewId),
+    externalViewedSource,externalViewedCandidate,externalReviewed);
   $: semanticReadyForApply = semanticReviewReady(
     validSemanticPreview &&
       matchingRenderedMaterialPair(semanticSourceCapture,semanticCandidateCapture,
         semanticCapturedView,reviewViewId),
     semanticViewedSource,semanticViewedCandidate,semanticReviewed);
-  $: semanticAtlasSource = validSemanticPreview && semanticShowCandidate &&
-    semanticPreview ? semanticPreview.candidatePngSource :
-    snapshot?.texturePreviewSources[paintTextureIndex] ?? null;
+  $: paintAtlasSource = validExternalPreview && externalShowCandidate && externalPreview
+    ? externalPreview.candidatePngSource
+    : validSemanticPreview && semanticShowCandidate && semanticPreview
+      ? semanticPreview.candidatePngSource
+      : snapshot?.texturePreviewSources[paintTextureIndex] ?? null;
 
   // Source-backed once/loop/hold playback is admitted only for the strict
   // numeric-linear projection. Stale snapshots and unknown clips pause.
@@ -643,7 +665,7 @@
   };
   async function exportReviewCapture() {
     if (!snapshot || snapshot.dirty || !snapshot.sourceName ||
-        busy || loading || paintStroke || validSemanticPreview ||
+        busy || loading || paintStroke || validSemanticPreview || validExternalPreview ||
         workspaceMode === 'animate') return;
     const epoch = snapshot.epoch;
     const revision = snapshot.revision;
@@ -1129,11 +1151,95 @@
     semanticViewedSource=false;semanticViewedCandidate=false;
     semanticReviewed=false;
   }
+  function clearExternalPreview(){
+    externalPreview=null;externalShowCandidate=false;
+    externalSourceCapture=null;externalCandidateCapture=null;
+    externalCapturedView=null;
+    externalViewedSource=false;externalViewedCandidate=false;
+    externalReviewed=false;
+  }
   function clearSemanticPreview(){
     semanticPreview=null;
     semanticShowCandidate=false;
     clearSemanticComparison();
+    clearExternalPreview();
   }
+  function externalIntent():ExternalFaceTextureIntent|null{
+    if(!snapshot||!selectedId||
+       !snapshot.paintEditableTextures[paintTextureIndex]||
+       !snapshot.texturePreviewSources[paintTextureIndex])return null;
+    const uuid=snapshot.textureUuids[paintTextureIndex];
+    const color=sourceRgb(externalBase);
+    if(!uuid||!color)return null;
+    return {
+      expected_revision:snapshot.revision,cube_uuid:selectedId,
+      texture_uuid:uuid,face:selectedFace as ExternalFaceTextureIntent['face'],
+      source_base_rgba:[...color,255],protected_regions:[],
+      expected_before_pixels:[],
+    };
+  }
+  async function chooseExternalTextureCandidate(){
+    if(!snapshot||busy||loading||paintStroke||workspaceMode!=='paint')return;
+    const intent=externalIntent();
+    if(!intent){error='Select an editable atlas, Cube and face.';return;}
+    const {epoch,revision}=snapshot;
+    clearSemanticPreview();busy=true;error='';closeMenus();
+    try{
+      const receipt=await invoke<ExternalFaceTextureReceipt|null>(
+        'rust_editor_preview_external_face_png',{
+          expectedEpoch:epoch,expectedRevision:revision,intent,
+        });
+      if(!receipt)return;
+      const draft={...receipt,intent};
+      if(!matchingExternalTextureCandidate(snapshot,draft,
+        selectedId,selectedFace,paintTextureIndex))
+        throw new Error('EXTERNAL_TEXTURE_PREVIEW_STALE');
+      externalPreview=draft;
+      notice='Disposable edited PNG loaded. Capture Source and Candidate before Apply.';
+    }catch(cause){clearExternalPreview();showError(cause);}
+    finally{busy=false;}
+  }
+  async function showExternalTextureCandidate(value:boolean){
+    if(!validExternalPreview||!externalPreview||busy||!snapshot||!viewport)return;
+    const expected=externalPreview,view=reviewViewId,index=expected.textureIndex;
+    const source=value?expected.candidatePngSource:
+      snapshot.texturePreviewSources[index];
+    if(!source)return;
+    busy=true;error='';externalShowCandidate=value;externalReviewed=false;
+    if(externalCapturedView!==null&&externalCapturedView!==view){
+      externalSourceCapture=null;externalCandidateCapture=null;
+      externalViewedSource=false;externalViewedCandidate=false;
+      externalCapturedView=null;
+    }
+    try{
+      // Existing RustViewport owns exact loaded texture + fixed-camera guard.
+      await tick();
+      if(document.hidden)throw new Error('EXTERNAL_TEXTURE_WINDOW_INACTIVE');
+      const png=viewport.captureReviewPng(view,{index,source});
+      if(externalPreview!==expected||!validExternalPreview||
+         reviewViewId!==view)throw new Error('EXTERNAL_TEXTURE_COMPARISON_STALE');
+      externalCapturedView=view;
+      if(value){externalCandidateCapture=png;externalViewedCandidate=true;}
+      else{externalSourceCapture=png;externalViewedSource=true;}
+    }catch(cause){
+      if(value){externalCandidateCapture=null;externalViewedCandidate=false;}
+      else{externalSourceCapture=null;externalViewedSource=false;}
+      showError(cause);
+    }finally{busy=false;}
+  }
+  async function applyExternalTextureCandidate(){
+    if(!externalPreview||!externalReadyForApply||busy)return;
+    const draft=externalPreview;
+    const next=await command('rust_editor_apply_external_face_png',{
+      expectedEpoch:draft.epoch,expectedRevision:draft.revision,
+      intent:draft.intent,candidatePngSource:draft.candidatePngSource,
+      expectedSourceSha256:draft.sourceModelSha256,
+      expectedCandidateSha256:draft.candidateSha256,
+    });
+    if(next)notice='Reviewed PNG applied to existing atlas in one Rust Undo step. Artistic quality remains unverified.';
+    else clearExternalPreview();
+  }
+
   async function chooseSemanticReference(){
     if(!snapshot||busy||loading||paintStroke)return;
     const {epoch,revision}=snapshot;
@@ -1337,7 +1443,7 @@
   }
 
   function startPaintStroke(event: PointerEvent) {
-    if (!snapshot || busy || validSemanticPreview || paintStroke || event.button !== 0 ||
+    if (!snapshot || busy || validSemanticPreview || validExternalPreview || paintStroke || event.button !== 0 ||
         !snapshot.paintEditableTextures[paintTextureIndex]) return;
     const target = event.currentTarget;
     if (!(target instanceof HTMLImageElement)) return;
@@ -1887,6 +1993,69 @@
         ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
+      <section class="paint-starter semantic-material-panel" aria-label="External pixel editor PNG">
+        <div class="dock-title"><span>EXTERNAL PIXEL EDITOR</span></div>
+        <p class="hint">Export the current atlas PNG and edit it in Aseprite,
+          Pixelorama, Photoshop or Krita. Reimport as a disposable candidate
+          for one explicitly mapped, non-shared Cube face. Only the selected
+          original base RGB may change; alpha and other original details cannot.</p>
+        <div class="semantic-material-fields">
+          <label>Face
+            <select bind:value={selectedFace} disabled={busy || !!paintStroke}
+              onchange={clearSemanticPreview}>
+              {#each FACES as face}<option value={face}>{face}</option>{/each}
+            </select>
+          </label>
+          <label>Original editable RGB
+            <input type="color" bind:value={externalBase}
+              disabled={busy || !!paintStroke} onchange={clearExternalPreview}/>
+          </label>
+        </div>
+        <button type="button" disabled={busy || loading || !!paintStroke ||
+            !selectedId || !snapshot.paintEditableTextures[paintTextureIndex] ||
+            !snapshot.texturePreviewSources[paintTextureIndex]}
+          onclick={() => void chooseExternalTextureCandidate()}>
+          Choose edited PNG…
+        </button>
+        {#if validExternalPreview}
+          <p class="hint">Selected PNG {externalPreview?.selectedPngSha256.slice(0,12)}
+            · model unchanged. Capture both renders using the same fixed camera.</p>
+          <div class="semantic-material-actions" role="group" aria-label="External PNG comparison">
+            <button type="button" disabled={busy}
+              onclick={() => void showExternalTextureCandidate(false)}>Capture Source</button>
+            <button type="button" disabled={busy}
+              onclick={() => void showExternalTextureCandidate(true)}>Capture Candidate</button>
+            <button type="button" disabled={busy}
+              onclick={clearExternalPreview}>Discard</button>
+          </div>
+          {#if externalSourceCapture || externalCandidateCapture}
+            <div class="semantic-material-comparison" aria-label="External PNG source candidate renders">
+              {#if externalSourceCapture}
+                <figure><img src={externalSourceCapture} draggable="false"
+                  alt={'Source at '+externalCapturedView}/>
+                  <figcaption>Source · {externalCapturedView}</figcaption></figure>
+              {/if}
+              {#if externalCandidateCapture}
+                <figure><img src={externalCandidateCapture} draggable="false"
+                  alt={'External PNG candidate at '+externalCapturedView}/>
+                  <figcaption>Candidate · {externalCapturedView}</figcaption></figure>
+              {/if}
+            </div>
+          {/if}
+          <label class="semantic-material-review">
+            <input type="checkbox" bind:checked={externalReviewed}
+              disabled={busy || !externalViewedSource || !externalViewedCandidate ||
+                !matchingRenderedMaterialPair(externalSourceCapture,externalCandidateCapture,
+                  externalCapturedView,reviewViewId)}/>
+            I compared the matching renders and checked existing markings.
+          </label>
+          <button type="button" disabled={busy || !externalReadyForApply}
+            onclick={() => void applyExternalTextureCandidate()}>Apply reviewed external PNG</button>
+          <p class="hint">RGBA8 PNG must have the exact atlas dimensions. Marks
+            with the same base RGB cannot be recognized automatically; preserve
+            them before acknowledging the comparison.</p>
+        {/if}
+      </section>
       <section class="paint-starter semantic-material-panel" aria-label="Semantic painted-metal candidate">
         <div class="dock-title"><span>SEMANTIC PAINTED METAL</span></div>
         <p class="hint">Source-aware candidate only. Select a reference PNG and the actual
@@ -2078,8 +2247,8 @@
               <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
             <img class="paint-atlas paint-workspace-atlas" draggable="false"
-              src={semanticAtlasSource ?? ''}
-              alt={validSemanticPreview ?
+              src={paintAtlasSource ?? ''}
+              alt={validSemanticPreview || validExternalPreview ?
                 'Read-only source/candidate material atlas for comparison' :
                 'Editable texture atlas; drag to paint one Rust-owned stroke'}
               onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
@@ -2730,7 +2899,7 @@
     </select>
     <button onclick={() => void exportReviewCapture()}
       disabled={!snapshot || snapshot.dirty || !snapshot.sourceName ||
-        busy || loading || !!paintStroke || validSemanticPreview || workspaceMode === 'animate'}
+        busy || loading || !!paintStroke || validSemanticPreview || validExternalPreview || workspaceMode === 'animate'}
       title="Save a new source-bound Rust preview PNG. Save Copy first; this is not Bedrock rendering proof.">
       Capture PNG
     </button>

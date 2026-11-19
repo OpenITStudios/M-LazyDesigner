@@ -7199,6 +7199,27 @@ fn external_face_png_keeps_original_detail_and_existing_texture_identity() {
     ).is_err());
     assert_eq!(forbidden.export().unwrap(),original);
 
+    // The selected swatch cannot be made transparent via external import.
+    let mut alpha=forbidden.document().texture_assets[0].clone();
+    paint::pixel(&mut alpha,128,128,1,1,[80,100,120,0]).unwrap();
+    assert!(forbidden.apply_external_face_texture(
+        &ExternalFaceTextureIntent{expected_revision:0,..intent.clone()},
+        alpha["source"].as_str().unwrap(),
+    ).is_err());
+    assert_eq!(forbidden.export().unwrap(),original);
+
+    // Explicit same-color protected marks remain immutable as well.
+    let protected=ExternalFaceTextureIntent{
+        expected_revision:0,
+        protected_regions:vec![correction_scope::CorrectionRectangle{
+            from:[1,1],to:[2,2],
+        }],
+        ..intent.clone()
+    };
+    assert_eq!(forbidden.apply_external_face_texture(&protected,&png).unwrap_err(),
+        "CORRECTION_PROTECTED_PIXEL_CHANGED");
+    assert_eq!(forbidden.export().unwrap(),original);
+
     // Direct unscoped EditOperation still enforces the actual source swatch.
     let mut outside=forbidden.document().texture_assets[0].clone();
     paint::pixel(&mut outside,128,128,12,12,[80,100,120,255]).unwrap();

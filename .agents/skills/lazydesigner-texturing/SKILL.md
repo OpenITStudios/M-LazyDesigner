@@ -20,6 +20,18 @@ Geometry/UV capabilities remain available in the shared AUTHORING Runtime Surfac
 
 User-authorized autonomy replaces approval waits with verified checkpoints; never claim user approval.
 
+**Rust external pixel-editor correction (SOURCE ONLY):**
+A user-selected edited RGBA8 PNG is a disposable candidate for an existing
+owned atlas and one exact, non-shared Cube face. Only a reviewed original
+base RGBA can change; original alpha, different-color markings, adjacent
+detail pixels, unchanged faces and optional protected landmarks are guarded.
+Tauri compares actual fixed-camera source/candidate 3D renders before the
+direct editor user may Apply a SHA/revision-bound Rust Undo transaction.
+This is not automatic visual quality, same-RGBA identity recognition,
+a full external-editor plugin, native proof or Code Mode guest write access.
+The user may use Aseprite, Pixelorama, Krita or Photoshop externally;
+no app is bundled or launched by the source integration. Local tests held.
+
 ## Control Context Projection
 
 Start from LazyDesigner Control's stage-specific Texturing projection; do not reload the complete Modelling Profile or Reference Package.

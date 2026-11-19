@@ -1,3 +1,20 @@
+**Rust external editor existing-face PNG (2026-11-19; SOURCE ONLY / NOT_EXECUTED):**
+The Rust source now accepts one local selected RGBA8 PNG as a disposable
+candidate for exactly one mapped, non-shared Cube face of an existing owned
+atlas. The source base RGBA is the ONLY editable original color; all other
+source pixel colors, original alpha, outside-face cells and one texel around
+observed different-color details are guarded. Optional reviewer-protected
+rectangles and expected-before landmarks share the existing native correction
+scope. A direct editor user must capture distinct Source/Candidate images at
+the same fixed-camera view and acknowledge comparison before exact source /
+candidate SHA and epoch/revision can publish one Rust Undo transaction.
+Existing import-as-new-texture remains separate. External file paths remain
+local to the native picker; no file watcher, external app launch, second
+document/renderer/bitmap authority, guest Apply, CI or release is introduced.
+Same-RGBA identity marks remain an explicit unverified artistic risk.
+Rust/TS tests are AUTHORED_NOT_RUN, Windows/WebView2/Blockbench native
+and visual quality, file-format compatibility and speed remain UNVERIFIED.
+
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
 ## P0-D/E desktop visual preview versus Code Mode guest (SOURCE ONLY)
