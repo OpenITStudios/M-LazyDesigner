@@ -380,7 +380,11 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   function selectWorkspace(mode: WorkspaceMode) {
     if(surfaceMaskDrag)return;
     if (!canChangeWorkspace(Boolean(snapshot), busy, loading, Boolean(paintStroke))) return;
-    if(mode!=='paint')clearSemanticPreview();
+    if(mode!=='paint'){
+      clearSemanticPreview();
+      // Release the optional large PNG display cache outside Paint mode.
+      selectedTexturePreview=null;
+    }
     if (mode !== workspaceMode) pauseAnimationPlayback();
     workspaceMode = mode;
     closeMenus();
@@ -1285,7 +1289,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
         paintTextureIndex = previousCount;
         notice = next.texturePreviewSources[previousCount]
           ? 'Embedded RGBA8 PNG imported. Select a Cube to assign it; no existing UV was changed.'
-          : 'PNG imported, but preview is unavailable under the current project texture budget.';
+          : 'PNG imported. Select Load selected atlas preview if the eager view omitted it.';
       }
     } catch (cause) { showError(cause); }
     finally { busy = false; }
@@ -2838,7 +2842,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
             {#if surfacePaint3d && !surfacePaintEnabled}
               <p class="hint">3D Paint needs the Pencil tool, an editable
                 texture, opaque Alpha (255), no preview candidate, and an idle
-                Rust session.</p>
+                Rust session. If the eager atlas preview was omitted, load
+                the selected atlas above without loading every PNG.</p>
             {/if}
           </div>
           {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
