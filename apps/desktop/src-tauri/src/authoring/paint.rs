@@ -139,6 +139,63 @@ pub(super) fn decode_for_uv_inspection(
     decode_rgba8_source(texture, width, height)
 }
 
+/// Perform a complete strict source/after RGBA8 comparison one decoded row
+/// at a time, instead of allocating TWO full uncompressed 2K/4K atlases for
+/// correction verification. These PNGs are read-only and never used as
+/// a second bitmap store or to approve artistic quality.
+fn admitted_row_reader(texture:&Value,width:u32,height:u32)
+    ->Result<png::Reader<Cursor<Vec<u8>>>>{
+    if !exportable(texture,width,height) {
+        return Err("PAINT_ROW_TEXTURE_UNSUPPORTED".into());
+    }
+    let encoded=texture.get("source").and_then(Value::as_str)
+        .and_then(|value|value.strip_prefix(PREFIX))
+        .ok_or("PAINT_PNG_SOURCE_INVALID")?;
+    if encoded.len()>MAX_PNG_BYTES.saturating_mul(4)/3+8{
+        return Err("PAINT_PNG_TOO_LARGE".into());
+    }
+    let bytes=STANDARD.decode(encoded).map_err(|_|"PAINT_PNG_SOURCE_INVALID")?;
+    if bytes.len()>MAX_PNG_BYTES{return Err("PAINT_PNG_TOO_LARGE".into());}
+    let reader=png::Decoder::new(Cursor::new(bytes)).read_info()
+        .map_err(|_|"PAINT_PNG_DECODE_FAILED")?;
+    let info=reader.info();
+    if info.width!=width||info.height!=height||
+       info.color_type!=png::ColorType::Rgba||
+       info.bit_depth!=png::BitDepth::Eight||
+       info.animation_control.is_some()||info.interlaced||
+       reader.output_buffer_size()!=size(width,height)?{
+        return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
+    }
+    Ok(reader)
+}
+pub(super) fn compare_rgba8_rows<F>(
+    original:&Value,candidate:&Value,width:u32,height:u32,mut visitor:F
+)->Result<()>
+where F:FnMut(u32,&[u8],&[u8])->Result<()>{
+    let mut before=admitted_row_reader(original,width,height)?;
+    let mut after=admitted_row_reader(candidate,width,height)?;
+    let row_len=(width as usize)*4;
+    for y in 0..height{
+        let a=before.next_row().map_err(|_|"PAINT_PNG_DECODE_FAILED")?
+            .ok_or("PAINT_PNG_FORMAT_UNSUPPORTED")?;
+        let b=after.next_row().map_err(|_|"PAINT_PNG_DECODE_FAILED")?
+            .ok_or("PAINT_PNG_FORMAT_UNSUPPORTED")?;
+        if a.data().len()!=row_len||b.data().len()!=row_len{
+            return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
+        }
+        visitor(y,a.data(),b.data())?;
+    }
+    if before.next_row().map_err(|_|"PAINT_PNG_DECODE_FAILED")?.is_some()||
+       after.next_row().map_err(|_|"PAINT_PNG_DECODE_FAILED")?.is_some(){
+        return Err("PAINT_PNG_FORMAT_UNSUPPORTED".into());
+    }
+    // Finish also validates trailing PNG chunks rather than silently treating
+    // an incomplete or corrupt file as a valid edited candidate.
+    before.finish().map_err(|_|"PAINT_PNG_DECODE_FAILED")?;
+    after.finish().map_err(|_|"PAINT_PNG_DECODE_FAILED")?;
+    Ok(())
+}
+
 /// Convert a face's integral atlas UV into a nonempty half-open pixel box.
 /// The same admission governs both source-only alpha inspection and
 /// semantic face painting, including mirrored/reversed UV coordinates.
@@ -768,6 +825,25 @@ mod lossless_png_palette_tests {
         assert_eq!(&changed[hidden..hidden+4],&[23,45,67,0]);
     }
 
+    #[test]
+    fn strict_row_pair_preserves_hidden_rgb_and_detects_only_changed_pixels(){
+        let (w,h)=(8u32,8u32);
+        let mut bytes=vec![0u8;(w*h*4) as usize];
+        bytes[0..4].copy_from_slice(&[8,9,10,0]);
+        let before=authored_asset("before","source.png",&encode(w,h,&bytes).unwrap());
+        bytes[4..8].copy_from_slice(&[20,30,40,255]);
+        let after=authored_asset("after","next.png",&encode(w,h,&bytes).unwrap());
+        let mut changed=0usize;
+        compare_rgba8_rows(&before,&after,w,h,|y,a,b|{
+            assert_eq!(a.len(),(w*4) as usize);
+            assert_eq!(a[0..4],[8,9,10,0]); // hidden RGB remains
+            for (x,(old,new)) in a.chunks_exact(4).zip(b.chunks_exact(4)).enumerate(){
+                if old!=new {assert_eq!((x,y),(1,0));changed+=1;}
+            }
+            Ok(())
+        }).unwrap();
+        assert_eq!(changed,1);
+    }
     #[test]
     fn compressed_png_round_trip_preserves_unique_rgba_and_alpha() {
         let (w,h)=(64u32,64u32);

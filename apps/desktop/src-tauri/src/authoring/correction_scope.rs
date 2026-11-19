@@ -144,63 +144,51 @@ pub(super) fn verify_after(
     }
     let width = before.resolution.width;
     let height = before.resolution.height;
-    let original = paint::decode_for_uv_inspection(
-        &before.texture_assets[selected], width, height,
-    ).map_err(|_| "CORRECTION_TEXTURE_UNSUPPORTED".to_string())?;
-    let candidate = paint::decode_for_uv_inspection(
-        &after.texture_assets[selected], width, height,
-    ).map_err(|_| "CORRECTION_TEXTURE_UNSUPPORTED".to_string())?;
-    if original.len() != candidate.len() {
-        return Err("CORRECTION_TEXTURE_UNSUPPORTED".into());
-    }
-    // Validate explicitly declared source-color preconditions on the
-    // IMMUTABLE original snapshot; do not trust the guest's claim about
-    // what was already saved, nor reinterpret an approved RGB as a palette.
-    for expected in &scope.expected_before_pixels {
-        let at = ((expected.at[1] as usize) * (width as usize) +
-            expected.at[0] as usize) * 4;
-        if original.get(at..at + 4) != Some(&expected.rgba[..]) {
-            return Err("CORRECTION_EXPECTED_BEFORE_MISMATCH".into());
-        }
-    }
-    // Exact HashSet membership is O(1) per changed texel even with many
-    // original source RGBAs; no arbitrary 16-color editing ceiling.
+    // The original path allocated two full decoded atlas copies here,
+    // plus the candidate Paint buffer. Compare each strict RGBA8 PNG row
+    // instead; no artificial reduction of atlas size, palette, or Undo count.
     let allowed_source:HashSet<[u8;4]>=
         scope.editable_before_rgba.iter().copied().collect();
-    let mut changed = 0usize;
-    for (index, (old, new)) in original.chunks_exact(4)
-        .zip(candidate.chunks_exact(4)).enumerate() {
-        if old == new { continue; }
-        let x = (index as u32) % width;
-        let y = (index as u32) / width;
-        if !scope.allowed_regions.iter().any(|rect|
-            x >= rect.from[0] && x < rect.to[0] &&
-            y >= rect.from[1] && y < rect.to[1]
-        ) {
-            return Err("CORRECTION_PIXEL_OUTSIDE_ALLOWED".into());
+    let mut changed=0usize;
+    let mut expected_mismatch=false;
+    let mut first_error:Option<&'static str>=None;
+    paint::compare_rgba8_rows(&before.texture_assets[selected],
+        &after.texture_assets[selected],width,height,|y,old_row,new_row|{
+        for expected in scope.expected_before_pixels.iter()
+            .filter(|expected|expected.at[1]==y) {
+            let x=expected.at[0] as usize*4;
+            if old_row.get(x..x+4)!=Some(expected.rgba.as_slice()){
+                expected_mismatch=true;
+            }
         }
-        // A protected landmark in an otherwise editable region remains
-        // byte-for-byte unchanged, including alpha, within this same
-        // Rust transaction/Undo boundary.
-        if scope.protected_regions.iter().any(|rect|
-            x >= rect.from[0] && x < rect.to[0] &&
-            y >= rect.from[1] && y < rect.to[1]
-        ) {
-            return Err("CORRECTION_PROTECTED_PIXEL_CHANGED".into());
+        for x in 0..width {
+            let index=x as usize*4;
+            let old=&old_row[index..index+4];
+            let new=&new_row[index..index+4];
+            if old==new{continue;}
+            if first_error.is_some(){continue;}
+            if !scope.allowed_regions.iter().any(|rect|
+                x>=rect.from[0]&&x<rect.to[0]&&
+                y>=rect.from[1]&&y<rect.to[1]){
+                first_error=Some("CORRECTION_PIXEL_OUTSIDE_ALLOWED");
+            }else if scope.protected_regions.iter().any(|rect|
+                x>=rect.from[0]&&x<rect.to[0]&&
+                y>=rect.from[1]&&y<rect.to[1]){
+                first_error=Some("CORRECTION_PROTECTED_PIXEL_CHANGED");
+            }else if scope.preserve_alpha&&old[3]!=new[3]{
+                first_error=Some("CORRECTION_ALPHA_CHANGED");
+            }else if !allowed_source.is_empty()&&
+                !allowed_source.contains(&[old[0],old[1],old[2],old[3]]){
+                first_error=Some("CORRECTION_SOURCE_COLOR_NOT_ALLOWED");
+            }
+            changed+=1;
         }
-        if scope.preserve_alpha && old[3] != new[3] {
-            return Err("CORRECTION_ALPHA_CHANGED".into());
-        }
-        // This is a PRE-IMAGE guard on every changed pixel. One stray
-        // approved marking color aborts the entire Rust edit transaction;
-        // a changed highlight cannot silently overwrite old artwork.
-        if !allowed_source.is_empty() &&
-           !allowed_source.contains(&[old[0],old[1],old[2],old[3]]) {
-            return Err("CORRECTION_SOURCE_COLOR_NOT_ALLOWED".into());
-        }
-        changed += 1;
-    }
-    if changed == 0 { return Err("CORRECTION_NO_PIXEL_CHANGE".into()); }
+        Ok(())
+    }).map_err(|_|"CORRECTION_TEXTURE_UNSUPPORTED".to_string())?;
+    // Preserve existing pre-image error precedence for negative fixtures.
+    if expected_mismatch{return Err("CORRECTION_EXPECTED_BEFORE_MISMATCH".into());}
+    if let Some(error)=first_error{return Err(error.into());}
+    if changed==0{return Err("CORRECTION_NO_PIXEL_CHANGE".into());}
     Ok(())
 }
 
