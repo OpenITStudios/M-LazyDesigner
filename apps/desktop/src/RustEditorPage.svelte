@@ -64,6 +64,7 @@
   let paintRadius = 1;
   // Temporary 3D presentation only; Rust owns the actual model and Undo.
   let semanticReferenceSha:string|null=null,semanticReferenceStatus='';
+  let semanticReferenceImage:string|null=null;
   let semanticBase='#5a6e82',semanticShadow='#343e50',semanticHighlight='#a0afc3';
   let semanticCorner:SemanticMaterialIntent['light_corner']='upper_left';
   let semanticContrast:SemanticMaterialIntent['contrast']='subtle';
@@ -314,6 +315,7 @@
     if (snapshot && snapshot.epoch !== next.epoch) {
       semanticReferenceSha=null;
       semanticReferenceStatus='';
+      semanticReferenceImage=null;
       // Old read-only pairing is bound to the previous model epoch; revoke
       // before another model is exposed. Never carry a capability forward.
       if (livePairing) void stopLiveRead();
@@ -1118,7 +1120,12 @@
       if(r){
         if(snapshot?.epoch!==epoch||snapshot.revision!==revision)
           throw new Error('SEMANTIC_REFERENCE_SOURCE_STALE');
+        if(!r.referencePngSource.startsWith('data:image/png;base64,') ||
+           r.referenceAuthority!=='USER_SELECTED_NOT_ARTISTICALLY_VERIFIED'){
+          throw new Error('SEMANTIC_REFERENCE_PROVENANCE_INVALID');
+        }
         semanticReferenceSha=r.pngSha256;
+        semanticReferenceImage=r.referencePngSource;
         semanticReferenceStatus='Selected PNG '+r.pngSha256.slice(0,12)+
           ' (not verified as approved artwork).';
         clearSemanticPreview();
@@ -1803,6 +1810,11 @@
         <button type="button" disabled={busy || loading || !!paintStroke}
           onclick={() => void chooseSemanticReference()}>Choose reference PNG…</button>
         {#if semanticReferenceStatus}<p class="hint">{semanticReferenceStatus}</p>{/if}
+        {#if semanticReferenceImage}
+          <img class="semantic-material-reference"
+            src={semanticReferenceImage} draggable="false"
+            alt="User-selected material reference; artistic approval is not verified"/>
+        {/if}
         <div class="semantic-material-fields">
           <label>Face
             <select bind:value={selectedFace} disabled={busy || !!paintStroke}
@@ -1848,7 +1860,7 @@
           <label class="semantic-material-review">
             <input type="checkbox" bind:checked={semanticReviewed}
               disabled={busy || !semanticViewedSource || !semanticViewedCandidate}/>
-            I inspected the source, candidate and visible identity markings.
+            I compared source and candidate with the selected reference and checked visible identity markings.
           </label>
           <button type="button" disabled={busy || !semanticReviewed ||
             !semanticViewedSource || !semanticViewedCandidate}

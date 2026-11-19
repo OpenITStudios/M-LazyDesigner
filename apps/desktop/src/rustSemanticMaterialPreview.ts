@@ -16,6 +16,8 @@ export type SemanticMaterialIntent={
 };
 export type SemanticMaterialReferenceReceipt={
   pngSha256:string;byteCount:number;
+  /** Render-only local selected reference; never a semantic model source. */
+  referencePngSource:string;
   referenceAuthority:'USER_SELECTED_NOT_ARTISTICALLY_VERIFIED';
 };
 export type SemanticMaterialPreviewReceipt={

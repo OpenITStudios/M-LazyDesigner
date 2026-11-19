@@ -238,6 +238,9 @@ pub struct ReviewCaptureReceipt {
 pub struct SemanticMaterialReferenceReceipt {
     png_sha256: String,
     byte_count: usize,
+    // Kept in the local Tauri UI for real human comparison. Never sent to
+    // the permission-denied Code Mode guest or persisted as a model asset.
+    reference_png_source: String,
     reference_authority: &'static str,
 }
 
@@ -1138,8 +1141,10 @@ pub fn rust_editor_preflight(
 }
 
 /// A source/reference picker does not transfer the bytes or filesystem path
-/// to the AI guest. Only the PNG hash enters the GUI's provisional intent.
-/// The user must still inspect the actual approved material artwork.
+/// to the AI guest. The local Tauri UI receives a bounded validated PNG
+/// solely to display the chosen reference beside the candidate; only its
+/// hash enters the semantic Rust material intent. The user must still
+/// confirm artistic relevance and approval independently.
 #[tauri::command]
 pub async fn rust_editor_choose_semantic_reference(
     state: State<'_, EditorState>,
@@ -1172,6 +1177,7 @@ pub async fn rust_editor_choose_semantic_reference(
     let _ = frozen_read_session(&state.store,expected_epoch,expected_revision)?;
     Ok(Some(SemanticMaterialReferenceReceipt{
         png_sha256:sha256(&bytes),byte_count:bytes.len(),
+        reference_png_source:format!("data:image/png;base64,{}",STANDARD.encode(&bytes)),
         reference_authority:"USER_SELECTED_NOT_ARTISTICALLY_VERIFIED",
     }))
 }

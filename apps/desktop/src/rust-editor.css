@@ -869,3 +869,5 @@
 .rust-editor .semantic-material-actions button[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
 .rust-editor .semantic-material-review{display:flex;align-items:flex-start;gap:6px}
 .rust-editor .semantic-material-review input{flex:none;margin-top:3px}
+
+.rust-editor .semantic-material-reference{display:block;max-width:100%;max-height:170px;object-fit:contain;image-rendering:pixelated;background:var(--surface-2);border-radius:6px}
