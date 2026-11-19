@@ -357,6 +357,80 @@ test('pixel brush tip/taper is deterministic and preserves quiet mask pixels',()
   same.strokes[0].tip='square';
   assert.notDeepEqual(compileMaterialBrushComposition(same,['highlight']),r);
 });
+test('three-anchor curved highlight is connected and remains a guarded Paint plan',()=>{
+  const source=brushPacket();
+  const brush=source.facePlans[0].brushComposition;
+  brush.mask.paintable=Array.from({length:10},(_,y)=>({y,x0:0,x1:11}));
+  brush.mask.rest=[{y:0,x0:0,x1:11}];
+  brush.strokes=[
+    {id:'lower-joint',role:'shadow',
+      formReason:'Preserve the dark metal joint below the bright helmet bevel.',
+      points:[[2,8],[8,8]],radius:0,tip:'square',taper:'none'},
+    {id:'curved-rim',shadeWalk:{from:'base',steps:1},
+      formReason:'Paint the selected raised bevel as a curved cluster, not a flat stripe.',
+      points:[[2,6],[5,1],[8,6]],pathKind:'quadratic',
+      radius:0,tip:'diamond',taper:'none'},
+  ];
+  source.facePlans[0].atlasRegion={from:[0,0],to:[11,10]};
+  const p=normalizedMaterialWorkPacket(source);
+  const compiled=compileMaterialClusterPaint(p);
+  const curve=materialFaceClusters(p.facePlans[0],p.palette)[1];
+  assert.equal(curve.role,'highlight');
+  assert.ok(curve.spans.length>1);
+  assert.ok(new Set(curve.spans.map(s=>s.y)).size>1);
+  assert.ok(curve.spans.every(s=>s.y!==0));
+  assert.equal(validateMaterialWorkPacketOperations(p,{
+    texture_uuid:'tier2-atlas',allowed_regions:[{from:[0,0],to:[11,10]}],
+    preserve_alpha:true,
+  },compiled),true);
+  assert.deepEqual(compileMaterialClusterPaint(source),compiled);
+  const straight=structuredClone(source);
+  straight.facePlans[0].brushComposition.strokes[1].pathKind='polyline';
+  assert.notDeepEqual(compileMaterialClusterPaint(straight),compiled);
+});
+test('curve mode refuses incorrect anchors and path directions outside mask',()=>{
+  for(const data of [
+    {pathKind:'quadratic',points:[[1,1],[2,2]]},
+    {pathKind:'quadratic',points:[[1,1],[2,2],[3,3],[4,4]]},
+    {pathKind:'cubic',points:[[1,1],[2,2],[3,3]]},
+    {pathKind:'quadratic',points:[[1,1],[1,1],[4,5]]},
+    {pathKind:'quadratic',points:[[0,0],[1,3],[2,5]]},
+  ]){
+    const input=brushPacket();
+    Object.assign(input.facePlans[0].brushComposition.strokes[1],data);
+    assert.throws(()=>normalizedMaterialWorkPacket(input),
+      /MATERIAL_BRUSH_COMPOSITION_INVALID|MATERIAL_WORK_PACKET_INVALID/);
+  }
+});
+test('sparse-mask row compaction keeps curve 4-connected and protected rest empty',()=>{
+  const mask={mask:{
+    reason:'Rest row must stay protected beneath the reviewed curved metal glint.',
+    paintable:Array.from({length:6},(_,y)=>({y,x0:0,x1:8})),
+    rest:[{y:0,x0:0,x1:8}]},
+    strokes:[{id:'painted-rim',role:'highlight',
+      formReason:'Create a short intentional curved reflective mass for this bevel.',
+      points:[[1,3],[4,2],[6,4]],pathKind:'quadratic',
+      radius:0,tip:'square',taper:'none'}],
+  };
+  const [cluster]=compileMaterialBrushComposition(mask,['highlight']);
+  const positions=new Set();
+  for(const s of cluster.spans){
+    assert.notEqual(s.y,0);
+    for(let x=s.x0;x<s.x1;x++)positions.add(s.y*256+x);
+  }
+  assert.ok(positions.size>=5);
+  const first=[...positions][0],seen=new Set([first]),q=[first];
+  for(let i=0;i<q.length;i++){
+    const v=q[i],px=v%256,py=Math.floor(v/256);
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const x=px+dx,y=py+dy,n=y*256+x;
+      if(x>=0&&x<256&&y>=0&&y<256&&positions.has(n)&&!seen.has(n)){
+        seen.add(n);q.push(n);
+      }
+    }
+  }
+  assert.equal(seen.size,positions.size);
+});
 test('operator approval sees the plan digest and description but cannot bypass the Rust write guard',async()=>{
   let approvals=0,runs=0;
   const p=packet();

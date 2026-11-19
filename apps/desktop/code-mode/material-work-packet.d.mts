@@ -51,6 +51,9 @@ export interface MaterialWorkPacket {
         formReason:string;
         /** Absolute positions on the selected Cube face, NOT atlas pixels. */
         points:Array<[number,number]>;
+        /** An optional 3-anchor quadratic curved highlight/cloth fold
+         * on the selected Cube face. Absent = original polyline. */
+        pathKind?:"polyline"|"quadratic";
         /** Pixel radius (0–2), solid square or diamond dabs. */
         radius:number;tip:"square"|"diamond";
         /** Optional taper at both ends; preserves hard pixel edges. */
