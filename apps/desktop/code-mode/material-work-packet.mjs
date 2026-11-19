@@ -27,6 +27,15 @@ function statement(v, min=16, max=220){
      v!==v.trim() || /[\x00-\x1f\x7f]/.test(v))fail();
   return v;
 }
+// Role ordering only: linear-sRGB relative luminance is not an art score
+// or a substitute for the approved palette's hue/material relationships.
+function relativeLuminance(rgb){
+  const channels=rgb.map(byte=>{
+    const c=byte/255;
+    return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4;
+  });
+  return channels[0]*0.2126+channels[1]*0.7152+channels[2]*0.0722;
+}
 function rgb(v){
   if(!Array.isArray(v) || v.length!==3 ||
      !v.every(n=>Number.isInteger(n) && n>=0 && n<=255))fail();
@@ -168,6 +177,15 @@ export function normalizedMaterialWorkPacket(value){
     const triple=plan.palette.filter(p=>
       ['shadow','base','highlight'].includes(p.role)).map(x=>x.rgb.join(','));
     if(new Set(triple).size!==3)fail();
+    // Distinct swatches alone allowed inverted or same-value 'shadows'.
+    // A deliberately flat/hue-only surface is a separate artistic intent,
+    // not a fake FORM_SHADING triple. No mandatory minimum step or hue.
+    const lightness=role=>relativeLuminance(
+      plan.palette.find(p=>p.role===role).rgb);
+    if(!(lightness('shadow')<lightness('base') &&
+         lightness('base')<lightness('highlight')))fail();
+    if(roles.includes('deep_shadow') &&
+       !(lightness('deep_shadow')<lightness('shadow')))fail();
   }
   if(!Array.isArray(value.facePlans) ||
      value.facePlans.length<1 || value.facePlans.length>MAX_FACES)fail();

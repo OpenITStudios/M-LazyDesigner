@@ -401,6 +401,18 @@ views and explicit reviewer acceptance remain the quality authority.
 No new authoring store, ML dependency, renderer, public tool or
 automatic pixel painter is created by this source-only slice.
 
+**T2 material-craft role gate (SOURCE ONLY):** The reviewed Code Mode
+`FORM_SHADING` material packet now checks that its named shadow,
+base and highlight colors follow strictly increasing *linear-sRGB
+relative luminance*; optional deep shadow must be darker than shadow.
+This rejects a previously accepted distinct-but-inverted ramp. It
+does not enforce grayscale RGB ramps, fixed contrast steps, three
+colors on every face, automatic lighting, or pixel-art quality PASS.
+Intentional hue-only/flat design follows the appropriate explicit
+styling intent and approved reference, not relabelled fake form
+shading. Verify palette hue movement, cluster placement, model
+lighting and visible surface material independently.
+
 ## SURFACE PATTERN PASS
 
 Apply the selected `surface_pattern` recipe to each material cohort only after BASE and VALUE/FORM are readable. Recipes describe directionality, cluster language, value behavior, edge behavior, secondary detail, and anti-patterns. They are not bitmap presets and never select transparency/glow/PBR by name.

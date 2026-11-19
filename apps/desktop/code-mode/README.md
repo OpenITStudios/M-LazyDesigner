@@ -1179,6 +1179,20 @@ console.log(report.results.map(({ kind }) => kind));
 
 `approvedCubeUuid` must come from an actual user-authorized asset selection,
 not an invented ID. The real agent host still owns process sandboxing.
+For a **reviewer-selected material face**, query
+`material_face_patch` using the actual saved `cube_uuid`, `texture_uuid`,
+face and approved physical atlas region. Its source-bound
+`binding.surface_form` now includes Cube-local normals, conditional
+model-axis normals, face-local texel density and limited same-parent
+contact candidates. Pair with `texture_styling_face` when the saved
+PNG is supported. Reviewed `FORM_SHADING` preflight requires this
+native form receipt and an ordered shadow/base/highlight luminance
+ramp; neither is an artist verdict, automatic lighting placement,
+or a substitute for fresh matched reference/model images.
+Rotated hierarchies, other Bones, animation and world visibility are
+explicitly not certified. The underlying Rust guarded painter and
+separate authorization remain unchanged.
+
 Selected kinds include `authoring_target`, `cube`, `cube_surfaces`,
 `cube_face_alpha`, `catalog`, `texture`, `texture_alpha`,
 `animation`, `animation_track`, `audit`; the full typed selector union

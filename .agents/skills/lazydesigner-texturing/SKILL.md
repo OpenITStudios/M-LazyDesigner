@@ -104,6 +104,35 @@ for the form/light plan. This is only for reviewed FORM_SHADING sample
 and propagation, not pixel-by-pixel approvals,
 intentionally flat details, or independent Geometry/UV edits.
 
+**Rust form-aware pixel craft (T1/T2 SOURCE ONLY; NOT_EXECUTED):**
+Before a reviewed FORM_SHADING sample, use the existing SHA-bound
+`material_face_patch` and `texture_styling_face` reads for the actual
+selected Cube face. Inspect `surface_form.normal_cube_local`, supported
+`normal_saved_model_axis`, face-local texel density and bounded
+`contact_analysis` alongside approved images. A local Cube normal
+is **not** a light vector; a same-parent AABB contact is **not** a
+world-space shadow or permission to shade it. Rotated, stretched,
+cross-Bone, animation-dependent and unseen surface relationships
+remain `UNVERIFIED`. Never place a contact shadow by pretending an
+unmapped geometric interval is an atlas rectangle.
+
+Select the **pixel-art dialect of the approved reference** before
+authoring clusters. For angular metal, test few purposeful reflective
+value masses and restrained edge light; for cloth, group fold/shadow
+masses along observed drape; for wood, follow observed grain axes
+without evenly stamped stripes; for stone, favor large readable
+facets over scatter noise; for skin, preserve identity hues and
+modeled anatomy; for sci-fi glass/energy, separate pigment, alpha,
+render material and true emission. These are **conditional hypotheses**,
+not material-name presets, mandatory accents or automatic operations.
+Keep focal accents and accepted symbols intact, allow quiet surfaces,
+and verify readability at the final mapped-model scale, not from a
+palette histogram alone. A reviewed FORM_SHADING shadow/base/highlight
+ramp must have increasing linear-sRGB luminance by role, but that
+technical guard is not a test of pleasing hue, light realism or
+material mastery. Unsupported source-light correspondence requires
+an independent reviewer decision, not made-up normal-based lighting.
+
 **Rust reviewed material propagation plan (source-only):**
 Before *broad reviewed* Texture propagation, the AI must submit one
 bounded `materialWorkPacket` with approved/current SHA binding, latest

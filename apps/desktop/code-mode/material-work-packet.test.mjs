@@ -103,6 +103,30 @@ test('single-color fake FORM ramp, missing shading cues and extra JSON fields re
       /MATERIAL_WORK_PACKET_INVALID/);
   }
 });
+test('form-shading value roles require ordered luminance, not distinct RGB alone',()=>{
+  const inverted=packet();
+  inverted.palette=[
+    {...packet().palette[0],rgb:[250,185,30]},
+    packet().palette[1],
+    {...packet().palette[2],rgb:[35,45,60]},
+  ];
+  assert.throws(()=>normalizedMaterialWorkPacket(inverted),
+    /MATERIAL_WORK_PACKET_INVALID/);
+  const falseDeep=packet();
+  falseDeep.palette.push({role:'deep_shadow',rgb:[210,160,120],
+    purpose:'A wrongly brighter deep shadow must be refused.'});
+  assert.throws(()=>normalizedMaterialWorkPacket(falseDeep),
+    /MATERIAL_WORK_PACKET_INVALID/);
+  // Hue-shifted artist ramps remain valid; no fixed number of shades,
+  // monotone per-channel ramp, minimum contrast or mandatory noise.
+  const shifted=packet();
+  shifted.palette=[
+    {...packet().palette[0],rgb:[72,45,106]},
+    {...packet().palette[1],rgb:[90,105,125]},
+    {...packet().palette[2],rgb:[145,164,130]},
+  ];
+  assert.equal(normalizedMaterialWorkPacket(shifted).palette.length,3);
+});
 test('form-shading cannot disguise full-width shadow/highlight bars as modeled shading',()=>{
   const striped=packet();
   striped.facePlans[0].clusters=[
