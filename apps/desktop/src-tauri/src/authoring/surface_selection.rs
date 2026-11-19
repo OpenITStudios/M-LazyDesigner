@@ -151,8 +151,10 @@ mod tests{
     use crate::authoring::{EditOperation,EditorSession,AuthoringDocument};
     #[test]
     fn connected_island_is_exact_and_does_not_cross_a_detail_or_mask(){
-        let mut s=EditorSession::from_document(
-            AuthoringDocument::new_bedrock("Selection","selection").unwrap()).unwrap();
+        let mut doc=AuthoringDocument::new_bedrock(
+            "Selection","selection").unwrap();
+        doc.meta.box_uv=Some(false);
+        let mut s=EditorSession::from_document(doc).unwrap();
         const TEX:&str="00000000-0000-4000-8000-000000003105";
         const CUBE:&str="00000000-0000-4000-8000-000000003106";
         const BONE:&str="00000000-0000-4000-8000-000000003107";
@@ -170,9 +172,9 @@ mod tests{
         let bone=serde_json::from_value(serde_json::json!({
             "uuid":BONE,"name":"root","origin":[0,0,0]})).unwrap();
         s.apply(0,&[
+            EditOperation::CreatePaintTexture{uuid:TEX.into(),name:"a.png".into()},
             EditOperation::AddBone{bone,parent_uuid:None},
             EditOperation::AddCube{cube,bone_uuid:BONE.into()},
-            EditOperation::CreatePaintTexture{uuid:TEX.into(),name:"a.png".into()},
         ]).unwrap();
         // Isolated two cyan pixels and one red interruption on same face.
         s.apply(1,&[

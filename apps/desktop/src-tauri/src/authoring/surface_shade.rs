@@ -125,8 +125,10 @@ mod tests{
     const CUBE:&str="00000000-0000-4000-8000-000000003206";
     const BONE:&str="00000000-0000-4000-8000-000000003207";
     fn session()->EditorSession{
-        let mut s=EditorSession::from_document(
-            AuthoringDocument::new_bedrock("Shading","shading").unwrap()).unwrap();
+        let mut doc=AuthoringDocument::new_bedrock(
+            "Shading","shading").unwrap();
+        doc.meta.box_uv=Some(false);
+        let mut s=EditorSession::from_document(doc).unwrap();
         let cube=serde_json::from_value(serde_json::json!({
             "uuid":CUBE,"type":"cube","from":[0,0,0],"to":[4,4,4],
             "faces":{
@@ -141,9 +143,9 @@ mod tests{
         let bone=serde_json::from_value(serde_json::json!({
             "uuid":BONE,"name":"root","origin":[0,0,0]})).unwrap();
         s.apply(0,&[
+            EditOperation::CreatePaintTexture{uuid:TEX.into(),name:"shade.png".into()},
             EditOperation::AddBone{bone,parent_uuid:None},
             EditOperation::AddCube{cube,bone_uuid:BONE.into()},
-            EditOperation::CreatePaintTexture{uuid:TEX.into(),name:"shade.png".into()},
         ]).unwrap();
         s.apply(1,&[
             EditOperation::PaintTextureRectangle{
