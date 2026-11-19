@@ -1278,6 +1278,7 @@ export function createRustCodeModeClient({
              ![[...intent.shadow_rgb,255],[...intent.highlight_rgb,255]]
                .some(color=>equal(color,r.rgba)) ||
              !Array.isArray(r.from) || !Array.isArray(r.to) ||
+             r.from.length!==2 || r.to.length!==2 ||
              !r.from.every((v,i)=>Number.isInteger(v)&&v>=0&&v<r.to[i]&&
                Number.isInteger(r.to[i])&&r.to[i]<=256)) ||
            scope?.texture_uuid!==intent.texture_uuid ||

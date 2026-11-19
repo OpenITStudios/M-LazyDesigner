@@ -14,15 +14,15 @@ use serde_json::{json, Value};
 const MAX_FACE_SIDE: u32 = 32;
 const MAX_FACE_AREA: u32 = 1024;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticMaterialKind { PaintedMetal }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticLightCorner { UpperLeft, UpperRight }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticContrast { Subtle, Balanced }
 
