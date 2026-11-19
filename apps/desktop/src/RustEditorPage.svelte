@@ -14,7 +14,7 @@
   import { canReusePreviewInCommand, isOlderEditorSnapshot, isPreviewTransportFailure, reconcileEditorSnapshot } from './rustSnapshotTransport';
   import { canChangeWorkspace, type WorkspaceMode } from './rustWorkspaceMode';
   import { matchingSemanticCandidate, semanticViewportSources, sourceRgb,
-    semanticIntentFingerprint, repeatedRejectedIntent,
+    semanticIntentFingerprint, repeatedRejectedIntent, semanticReviewReady,
     type SemanticMaterialIntent, type SemanticMaterialDraft,
     type SemanticMaterialPreviewReceipt, type SemanticMaterialReferenceReceipt,
     type SemanticRejectReason
@@ -198,6 +198,8 @@
     selectedId,selectedFace,paintTextureIndex,semanticReferenceSha);
   $: modelTextureSources = semanticViewportSources(snapshot,semanticPreview,
     semanticShowCandidate,validSemanticPreview);
+  $: semanticReadyForApply = semanticReviewReady(validSemanticPreview,
+    semanticViewedSource,semanticViewedCandidate,semanticReviewed);
   $: semanticAtlasSource = validSemanticPreview && semanticShowCandidate &&
     semanticPreview ? semanticPreview.candidatePngSource :
     snapshot?.texturePreviewSources[paintTextureIndex] ?? null;
@@ -1209,8 +1211,7 @@
     notice='Candidate rejected. Original model and PNG were not changed.';
   }
   async function applySemanticCandidate(){
-    if(!semanticPreview||!validSemanticPreview||busy||
-       !semanticViewedSource||!semanticViewedCandidate||!semanticReviewed)return;
+    if(!semanticPreview||!semanticReadyForApply||busy)return;
     const candidate=semanticPreview;
     const next=await command('rust_editor_apply_preview_semantic_material',{
       expectedEpoch:candidate.epoch,expectedRevision:candidate.revision,
@@ -1904,8 +1905,7 @@
               disabled={busy || !semanticViewedSource || !semanticViewedCandidate}/>
             I compared source and candidate with the selected reference and checked visible identity markings.
           </label>
-          <button type="button" disabled={busy || !semanticReviewed ||
-            !semanticViewedSource || !semanticViewedCandidate}
+          <button type="button" disabled={busy || !semanticReadyForApply}
             onclick={() => void applySemanticCandidate()}>Apply inspected candidate</button>
           <p class="hint">This is a user-selected treatment, not an independent artistic PASS.
             Full-face review remains required.</p>

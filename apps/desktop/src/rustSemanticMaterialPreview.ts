@@ -43,6 +43,15 @@ export function repeatedRejectedIntent(
 ):boolean {
   return rejected?.fingerprint===semanticIntentFingerprint(intent);
 }
+/** A deliberate user comparison is a UI requirement only; it never
+ * certifies a renderer, source reference approval or visual art quality.
+ */
+export function semanticReviewReady(
+  candidateValid:boolean,viewedSource:boolean,viewedCandidate:boolean,
+  userAcknowledged:boolean,
+):boolean {
+  return candidateValid&&viewedSource&&viewedCandidate&&userAcknowledged;
+}
 export function sourceRgb(hex:string):[number,number,number]|null{
   if(!/^#[0-9a-f]{6}$/i.test(hex))return null;
   return [Number.parseInt(hex.slice(1,3),16),

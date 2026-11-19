@@ -2158,7 +2158,7 @@ mod tests {
         let (proposal,candidate)=preview_semantic_candidate(&source,&intent).unwrap();
         assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
         assert_eq!(proposal.preflight["candidate_sha256"],
-            candidate.canonical_sha256().unwrap());
+            json!(candidate.canonical_sha256().unwrap()));
         assert_ne!(candidate.export().unwrap(),before);
         assert_eq!(source.export().unwrap(),before);
         assert_eq!(source.canonical_sha256().unwrap(),before_hash);
