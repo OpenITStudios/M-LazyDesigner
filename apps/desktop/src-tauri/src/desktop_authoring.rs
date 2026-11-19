@@ -221,6 +221,22 @@ pub struct PaintPngExportReceipt {
     byte_count: usize,
 }
 
+/// A source-revision-bound Paint atlas requested explicitly by the user.
+/// The PNG source is disposable preview data, never native write authority.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectedTexturePreviewReceipt {
+    epoch: u64,
+    revision: u64,
+    texture_index: usize,
+    texture_uuid: String,
+    texture_source: String,
+    texture_resolution: [u32; 2],
+    source_authority: &'static str,
+    write_authority: &'static str,
+    preview_scope: &'static str,
+}
+
 /// User-initiated PNG of the current Three.js Rust preview only. This receipt
 /// reports exact saved .bbmodel and PNG bytes, NOT camera/image fidelity.
 #[derive(Serialize)]
@@ -507,6 +523,21 @@ fn preview_uv_axis(texture: &Value, name: &str, project_default: u32) -> Option<
     (1..=4096).contains(&value).then_some(value)
 }
 
+/// Share identical ProjectAtlas UV/dimension admission for eager and
+/// on-demand sources. Only the aggregate snapshot budget is optional.
+fn project_atlas_preview_grid(
+    doc: &AuthoringDocument, texture: &Value, width: u32, height: u32,
+) -> Option<[u32; 2]> {
+    if width != doc.resolution.width || height != doc.resolution.height ||
+       texture.get("uv_width").is_some_and(|value|
+           value.as_u64() != Some(u64::from(doc.resolution.width))) ||
+       texture.get("uv_height").is_some_and(|value|
+           value.as_u64() != Some(u64::from(doc.resolution.height))) {
+        return None;
+    }
+    Some([doc.resolution.width, doc.resolution.height])
+}
+
 /// Each admitted source carries its actual UV grid separately from PNG pixel
 /// dimensions. The latter only controls decoding and GPU memory budgets.
 #[cfg(test)]
@@ -529,17 +560,8 @@ fn texture_preview_assets_in_mode(
         }
         let (source, width, height) = embedded_png_preview_candidate(texture)?;
         let uv_grid = match mode {
-            PreviewUvMode::ProjectAtlas => {
-                // Preserve the previous one-atlas preview admission rule.
-                if width != doc.resolution.width || height != doc.resolution.height ||
-                   texture.get("uv_width").is_some_and(|value|
-                       value.as_u64() != Some(u64::from(doc.resolution.width))) ||
-                   texture.get("uv_height").is_some_and(|value|
-                       value.as_u64() != Some(u64::from(doc.resolution.height))) {
-                    return None;
-                }
-                [doc.resolution.width, doc.resolution.height]
-            },
+            PreviewUvMode::ProjectAtlas =>
+                project_atlas_preview_grid(doc,texture,width,height)?,
             PreviewUvMode::ScopedAttachable => {
                 // No external precedence, implicit layers or animation may
                 // be interpreted as a single embedded scoped PNG.
@@ -1417,6 +1439,44 @@ pub fn rust_editor_apply_preview_semantic_material(
 pub fn rust_editor_snapshot(state: State<'_, EditorState>) -> Result<Option<EditorSnapshot>, DesktopError> {
     Ok(project_detached(lock(&state)?, ProjectionReuse::default()))
 }
+/// Read only the selected valid source atlas if the aggregate eager snapshot
+/// omitted it. All PNG/UV source rules still apply. Code Mode guest permissions
+/// and native Paint/Undo are entirely unaffected by this presentation request.
+#[tauri::command(async)]
+pub fn rust_editor_read_texture_preview(
+    state: State<'_, EditorState>, expected_epoch: u64,
+    expected_revision: u64, texture_index: usize, texture_uuid: String,
+) -> Result<SelectedTexturePreviewReceipt, DesktopError> {
+    let frozen=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    let doc=frozen.document();
+    if preview_uv_mode(doc)!=PreviewUvMode::ProjectAtlas {
+        return Err(failure("SELECTED_PREVIEW_UV_MODE_UNSUPPORTED",
+            "Selected atlas preview requires supported project UV."));
+    }
+    let texture=doc.texture_assets.get(texture_index).ok_or_else(||
+        failure("SELECTED_PREVIEW_TEXTURE_NOT_FOUND","Selected texture is absent."))?;
+    if texture.get("uuid").and_then(Value::as_str)!=Some(texture_uuid.as_str()) ||
+       texture_uuid.is_empty(){
+        return Err(failure("SELECTED_PREVIEW_IDENTITY_STALE",
+            "Selected texture no longer matches the Rust source."));
+    }
+    let (source,width,height)=embedded_png_preview_candidate(texture).ok_or_else(||
+        failure("SELECTED_PREVIEW_PNG_UNSUPPORTED",
+            "Selected PNG is not an admitted embedded preview source."))?;
+    let grid=project_atlas_preview_grid(doc,texture,width,height).ok_or_else(||
+        failure("SELECTED_PREVIEW_UV_MISMATCH",
+            "Selected atlas UV and PNG dimensions differ."))?;
+    let receipt=SelectedTexturePreviewReceipt{
+        epoch:expected_epoch,revision:expected_revision,
+        texture_index,texture_uuid,texture_source:source.to_owned(),
+        texture_resolution:grid,source_authority:"RUST_VALIDATED_EMBEDDED_PNG",
+        write_authority:"NOT_GRANTED",
+        preview_scope:"SELECTED_PROJECT_ATLAS_ONLY",
+    };
+    let _fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    Ok(receipt)
+}
+
 
 #[tauri::command(async)]
 pub fn rust_editor_new(
@@ -3011,7 +3071,7 @@ mod tests {
         let oversized_source = format!("data:image/png;base64,iVBORw0KGgo{}", "A".repeat(2 * 1024 * 1024));
         assert!(embedded_png_preview_source(&json!({"source":oversized_source})).is_none());
         let mut bytes = STANDARD.decode(candidate.strip_prefix("data:image/png;base64,").unwrap()).unwrap();
-        bytes[16..20].copy_from_slice(&4096u32.to_be_bytes());
+        bytes[16..20].copy_from_slice(&4097u32.to_be_bytes());
         assert!(embedded_png_preview_source(&json!({
             "source": format!("data:image/png;base64,{}", STANDARD.encode(&bytes))
         })).is_none());
@@ -3048,6 +3108,11 @@ mod tests {
         assert_eq!(texture_preview_sources(&doc), vec![None]);
         doc.texture_assets[0]["uv_height"] = json!(16);
         assert_eq!(texture_preview_sources(&doc), vec![Some(matching)]);
+        // A manually selected atlas uses exactly this source-bound UV rule.
+        assert_eq!(project_atlas_preview_grid(&doc,&doc.texture_assets[0],16,16),
+            Some([16,16]));
+        assert_eq!(project_atlas_preview_grid(&doc,&doc.texture_assets[0],16,8),
+            None);
     }
 
     // SOURCE-AUTHORED_NOT_RUN: indexed texture scope resolution must retain

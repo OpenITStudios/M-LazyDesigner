@@ -330,6 +330,7 @@ fn main() {
             analytics_overview,
             export_analytics,
             desktop_authoring::rust_editor_snapshot,
+            desktop_authoring::rust_editor_read_texture_preview,
             desktop_authoring::rust_editor_semantic_map,
             desktop_authoring::rust_editor_preflight,
             desktop_authoring::rust_editor_choose_semantic_reference,
