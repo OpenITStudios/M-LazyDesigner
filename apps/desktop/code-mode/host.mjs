@@ -218,6 +218,58 @@ function compactMaskMismatch(comparison) {
   });
 }
 
+// One operator-selected image-to-Cube hypothesis; never inferred from
+// pixels, names or model-authored Deno code. Source UUID is verified later.
+function boundGeometryLandmark(choice, views) {
+  if (choice === undefined) return null;
+  const allowed = new Set([
+    'cubeUuid','viewId','mismatchKind','regionBounds','landmarkLabel',
+  ]);
+  const bounds=choice?.regionBounds;
+  if (!choice || typeof choice!=='object' || Array.isArray(choice) ||
+      Object.keys(choice).some(key=>!allowed.has(key)) ||
+      typeof choice.cubeUuid!=='string' ||
+      choice.cubeUuid.length<1 || choice.cubeUuid.length>128 ||
+      typeof choice.landmarkLabel!=='string' ||
+      choice.landmarkLabel.trim().length<1 ||
+      choice.landmarkLabel.length>96 ||
+      /[\x00-\x1f]/.test(choice.landmarkLabel) ||
+      !views.some(view=>view.viewId===choice.viewId) ||
+      !['missing','excess'].includes(choice.mismatchKind) ||
+      !Array.isArray(bounds) || bounds.length!==4 ||
+      bounds.some(n=>!Number.isSafeInteger(n) || n<0 || n>2048) ||
+      bounds[2]<=bounds[0] || bounds[3]<=bounds[1]) {
+    throw new Error('CODE_MODE_GEOMETRY_LANDMARK_BINDING_INVALID');
+  }
+  return Object.freeze({...choice,regionBounds:Object.freeze([...bounds])});
+}
+function confirmedGeometryCube(receipt, modelSha, cubeUuid) {
+  const cube=receipt?.element;
+  const point=vec=>Array.isArray(vec) && vec.length===3 &&
+    vec.every(Number.isFinite);
+  if (receipt?.status!=='OK' || receipt.sha256!==modelSha ||
+      receipt.summary?.revision!==0 ||
+      cube?.uuid!==cubeUuid || cube?.kind!=='cube' ||
+      typeof cube.parent_uuid!=='string' || !cube.parent_uuid.length ||
+      !point(cube.from) || !point(cube.to) ||
+      cube.from.some((v,i)=>v>cube.to[i])) {
+    throw new Error('CODE_MODE_GEOMETRY_LANDMARK_SOURCE_UNVERIFIED');
+  }
+  return Object.freeze({
+    cube_uuid:cubeUuid,parent_bone_uuid:cube.parent_uuid,
+    source_name:typeof cube.name==='string'?cube.name.slice(0,96):null,
+    source_from:Object.freeze([...cube.from]),
+    source_to:Object.freeze([...cube.to]),
+  });
+}
+function regionMatchesFocus(region, focus) {
+  return focus?.status==='MEASURED' &&
+    focus.priority_regions.some(item=>
+      item.kind===region.mismatchKind &&
+      item.bounds.length===4 &&
+      item.bounds.every((value,i)=>value===region.regionBounds[i]));
+}
+
 async function pinnedVisualPair(source, options, modelSha, approvedReferencePackagePath) {
   if (options === undefined) return null;
   if (!options || typeof options !== 'object' || Array.isArray(options) ||
@@ -881,7 +933,8 @@ async function bindApprovedReference(project,uuid){
 export async function createCodeModeHost({
   rustBinary, denoBinary, input, outputDirectory, authorizeMutation,
   preselectedPngPath, approvedMaterialReferenceUuid,
-  preselectedVisualPair, approvedReferencePackagePath,
+  preselectedVisualPair, preselectedGeometryLandmark,
+  approvedReferencePackagePath,
   reviewVisualPair, runner, spawnImpl, liveReadPairing, liveReadClient,
   observeExecutionMetrics,
 } = {}) {
@@ -891,7 +944,8 @@ export async function createCodeModeHost({
   const pureLiveRead = input === undefined && outputDirectory === undefined;
   if (pureLiveRead && [
     authorizeMutation, preselectedPngPath, approvedMaterialReferenceUuid,
-    preselectedVisualPair, approvedReferencePackagePath, reviewVisualPair,
+    preselectedVisualPair, preselectedGeometryLandmark,
+    approvedReferencePackagePath, reviewVisualPair,
   ].some(value => value !== undefined)) {
     // A live-only host cannot contain any disk-writer, texture-import or
     // reference-pair declaration. Those require an independent saved source
@@ -1063,6 +1117,10 @@ export async function createCodeModeHost({
   const visualViews=Object.freeze(visualPair===null?[]:[
     visualPair,...visualPair.additionalViews,
   ]);
+  const geometryLandmark=boundGeometryLandmark(
+    preselectedGeometryLandmark,visualViews);
+  // One transient source/image link, invalid until an exact visual read.
+  let verifiedGeometryLandmark=null;
   // One ephemeral review state per exact model SHA, not a second asset store.
   const visualPreflights = new Map();
   // Single immutable source/view selection per host. Repeated multi-view
@@ -1158,6 +1216,70 @@ export async function createCodeModeHost({
     // One-shot G2.2 Rust planning; no saved graph or new writer.
     planGeometryResizePropagation: async (args) =>
       selected(args).planGeometryResizePropagation(args.propagation),
+    // Only the trusted operator may bind a source Cube to a pinned
+    // pixel-mask region. The guest declares numerical bounds, not identity.
+    // Rust's existing ReframeCube preflight is the sole geometry authority.
+    planReviewedGeometryReframe: async (args) => {
+      const model=selected(args);
+      if (Object.keys(args).some(key=>![
+        'project','from','to','uvPolicy',
+      ].includes(key))) {
+        throw new Error('CODE_MODE_GEOMETRY_REFRAME_ARGUMENT_INVALID');
+      }
+      const evidence=verifiedGeometryLandmark;
+      if (!evidence || evidence.source_model_sha256!==model.expectedSha256) {
+        throw new Error('CODE_MODE_GEOMETRY_LANDMARK_EVIDENCE_REQUIRED');
+      }
+      const vector=v=>Array.isArray(v) && v.length===3 &&
+        v.every(n=>typeof n==='number' && Number.isFinite(n));
+      if (!vector(args.from) || !vector(args.to) ||
+          args.from.some((v,i)=>v>args.to[i]) ||
+          !['manual_preserve','box_repack'].includes(args.uvPolicy)) {
+        throw new Error('CODE_MODE_GEOMETRY_REFRAME_ARGUMENT_INVALID');
+      }
+      if(args.from.every((v,i)=>v===evidence.source_from[i]) &&
+         args.to.every((v,i)=>v===evidence.source_to[i])) {
+        throw new Error('CODE_MODE_GEOMETRY_REFRAME_NO_CHANGE');
+      }
+      const operation={op:'reframe_cube',uuid:evidence.cube_uuid,
+        from:[...args.from],to:[...args.to],uv_policy:args.uvPolicy};
+      const planned=await model.preflight({operations:[operation]});
+      if(planned.sha256!==model.expectedSha256 ||
+         planned.summary?.revision!==0 ||
+         planned.preflight?.write_authority!=='NOT_GRANTED' ||
+         planned.preflight?.visual_verdict!=='UNVERIFIED' ||
+         planned.preflight?.mutation?.operation_count!==1 ||
+         planned.preflight?.mutation?.changed_uuids?.length!==1 ||
+         planned.preflight.mutation.changed_uuids[0]!==evidence.cube_uuid) {
+        throw new Error('CODE_MODE_GEOMETRY_REFRAME_PREFLIGHT_UNVERIFIED');
+      }
+      // The preflight and fresh focused read must use the same model SHA;
+      // re-hash every bound image before returning a possible correction.
+      const source=confirmedGeometryCube(
+        await model.inspect(evidence.cube_uuid),
+        model.expectedSha256,evidence.cube_uuid);
+      if (source.parent_bone_uuid!==evidence.parent_bone_uuid ||
+          !source.source_from.every((v,i)=>v===evidence.source_from[i]) ||
+          !source.source_to.every((v,i)=>v===evidence.source_to[i])) {
+        throw new Error('CODE_MODE_GEOMETRY_LANDMARK_SOURCE_CHANGED');
+      }
+      if(visualPair.referencePackageBinding){
+        await assertApprovedWorkspaceReferenceFresh(
+          visualPair.referencePackageBinding);
+      }
+      await Promise.all(visualViews.flatMap(view=>[
+        pinnedReviewBytes(view.reference),pinnedReviewBytes(view.capture),
+      ]));
+      return Object.freeze({
+        status:'OK',source_model_sha256:model.expectedSha256,
+        geometry_landmark:evidence,
+        plan:Object.freeze({expected_revision:0,
+          operations:Object.freeze([Object.freeze(operation)]),
+          correction_scope:null}),
+        preflight:planned.preflight,
+        write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+      });
+    },
     // One existing native authoring_target query, then a small host-only
     // projection. No unbounded scene/PNG/opaque payload reaches Deno.
     taskContext: async (args) => {
@@ -1572,10 +1694,40 @@ export async function createCodeModeHost({
         // never cached or promoted to a guest-visible readiness result.
         if(pendingFaceLedger) pagedFaceLedger=pendingFaceLedger;
       }
+      // Match a trusted operator's exact pixel-focus declaration and the
+      // real saved Cube UUID. This is an unverified visual correspondence,
+      // not an automatic projection from PNG pixels into 3D coordinates.
+      let landmarkEvidence=null;
+      if (geometryLandmark!==null) {
+        const view=visualViews.find(v=>v.viewId===geometryLandmark.viewId);
+        const focus=view_evidence.find(v=>v.view_id===geometryLandmark.viewId)
+          ?.mask_mismatch;
+        if(!view || !regionMatchesFocus(geometryLandmark,focus)){
+          throw new Error('CODE_MODE_GEOMETRY_LANDMARK_MASK_UNVERIFIED');
+        }
+        const source=confirmedGeometryCube(
+          await model.inspect(geometryLandmark.cubeUuid),
+          model.expectedSha256,geometryLandmark.cubeUuid);
+        landmarkEvidence=Object.freeze({
+          ...source,
+          landmark_label:geometryLandmark.landmarkLabel,
+          view_id:geometryLandmark.viewId,
+          mismatch_kind:geometryLandmark.mismatchKind,
+          region_bounds:geometryLandmark.regionBounds,
+          source_model_sha256:model.expectedSha256,
+          reference_png_sha256:view.reference.sha256,
+          capture_png_sha256:view.capture.sha256,
+          identity_status:'SOURCE_UUID_VERIFIED',
+          image_correspondence:'OPERATOR_DECLARED_UNVERIFIED',
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+        });
+      }
       if (prior === undefined) visualPreflights.set(model.expectedSha256,feedback);
+      verifiedGeometryLandmark=landmarkEvidence;
       const readReceipt = {
         ...evidence,
         view_evidence,
+        geometry_landmark:landmarkEvidence,
         view_scope:visualPair.requireSixDirections ?
           'six_cardinal_source_pairs_selected' : 'selected_source_pairs_only',
         review_feedback:feedback,
@@ -2544,6 +2696,7 @@ export function createCodeModeTool(host) {
       'For source-authored Geometry parts, planGeometryAssembly compiles one parent-first Rust EditPlan with explicit Bone pivots and Cube IDs. G3 frame/hollow/arch blockouts and G3.3 isotropic sphere sweeps share the canonical Rust source. G3.4a optionally adds bounded centripetal Catmull-Rom to those sphere sweeps. G3.4b/G3.4d accept LINEAR 3D profile sweeps with ELLIPSE/RECTANGLE half-extents, a selected X/Y/Z up axis and optional per-station twist_degrees (-180..180; absent means zero). Rust parallel-transports the section frame, interpolates twist and refuses material rotation invisible at voxel scale. It does NOT support Catmull-Rom on profile sections, native mesh, verified UV/visual quality, invented reference dimensions or implicit Apply. Independently authorized host approval still controls mutation.',
       'For G3.5 source-authored axial LOFT/REVOLVE, use assembly.parts[].lofts or .revolves with exact origin, axis and 2–12 sections. Rust owns per-layer interpolation, hollow-ring topology and Cube partition; Code Mode only validates bounded input and seed-derived IDs. No inferred reference dimensions, mesh, automatic Apply or UV/texture approval.',
       'For two unrotated Cubes sharing one Bone frame, planGeometryAttachment can propose a cardinal face-to-face gap/offset as one Rust TranslateCube. Cross-Bone/rotated cases are unsupported; this does not establish collision or visual quality and is never applied automatically.',
+      'When a trusted operator has bound exactly one landmark Cube UUID to a measured mask region, inspectSelectedVisualPair verifies the source UUID and declares image correspondence UNVERIFIED. planReviewedGeometryReframe can then preflight one explicit from/to plus UV policy through canonical Rust ReframeCube, without inferring 3D bounds, selecting another Cube or granting Apply.',
       'For one Cube resize and explicitly linked same-Bone dependents, planGeometryResizePropagation compiles ordered Rust reframe/translation operations. G2 face attachment and resize proposals also provide bounded same-Bone AABB overlap hints plus advisory OBB-SAT against supported rotated siblings. These static, partial source observations are never whole-model collision, visual or motion proof. Planning remains one-shot and read-only, never persistent constraints or automatic Apply.',
       'Use taskContext for one exact named target when the UUID is unknown; it compacts a single verified authoring_target read, not artistic evidence. Use preflightGuidance for advisory risk orientation; call native preflight for risky plans when appropriate. Neither grants permission nor changes the required Rust Apply validation.',
       ...(host.initial?.liveReadOnly ? [

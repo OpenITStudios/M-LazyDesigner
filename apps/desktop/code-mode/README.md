@@ -811,6 +811,29 @@ Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.
 
 
+**G3.7 operator-bound semantic Geometry correction (2026-11-19; SOURCE ONLY):**
+The trusted `createCodeModeHost` may opt into exactly one
+`preselectedGeometryLandmark` with a known `cubeUuid`, operator landmark
+label, selected view, missing/excess mask type and exact pixel region.
+`inspectSelectedVisualPair` must first measure the matching mask
+hotspot, and a fresh Rust `inspect --uuid` must prove the Cube and its
+actual parent Bone/bounds at the same source SHA. The guest receives
+a compact `geometry_landmark` binding that explicitly says
+`OPERATOR_DECLARED_UNVERIFIED` for image-to-Cube correspondence.
+With this evidence, `planReviewedGeometryReframe({project,from,to,uvPolicy})`
+accepts only exact new model-unit coordinates and explicit UV policy;
+the operator's Cube target cannot be replaced by guest arguments.
+It reuses the canonical Rust `ReframeCube` in the existing SHA-bound
+`preflight`, verifies the single changed UUID, re-inspects source and
+re-hashes all selected images. The result is a read-only one-Cube plan
+with `NOT_GRANTED / UNVERIFIED`, not Apply or quality acceptance.
+Missing images, stale model, absent/incorrect Cube, wrong hotspot,
+unknown region, unsupported UV and malformed edits refuse instead of
+guessing. No 2D-to-3D solver, extra model/renderer/CLI/process,
+persistent constraint, automatic write or new dependency.
+Node fixtures AUTHORED_NOT_RUN; native image-to-geometry fidelity and
+actual accepted shape remain UNVERIFIED.
+
 **G3.6 source-pixel silhouette focus in existing multi-view review (2026-11-19; SOURCE ONLY):**
 Each SHA-pinned `inspect-visual-pair` Rust read now includes
 `comparison.silhouette.localization`: measured missing/excess mask

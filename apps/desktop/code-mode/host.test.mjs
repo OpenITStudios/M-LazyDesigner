@@ -1116,6 +1116,260 @@ test('visual pair exposes pinned mismatch focus but no Cube attribution',()=>
     }
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: operator-named landmark must be a real Rust
+// Cube bound to an actual selected mask hotspot. Reframe stays read-only.
+test('operator-bound Geometry landmark offers one source-verified Rust preflight',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const reference=join(folder,'landmark-reference.png');
+    const capture=join(folder,'landmark-capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(reference,png);
+    await writeFile(capture,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const cubeUuid='00000000-0000-4000-8000-000000008501';
+    const element={uuid:cubeUuid,kind:'cube',name:'left_horn',
+      parent_uuid:'00000000-0000-4000-8000-000000008502',
+      from:[0,0,0],to:[4,4,4]};
+    const comparison={scope:'operator_selected_saved_png_pair',
+      reference_png_sha256:digest,capture_png_sha256:digest,
+      width:4,height:4,visual_verdict:'UNVERIFIED',
+      silhouette:{status:'alpha_overlap_measured',
+        reference_foreground_pixels:3,capture_foreground_pixels:3,
+        intersection_pixels:2,union_pixels:4,alpha_iou:0.5,
+        localization:{status:'pixel_mask_mismatch_measured',
+          missing_from_capture_pixels:1,excess_in_capture_pixels:1,
+          reference_foreground_bounds:[0,0,4,4],
+          capture_foreground_bounds:[0,0,4,4],
+          missing_bounds:[0,1,1,2],excess_bounds:[3,0,4,1],
+          priority_regions:[
+            {kind:'excess',pixel_count:1,bounds:[3,0,4,1]},
+            {kind:'missing',pixel_count:1,bounds:[0,1,1,2]},
+          ]}}};
+    const visualPair={referencePngPath:reference,capturePngPath:capture,
+      captureModelSha256:HASH,viewId:'front'};
+    const landmark={cubeUuid,landmarkLabel:'left_horn',
+      viewId:'front',mismatchKind:'missing',regionBounds:[0,1,1,2]};
+    const preflight={status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:1,changed_uuids:[cubeUuid]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{...SUMMARY,revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+    const approvals=[],calls=[];
+    let stage=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:visualPair,preselectedGeometryLandmark:landmark,
+      authorizeMutation:r=>{approvals.push(r);return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect'){
+          const uuidIndex=argv.indexOf('--uuid');
+          if(uuidIndex!==-1) {
+            assert.equal(argv[uuidIndex+1],cubeUuid);
+            assert.equal(argv[argv.indexOf('--expected-sha256')+1],HASH);
+            return {status:'OK',sha256:HASH,summary:SUMMARY,element};
+          }
+          return {status:'OK',sha256:HASH,summary:SUMMARY};
+        }
+        if(argv[0]==='inspect-visual-pair'){
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            comparison};
+        }
+        assert.equal(argv[0],'preflight');
+        const sent=JSON.parse(await readFile(argv[argv.indexOf('--plan')+1],'utf8'));
+        assert.deepEqual(sent,{expected_revision:0,operations:[{
+          op:'reframe_cube',uuid:cubeUuid,from:[0,0,0],to:[6,4,4],
+          uv_policy:'box_repack',
+        }]});
+        return {status:'OK',sha256:HASH,summary:SUMMARY,preflight};
+      },
+      spawnImpl:()=>stage++===0 ?
+        fakeGuest({method:'inspectSelectedVisualPair',args:{project:'p0'}},
+          reply=>{
+            assert.equal(reply.ok,true);
+            const link=reply.result.geometry_landmark;
+            assert.equal(link.cube_uuid,cubeUuid);
+            assert.equal(link.parent_bone_uuid,element.parent_uuid);
+            assert.equal(link.identity_status,'SOURCE_UUID_VERIFIED');
+            assert.equal(link.image_correspondence,'OPERATOR_DECLARED_UNVERIFIED');
+            assert.equal(link.source_model_sha256,HASH);
+            assert.equal(link.visual_verdict,'UNVERIFIED');
+            return {candidate:link.cube_uuid};
+          }) :
+        fakeGuest({method:'planReviewedGeometryReframe',args:{
+          project:'p0',from:[0,0,0],to:[6,4,4],uvPolicy:'box_repack',
+        }},reply=>{
+          assert.equal(reply.ok,true);
+          assert.equal(reply.result.plan.operations[0].uuid,cubeUuid);
+          assert.equal(reply.result.preflight.status,'VALIDATED_NOT_APPLIED');
+          assert.equal(reply.result.write_authority,'NOT_GRANTED');
+          assert.equal(reply.result.visual_verdict,'UNVERIFIED');
+          return {proposed:reply.result.plan.operations.length};
+        }),
+    });
+    const seen=await host.execute({code:'return codemode.inspectSelectedVisualPair({});'});
+    assert.deepEqual(seen.value,{candidate:cubeUuid});
+    const proposed=await host.execute({code:'return codemode.planReviewedGeometryReframe({});'});
+    assert.deepEqual(proposed.value,{proposed:1});
+    assert.equal(approvals.length,0);
+    assert.deepEqual(calls,[
+      'inspect','inspect-visual-pair','inspect',
+      'preflight','inspect',
+    ]);
+  }));
+
+test('Geometry reframe cannot run before visual and Cube identity evidence',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    const ref=join(folder,'preflight-ref.png');
+    const cap=join(folder,'preflight-current.png');
+    await writeFile(ref,png);
+    await writeFile(cap,png);
+    const rejected=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{referencePngPath:ref,capturePngPath:cap,
+        captureModelSha256:HASH,viewId:'front'},
+      preselectedGeometryLandmark:{
+        cubeUuid:'00000000-0000-4000-8000-000000008501',
+        landmarkLabel:'left_horn',viewId:'front',mismatchKind:'missing',
+        regionBounds:[0,1,1,2],
+      },
+      runner:async argv=>{
+        if(argv[0]!=='inspect')throw Error('No preflight may be launched');
+        return {status:'OK',sha256:HASH,summary:SUMMARY};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'planReviewedGeometryReframe',
+        args:{project:'p0',from:[0,0,0],to:[6,4,4],uvPolicy:'box_repack'},
+      },reply=>{
+        assert.equal(reply.ok,false);
+        rejected.push(reply.code);
+        return {blocked:true};
+      }),
+    });
+    const result=await host.execute({
+      code:'return codemode.planReviewedGeometryReframe({});',
+    });
+    assert.deepEqual(result.value,{blocked:true});
+    assert.deepEqual(rejected,['CODE_MODE_GEOMETRY_LANDMARK_EVIDENCE_REQUIRED']);
+  }));
+
+test('unverified or wrong mask landmark never grants Geometry source ownership',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    const ref=join(folder,'landmark-mask-reference.png');
+    const cap=join(folder,'landmark-mask-capture.png');
+    await writeFile(ref,png);
+    await writeFile(cap,png);
+    const sha=createHash('sha256').update(png).digest('hex');
+    const invalid=[
+      {cubeUuid:'cube',landmarkLabel:'horn',
+        viewId:'left',mismatchKind:'missing',regionBounds:[0,1,1,2]},
+      {cubeUuid:'cube',landmarkLabel:'horn',
+        viewId:'front',mismatchKind:'missing',regionBounds:[3,0,4,1]},
+    ];
+    for(const candidate of invalid){
+      const direct= candidate.viewId==='left';
+      const make=()=>createCodeModeHost({
+        rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+        preselectedVisualPair:{referencePngPath:ref,capturePngPath:cap,
+          captureModelSha256:HASH,viewId:'front'},
+        preselectedGeometryLandmark:candidate,
+        runner:async argv=>{
+          if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:sha,capture_png_sha256:sha,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:sha,capture_png_sha256:sha,
+              visual_verdict:'UNVERIFIED',width:2,height:2,
+              silhouette:{status:'alpha_overlap_measured',
+                reference_foreground_pixels:2,capture_foreground_pixels:1,
+                intersection_pixels:1,union_pixels:2,
+                localization:{status:'pixel_mask_mismatch_measured',
+                  missing_from_capture_pixels:1,excess_in_capture_pixels:0,
+                  reference_foreground_bounds:[0,0,2,2],
+                  capture_foreground_bounds:[0,0,1,1],
+                  missing_bounds:[1,1,2,2],excess_bounds:null,
+                  priority_regions:[{kind:'missing',pixel_count:1,
+                    bounds:[1,1,2,2]}]}}}};
+        },
+        spawnImpl:()=>fakeGuest({
+          method:'inspectSelectedVisualPair',args:{project:'p0'},
+        },reply=>{
+          assert.equal(reply.ok,false);
+          assert.equal(reply.code,'CODE_MODE_GEOMETRY_LANDMARK_MASK_UNVERIFIED');
+          return {rejected:true};
+        }),
+      });
+      if(direct)await assert.rejects(make(),
+        /CODE_MODE_GEOMETRY_LANDMARK_BINDING_INVALID/);
+      else {
+        const host=await make();
+        const result=await host.execute({
+          code:'return codemode.inspectSelectedVisualPair({});'});
+        assert.deepEqual(result.value,{rejected:true});
+      }
+    }
+  }));
+
+test('geometry landmark refuses a forged Rust Cube identity even with a real mask',()=>
+  fixture(async input=>{
+    const folder=dirname(input);
+    const ref=join(folder,'forged-landmark-reference.png');
+    const cap=join(folder,'forged-landmark-capture.png');
+    const png=Buffer.from('89504e470d0a1a0a00000000','hex');
+    await writeFile(ref,png);
+    await writeFile(cap,png);
+    const digest=createHash('sha256').update(png).digest('hex');
+    const expected='00000000-0000-4000-8000-000000008501';
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{referencePngPath:ref,capturePngPath:cap,
+        captureModelSha256:HASH,viewId:'front'},
+      preselectedGeometryLandmark:{cubeUuid:expected,
+        landmarkLabel:'left_horn',viewId:'front',
+        mismatchKind:'missing',regionBounds:[0,1,1,2]},
+      runner:async argv=>{
+        if(argv[0]==='inspect'){
+          return {status:'OK',sha256:HASH,summary:SUMMARY,
+            ...(argv.includes('--uuid')?{element:{
+              uuid:'00000000-0000-4000-8000-000000008599',
+              kind:'cube',parent_uuid:'bone',from:[0,0,0],to:[4,4,4],
+            }}:{})};
+        }
+        return {status:'OK',source_model_sha256:HASH,
+          reference_png_sha256:digest,capture_png_sha256:digest,
+          comparison:{scope:'operator_selected_saved_png_pair',
+            reference_png_sha256:digest,capture_png_sha256:digest,
+            width:4,height:4,visual_verdict:'UNVERIFIED',
+            silhouette:{status:'alpha_overlap_measured',
+              reference_foreground_pixels:3,capture_foreground_pixels:3,
+              intersection_pixels:2,union_pixels:4,
+              localization:{status:'pixel_mask_mismatch_measured',
+                missing_from_capture_pixels:1,excess_in_capture_pixels:1,
+                reference_foreground_bounds:[0,0,4,4],
+                capture_foreground_bounds:[0,0,4,4],
+                missing_bounds:[0,1,1,2],excess_bounds:[3,0,4,1],
+                priority_regions:[{kind:'missing',pixel_count:1,
+                  bounds:[0,1,1,2]}]}}}};
+      },
+      spawnImpl:()=>fakeGuest({
+        method:'inspectSelectedVisualPair',args:{project:'p0'},
+      },reply=>{
+        assert.equal(reply.ok,false);
+        assert.equal(reply.code,'CODE_MODE_GEOMETRY_LANDMARK_SOURCE_UNVERIFIED');
+        return {blocked:true};
+      }),
+    });
+    const out=await host.execute({
+      code:'return codemode.inspectSelectedVisualPair({});'});
+    assert.deepEqual(out.value,{blocked:true});
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: pinned source/image evidence and fail-closed claims.
 test('operator-bound visual pair is a read-only preflight, never visual PASS', () =>
   fixture(async input=>{

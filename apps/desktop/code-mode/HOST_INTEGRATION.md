@@ -875,6 +875,41 @@ calls, and scoped paint cannot modify the selected master. Missing, stale,
 unsupported or unselected reference state refuses instead of guessing.
 Neither the host option nor the numeric stats confirm external reference
 images were viewed or that a human actually approved the material.
+### Semantic Geometry landmark and bounded correction (SOURCE ONLY)
+
+For Geometry, a trusted operator may additionally bind one
+`preselectedGeometryLandmark` to the already pinned
+`preselectedVisualPair` and exact model SHA:
+
+~~~js
+preselectedGeometryLandmark: {
+  cubeUuid: 'known-model-cube-uuid',
+  landmarkLabel: 'left_horn',
+  viewId: 'front',
+  mismatchKind: 'missing',
+  regionBounds: [10, 20, 30, 40], // exclusive image-pixel bounds
+}
+~~~
+
+The region must exactly match one of the measured G3.6 top-four
+`priority_regions` in that selected view. A separate Rust
+`inspect --uuid` proves this is a current saved Cube with its actual
+parent Bone and old bounds. The mapping from image pixels to the Cube
+remains **operator-declared and visually UNVERIFIED**; no camera
+projection, reference approval, or Cube attribution is inferred.
+
+First read `codemode.inspectSelectedVisualPair({project:'p0'})`.
+Only after this read may guest code call
+`codemode.planReviewedGeometryReframe({project:'p0',from:[...],
+to:[...],uvPolicy:'box_repack'})`. The trusted host inserts the
+operator-selected UUID and calls the **existing** Rust `preflight`
+with one `reframe_cube`. Rust alone validates bounds/UV/undo, and
+the host rechecks the same source Cube and selected PNG fingerprints.
+The guest cannot change the target UUID, choose new reference images,
+or turn this proposal into approval. Actual `codemode.apply` remains
+an independently authorized action. No file is changed by either
+read-only method; source fixtures are AUTHORED_NOT_RUN.
+
 ### Operator-selected reference and current capture images (source-only)
 
 The trusted host can optionally bind one explicitly selected PNG pair at startup:

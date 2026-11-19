@@ -1,3 +1,34 @@
+**Active Rust Geometry G3.7 — operator-bound semantic Cube reframe (2026-11-19; SOURCE ONLY):**
+Building from Rust@0deefa0, the existing trusted Code Mode host
+accepts at most ONE operator-chosen Geometry landmark: exact Cube
+UUID, label, selected view, measured mask kind and exact G3.6 hotspot.
+Source attribution is never inferred from pixels. After successful
+SHA-pinned `inspectSelectedVisualPair`, the same saved model is
+queried through the EXISTING Rust `inspect --uuid` and returns
+current Cube UUID/parent Bone/original numeric bounds, along with
+`image_correspondence=OPERATOR_DECLARED_UNVERIFIED`.
+An optional guest-authored `planReviewedGeometryReframe` supplies
+only explicit from/to/UV policy; target Cube identity cannot change.
+The unchanged Rust `ReframeCube` and EditorSession `preflight`
+own bounds, UV, candidate SHA/Undo and safe refusal. The host
+verifies one changed UUID, re-reads current source identity and
+re-hashes the pinned reference/capture views before issuing a
+read-only NOT_GRANTED/UNVERIFIED proposal. It never auto-Applies,
+derives 3D coordinates from pixel discrepancies, rewrites
+approved geometry, grants permission or claims camera/art review.
+Existing G1 EditPlan, headless CLI, Tauri authoring state, visual
+mask analysis and independent approved Apply remain unchanged.
+No new Rust kernel, file publisher, GPU/renderer, model store,
+dependency, CI, branch, release or cross-repo write.
+Regression source covers valid one-Cube proposal, stale/missing
+mask binding, wrong view, arbitrary guest target and unverified
+source; Node tests AUTHORED_NOT_RUN, PC-local test hold preserved.
+Actual Cargo/Node/Windows/Blockbench execution, source-screen
+calibration, artist-approved reference correspondence, 3D shape
+quality and efficiency improvements remain NOT_EXECUTED/UNVERIFIED.
+Further geometry work must be prompted by observed model/reviewer
+corrections, not expanding automated guesses from pixel masks.
+
 **Active Rust Geometry G3.6 — reference-mask discrepancy localization (2026-11-19; SOURCE ONLY):**
 From Rust@bf61d684 and current single-session G1 plan/visual_pair,
 the SHA-bound Rust `inspect-visual-pair` now uses its existing PNG

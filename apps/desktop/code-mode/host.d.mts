@@ -2,7 +2,7 @@
  * SOURCE_ONLY: installed host/Deno/Rust execution NOT_EXECUTED. */
 import type {MaterialWorkPacket} from './material-work-packet.mjs';
 import type {
-  ApplyReceipt, CatalogPage, DocumentSummary, EditOperation,
+  ApplyReceipt, CatalogPage, DocumentSummary, EditOperation, Vec3,
   InspectBatchQuery, InspectBatchReceipt, InspectReceipt,
   MutationRequest, OutputReceipt, TextureCorrectionScope,
   MaterialPatchRegion, MaterialPairComparison, VisualPairReceipt,
@@ -111,6 +111,18 @@ export interface CodeModeTexturingReadinessReceipt {
   }|null;
   next:string;
 }
+export interface CodeModeGeometryLandmarkEvidence {
+  cube_uuid:string; parent_bone_uuid:string;
+  source_name:string|null; source_from:Vec3;source_to:Vec3;
+  landmark_label:string;view_id:CodeModeVisualViewId;
+  mismatch_kind:"missing"|"excess";
+  region_bounds:Readonly<[number,number,number,number]>;
+  source_model_sha256:string;
+  reference_png_sha256:string;capture_png_sha256:string;
+  identity_status:"SOURCE_UUID_VERIFIED";
+  image_correspondence:"OPERATOR_DECLARED_UNVERIFIED";
+  write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
+}
 export interface CodeModeGuestAPI {
   /** Null project indicates a New-model bootstrap in a trusted directory. */
   initial: CodeModeInitialReference;
@@ -143,6 +155,20 @@ export interface CodeModeGuestAPI {
   planGeometryResizePropagation(args: {
     project:string; propagation:GeometryResizePropagationRequest;
   }): Promise<GeometryResizePropagationReceipt>;
+  /** One source-confirmed, operator-bound Cube. Only canonical Rust
+   * ReframeCube preflight runs; no 3D inference or permission grant. */
+  planReviewedGeometryReframe(args: {
+    project:string;from:Vec3;to:Vec3;
+    uvPolicy:"box_repack"|"manual_preserve";
+  }): Promise<{
+    status:"OK";source_model_sha256:string;
+    geometry_landmark:CodeModeGeometryLandmarkEvidence;
+    plan:{expected_revision:0;
+      operations:Array<Extract<EditOperation,{op:"reframe_cube"}>>;
+      correction_scope:null};
+    preflight:PreflightReceipt["preflight"];
+    write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
+  }>;
   /** One authoritative authoring_target inspection, compacted by trusted host. */
   taskContext(args: {
     project:string; domain:"geometry"|"uv"|"texturing"|"animation";
@@ -166,10 +192,10 @@ export interface CodeModeGuestAPI {
       visual_verdict:"UNVERIFIED";
     };
   }>;
-  /** Host-only reference and capture PNG paths, SHA and view ID.
-   * Image content is not streamed to the guest. No native/artistic PASS.
-   */
+  /** Source-grounded Cube ID; pixel correspondence is only operator-declared,
+   * never camera-proven, and is not write authority. */
   inspectSelectedVisualPair(args: { project: string }): Promise<VisualPairReceipt & {
+    geometry_landmark:CodeModeGeometryLandmarkEvidence|null;
     review_feedback:{
       status:"RECORDED"|"NOT_RECORDED";
       decision:"ACCEPTED"|"REJECTED"|"UNVERIFIED";
@@ -486,6 +512,15 @@ export interface CodeModeHostOptions {
      * Texturing readiness, and bounds reviewer-authorized Paint regions.
      */
     reviewCriteria?:CodeModeReviewCriterion[];
+  };
+  /** Optional trusted source hypothesis for ONE Cube landmark. The exact
+   * image region must be a measured mask mismatch hotspot for a selected
+   * view; Rust must confirm the Cube UUID before it becomes guest-visible.
+   * This declaration is NOT proof of image-to-3D correspondence. */
+  preselectedGeometryLandmark?:{
+    cubeUuid:string;landmarkLabel:string;
+    viewId:CodeModeVisualViewId;mismatchKind:"missing"|"excess";
+    regionBounds:[number,number,number,number];
   };
   /** Operator-owned, independent visual review adapter. The callback receives
    * bounded original PNG bytes under trusted Node, not in the Deno guest.
