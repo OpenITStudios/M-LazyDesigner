@@ -211,10 +211,14 @@ pub(super) fn apply(
 )->Result<MutationReceipt>{
     session.check_revision(intent.expected_revision)?;
     if intent.source_base_rgba[3]!=255||intent.paint_rgba[3]!=255||
+       !super::valid_uuid(&intent.cube_uuid)||
+       !super::valid_uuid(&intent.texture_uuid)||
+       !FACE_NAMES.contains(&intent.face.as_str())||
        intent.brush_radius==0||intent.brush_radius>4||
        intent.protected_regions.len()>16||
        intent.points.is_empty()||intent.points.len()>paint::MAX_STROKE_POINTS||
-       intent.points.len()+intent.seam.as_ref().map_or(0,|s|s.points.len())
+       intent.points.len().saturating_add(
+           intent.seam.as_ref().map_or(0,|s|s.points.len()))
            >paint::MAX_STROKE_POINTS||
        serde_json::to_vec(intent)
            .is_err_or(|data|data.len()>MAX_PLAN_BYTES){
@@ -380,6 +384,9 @@ mod tests{
         stale_uv.expected_face_uv=[4.0,4.0,0.0,0.0];
         assert_eq!(s.apply_surface_paint_stroke(&stale_uv).unwrap_err(),
             "SURFACE_PAINT_VIEW_UV_STALE");
+        let mut bad_radius=intent();bad_radius.brush_radius=5;
+        assert_eq!(s.apply_surface_paint_stroke(&bad_radius).unwrap_err(),
+            "SURFACE_PAINT_INTENT_INVALID");
         let mut alpha=intent();
         alpha.paint_rgba[3]=0;
         assert_eq!(s.apply_surface_paint_stroke(&alpha).unwrap_err(),
@@ -414,6 +421,12 @@ mod tests{
         let mut stale=request.clone();stale.expected_face_rotation=90;
         assert_eq!(s.sample_surface_source(&stale).unwrap_err(),
             "SURFACE_PAINT_VIEW_UV_STALE");
+        let mut stale_revision=request.clone();stale_revision.expected_revision=1;
+        assert!(s.sample_surface_source(&stale_revision).is_err());
+        let mut transparent=request.clone();transparent.local=[0,2];
+        assert_eq!(s.sample_surface_source(&transparent).unwrap().rgba,
+            [80,100,120,255]);
+        assert_eq!(s.export().unwrap(),before);
     }
     #[test]
     fn square_and_diamond_brush_keep_all_original_detail_pixels(){

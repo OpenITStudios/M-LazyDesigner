@@ -70,3 +70,10 @@ test('seam candidate is only a same-atlas/same-face different Cube',()=>{
   assert.equal(canBeginSurfaceSeam(a,{...a,cubeUuid:'b',textureIndex:1}),false);
   assert.equal(canBeginSurfaceSeam(a,{...a}),false);
 });
+
+test('material role brush variants never change signed UV sampling coordinates',()=>{
+  const face={uv:[10,9,2,5],rotation:270,texture:'atlas'};
+  const corners=faceUvCoordinates(face,[32,32],true);
+  const target=hitFaceLocalTexel(face,corners,uvAt(corners,.45,.75));
+  assert.deepEqual(target,{size:[4,8],texel:[1,6]});
+});

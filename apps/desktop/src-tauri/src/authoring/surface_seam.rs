@@ -86,8 +86,8 @@ mod tests{
         assert!(validate_pair(s.document(),first,"north",second,"north").is_ok());
         assert_eq!(validate_pair(s.document(),first,"north",second,"east")
             .unwrap_err(),"SURFACE_SEAM_PAIR_UNSUPPORTED");
-        assert_eq!(validate_pair(s.document(),first,"south",second,"south")
-            .is_ok(),true);
+        assert!(validate_pair(s.document(),first,"south",second,"south")
+            .is_ok());
         let mut separated=s.document().clone();
         separated.cubes.iter_mut().find(|c|c.uuid==second).unwrap()
             .from[0]=5.0;
