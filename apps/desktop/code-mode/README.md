@@ -1200,7 +1200,13 @@ composer produces 4-connected pixel masses, with total 64-span Paint
 budget, and sends exactly the same Rust `paint_cube_face_regions_guarded`
 operations through existing native UV/source-color/correction guards.
 It refuses masked-out centers, disconnected/overlapping shapes, unsafe
-bounds and invented palette roles. A mask is a proposed composition,
+bounds and invented palette roles. A stroke can optionally use an
+Aseprite-like **`shadeWalk`** (`{from:"base",steps:-1|1}`) to select
+the next actual `shadow` or `highlight` swatch from the reviewer-owned
+material palette in fixed shade-role order. There is no algorithmic RGB
+generation, pigment sampling, automatic hue shifting or per-pixel source
+classification; distinct source-approved swatches must be provided.
+Accent/detail remain explicitly named colors. A mask is a proposed composition,
 not observed shading or approval; the actual Rust protected regions
 and selected visual-review context remain authoritative.
 Rotated hierarchies, other Bones, animation and world visibility are

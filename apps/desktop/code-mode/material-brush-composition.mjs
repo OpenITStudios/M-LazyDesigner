@@ -13,6 +13,9 @@ const MAX_STROKES=8;
 const MAX_POINTS=12;
 const MAX_PATH_SAMPLES=512;
 const TOKEN=/^[a-z][a-z0-9_-]{0,63}$/;
+// Aseprite-style shade selection steps through *existing authored swatches*.
+// No HSL/OKLab synthesis, source-pixel inference or material-name ramp.
+const SHADE_ROLES=['deep_shadow','shadow','base','highlight','edge_light'];
 
 function invalid(){throw new TypeError('MATERIAL_BRUSH_COMPOSITION_INVALID');}
 function object(value,fields){
@@ -53,6 +56,23 @@ function rasterMask(rows){
   }
   return pixels;
 }
+function resolveShadeRole(stroke,roles){
+  const direct=stroke.role!==undefined;
+  const stepped=stroke.shadeWalk!==undefined;
+  if(direct===stepped)invalid(); // exactly one selector
+  if(direct){
+    if(!roles.includes(stroke.role))invalid();
+    return stroke.role;
+  }
+  object(stroke.shadeWalk,['from','steps']);
+  const {from,steps}=stroke.shadeWalk;
+  if(!SHADE_ROLES.includes(from) ||
+     !roles.includes(from) || (steps!==-1 && steps!==1))invalid();
+  const selectable=SHADE_ROLES.filter(role=>roles.includes(role));
+  const target=selectable[selectable.indexOf(from)+steps];
+  if(!target)invalid();
+  return target;
+}
 function strokePoints(points){
   if(!Array.isArray(points) || points.length<1 || points.length>MAX_POINTS)invalid();
   const out=points.map(p=>{
@@ -66,34 +86,39 @@ function strokePoints(points){
 /** Source-only normalization, not reviewer consent or visual evidence. */
 export function normalizedMaterialBrushComposition(value,roles){
   object(value,['mask','strokes']);
-  if(!Array.isArray(roles) || roles.length===0)invalid();
+  if(!Array.isArray(roles) || roles.length===0 ||
+     roles.some(role=>typeof role!=='string') ||
+     new Set(roles).size!==roles.length)invalid();
   object(value.mask,['reason','paintable','rest']);
   const mask=Object.freeze({
     reason:reason(value.mask.reason),
     paintable:spanList(value.mask.paintable,true),
     rest:spanList(value.mask.rest??[],false),
   });
-  const palette=new Set(roles);
   if(!Array.isArray(value.strokes) || value.strokes.length<1 ||
      value.strokes.length>MAX_STROKES)invalid();
   const ids=new Set();
   const strokes=value.strokes.map(stroke=>{
-    object(stroke,['id','role','formReason','points','radius','tip','taper']);
+    object(stroke,['id','role','shadeWalk','formReason','points','radius','tip','taper']);
     if(typeof stroke.id!=='string' || !TOKEN.test(stroke.id) ||
-       ids.has(stroke.id) || !palette.has(stroke.role) ||
+       ids.has(stroke.id) ||
        !Number.isInteger(stroke.radius) || stroke.radius<0 ||
        stroke.radius>2 ||
        !['square','diamond'].includes(stroke.tip) ||
        !['none','ends'].includes(stroke.taper))invalid();
     ids.add(stroke.id);
-    return Object.freeze({id:stroke.id,role:stroke.role,
+    resolveShadeRole(stroke,roles);
+    return Object.freeze({id:stroke.id,
+      ...(stroke.role!==undefined?{role:stroke.role}:{
+        shadeWalk:Object.freeze({from:stroke.shadeWalk.from,steps:stroke.shadeWalk.steps}),
+      }),
       formReason:reason(stroke.formReason),
       points:strokePoints(stroke.points),radius:stroke.radius,
       tip:stroke.tip,taper:stroke.taper});
   });
   const normalized=Object.freeze({mask,strokes:Object.freeze(strokes)});
   // Reject an unsafe or unrepresentable path before it reaches host approval.
-  draw(normalized);
+  draw(normalized,roles);
   return normalized;
 }
 function pathSamples(points){
@@ -128,7 +153,7 @@ function spansFromPixels(pixels){
   if(spans.length===0)invalid();
   return Object.freeze(spans);
 }
-function draw(composition){
+function draw(composition,roles){
   const paintable=rasterMask(composition.mask.paintable);
   const rest=rasterMask(composition.mask.rest);
   for(let i=0;i<rest.length;i++)if(rest[i] && !paintable[i])invalid();
@@ -156,7 +181,8 @@ function draw(composition){
     for(const i of pixels)if(used.has(i))invalid();
     for(const i of pixels)used.add(i);
     clusters.push(Object.freeze({
-      id:stroke.id,role:stroke.role,formReason:stroke.formReason,
+      id:stroke.id,role:resolveShadeRole(stroke,roles),
+      formReason:stroke.formReason,
       spans:spansFromPixels(pixels),
     }));
   }
@@ -165,5 +191,5 @@ function draw(composition){
 }
 /** Build exact row-span cluster candidates; later native UV preflight remains mandatory. */
 export function compileMaterialBrushComposition(value,roles){
-  return draw(normalizedMaterialBrushComposition(value,roles));
+  return draw(normalizedMaterialBrushComposition(value,roles),roles);
 }

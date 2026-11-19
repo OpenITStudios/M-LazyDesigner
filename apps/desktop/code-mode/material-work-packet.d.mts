@@ -40,8 +40,14 @@ export interface MaterialWorkPacket {
       };
       strokes:Array<{
         id:string;
-        role:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light"|
+        /** Choose either an explicit swatch role, or walk one adjacent
+         * existing shade role from a reviewer-selected anchor, never both.
+         * The painter does not sample or infer the underlying source color.
+         */
+        role?:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light"|
           "accent"|"detail";
+        shadeWalk?:{from:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light";
+          steps:-1|1};
         formReason:string;
         /** Absolute positions on the selected Cube face, NOT atlas pixels. */
         points:Array<[number,number]>;

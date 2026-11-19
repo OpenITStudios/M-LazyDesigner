@@ -268,6 +268,37 @@ test('source-selected brush masks compile into native guarded face-local Paint o
   assert.throws(()=>normalizedMaterialWorkPacket(samePixelsDifferentPaths),
     /MATERIAL_BRUSH_COMPOSITION_INVALID|MATERIAL_WORK_PACKET_INVALID/);
 });
+test('artist palette shade walk uses only selected swatches, never synthesizes a RGB ramp',()=>{
+  const plan=brushPacket();
+  const strokes=plan.facePlans[0].brushComposition.strokes;
+  const authored=compileMaterialClusterPaint(plan);
+  const {role:_shadow,...shadow}=strokes[0];
+  const {role:_highlight,...highlight}=strokes[1];
+  strokes[0]={...shadow,shadeWalk:{from:'base',steps:-1}};
+  strokes[1]={...highlight,shadeWalk:{from:'base',steps:1}};
+  const normalized=normalizedMaterialWorkPacket(plan);
+  assert.equal(normalized.facePlans[0].brushComposition.strokes[0].role,undefined);
+  assert.equal(normalized.facePlans[0].brushComposition.strokes[0].shadeWalk.steps,-1);
+  assert.deepEqual(materialFaceClusters(normalized.facePlans[0],normalized.palette)
+    .map(c=>c.role),['shadow','highlight']);
+  assert.deepEqual(compileMaterialClusterPaint(plan),authored);
+  assert.notEqual(materialWorkPacketDigest(plan),materialWorkPacketDigest(brushPacket()));
+  const bad=[
+    {shadeWalk:{from:'accent',steps:1}},
+    {shadeWalk:{from:'base',steps:2}},
+    {shadeWalk:{from:'highlight',steps:1}},
+    {shadeWalk:{from:'base',steps:-1},role:'shadow'},
+    {shadeWalk:{from:'base',steps:0}},
+  ];
+  for(const change of bad){
+    const altered=brushPacket();
+    const brush=altered.facePlans[0].brushComposition.strokes[0];
+    delete brush.role;
+    Object.assign(brush,change);
+    assert.throws(()=>normalizedMaterialWorkPacket(altered),
+      /MATERIAL_BRUSH_COMPOSITION_INVALID/);
+  }
+});
 test('rest mask, off-mask strokes, overlapping shade roles and unsafe brush controls refuse',()=>{
   const original=brushPacket();
   const b=original.facePlans[0].brushComposition;

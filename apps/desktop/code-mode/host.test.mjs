@@ -2378,11 +2378,11 @@ test('representative material is constrained; propagation requires fresh accepte
           rest:[{y:0,x0:2,x1:4}],
         },
         strokes:[
-          {id:'side-shadow',role:'shadow',
+          {id:'side-shadow',shadeWalk:{from:'base',steps:-1},
             formReason:'Preserve the approved stepped shadow against the helmet joint.',
             points:[[0,0],[1,0],[0,1],[1,1],[2,1]],
             radius:0,tip:'square',taper:'none'},
-          {id:'rim-light',role:'highlight',
+          {id:'rim-light',shadeWalk:{from:'base',steps:1},
             formReason:'Preserve the approved compact bevel reflection shape.',
             points:[[2,2],[3,2],[3,3]],
             radius:0,tip:'diamond',taper:'none'},
@@ -2694,6 +2694,8 @@ test('representative material is constrained; propagation requires fresh accepte
     assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].face,'east');
     assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].clusters,undefined);
     assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].brushComposition.strokes.length,2);
+    assert.deepEqual(actualApprovals[0].materialWorkPacket.facePlans[0].brushComposition.strokes
+      .map(s=>s.shadeWalk.steps),[-1,1]);
     assert.deepEqual(actualApprovals[0].operationKinds,
       ['paint_cube_face_regions_guarded']);
     assert.deepEqual(actualApprovals[0].correctionScope.editableBeforeRgba,

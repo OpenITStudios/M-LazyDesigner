@@ -429,7 +429,13 @@ hard-edged pixel clusters; no soft blur, random noise, stamp
 library, sensor input, automatic curvature/baking, generated palette,
 or untrusted texture patch is introduced. Every role is selected
 from the existing explicit material swatches; shadow/base/highlight
-relationships remain reviewer/approved-reference decisions.
+relationships remain reviewer/approved-reference decisions. The
+optional `shadeWalk` selects an adjacent **existing** shade role
+(e.g. `base - 1 = shadow`, `base + 1 = highlight`) following
+Aseprite's user-selected palette-step principle, independent of
+source swatch list order. It cannot synthesize a new color, query
+the underlying native pixel, skip an absent shade step, or infer
+actual material appearance.
 The compiled spans are still checked by the same FORM_SHADING
 cluster guards and exact native signed/rotated Cube-face UV/alias
 preflight. A mask is an additional **narrowing** of where a reviewed
