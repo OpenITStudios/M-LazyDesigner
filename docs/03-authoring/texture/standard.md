@@ -49,6 +49,28 @@ initial source-only implementation; multi-face seams, brush tip dynamics,
 alpha-aware picking and semantic mask inference are separate acceptance
 gates and not yet supported by this adapter.
 
+## 2026-11-19 Rust 3D Paint phase 2 — sampling and limited seam
+
+Read original colors from the **saved Rust RGBA8 source PNG**, never
+infer an artist palette from lit Three.js screenshots. The source picker
+has zero mutation/Undo side effects and returns an exact RGBA8 texel
+and source coordinate; transparent RGB is retained. The direct-user
+hard square/diamond brush radius 1..4 is merely a spatial mask over
+authorized original-color pixels. It cannot change alpha, different
+original-color details, reviewer-protected same-color emblems, or
+pixels on another face without source admission.
+
+An optional TWO-Cube seam stroke may span same-oriented coplanar
+faces with actual positive edge contact, one Bone parent frame and
+one explicit atlas. Every face is separately UV/alias checked by Rust;
+all accepted points are applied in one Undo version. This is not a
+general seam solver or visual continuity certification. Other
+rotations, shared/implicit UV, uneven Bone frames, third faces and
+alpha-sensitive viewport picks remain unsupported/unverified.
+A per-gesture 4,096-texel budget is for source/performance safety,
+not a restriction on the texture's artist color count. PNG remains
+lossless RGBA8. Native quality/latency/compatibility tests remain held.
+
 ## Canonical Vocabulary
 
 ```text

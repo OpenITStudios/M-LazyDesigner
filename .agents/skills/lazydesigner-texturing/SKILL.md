@@ -64,6 +64,20 @@ raycasting does not account for actual fragment alpha-test occlusion, and
 native pointer/Bedrock/visual validation remains NOT_EXECUTED. Keep 2D paint,
 reviewed external PNG and Code Mode permissions distinct.
 
+**Direct-user 3D Paint phase 2 (SOURCE_ONLY / NOT_EXECUTED):**
+The Svelte/Three.js user may now sample a single exact original RGBA8
+texel from the Rust source model (not a rendered-color guess), select a
+hard square/diamond brush radius 1..4, or explicitly bridge up to TWO
+adjacent coplanar same-name faces on unrotated, uninflated Cubes sharing
+one saved Bone and one explicit owned atlas. Native Rust independently
+rechecks both source UV/rotation, all per-face alias and color guards,
+operator masks and same-Bone adjacency, then writes one Paint/Undo
+transaction. An artist sample does not automatically grant painting
+permission. This is NOT automatic cross-face seam repair, full
+material-style inference, alpha-aware raycasting, AI guest write access,
+or independently verified artistic quality. Keep sampled source RGBA,
+reviewed swatches and user-authored mask evidence distinct.
+
 ## Control Context Projection
 
 Start from LazyDesigner Control's stage-specific Texturing projection; do not reload the complete Modelling Profile or Reference Package.

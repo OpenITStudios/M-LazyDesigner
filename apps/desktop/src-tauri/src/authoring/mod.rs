@@ -42,7 +42,7 @@ mod external_texture;
 pub use external_texture::ExternalFaceTextureIntent;
 mod surface_paint;
 mod surface_seam;
-pub use surface_paint::{SurfacePaintIntent,SurfacePaintSampleRequest,SurfaceSourceSample};
+pub use surface_paint::{SurfacePaintIntent,SurfacePaintSampleRequest,SurfaceSourceSample,SurfaceBrushTip};
 pub use surface_seam::SurfaceSeamPatch;
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;

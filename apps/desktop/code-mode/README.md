@@ -1,3 +1,44 @@
+**2026-11-19 — Rust 3D Paint phase 2: source color sample, hard brush and guarded coplanar seam (SOURCE_ONLY / NOT_EXECUTED)**
+
+- The source-only direct-user 3D eyedropper calls
+  `rust_editor_sample_surface_color` to read exactly one original
+  Rust-owned RGBA8 texel by selected Cube, saved face UV/rotation, texture
+  UUID, model epoch and revision. The returned value is from the source
+  PNG, not a lit WebGL pixel or AI interpretation. It is read-only;
+  transparent/non-opaque values are reported without authorizing opaque
+  brush mutation.
+- `surface_paint.rs` now supports **1..4 pixel radius** and **square or
+  diamond hard pixel tips**, strictly clipped to each original Cube face.
+  No automatic noise, palette reduction, blur, alpha change or dithering.
+  The existing original-color match, adjacent distinct-color identity
+  margin and explicit protected atlas rectangles still apply to each
+  expanded source texel.
+- `surface_seam.rs` is a narrow **optional two-Cube** bridge: matching
+  outward face name, same saved Bone parent coordinate frame, unrotated/
+  uninflated/unstretched cuboid bounds, exactly coplanar source face plane,
+  positive shared edge overlap, one explicitly mapped owned RGBA8 atlas,
+  and independently isolated UV patches. Unsupported/ambiguous geometry
+  or source, or a third face in one gesture, is refused. The native Rust
+  owner combines both clipped face-local paths into **one** PNG stroke,
+  one `correction_scope`, one immutable document revision and Undo step.
+  It does not certify perfectly continuous artwork or infer world-space
+  identity of arbitrary meshes.
+- UI: opt-in Source eyedropper on 3D, Brush radius/tip, and Bridge
+  adjacent Cube faces in Svelte/Three.js. Rust independently verifies
+  face UV/rotation and every target point. Existing 2D Paint, external
+  PNG editing and AI-facing Code Mode write permissions are unchanged.
+  The 3D raycaster is not alpha-aware, so transparent rendered faces can
+  remain ambiguous until native visual QA.
+- A 4,096-centre budget / 4,096 physical edited-texel limit is a
+  per-gesture safety bound, **not a global palette color-count limit**.
+  Output remains lossless truecolor RGBA8 PNG, with the existing
+  size/compression rules. The engine still does not automatically invent
+  material-specific shapes or deliver cross-face shader equivalence.
+- Negative and positive Rust/TS seam, brush and sample fixtures were
+  AUTHORED_NOT_RUN. No Cargo, Node, CI, WebView2, Windows, Blockbench or
+  Bedrock live acceptance was run due the active test hold. No observed
+  performance improvement or automatic artwork quality is claimed.
+
 **2026-11-19 — Rust rich color palettes + lossless PNG (SOURCE ONLY / NOT_EXECUTED)**
 Source baseline Rust@b562f265c6907a0f8fec933b90fe8fc20cfd82a8.
 MaterialWorkPacket now accepts multiple independently authored RGB swatches per
