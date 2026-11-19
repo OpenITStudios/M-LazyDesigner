@@ -6,6 +6,10 @@ Isolated workspace for bounded research and historical proposals that are **not*
 
 There is no active production authority under `experiments/`.
 
+## Research-only dossiers
+
+- [Procedural Reasoning deep research (2026-11-20)](2026-11-20-procedural-reasoning-deep-research.md) — Abyssal Garden algorithm audit; 2020–2026 procedural CAD research; Geometry/Texturing/Animation reasoning; feasibility, counterevidence, safety and A/B protocol. **Advisory only; not an implementation plan or new owner.**
+
 [Asset motion](asset-motion/README.md) retains recovered simulation inputs/outputs and GIF references for the 2026-10-21 handoff. These historical experiments were not executed or promoted during transfer.
 
 - Historical Navigator design context is retained in Git history only; there is no Navigator working-tree owner.
