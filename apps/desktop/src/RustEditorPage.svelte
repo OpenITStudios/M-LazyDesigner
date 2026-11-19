@@ -31,7 +31,9 @@
     type SelectionRaster} from './rustSurfaceTools';
   import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
   import {matchingSelectedTexturePreview,selectedTexturePreviewSources,
-    type SelectedTexturePreview} from './rustSelectedTexturePreview';
+    bindSelectedTexturePreview,
+    type SelectedTexturePreview,type SelectedTexturePreviewReceipt}
+    from './rustSelectedTexturePreview';
 import {BRUSH_PRESET_STORAGE_KEY,planSurfacePattern,readBrushPresets,
     serializeBrushPresets,upsertBrushPreset,validBrushSettings,
     type PatternMode,type BrushPreset,type BrushSettings} from './rustBrushPresets';
@@ -438,8 +440,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     // A fresh canonical snapshot invalidates all temporary texture overlays.
     clearSemanticPreview();
     clearSurfaceSelection();
-    // A native edit/new/open also evicts previously materialized image URLs.
-    selectedTexturePreview=null;
+    // A selected view may survive another revision only as a *stale* cached
+    // source string until Rust proves it is still the same PNG by SHA-256.
     // Any document receipt invalidates the frame-clock identity. Resume is
     // always explicit; never replay a stale animation after Undo/Open/Save.
     pauseAnimationPlayback();
@@ -448,6 +450,13 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     paintTextureIndex = reconcilePaintTextureSelection(
       snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
     );
+    if(selectedTexturePreview && (
+       selectedTexturePreview.epoch!==next.epoch ||
+       selectedTexturePreview.textureIndex!==paintTextureIndex ||
+       selectedTexturePreview.textureUuid!==next.textureUuids[paintTextureIndex] ||
+       !!next.texturePreviewSources[paintTextureIndex])){
+      selectedTexturePreview=null;
+    }
     if (snapshot && snapshot.epoch !== next.epoch) {
       clearSurfaceProtection();
       semanticReferenceSha=null;
@@ -603,6 +612,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
 
   async function command(name: string, args: Record<string, unknown>): Promise<EditorSnapshot | null> {
     if (busy) return null;
+    const hadSelectedPreview=validSelectedTexturePreview;
+    let editAccepted=false;
     busy = true; closeMenus(); error = '';
     try {
       const reuse = canReusePreviewInCommand(name)
@@ -612,7 +623,9 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
           knownAnimationSourceKey: snapshot?.animationSourceKey ?? null,
         } : {};
       const next = await invoke<EditorSnapshot>(name, { ...args, ...reuse });
-      return accept(next);
+      const accepted=accept(next);
+      editAccepted=true;
+      return accepted;
     } catch (cause) {
       if (isPreviewTransportFailure(cause)) {
         // Rust may have COMMITTED the edit before this derived IPC preview
@@ -635,7 +648,14 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
         showError(cause);
       }
       return null;
-    } finally { busy = false; }
+    } finally {
+      busy = false;
+      // When Rust confirms the image source key is unchanged, restore the
+      // existing bytes without another large PNG transport after Undo/edit.
+      if(editAccepted&&hadSelectedPreview&&selectedTexturePreview&&
+         snapshot&&!snapshot.texturePreviewSources[paintTextureIndex])
+        void loadSelectedTexturePreview(true);
+    }
   }
   async function load() {
     loading = true;
@@ -1214,26 +1234,33 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     apply([{ op: 'set_empty_atlas_resolution', width, height }]);
   }
 
-  async function loadSelectedTexturePreview():Promise<void>{
+  async function loadSelectedTexturePreview(silent=false):Promise<void>{
     if(!snapshot||busy||loading||workspaceMode!=='paint'||
-       snapshot.scopedTexturePreview||selectedTextureSource)return;
+       snapshot.scopedTexturePreview||
+       snapshot.texturePreviewSources[paintTextureIndex]||
+       matchingSelectedTexturePreview(snapshot,selectedTexturePreview,paintTextureIndex))return;
     const index=paintTextureIndex;
     const textureUuid=snapshot.textureUuids[index];
     if(!textureUuid)return;
     const {epoch,revision}=snapshot;
+    const previous=selectedTexturePreview;
+    const sourceKey=previous&&previous.epoch===epoch&&
+      previous.textureIndex===index&&previous.textureUuid===textureUuid
+        ?previous.sourceSha256:null;
     busy=true;error='';
     try{
-      const receipt=await invoke<SelectedTexturePreview>(
+      const receipt=await invoke<SelectedTexturePreviewReceipt>(
         'rust_editor_read_texture_preview',{
           expectedEpoch:epoch,expectedRevision:revision,
           textureIndex:index,textureUuid,
+          knownSourceSha256:sourceKey,
         });
+      const bound=bindSelectedTexturePreview(snapshot,receipt,previous,index);
       if(!snapshot||snapshot.epoch!==epoch||snapshot.revision!==revision||
-         paintTextureIndex!==index||
-         !matchingSelectedTexturePreview(snapshot,receipt,index))
+         paintTextureIndex!==index||!bound)
         throw new Error('SELECTED_PREVIEW_SOURCE_STALE');
-      selectedTexturePreview=receipt;
-      notice='Selected atlas loaded for this view only. Source PNG and Undo remain in Rust.';
+      selectedTexturePreview=bound;
+      if(!silent)notice='Selected atlas loaded for this view only. Source PNG and Undo remain in Rust.';
     }catch(cause){selectedTexturePreview=null;showError(cause);}
     finally{busy=false;}
   }
@@ -1755,7 +1782,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
        snapshot.textureUuids[gesture.textureIndex]!==gesture.textureUuid||
        paintTextureIndex!==gesture.textureIndex ||
        gesture.contextKey!==surfacePaintContextKey)return;
-    const refreshManualPreview=validSelectedTexturePreview;
     const base=sourceRgb(surfaceSourceBase),color=sourceRgb(paintColor);
     if(!base||!color){error='Select valid original and target RGB colors.';return;}
     // An active selection never degrades to an unrestricted gesture.
@@ -1799,10 +1825,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
         intent:{...shared,shade_ramp:surfaceShadeColors,
           direction:surfaceShadeDirection},
       });
-      if(next){
-        notice='Shade Ink stepped each eligible original pixel by one exact authored ramp swatch in one Undo.';
-        if(refreshManualPreview)void loadSelectedTexturePreview();
-      }
+      if(next)notice='Shade Ink stepped each eligible original pixel by one exact authored ramp swatch in one Undo.';
       return;
     }
     const next=await command('rust_editor_paint_surface_stroke',{
@@ -1822,7 +1845,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       notice=gesture.seam
         ? 'Two adjacent Cube faces painted in one Rust Undo step; identity and alpha guards remain.'
         : '3D brush committed in one Undo with exact original RGB and protected masks.';
-      if(refreshManualPreview)void loadSelectedTexturePreview();
     }
   }
   function startSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
