@@ -6,7 +6,7 @@ use lazydesigner::authoring::{
     inspect_animation_timeline_markers, export_bedrock_animations, bedrock_animation_curve_fidelity,
     inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors_page, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession, ValidatedInspection,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
-    GeometryAssemblyRequest, GeometryFaceAttachmentRequest,
+    GeometryAssemblyRequest, GeometryFaceAttachmentRequest, inspect_geometry_impact,
     GeometryResizePropagationRequest, SemanticMaterialIntent,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -463,6 +463,7 @@ enum InspectBatchQuery {
     CubeSurfaces { uuid: String },
     CubeFaceAlpha { uuid: String },
     CubeUvSharing { uuid: String, texture_uuid: String },
+    GeometryImpact { cube_uuid: String, change: String },
     AssetHandoff { texture_uuid: String, offset: Option<usize>, limit: Option<usize> },
     ModelTextureCoverage { offset: Option<usize>, limit: Option<usize>, attention_only: Option<bool> },
     MaterialPair { reference_uuid: String, candidate_uuid: String,
@@ -552,6 +553,10 @@ fn inspect_batch_with_view(
                     None => inspect_cube_uv_alpha(doc, uuid)?,
                 };
                 json!({"kind":"cube_face_alpha","face_alpha":face_alpha})
+            },
+            InspectBatchQuery::GeometryImpact { cube_uuid, change } => {
+                let impact = inspect_geometry_impact(doc, batch_id(&cube_uuid)?, &change)?;
+                json!({"kind":"geometry_impact","impact":impact})
             },
             InspectBatchQuery::CubeUvSharing { uuid, texture_uuid } => {
                 let uv_sharing = inspect_cube_uv_sharing(

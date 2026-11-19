@@ -1023,12 +1023,43 @@ export interface AuthoringTargetOrientation {
   visual_verdict:"UNVERIFIED";
   next:string;
 }
+/** Bounded source-derived impact hints, not inferred physical contact,
+ * UV exclusivity, visual acceptance, persistent graph or edit permission.
+ */
+export interface GeometryImpactEvidence {
+  scope:"saved_geometry_impact_advisory";
+  cube_uuid:string;
+  change:"reshape"|"translate"|"texture"|"pose";
+  parent_bone_uuid:string|null;
+  ancestor_count:number;
+  ancestor_bone_uuids:string[];
+  ancestors_truncated:boolean;
+  dimensions:Vec3;
+  same_parent_cube_uuids:string[];
+  same_parent_cube_count:number;
+  same_parent_truncated:boolean;
+  declared_texture_uuids:string[];
+  same_atlas_cube_uuids:string[];
+  same_atlas_cube_count:number;
+  same_atlas_truncated:boolean;
+  texture_relations_complete:boolean;
+  matching_animation_uuids:string[];
+  matching_animation_count:number;
+  matching_animation_truncated:boolean;
+  animation_relation_verdict:"EXACT_KEYS_ONLY";
+  review_reasons:string[];
+  collision_verdict:"UNVERIFIED";
+  visual_verdict:"UNVERIFIED";
+  write_authority:"NOT_GRANTED";
+  source_change_verdict:"NOT_APPLIED";
+}
 export type InspectBatchQuery =
   | AuthoringTargetQuery
   | { kind: "cube"; uuid: string }
   | { kind: "cube_surfaces"; uuid: string }
   | { kind: "cube_face_alpha"; uuid: string }
   | { kind: "cube_uv_sharing"; uuid: string; texture_uuid: string }
+  | { kind: "geometry_impact"; cube_uuid: string; change: GeometryImpactEvidence["change"] }
   | { kind: "asset_handoff"; texture_uuid: string; offset?: number; limit?: number }
   | { kind: "model_texture_coverage"; offset?: number; limit?: number; attention_only?: boolean }
   | { kind: "material_pair"; reference_uuid: string; candidate_uuid: string; reference_region: MaterialPatchRegion; candidate_region: MaterialPatchRegion }
@@ -1083,6 +1114,7 @@ export type InspectBatchResult =
   | { kind: "cube_surfaces"; surfaces: CubeSurfaceInspection }
   | { kind: "cube_face_alpha"; face_alpha: CubeFaceAlphaInspection }
   | { kind: "cube_uv_sharing"; uv_sharing: CubeUvSharingInspection }
+  | { kind: "geometry_impact"; impact: GeometryImpactEvidence }
   | { kind: "asset_handoff"; handoff: AssetHandoffInspection }
   | { kind: "model_texture_coverage"; coverage: ModelTextureCoveragePage }
   | { kind: "material_pair"; comparison: MaterialPairComparison }

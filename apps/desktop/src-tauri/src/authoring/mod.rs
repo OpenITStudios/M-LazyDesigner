@@ -13,6 +13,8 @@ mod bbmodel;
 mod semantic_map;
 mod geometry;
 mod geometry_assembly;
+mod geometry_impact;
+pub use geometry_impact::inspect_geometry_impact;
 mod geometry_sweep;
 pub use geometry_sweep::{GeometrySphereSweep, GeometrySweepStation};
 mod geometry_profile_sweep;

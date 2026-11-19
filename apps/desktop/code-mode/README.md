@@ -973,6 +973,20 @@ Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.
 
 
+**G4 source-grounded Geometry impact inspection (2026-11-20; SOURCE_ONLY):**
+`codemode.inspectBatch([{kind:'geometry_impact',cube_uuid:'...',change:'reshape'}])`
+reuses the existing SHA-bound read-only Rust `inspect-batch` call. Supported
+change intents: `reshape`, `translate`, `texture`, `pose`. Rust returns
+exact saved Bone ancestry and same-parent Cube IDs, declared common atlas
+consumers and matching animation UUID keys, with bounded lists and truthful
+truncation. These are **source facts, not geometric contact, UV-alias,
+reference/visual, or rig motion quality proofs**. Where relevant, follow with
+existing targeted UV/Animation/Geometry inspectors and actual source-bound
+multi-view review before any correction. Code Mode verifies the receipt and
+rejects a forged permission or visual verdict. No new guest RPC method,
+model store, shape generator, renderer, automatic Apply or asset approval.
+Rust/Node fixture checks are SOURCE_AUTHORED_NOT_RUN under the existing hold.
+
 **G3.7 operator-bound semantic Geometry correction (2026-11-19; SOURCE ONLY):**
 The trusted `createCodeModeHost` may opt into exactly one
 `preselectedGeometryLandmark` with a known `cubeUuid`, operator landmark

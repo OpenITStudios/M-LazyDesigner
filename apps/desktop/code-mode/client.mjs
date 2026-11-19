@@ -12,6 +12,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest} from './material-work-packet.mjs';
+import {validGeometryImpact} from './geometry-impact.mjs';
 
 const execFileAsync = promisify(execFile);
 const PLAN_LIMIT = 64 * 1024;
@@ -501,6 +502,7 @@ const INSPECTION_QUERY_FIELDS = Object.freeze({
   cube_surfaces: ['uuid'],
   cube_face_alpha: ['uuid'],
   cube_uv_sharing: ['uuid', 'texture_uuid'],
+  geometry_impact: ['cube_uuid','change'],
   asset_handoff: ['texture_uuid', 'offset', 'limit'],
   model_texture_coverage: ['offset', 'limit', 'attention_only'],
   material_pair: ['reference_uuid', 'candidate_uuid', 'reference_region', 'candidate_region'],
@@ -590,6 +592,12 @@ function serializeInspectionQueries(requests) {
           throw new TypeError('Inspection attention_only must be a boolean');
         }
         output.attention_only = value;
+      } else if (field === 'change') {
+        if (kind !== 'geometry_impact' ||
+            !['reshape','translate','texture','pose'].includes(value)) {
+          throw new TypeError('GEOMETRY_IMPACT_CHANGE_INVALID');
+        }
+        output.change = value;
       } else if (field === 'channel') {
         if (!['rotation', 'position', 'scale'].includes(value)) {
           throw new TypeError('Unsupported transform channel');
@@ -807,6 +815,14 @@ export function createRustCodeModeClient({
               typeof item !== 'object' || Array.isArray(item) ||
               item.kind !== unique[i].kind)) {
           throw new Error('CODE_MODE_INSPECT_BATCH_RECEIPT_INVALID');
+        }
+        // Source relationships are advisory only. An untrusted/forged
+        // answer must never promote itself into a write or visual verdict.
+        for (let i = 0; i < unique.length; i++) {
+          if (unique[i].kind === 'geometry_impact' &&
+              !validGeometryImpact(receipt.results[i]?.impact, unique[i])) {
+            throw new Error('CODE_MODE_GEOMETRY_IMPACT_RECEIPT_INVALID');
+          }
         }
         // Only repeated selectors need independent JSON copies. Always
         // enforce the existing 96 KiB native result-array budget, including
