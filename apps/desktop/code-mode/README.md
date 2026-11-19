@@ -1,5 +1,39 @@
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+## P0-D/E desktop visual preview versus Code Mode guest (SOURCE ONLY)
+
+The native Rust Tauri editor (not the permission-denied Deno
+guest) can choose one bounded local reference PNG, display its
+actual user-selected pixels in the Paint workspace, and generate
+an ephemeral painted-metal candidate from the same
+\`EditorSession::plan_semantic_material\` owner as the headless
+read-only \`planSemanticMaterial\` RPC. The selected image's
+path is never sent to Code Mode; only its SHA is included in
+the semantic intent. The Tauri UI can show the image bytes
+locally for human comparison, but its label is
+\`USER_SELECTED_NOT_ARTISTICALLY_VERIFIED\`.
+
+\`rust_editor_preview_semantic_material\` applies the guarded
+native plan to a disposable in-memory clone and verifies its
+exact candidate canonical SHA against \`VALIDATED_NOT_APPLIED\`.
+Only one existing Three.js texture source is temporarily
+replaced; no new renderer, file publisher, model revision
+or Undo history is created. \`RustEditorPage.svelte\` exposes
+Source/Candidate and revised material controls. Direct
+\`rust_editor_apply_preview_semantic_material\` is an explicit
+editor-user action that recomputes source/candidate SHA and
+the same original-RGBA/UV/alpha/protected correction scope
+through existing \`detached_edit\`. It is **not** a new guest
+RPC, not autonomous Code Mode Apply and not proof of
+independent artistic review.
+
+When finalizing a model, use fresh approved-reference captures,
+the original source and the new saved candidate under the
+existing Golden Pillager/Texture acceptance contract.
+A checkbox that the user inspected both modes is not
+the independent reviewer. Source code cannot establish
+the visual quality of the generated corner treatment.
+
 ## First-read map
 
 Code Mode is the AI **client** for the canonical Rust authoring library,

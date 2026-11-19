@@ -131,6 +131,47 @@ Pillager review. P0-D disposable rendered preview and P0-E
 reviewer-bound Apply integration remain separate work; no native
 Pillager test, image-capable review or quality win was executed.
 
+## P0-D/E semantic material candidate — actual matched-view review remains mandatory
+
+**Source-authored, NOT_EXECUTED.** The Rust editor now has a
+user-selected PNG **reference image preview** and a non-persistent
+Source/Candidate toggle using the *same* Three.js model, camera,
+UV and renderer. The reference picker reports only
+\`USER_SELECTED_NOT_ARTISTICALLY_VERIFIED\`; selection/hash is
+not proof that the reference was approved. The candidate has
+\`UNVERIFIED\` material/visual status, and the GUI must never
+capture it as if it were the original saved .bbmodel preview.
+
+At PILL-03 and PILL-07, compare a real close-up of the current
+helmet from both Source and Candidate views at identical framing,
+with the chosen approved Tier 1 reference visible. Reject
+generic opposite-corner wedges, discontinuities, stripes,
+underexposed panel centers or lost material identity even if
+the native source plan was legal and the user could click Apply.
+If a candidate is worse than the previous manual cluster,
+retain the previous version or discard; do NOT increment a
+self-authored performance or quality score for generating it.
+
+At PILL-01/PILL-04/PILL-05 require explicit source
+before-color and protected landmark checks. RGB equivalence
+does **not** prove an emblem is harmless to repaint:
+approved marks using the same base swatch still need protected
+atlas coordinates from actual reviewed image evidence.
+At PILL-06, an accepted one-face result must not stand in for
+actual side/back/underside and six-camera review.
+At PILL-09, the direct editor user can acknowledge that both
+provisional views were inspected and explicitly Apply, but
+this **does not constitute independent image reviewer
+acceptance** or final material/style PASS. A stale model epoch,
+revision, selected target, texture UUID, reference hash,
+source SHA or candidate SHA must refuse that Apply.
+
+Efficiency includes number of model reloads, rejected candidates,
+correction cycles, tool invocations and elapsed time **to
+independently accepted art**. No candidate image, actual review
+or cost-to-accepted measurement was executed in this GitHub-only
+source phase.
+
 ## Frozen acceptance cases
 
 | Case ID | Prior user feedback | Acceptance evidence to obtain |

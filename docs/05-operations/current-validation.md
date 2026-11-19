@@ -1,3 +1,40 @@
+## 2026-11-19 — Rust P0-D/E ephemeral material preview (SOURCE ONLY)
+
+Starting selected Rust \`b57d6b6fa6b5a21574a2067fc252c570272972c6\`,
+source changes introduce the local \`desktop_authoring.rs\`
+Tauri reference-picker, preview and guarded user Apply
+commands. The reference picker validates a selected PNG,
+returns bounded local UI data for real source image
+comparison and keeps its path/bitmap out of guest
+Code Mode. Artist approval still NOT_VERIFIED.
+An immutable Rust source builds the same one-face
+semantic metal EditPlan in a disposable session; native
+\`preflight["candidate_sha256"]\` must match the
+actual preview candidate bytes. \`rustSemanticMaterialPreview.ts\`
+selects exact source/revision/texture/face/reference,
+and \`RustEditorPage.svelte\` overlays only one candidate
+PNG in the existing Three.js viewport. Changed selection
+or authoritative snapshot clears candidate. A saved-model
+review Capture is denied while candidate overlay is
+active. No preview action modifies original model,
+disk asset or Rust Undo history.
+
+A direct UI-user reviewed Apply is separate and
+recomputes exact source model SHA, revision, current
+candidate SHA, source-RGBA/alpha/protected scope
+and UV before publishing one Rust Undo transaction.
+This is not a new Deno guest Apply/independent image
+reviewer authority. Authored frontend stale/forged
+binding tests cover source-reference mismatch, target
+swaps and untrusted positive status. No tests
+executed; no actual Tauri/Three.js/Windows acceptance
+or matched Golden Pillager image verdict.
+\`SOURCE_COMMITTED\` and \`SOURCE_REVIEWED\`
+do NOT certify output quality or speed. Pending
+real reference-approved quality comparison and
+necessary exact protected regions for original-base
+markings remain explicit.
+
 ## 2026-11-19 — Rust P0 semantic material intent/mask/native plan (SOURCE ONLY)
 
 Source user goal: AI no longer hand-assembles pixel-by-pixel Texture;

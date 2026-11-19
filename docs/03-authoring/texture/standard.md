@@ -519,6 +519,39 @@ TC1/TC2 stroke tools remain fallback for reviewed
 complex details. P0-D image preview and P0-E review-bound
 Apply have not yet been implemented as part of this slice.
 
+### P0-D/E ephemeral model preview and user-confirmed Apply (SOURCE ONLY)
+
+Semantic treatment is **provisional** until the user has
+viewed the same original and candidate model with the
+actual chosen reference image. Native Tauri can return
+a bounded user-selected PNG to its own UI for comparison;
+only its hash enters the high-level intent. This is
+NOT evidence the selected reference is the approved art
+master. The original \`.bbmodel\` and Undo history are
+unchanged while the disposable candidate is shown.
+
+The editor overlays one candidate texture source through
+its existing Three.js preview. Changing the source
+revision, selected Cube/face, texture, model session or
+treatment inputs makes the old candidate stale. The
+regular saved-model Capture PNG action must not label
+a temporary candidate as a saved source image. A direct
+user-inspected Apply is separately SHA/revision-bound
+and goes through existing Rust UV ownership,
+protected pixel/source-RGBA guard and Undo; the Deno
+guest gets no new write path.
+
+**Quality gate:** an explicit user comparison is distinct
+from independent image-capable review of the approved
+reference and all relevant model angles. The material
+formula may still be visually worse than the original:
+on rejection discard or diagnose a new treatment instead
+of reapplying the same generic shade mask. No verified
+Rust > Local image-quality or latency evidence exists yet.
+Reference marks using the permitted original RGB value
+still need exact protected regions; palette equality
+does not imply artistic identity is disposable.
+
 ## SURFACE PATTERN PASS
 
 Apply the selected `surface_pattern` recipe to each material cohort only after BASE and VALUE/FORM are readable. Recipes describe directionality, cluster language, value behavior, edge behavior, secondary detail, and anti-patterns. They are not bitmap presets and never select transparency/glow/PBR by name.

@@ -186,6 +186,25 @@ improve the real mapped view, reject it and use reviewed
 `MaterialWorkPacket`/manual brush fallback rather than
 applying generic wedges repeatedly. No auto Apply, CI or PC test.
 
+**P0-D/E semantic material rendered preview (SOURCE ONLY, NOT_EXECUTED):**
+The Rust editor GUI can display the actual user-selected
+reference image beside Source and Candidate while swapping
+only one temporary texture on the same Three.js model.
+The selected reference hash is NOT proof of its approval.
+Provisional images never become native model history, a
+real saved Capture PNG or an artist acceptance verdict.
+The direct editor user's separate "Apply inspected candidate"
+calls the canonical guarded Rust transaction only after a
+source/candidate comparison and SHA/revision precondition.
+Code Mode guest \`planSemanticMaterial\` remains read-only;
+do not describe the GUI action as an autonomous agent Apply.
+Never preserve an unapproved corner-wedge pattern merely
+because it passed source validation; compare the full
+relevant model views, identity and accepted style, then
+discard or diagnose a better material approach if it fails.
+When protected identity shares the exact base RGB, require
+explicit approved atlas regions before broad correction.
+
 **Rust reviewed material propagation plan (source-only):**
 Before *broad reviewed* Texture propagation, the AI must submit one
 bounded `materialWorkPacket` with approved/current SHA binding, latest

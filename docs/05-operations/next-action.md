@@ -1,3 +1,43 @@
+**Active Rust P0-D/E — local ephemeral source/candidate texture preview (2026-11-19; SOURCE ONLY):**
+From \`Rust@b57d6b6fa6b5a21574a2067fc252c570272972c6\`,
+the P0-D/E Tauri/Svelte source adds three local-native
+commands: pick bounded validated reference PNG (show it in
+the UI; only its SHA enters semantic intent), preview a
+guarded painted-metal plan in a disposable \`EditorSession\`
+clone, and explicitly Apply the inspected candidate through
+the canonical current model SHA/revision/candidate SHA +
+source-color/UV/protected area check and single Undo.
+Only the existing \`RustViewport\` texture mapping and
+one atlas index are temporarily overlaid. Source/texture/
+face/reference/revision changes invalidate the preview;
+official saved-model Capture PNG is blocked while a
+provisional candidate is visible. The UI user can compare
+Source vs Candidate and change contrast/light corner
+without issuing pixel-level commands. The Code Mode
+permission-denied guest is still **read-only** for new
+semantic planning and cannot invoke Tauri user Apply.
+
+These are SOURCE capabilities, not observed rendering
+or independent art-review results. The reference image
+is selected by the user but NOT cryptographically
+established as artistically approved; in particular,
+approved marks sharing the base RGB require explicit
+protected regions not automatically produced here.
+The one-face painted-metal corner formula is a candidate
+that may be worse than manually painted clusters.
+Before any Rust>Local quality claim, independent
+image-capable Golden PILL-01/03/04/05/06/07/09
+review must use matching source/candidate renders and
+the actually approved reference. No screenshot,
+Blockbench/Windows execution, measured speed or
+accepted Pillager improvement has occurred.
+
+Current ceiling: SOURCE_COMMITTED / SOURCE_REVIEWED /
+TEST_AUTHORED_NOT_RUN / LOCAL_TEST_DEFERRED. Existing
+localtest and CI hold remains; no release, new renderer,
+native asset publisher, separate bitmap authority or
+cross-branch write. P0-A/B/C history below is retained.
+
 **Active Rust Texturing P0-A/B/C — semantic painted-metal candidate (2026-11-19; SOURCE ONLY):**
 Selected user direction supersedes manual pixel-by-pixel/stroke authoring
 as the default *AI authoring interface* without removing TC1/TC2 fallback.

@@ -1,5 +1,33 @@
 # Rust-native authoring core — Phase 1/2 source integration
 
+## Source-only P0-D/E semantic material review flow
+
+The Rust compiler at \`material_synthesis.rs\` returns one
+source-bound guarded EditPlan. The Tauri desktop adapter in
+\`../desktop_authoring.rs\` now exposes three *local UI*
+commands: \`rust_editor_choose_semantic_reference\` (bounded
+decoded PNG for human preview, no guest path),
+\`rust_editor_preview_semantic_material\` (disposable
+EditorSession clone, exact candidate SHA, preview-only
+embedded PNG) and
+\`rust_editor_apply_preview_semantic_material\`
+(explicit editor-user action, current model SHA/revision/
+candidate SHA revalidated before the protected native
+transaction). The UI uses the **existing** Three.js
+\`RustViewport\` texture cache, and restores its original
+source without editing the saved model when the candidate
+is discarded. No new material storage, layer system,
+GPU renderer, unrestricted IPC listener or guest
+authorization is introduced.
+
+The selected reference image is NOT independently approved.
+A syntactically valid source-RGBA mask or user-inspected
+candidate is not equivalent to professional pixel-art
+acceptance; approved identity pixels that happen to share
+the base RGBA still require separately declared protected
+regions. Full matched six-view/source acceptance and
+Golden Pillager A/B remain unexecuted under the test hold.
+
 ## Entry and domain ownership
 
 This directory is the **single Rust model/transaction implementation**
