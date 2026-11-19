@@ -1,20 +1,20 @@
-/** Pure, source-only UI planning for the existing Rust surface painter.
- * Does not sample images, mutate bitmaps, infer light or auto-author colors.
- */
+/** Pure UI receipt validation. Rust bitmap authority is never in the WebView. */
 import type {SurfaceSampleHit} from './rustSurfacePaint';
 import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 export type ShadeDirection='lighten'|'darken';
 export type ShadeRamp=Array<[number,number,number,255]>;
 export type SelectionRow={y:number;x0:number;x1:number};
+export type SelectionMode='replace'|'add'|'subtract'|'intersect'|'invert';
+export type SelectionStep={mode:SelectionMode;seed?:[number,number]};
 export type SourceSelection={
   epoch:number;revision:number;cubeUuid:string;face:string;
-  textureUuid:string;sourceUv:[number,number,number,number];
+  textureUuid:string;textureIndex:number;size:[number,number];
+  sourceUv:[number,number,number,number];
   sourceRotation:number;seed:[number,number];rgba:[number,number,number,number];
-  pixelCount:number;atlasRows:SelectionRow[];
+  pixelCount:number;atlasRows:SelectionRow[];previewComplete:boolean;
+  steps:SelectionStep[];
 };
-/** A ramp is artist-authored and arbitrarily rich up to the Rust plan's
- * serialized-byte budget; never convert the atlas into indexed color.
- */
+/** Ordered artist colors. There is no fixed artistic palette count. */
 export function parseShadeRamp(input:string):ShadeRamp|null{
   if(typeof input!=='string'||input.length>12*1024)return null;
   const tokens=input.split(/[\s,;]+/).filter(Boolean);
@@ -34,15 +34,49 @@ export function parseShadeRamp(input:string):ShadeRamp|null{
   }
   return result;
 }
+export function validSelectionSteps(steps:unknown,size:readonly [number,number]):steps is SelectionStep[]{
+  if(!Array.isArray(steps)||!steps.length)return false;
+  return steps.every((step,i)=>{
+    if(!step||typeof step!=='object'||
+       !['replace','add','subtract','intersect','invert'].includes(step.mode))return false;
+    if(i===0&&!['replace','invert'].includes(step.mode))return false;
+    if(step.mode==='invert')return step.seed===undefined||step.seed===null;
+    return Array.isArray(step.seed)&&step.seed.length===2&&
+      step.seed.every((v,j)=>Number.isInteger(v)&&v>=0&&v<size[j]);
+  });
+}
+function matches(selection:SourceSelection,hit:Pick<SurfaceSampleHit,
+  'epoch'|'revision'|'cubeUuid'|'textureUuid'|'face'|'sourceUv'|'sourceRotation'>){
+  return selection.epoch===hit.epoch&&selection.revision===hit.revision&&
+    selection.cubeUuid===hit.cubeUuid&&selection.textureUuid===hit.textureUuid&&
+    selection.face===hit.face&&selection.sourceRotation===hit.sourceRotation&&
+    selection.sourceUv.every((value,i)=>value===hit.sourceUv[i]);
+}
+export function selectionStepsForStroke(selection:SourceSelection|null,hit:
+  Pick<SurfaceSampleHit,'epoch'|'revision'|'cubeUuid'|'textureUuid'|'face'|'sourceUv'|'sourceRotation'>,
+):SelectionStep[]|null{
+  return selection&&matches(selection,hit)
+    ?selection.steps.map(s=>({mode:s.mode,...(s.seed?{seed:[...s.seed] as [number,number]}:{})}))
+    :null;
+}
+/** Legacy single-island helper refuses compound selections. */
+export function selectionSeedForStroke(selection:SourceSelection|null,hit:
+  Pick<SurfaceSampleHit,'epoch'|'revision'|'cubeUuid'|'textureUuid'|'face'|'sourceUv'|'sourceRotation'>,
+):[number,number]|null{
+  const steps=selectionStepsForStroke(selection,hit);
+  return steps?.length===1&&steps[0].mode==='replace'&&steps[0].seed
+    ?[...steps[0].seed]:null;
+}
 export function bindSourceSelection(
   hit:SurfaceSampleHit,
   response:{
     revision:number;cube_uuid:string;texture_uuid:string;
     face:string;seed:[number,number];source_rgba:[number,number,number,number];
     pixel_count:number;atlas_rows:SelectionRow[];
+    preview_complete?:boolean;selection_steps?:SelectionStep[];
     source_authority:string;write_authority:string;
   },
-  width:number,height:number,
+  width:number,height:number,expectedSteps?:SelectionStep[],
 ):SourceSelection|null{
   if(!Number.isInteger(width)||!Number.isInteger(height)||
      width<1||height<1||width>MAX_PAINT_ATLAS_SIDE||height>MAX_PAINT_ATLAS_SIDE||
@@ -57,9 +91,13 @@ export function bindSourceSelection(
      !Array.isArray(response.source_rgba)||response.source_rgba.length!==4||
      response.source_rgba.some(n=>!Number.isInteger(n)||n<0||n>255)||
      !Number.isInteger(response.pixel_count)||
-     response.pixel_count<1||response.pixel_count>width*height||
-     !Array.isArray(response.atlas_rows)||
-     response.atlas_rows.length<1||response.atlas_rows.length>1024)return null;
+     response.pixel_count<0||response.pixel_count>hit.size[0]*hit.size[1]||
+     !Array.isArray(response.atlas_rows))return null;
+  const steps=response.selection_steps??[{mode:'replace',seed:[...hit.texel]}];
+  if(!validSelectionSteps(steps,hit.size)||
+     (expectedSteps&&JSON.stringify(steps)!==JSON.stringify(expectedSteps)))return null;
+  const complete=response.preview_complete??true;
+  if(typeof complete!=='boolean'||response.atlas_rows.length>(complete?4096:0))return null;
   let count=0,previousY=-1,previousX1=0;
   for(const row of response.atlas_rows){
     if(!row||!Number.isInteger(row.x0)||!Number.isInteger(row.x1)||
@@ -71,29 +109,15 @@ export function bindSourceSelection(
     count+=row.x1-row.x0;
     if(count>response.pixel_count)return null;
   }
-  if(count!==response.pixel_count)return null;
+  if(complete&&count!==response.pixel_count)return null;
   return {
     epoch:hit.epoch,revision:hit.revision,
-    cubeUuid:hit.cubeUuid,textureUuid:hit.textureUuid,face:hit.face,
+    cubeUuid:hit.cubeUuid,textureUuid:hit.textureUuid,
+    textureIndex:hit.textureIndex,size:[...hit.size],face:hit.face,
     sourceUv:[...hit.sourceUv],sourceRotation:hit.sourceRotation,
     seed:[...response.seed],rgba:[...response.source_rgba],
-    pixelCount:response.pixel_count,
+    pixelCount:response.pixel_count,previewComplete:complete,
     atlasRows:response.atlas_rows.map(r=>({...r})),
+    steps:steps.map(s=>({mode:s.mode,...(s.seed?{seed:[...s.seed] as [number,number]}:{})})),
   };
-}
-/** A stale selection must NEVER silently become an unrestricted stroke. */
-export function selectionSeedForStroke(
-  selection:SourceSelection|null,hit:{
-    epoch:number;revision:number;cubeUuid:string;textureUuid:string;face:string;
-    sourceUv:[number,number,number,number];sourceRotation:number;
-  },
-):[number,number]|null{
-  return selection&&selection.epoch===hit.epoch&&
-    selection.revision===hit.revision&&
-    selection.cubeUuid===hit.cubeUuid&&
-    selection.textureUuid===hit.textureUuid&&
-    selection.face===hit.face&&
-    selection.sourceRotation===hit.sourceRotation&&
-    selection.sourceUv.every((value,i)=>value===hit.sourceUv[i])
-    ? [...selection.seed] : null;
 }
