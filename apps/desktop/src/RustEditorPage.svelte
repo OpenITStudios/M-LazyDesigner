@@ -312,6 +312,8 @@
       snapshot?.epoch ?? null, next.epoch, paintTextureIndex, next.textureNames.length,
     );
     if (snapshot && snapshot.epoch !== next.epoch) {
+      semanticReferenceSha=null;
+      semanticReferenceStatus='';
       // Old read-only pairing is bound to the previous model epoch; revoke
       // before another model is exposed. Never carry a capability forward.
       if (livePairing) void stopLiveRead();
@@ -1770,7 +1772,10 @@
           {#each snapshot.textureNames as name, index}
             <button type="button" class="texture-item" class:active={paintTextureIndex === index}
               aria-pressed={paintTextureIndex === index} title={name}
-              disabled={!!paintStroke} onclick={() => paintTextureIndex = index}>
+              disabled={!!paintStroke} onclick={() => {
+                if(paintTextureIndex!==index)clearSemanticPreview();
+                paintTextureIndex=index;
+              }}>
               <span class="texture-square"></span><span>{name}</span><small>{index + 1}</small>
             </button>
           {/each}
@@ -1947,7 +1952,9 @@
             </label>
             <img class="paint-atlas paint-workspace-atlas" draggable="false"
               src={semanticAtlasSource ?? ''}
-              alt="Editable texture atlas; drag to paint one Rust-owned stroke"
+              alt={validSemanticPreview ?
+                'Read-only source/candidate material atlas for comparison' :
+                'Editable texture atlas; drag to paint one Rust-owned stroke'}
               onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
               onpointerup={finishPaintStroke}
               onpointercancel={(event) => finishPaintStroke(event, true)}

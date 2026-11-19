@@ -859,3 +859,13 @@
   color: #a4acb9;
   font-variant-numeric: tabular-nums;
 }
+
+/* A single read-only texture overlay drives the existing 3D viewport. */
+.rust-editor .semantic-material-panel{display:grid;gap:8px}
+.rust-editor .semantic-material-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.rust-editor .semantic-material-fields label{display:grid;min-width:0;gap:4px}
+.rust-editor .semantic-material-fields input,.rust-editor .semantic-material-fields select{max-width:100%;min-width:0}
+.rust-editor .semantic-material-actions{display:flex;flex-wrap:wrap;gap:5px}
+.rust-editor .semantic-material-actions button[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
+.rust-editor .semantic-material-review{display:flex;align-items:flex-start;gap:6px}
+.rust-editor .semantic-material-review input{flex:none;margin-top:3px}

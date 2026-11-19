@@ -41,7 +41,11 @@ export function matchingSemanticCandidate(
   return Boolean(snapshot&&candidate &&
     candidate.epoch===snapshot.epoch &&
     candidate.revision===snapshot.revision &&
-    candidate.cubeUuid===cubeUuid && candidate.intent.face===face &&
+    candidate.cubeUuid===cubeUuid &&
+    candidate.intent.cube_uuid===cubeUuid &&
+    candidate.intent.texture_uuid===candidate.textureUuid &&
+    candidate.intent.expected_revision===candidate.revision &&
+    candidate.intent.face===face &&
     candidate.textureIndex===textureIndex &&
     candidate.textureUuid===snapshot.textureUuids[textureIndex] &&
     candidate.referencePngSha256===referenceSha &&

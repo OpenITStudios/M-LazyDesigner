@@ -35,6 +35,8 @@ test('stale epoch, revision, selection, reference and forged approval never disp
     [snapshot,candidate,'c0','north',0,'a'.repeat(64)],
     [snapshot,candidate,'c0','north',1,null],
     [snapshot,{...candidate,writeAuthority:'GRANTED'},'c0','north',1,'a'.repeat(64)],
+    [snapshot,{...candidate,intent:{...intent,cube_uuid:'other'}},'c0','north',1,'a'.repeat(64)],
+    [snapshot,{...candidate,intent:{...intent,expected_revision:6}},'c0','north',1,'a'.repeat(64)],
     [snapshot,{...candidate,candidatePngSource:'invalid'},'c0','north',1,'a'.repeat(64)],
     [snapshot,{...candidate,sourceModelSha256:'missing'},'c0','north',1,'a'.repeat(64)],
   ];
