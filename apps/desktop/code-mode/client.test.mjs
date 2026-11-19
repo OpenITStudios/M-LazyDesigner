@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs';
+import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope } from './client.mjs';
 
 const BIN = '/abs/lazydesigner-authoring';
 const SHA = 'a'.repeat(64);
@@ -2817,4 +2817,44 @@ test('source correction transport admits many reviewed RGBAs without a 16-slot c
     editableBeforeRgba:swatches,
   });
   assert.deepEqual(scope.editable_before_rgba,swatches);
+});
+
+
+// SOURCE_AUTHORED_NOT_RUN: inspection paging lets the reviewer reach
+// every saved swatch without asking the agent to load all colors at once.
+test('exact source color selector pages can be requested without broad atlas reads', async()=>{
+  let calls=0;
+  const client=createRustCodeModeClient({binary:BIN,runner:async argv=>{
+    calls++;
+    assert.equal(argv[0],'inspect-batch');
+    const req=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
+    assert.deepEqual(req,{requests:[{
+      kind:'texture_source_colors',texture_uuid:'atlas-one',
+      region:{from:[1,2],to:[5,6]},offset:16,limit:32,
+    }]});
+    return {status:'OK',sha256:SHA,summary:{revision:0},results:[{
+      kind:'texture_source_colors',colors:{
+        scope:'saved_physical_atlas_original_rgba_colors',
+        texture_uuid:'atlas-one',region:{from:[1,2],to:[5,6]},
+        sampled_pixels:16,unique_rgba:17,offset:16,limit:32,
+        next_offset:null,histogram_complete:true,complete:false,
+        reason:'SOURCE_COLORS_PAGED',
+        colors:[{rgba:[9,8,7,255],pixels:1}],
+        visual_verdict:'UNVERIFIED',texture_completion_attested:false,
+      },
+    }]};
+  }});
+  const project=await openRustCodeModeProject(client,'/abs/model.bbmodel');
+  const query={kind:'texture_source_colors',texture_uuid:'atlas-one',
+    region:{from:[1,2],to:[5,6]},offset:16,limit:32};
+  const response=await project.inspectBatch([query]);
+  assert.equal(response.results[0].colors.colors.length,1);
+  assert.equal(response.results[0].colors.next_offset,null);
+  assert.equal(calls,1);
+  for(const bad of [
+    {...query,limit:65},
+    {...query,offset:-1},
+    {...query,filename:'../private.png'},
+  ])await assert.rejects(project.inspectBatch([bad]));
+  assert.equal(calls,1);
 });
