@@ -8,7 +8,8 @@
   import { isActiveTextureRequest } from './rustTextureCache';
   import { cubeSelectionColors, selectionTargetIds } from './rustViewportSelection';
   import { canRefreshPaintSources, sceneRenderStructure, sameSceneInputs, singleCubeRotationUpdate, type SceneInputs } from './rustSceneIdentity';
-  import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
+  import { faceUvCoordinates, bedrockTextureForFace, isCubeFacePresent, previewRenderSide,
+  supportedFaceUvRotation, BEDROCK_PREVIEW_ALPHA_TEST } from './rustTextureProjection';
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
   import { reviewCameraAxes, type ReviewViewId } from './rustReviewCapture';
@@ -664,9 +665,12 @@
        texture.texture.image.naturalHeight!==textureResolution[1])return null;
     const corners=faceUvCoordinates(data,textureResolution,cube.boxUv);
     const local=corners?hitFaceLocalTexel(data,corners,[first.uv.x,first.uv.y]):null;
-    if(!local)return null;
+    const rotation=supportedFaceUvRotation(data);
+    if(!local||rotation===null)return null;
     return {cubeUuid,face,textureIndex:index,
-      texel:local.texel,size:local.size};
+      texel:local.texel,size:local.size,
+      sourceUv:[data.uv[0],data.uv[1],data.uv[2],data.uv[3]],
+      sourceRotation:rotation};
   }
   function moveSurfacePointer(event:PointerEvent){
     const current=surfaceGesture;
@@ -706,7 +710,8 @@
        completed.contextKey===surfacePaintContextKey){
       onSurfaceStroke({cubeUuid:completed.cubeUuid,face:completed.face,
         textureIndex:completed.textureIndex,texel:completed.texel,
-        size:completed.size,epoch:completed.epoch,
+        size:completed.size,sourceUv:completed.sourceUv,
+        sourceRotation:completed.sourceRotation,epoch:completed.epoch,
         revision:completed.revision,textureUuid:completed.textureUuid,
         contextKey:completed.contextKey,points:completed.points});
     }

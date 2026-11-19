@@ -39,11 +39,13 @@ test('3D pixel picker refuses unresolved, noninteger or boundary coordinates',()
 });
 test('3D gestures cannot silently continue onto another Cube, face or atlas',()=>{
   const a={cubeUuid:'cube',face:'north',textureIndex:0,
-    texel:[0,0],size:[4,4]};
+    texel:[0,0],size:[4,4],sourceUv:[0,0,4,4],sourceRotation:0};
   assert.equal(sameSurface(a,{...a,texel:[3,3]}),true);
   assert.equal(sameSurface(a,{...a,face:'east'}),false);
   assert.equal(sameSurface(a,{...a,cubeUuid:'other'}),false);
   assert.equal(sameSurface(a,{...a,textureIndex:1}),false);
+  assert.equal(sameSurface(a,{...a,sourceUv:[4,0,0,4]}),false);
+  assert.equal(sameSurface(a,{...a,sourceRotation:90}),false);
 });
 test('reviewer masks are exact atlas rectangles with no guessed bounds',()=>{
   assert.deepEqual(protectedAtlasRectangle([7,8],[2,3],[32,32]),{

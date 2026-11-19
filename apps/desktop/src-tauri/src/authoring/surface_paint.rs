@@ -19,6 +19,10 @@ pub struct SurfacePaintIntent {
     pub cube_uuid:String,
     pub texture_uuid:String,
     pub face:String,
+    /// Previewed source Cube UV binding. A stale or normalized Box UV view
+    /// MUST NOT silently paint a different physical atlas cell.
+    pub expected_face_uv:[f64;4],
+    pub expected_face_rotation:u16,
     /// Explicit original opaque swatch, never inferred from a material name.
     pub source_base_rgba:[u8;4],
     /// One opaque pixel color per native face-local texel.
@@ -71,6 +75,9 @@ pub(super) fn apply(
         .ok_or_else(||"SURFACE_PAINT_FACE_UNSUPPORTED".to_string())?;
     let rotation=face_regions::face_region_rotation(surface)?;
     let uv=face_uv(&projected,&intent.face)?;
+    if uv!=intent.expected_face_uv || rotation!=intent.expected_face_rotation {
+        return Err("SURFACE_PAINT_VIEW_UV_STALE".into());
+    }
     let original=paint::decode_for_uv_inspection(texture,width,height)?;
     let mut seen=HashSet::new();
     let mut points=Vec::with_capacity(intent.points.len());
@@ -162,6 +169,8 @@ mod tests{
         SurfacePaintIntent{
             expected_revision:2,cube_uuid:CUBE.into(),texture_uuid:TEX.into(),
             face:"north".into(),
+            expected_face_uv:[0.0,0.0,4.0,4.0],
+            expected_face_rotation:0,
             source_base_rgba:[80,100,120,255],
             paint_rgba:[140,150,160,255],
             points:vec![[0,0],[1,1],[2,2],[3,3]],
@@ -197,6 +206,7 @@ mod tests{
         }]).unwrap();
         let mut request=intent();
         request.expected_revision=3;
+        request.expected_face_rotation=90;
         request.points=vec![[0,0]];
         request.protected_regions=vec![];
         let before=s.export().unwrap();
@@ -233,6 +243,10 @@ mod tests{
         let mut stale=intent();
         stale.expected_revision=1;
         assert!(s.apply_surface_paint_stroke(&stale).is_err());
+        let mut stale_uv=intent();
+        stale_uv.expected_face_uv=[4.0,4.0,0.0,0.0];
+        assert_eq!(s.apply_surface_paint_stroke(&stale_uv).unwrap_err(),
+            "SURFACE_PAINT_VIEW_UV_STALE");
         let mut alpha=intent();
         alpha.paint_rgba[3]=0;
         assert_eq!(s.apply_surface_paint_stroke(&alpha).unwrap_err(),

@@ -1483,6 +1483,8 @@
       intent:{
         expected_revision:gesture.revision,cube_uuid:gesture.cubeUuid,
         texture_uuid:gesture.textureUuid,face:gesture.face,
+        expected_face_uv:gesture.sourceUv,
+        expected_face_rotation:gesture.sourceRotation,
         source_base_rgba:[...base,255],paint_rgba:[...color,255],
         points:gesture.points,protected_regions:guardedSurfaceMasks,
       },
@@ -1492,7 +1494,8 @@
     }
   }
   function startSurfaceProtection(event:PointerEvent,target:HTMLImageElement){
-    if(!snapshot||busy||loading||paintStroke||event.button!==0)return;
+    if(!snapshot||busy||loading||paintStroke||event.button!==0||
+       validSemanticPreview||validExternalPreview)return;
     const point=paintPoint(event,target),uuid=snapshot.textureUuids[paintTextureIndex];
     if(!point||!uuid||!snapshot.paintEditableTextures[paintTextureIndex])return;
     if(surfaceProtectionBinding?.epoch!==snapshot.epoch||
@@ -2317,7 +2320,8 @@
                 disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
             </label>
             <label><input type="checkbox" bind:checked={surfaceProtectMode}
-              disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
+              disabled={busy || !!paintStroke || !!surfaceMaskDrag ||
+                validSemanticPreview || validExternalPreview}/>
               Mark protected rectangle on atlas</label>
             <button type="button" onclick={clearSurfaceProtection}
               disabled={busy || !!surfaceMaskDrag || !guardedSurfaceMasks.length}>
@@ -2327,7 +2331,8 @@
               The exact original RGB is the paintable source selection; other
               original colors, adjacent detail pixels, alpha and shared UV
               cannot be altered. Use protected rectangles for same-color
-              emblems or markings before painting.</p>
+              emblems or markings before 3D painting. These masks do
+              not modify or restrict the separate 2D Paint tools.</p>
             {#if surfacePaint3d && !surfacePaintEnabled}
               <p class="hint">3D Paint needs the Pencil tool, an editable
                 texture, opaque Alpha (255), no preview candidate, and an idle

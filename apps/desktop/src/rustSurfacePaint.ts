@@ -10,6 +10,7 @@ export const SURFACE_FACE_ORDER:readonly SurfaceFace[]=
 export type SurfaceHit={
   cubeUuid:string;face:SurfaceFace;textureIndex:number;
   texel:[number,number];size:[number,number];
+  sourceUv:[number,number,number,number];sourceRotation:number;
 };
 export type SurfaceGesture=SurfaceHit&{
   epoch:number;revision:number;textureUuid:string;
@@ -52,6 +53,8 @@ export function hitFaceLocalTexel(
 export function sameSurface(a:SurfaceHit,b:SurfaceHit):boolean{
   return a.cubeUuid===b.cubeUuid&&a.face===b.face&&
     a.textureIndex===b.textureIndex&&
+    a.sourceRotation===b.sourceRotation&&
+    a.sourceUv.every((n,i)=>n===b.sourceUv[i])&&
     a.size[0]===b.size[0]&&a.size[1]===b.size[1];
 }
 /** Reviewer-only rectangle on the PHYSICAL atlas (half-open). */
