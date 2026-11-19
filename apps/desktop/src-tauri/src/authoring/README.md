@@ -1,3 +1,12 @@
+**2026-11-19 — Rust pixel-artist workflow P0 (SOURCE_COMMITTED / NOT_EXECUTED)**
+
+- Alpha-aware 3D face picking now has a disposable, source-keyed **alpha-only** preview cache. Nearest-filter UV sampling and Blockbench-style alpha test skip transparent geometric hits; unsupported foreground materials refuse paint rather than targeting a hidden face. The cache is not editable image state; WebView/Bedrock parity is unverified.
+- Rust `surface_selection.rs` computes exact original-RGBA 4-connected Magic Wand islands on ONE explicitly bound Cube face. Physical atlas RLE rows are read-only UI selection overlays; source UV/revision, protected rectangles and region complexity are bounded. Rust recomputes the seed-based island at direct-user Apply, refuses mismatched colors and does not allow selection plus cross-Cube seams. Add/subtract and perceptual-color selection are deferred.
+- Rust `surface_shade.rs` builds one artist-authored ordered RGBA Shade Ink ramp step per changed pixel per gesture. Native `paint::exact_pixels` checks expected original RGBA and alpha, then does ONE lossless PNG encode and ONE Rust Undo transaction with correction scope. Non-ramp source colors, reviewer masks and their one-texel detail margins are protected. No indexed quantization, dithering, automatic palette generator or fixed global color-count cap.
+- The Svelte Paint workspace now exposes Magic Wand, Shade Ink ramp/direction, original source eyedropper, hard brush tip/radius and CSS-only grayscale QA. Grayscale is display-only and does not change the captured/exported source PNG. Code Mode guest operation whitelist is intentionally unchanged.
+- All Rust/TS regressions are AUTHORED_NOT_RUN. Cargo/Node execution, native Windows/WebView2 behavior, alpha selection accuracy in real renderer, visual quality, timing and Bedrock compatibility remain UNVERIFIED under the active test hold. No CI, Local/main branch mutation, background testing, external bitmap owner or release.
+- Deferred: compound add/subtract/invert selections, brush preset manager, deterministic pattern stamps, broader seam support and measured GPU dirty-region improvements. STOP at source proof.
+
 **2026-11-19 — Rust 3D Paint phase 2: source color sample, hard brush and guarded coplanar seam (SOURCE_ONLY / NOT_EXECUTED)**
 
 - The source-only direct-user 3D eyedropper calls

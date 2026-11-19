@@ -78,6 +78,21 @@ material-style inference, alpha-aware raycasting, AI guest write access,
 or independently verified artistic quality. Keep sampled source RGBA,
 reviewed swatches and user-authored mask evidence distinct.
 
+**Rust alpha/selection/Shade Ink P0 (SOURCE ONLY / NOT_EXECUTED):**
+The direct-user 3D picker uses disposable nearest-filter alpha preview
+to avoid selecting invisible geometric hits; only Rust original PNG/UV
+state authorizes writes. A Magic Wand is an exact 4-connected source
+RGBA island on one bound Cube face, returned as temporary RLE spans
+and recomputed at Apply. Same-RGBA identity marks still require user
+protected masks. Shade Ink uses artist-supplied ordered RGBA swatches;
+each changed texel moves one shade step per gesture, preserving alpha,
+all non-ramp colors and their immediate neighbors. Rust `paint::exact_pixels`
+owns lossless PNG encoding and one Undo; no global palette size limit.
+Grayscale preview affects only presentation, not pixels or proof. Code
+Mode guest privileges are not expanded. Native/runtime/material quality
+are NOT_EXECUTED. Pattern stamps, preset manager, compound selections
+and broader seam handling remain separate tasks.
+
 ## Control Context Projection
 
 Start from LazyDesigner Control's stage-specific Texturing projection; do not reload the complete Modelling Profile or Reference Package.

@@ -71,6 +71,23 @@ A per-gesture 4,096-texel budget is for source/performance safety,
 not a restriction on the texture's artist color count. PNG remains
 lossless RGBA8. Native quality/latency/compatibility tests remain held.
 
+## 2026-11-19 Rust P0 — 3D alpha selection and artist Shade Ink
+
+The Three.js alpha-only preview gate can skip transparent ray hits, but
+is not authority over canonical Rust UV/pixels or Bedrock rendering.
+Rust connected-color selection is bounded to one Cube-face and exactly
+matching saved RGBA, four-neighbor connectivity, original identity masks,
+and the current revision. A selection must be recomputed for Apply.
+
+Shade Ink takes a human-chosen ordered swatch ramp, moves eligible
+original texels **one step per gesture**, preserves exact RGBA alpha and
+source non-ramp markings, then commits in one lossless Rust Paint/Undo
+transaction. Source pixels are neither indexed nor quantized. The
+grayscale viewport is only visual presentation; neither exported PNG
+nor source/color-space semantics change. A 64 KiB per-plan budget and
+bounded selection run count are transport/safety constraints, NOT
+artistic palette-color limits. Native compiler/visual tests are held.
+
 ## Canonical Vocabulary
 
 ```text
