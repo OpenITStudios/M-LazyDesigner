@@ -918,3 +918,9 @@
   width:100%;box-sizing:border-box;max-width:100%;font:inherit;
   background:#191d25;color:#e1e7ef;border:1px solid #566174;border-radius:4px;
 }
+
+/* Small read-only selection canvas; Rust owns the underlying pixels. */
+.rust-editor .surface-selection-overlay{
+  position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  image-rendering:pixelated;opacity:.8;
+}

@@ -26,8 +26,8 @@
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
   import { protectedAtlasRectangle,
     type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
-  import {parseShadeRamp,bindSourceSelection,selectionSeedForStroke,
-    type SourceSelection} from './rustSurfaceTools';
+  import {parseShadeRamp,bindSourceSelection,selectionStepsForStroke,
+    type SourceSelection,type SelectionStep,type SelectionMode,type SelectionRow} from './rustSurfaceTools';
   import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
 import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
   import {
@@ -80,6 +80,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   let surfaceSelectMode=false;
   let surfaceGrayscalePreview=false;
   let surfaceSelection:SourceSelection|null=null;
+  let surfaceSelectOperation:Exclude<SelectionMode,'invert'>='replace';
   let surfaceInkMode:'color'|'shade_ink'='color';
   let surfaceShadeRamp='';
   let surfaceShadeDirection:'lighten'|'darken'='darken';
@@ -1550,14 +1551,24 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     revision:number;cube_uuid:string;texture_uuid:string;face:string;
     seed:[number,number];source_rgba:[number,number,number,number];
     pixel_count:number;atlas_rows:Array<{y:number;x0:number;x1:number}>;
+    preview_complete:boolean;selection_steps:SelectionStep[];
     source_authority:'RUST_SAVED_RGBA8';
     write_authority:'NOT_GRANTED';visual_verdict:'UNVERIFIED';
   };
-  async function selectFromViewport(hit:SurfaceSampleHit):Promise<void>{
-    if(!surfacePaintEnabled||!surfaceSelectMode||!snapshot||busy||
+  async function selectFromViewport(hit:SurfaceSampleHit,overrideSteps?:SelectionStep[]):Promise<void>{
+    if(!surfacePaintEnabled||(!surfaceSelectMode&&!overrideSteps)||!snapshot||busy||
        hit.contextKey!==surfacePaintContextKey||
        hit.epoch!==snapshot.epoch||hit.revision!==snapshot.revision||
        snapshot.textureUuids[hit.textureIndex]!==hit.textureUuid)return;
+    const steps:SelectionStep[]|null=overrideSteps??(surfaceSelectOperation==='replace'
+      ?[{mode:'replace',seed:[...hit.texel] as [number,number]}]
+      :validSurfaceSelection&&surfaceSelection&&
+        surfaceSelection.cubeUuid===hit.cubeUuid&&
+        surfaceSelection.face===hit.face&&
+        surfaceSelection.sourceUv.every((v,i)=>v===hit.sourceUv[i])?
+          [...surfaceSelection.steps,{mode:surfaceSelectOperation,seed:[...hit.texel] as [number,number]}]
+          :null);
+    if(!steps){error='Choose Replace to start a selection on this Cube face.';return;}
     busy=true;error='';
     try{
       const receipt=await invoke<SurfaceSelectionReceipt>(
@@ -1571,24 +1582,59 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
               expected_face_rotation:hit.sourceRotation,local:hit.texel,
             },
             protected_regions:guardedSurfaceMasks,
+            selection_steps:steps,
           },
         });
       if(!snapshot||snapshot.epoch!==hit.epoch||
          snapshot.revision!==hit.revision)throw new Error('SURFACE_SELECTION_STALE');
       const selection=bindSourceSelection(hit,receipt,
-        snapshot.textureResolution[0],snapshot.textureResolution[1]);
+        snapshot.textureResolution[0],snapshot.textureResolution[1],steps);
       if(!selection)throw new Error('SURFACE_SELECTION_RECEIPT_INVALID');
       surfaceSelection=selection;
       surfaceSelectMode=false;
-      if(selection.rgba[3]===255){
+      if(selection.steps.length===1&&selection.rgba[3]===255){
         surfaceSourceBase='#'+selection.rgba.slice(0,3)
           .map(n=>n.toString(16).padStart(2,'0')).join('');
       }
       surfaceSampleStatus=selection.pixelCount+
         ' source texels selected on '+selection.face+
-        '. Selection is locked to this Cube/face/revision.';
+        (selection.previewComplete?'':' (overlay omitted for complex region)')+
+        '. Native Rust recomputes the complete selection at Apply.';
     }catch(cause){showError(cause);}
     finally{busy=false;}
+  }
+  async function invertSurfaceSelection():Promise<void>{
+    const selection=validSurfaceSelection?surfaceSelection:null;
+    if(!selection||!snapshot){error='Create a connected selection first.';return;}
+    if(selection.textureIndex!==paintTextureIndex){
+      error='Selection texture changed. Select again.';return;
+    }
+    const hit:SurfaceSampleHit={
+      cubeUuid:selection.cubeUuid,face:selection.face as SurfaceSampleHit['face'],
+      textureUuid:selection.textureUuid,textureIndex:selection.textureIndex,
+      epoch:selection.epoch,revision:selection.revision,
+      size:[...selection.size],sourceUv:[...selection.sourceUv],
+      sourceRotation:selection.sourceRotation,texel:[...selection.seed],
+      contextKey:surfacePaintContextKey,
+    };
+    await selectFromViewport(hit,[...selection.steps,{mode:'invert'}]);
+  }
+  // Transient downscaled overlay: never bitmap, UV or Paint authority.
+  function drawSurfaceSelectionOverlay(canvas:HTMLCanvasElement,settings:{
+    rows:SelectionRow[];width:number;height:number
+  }){
+    const draw=(data:typeof settings)=>{
+      const context=canvas.getContext('2d');
+      if(!context)return;
+      context.clearRect(0,0,canvas.width,canvas.height);
+      context.fillStyle='rgba(91,177,241,0.38)';
+      const sx=canvas.width/data.width,sy=canvas.height/data.height;
+      for(const row of data.rows){
+        context.fillRect(row.x0*sx,row.y*sy,(row.x1-row.x0)*sx,sy);
+      }
+    };
+    draw(settings);
+    return {update:draw};
   }
   async function paintFromViewport(gesture:SurfaceGesture):Promise<void>{
     if(!surfacePaintEnabled||surfaceSampleMode||!snapshot||busy||paintAlpha!==255 ||
@@ -1602,12 +1648,12 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     // An active selection never degrades to an unrestricted gesture.
     const selection=validSurfaceSelection?surfaceSelection:null;
     if(surfaceSelection&&!selection){error='Selection is stale. Clear it or select again.';return;}
-    const selectionSeed=selection?selectionSeedForStroke(selection,gesture):null;
-    if(selection&&!selectionSeed){
+    const selectionSteps=selection?selectionStepsForStroke(selection,gesture):null;
+    if(selection&&!selectionSteps){
       error='Paint hit is outside the selected Cube, face or source UV.';return;
     }
-    if(selection&&selection.rgba[3]!==255){
-      error='This connected island contains non-opaque source pixels.';return;
+    if(selection&&selection.pixelCount===0){
+      error='The current selection is empty. Invert or replace it before painting.';return;
     }
     if(selection&&gesture.seam){
       error='Selection-locked strokes cannot bridge multiple Cubes.';return;
@@ -1619,7 +1665,8 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       texture_uuid:gesture.textureUuid,face:gesture.face,
       expected_face_uv:gesture.sourceUv,
       expected_face_rotation:gesture.sourceRotation,
-      points:gesture.points,selection_seed:selectionSeed,
+      points:gesture.points,selection_seed:null,
+      selection_steps:selectionSteps??[],
       brush_radius:surfaceBrushRadius,brush_tip:surfaceBrushTip,
       protected_regions:guardedSurfaceMasks,
     };
@@ -2503,6 +2550,19 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
               onchange={() => {if(surfaceSelectMode)surfaceSampleMode=false;}}
               disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
               Magic Wand: select connected source color</label>
+            <label>Selection operation
+              <select bind:value={surfaceSelectOperation} disabled={busy || !surfacePaint3d}>
+                <option value="replace">Replace</option>
+                <option value="add">Add</option>
+                <option value="subtract">Subtract</option>
+                <option value="intersect">Intersect</option>
+              </select>
+            </label>
+            <button type="button" onclick={() => void invertSurfaceSelection()}
+              disabled={busy || !validSurfaceSelection}>Invert within Cube face</button>
+            <p class="hint">Add, Subtract and Intersect use another original-color
+              island on the same Cube face. Invert works only inside that face.
+              Rust recomputes the selection from original pixels at Apply.</p>
             {#if validSurfaceSelection}
               <button type="button" onclick={clearSurfaceSelection}
                 disabled={busy || !!surfaceMaskDrag}>
@@ -2641,15 +2701,13 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
                 onpointerup={finishPaintStroke}
                 onpointercancel={(event) => finishPaintStroke(event, true)}
                 onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
-              {#if validSurfaceSelection}
-                {#each surfaceSelection?.atlasRows ?? [] as region}
-                  <span class="surface-selection-row"
-                    style:left={(region.x0/snapshot.textureResolution[0]*100)+'%'}
-                    style:top={(region.y/snapshot.textureResolution[1]*100)+'%'}
-                    style:width={((region.x1-region.x0)/snapshot.textureResolution[0]*100)+'%'}
-                    style:height={(1/snapshot.textureResolution[1]*100)+'%'}
-                    aria-hidden="true"></span>
-                {/each}
+              {#if validSurfaceSelection && surfaceSelection?.previewComplete}
+                <canvas class="surface-selection-overlay"
+                  width={Math.min(snapshot.textureResolution[0],512)}
+                  height={Math.min(snapshot.textureResolution[1],512)}
+                  use:drawSurfaceSelectionOverlay={{rows:surfaceSelection?.atlasRows ?? [],
+                    width:snapshot.textureResolution[0],height:snapshot.textureResolution[1]}}
+                  aria-hidden="true"></canvas>
               {/if}
               {#each guardedSurfaceMasks as rect}
                 <span class="surface-mask-mark"
