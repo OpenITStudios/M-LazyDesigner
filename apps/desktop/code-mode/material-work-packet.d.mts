@@ -28,8 +28,31 @@ export interface MaterialWorkPacket {
     shadowPlacement?:string;
     highlightPlacement?:string;
     clusterPlan:string;
-    /** Mandatory for FORM_SHADING, optional for separately declared
-     * SURFACE_DETAIL; source-only connected pixel masks, never visual proof.
+    /** Alternative to clusters, never both: explicit paintable/rest mask,
+     * authored pixel-grid stroke paths, palette roles and bounded brush tips.
+     * Rust is still the only physical UV/atlas and Paint authority.
+     */
+    brushComposition?:{
+      mask:{
+        reason:string;
+        paintable:Array<{y:number;x0:number;x1:number}>;
+        rest?:Array<{y:number;x0:number;x1:number}>;
+      };
+      strokes:Array<{
+        id:string;
+        role:"deep_shadow"|"shadow"|"base"|"highlight"|"edge_light"|
+          "accent"|"detail";
+        formReason:string;
+        /** Absolute positions on the selected Cube face, NOT atlas pixels. */
+        points:Array<[number,number]>;
+        /** Pixel radius (0–2), solid square or diamond dabs. */
+        radius:number;tip:"square"|"diamond";
+        /** Optional taper at both ends; preserves hard pixel edges. */
+        taper:"none"|"ends";
+      }>;
+    };
+    /** Mandatory for FORM_SHADING unless brushComposition is given;
+     * connected pixel masks, never visual proof.
      */
     clusters?:Array<{
       id:string;
@@ -45,6 +68,10 @@ export declare function normalizedMaterialWorkPacket(
   packet?:MaterialWorkPacket
 ):Readonly<MaterialWorkPacket>|undefined;
 export declare function materialWorkPacketDigest(packet:MaterialWorkPacket):string;
+/** Deterministic compiled source spans for Rust preflight; no native write. */
+export declare function materialFaceClusters(
+  face:MaterialWorkPacket["facePlans"][number]
+):NonNullable<MaterialWorkPacket["facePlans"][number]["clusters"]>;
 /** Deterministic host-only FORM_SHADING cluster compiler. Generates exactly
  * the existing Rust guarded face-local Paint operation family, never writes.
  */

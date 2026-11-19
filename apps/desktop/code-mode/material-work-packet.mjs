@@ -5,6 +5,8 @@
  * Rust is the sole bitmap/transaction/UV authority.
  */
 import {createHash} from 'node:crypto';
+import {normalizedMaterialBrushComposition,compileMaterialBrushComposition}
+  from './material-brush-composition.mjs';
 
 const SHA=/^[0-9a-f]{64}$/;
 const TOKEN=/^[a-z][a-z0-9_-]{0,63}$/;
@@ -191,18 +193,26 @@ export function normalizedMaterialWorkPacket(value){
      value.facePlans.length<1 || value.facePlans.length>MAX_FACES)fail();
   plan.facePlans=Object.freeze(value.facePlans.map(face=>{
     object(face,['cubeUuid','face','atlasRegion','formCue',
-      'shadowPlacement','highlightPlacement','clusterPlan','clusters']);
+      'shadowPlacement','highlightPlacement','clusterPlan','clusters',
+      'brushComposition']);
     if(typeof face.cubeUuid!=='string' || !ID.test(face.cubeUuid) ||
        !FACES.has(face.face))fail();
     if(value.shadingIntent==='FORM_SHADING' &&
        (face.shadowPlacement===undefined ||
         face.highlightPlacement===undefined))fail();
+    if(face.clusters!==undefined && face.brushComposition!==undefined)fail();
     if(value.shadingIntent==='FORM_SHADING' &&
-       face.clusters===undefined)fail();
+       face.clusters===undefined && face.brushComposition===undefined)fail();
     if(value.shadingIntent==='ALPHA_SILHOUETTE' &&
-       face.clusters!==undefined)fail();
+       (face.clusters!==undefined || face.brushComposition!==undefined))fail();
+    const brushComposition=face.brushComposition===undefined?undefined:
+      normalizedMaterialBrushComposition(face.brushComposition,roles);
     const clusters=face.clusters===undefined?undefined:
       normalizedFaceClusters(face.clusters,plan.palette,value.shadingIntent);
+    const composedClusters=brushComposition===undefined?undefined:
+      normalizedFaceClusters(
+        compileMaterialBrushComposition(brushComposition,roles),
+        plan.palette,value.shadingIntent);
     const atlasRegion=rectangle(face.atlasRegion);
     const area=(atlasRegion.to[0]-atlasRegion.from[0])*
       (atlasRegion.to[1]-atlasRegion.from[1]);
@@ -217,6 +227,7 @@ export function normalizedMaterialWorkPacket(value){
         {highlightPlacement:statement(face.highlightPlacement)}:{}),
       clusterPlan:statement(face.clusterPlan),
       ...(clusters?{clusters}:{}),
+      ...(composedClusters?{brushComposition}:{}),
     });
   }));
   const faceKeys=plan.facePlans.map(x=>x.cubeUuid+':'+x.face);
@@ -224,7 +235,7 @@ export function normalizedMaterialWorkPacket(value){
   if(new Set(faceKeys).size!==faceKeys.length ||
      new Set(rectKeys).size!==rectKeys.length)fail();
   if(plan.facePlans.reduce((sum,face)=>sum+
-      (face.clusters?.reduce((n,c)=>n+c.spans.length,0)??0),0)>MAX_SPANS){
+      materialFaceClusters(face).reduce((n,c)=>n+c.spans.length,0),0)>MAX_SPANS){
     fail();
   }
   const normalized=Object.freeze(plan);
@@ -271,6 +282,17 @@ export function materialWorkPacketDigest(packet){
 }
 
 
+/** Source-normalized face clusters, from either legacy spans or mask+brush paths.
+ * The composition is a review proposal, not independently approved paint.
+ */
+export function materialFaceClusters(face){
+  if(face.brushComposition) {
+    return compileMaterialBrushComposition(face.brushComposition,
+      face.brushComposition.strokes.map(s=>s.role));
+  }
+  return face.clusters??[];
+}
+
 /** Deterministic source-only translation: named connected row spans become
  * existing Rust guarded face-local region operations. It does NOT paint.
  * The native Rust Document/UV/transaction remains the single edit owner.
@@ -285,7 +307,7 @@ export function compileMaterialClusterPaint(packet){
   for(const face of plan.facePlans){
     let regions=groups.get(face.cubeUuid);
     if(!regions){regions=[];groups.set(face.cubeUuid,regions);}
-    for(const cluster of face.clusters){
+    for(const cluster of materialFaceClusters(face)){
       const rgba=[...palette.get(cluster.role),255];
       for(const span of cluster.spans){
         regions.push({

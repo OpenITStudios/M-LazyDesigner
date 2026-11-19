@@ -18,7 +18,7 @@ import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrection
 import { createLiveReadClient } from './live-read-client.mjs';
 import { compactTaskContext, preflightGuidance } from './task-context.mjs';
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
-  materialWorkPacketDigest,compileMaterialClusterPaint,
+  materialWorkPacketDigest,compileMaterialClusterPaint,materialFaceClusters,
   paintOperationsFingerprint} from './material-work-packet.mjs';
 import {boundReviewCriteria,checkedCriterionReview,criterionPermitsPaint}
   from './review-criteria.mjs';
@@ -2284,7 +2284,7 @@ export async function createCodeModeHost({
             cube_uuid:face.cubeUuid,
             face:face.face,region:face.atlasRegion,
             ...(workPacket.shadingIntent==='FORM_SHADING'?{
-              face_spans:face.clusters.flatMap(cluster=>cluster.spans),
+              face_spans:materialFaceClusters(face).flatMap(cluster=>cluster.spans),
             }:{}),
           })));
           if(bounded.sha256!==p.expectedSha256 ||
@@ -2326,7 +2326,7 @@ export async function createCodeModeHost({
                    binding?.cluster_footprint?.scope!=='saved_face_local_to_atlas' ||
                    binding?.cluster_footprint?.status!=='within_selected_patch' ||
                    binding?.cluster_footprint?.visual_verdict!=='UNVERIFIED' ||
-                   binding?.cluster_footprint?.span_count!==face.clusters.reduce(
+                   binding?.cluster_footprint?.span_count!==materialFaceClusters(face).reduce(
                      (sum,cluster)=>sum+cluster.spans.length,0))) ||
                  !exact(binding?.sample_region?.from,face.atlasRegion.from) ||
                  !exact(binding?.sample_region?.to,face.atlasRegion.to);

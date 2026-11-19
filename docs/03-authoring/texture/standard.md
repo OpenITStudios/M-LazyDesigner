@@ -416,6 +416,38 @@ styling intent and approved reference, not relabelled fake form
 shading. Verify palette hue movement, cluster placement, model
 lighting and visible surface material independently.
 
+### T3 — reviewer-shaped mask and pixel brush composition (SOURCE ONLY)
+
+For a source-bound FORM_SHADING sample, the first-party Code Mode
+\`materialWorkPacket.facePlans\` may use **either** explicit row-span
+\`clusters\` **or** a bounded \`brushComposition\`, never both.
+The latter uses a reviewer-chosen editable face-local mask,
+optional explicitly rested/quiet row spans and 1–8 form-reasoned
+brush centerline paths. Hard square/diamond pixel tips (radius
+0–2) and deterministic endpoint taper produce connected
+hard-edged pixel clusters; no soft blur, random noise, stamp
+library, sensor input, automatic curvature/baking, generated palette,
+or untrusted texture patch is introduced. Every role is selected
+from the existing explicit material swatches; shadow/base/highlight
+relationships remain reviewer/approved-reference decisions.
+The compiled spans are still checked by the same FORM_SHADING
+cluster guards and exact native signed/rotated Cube-face UV/alias
+preflight. A mask is an additional **narrowing** of where a reviewed
+stroke might paint; it cannot weaken Rust's protected regions,
+editable-before colors, user Undo or independently authorized Apply.
+No mask coordinates come from reference-image \`box_uv\` annotations,
+screen pixels or guessed contact geometry. Inspect a real source-
+bound face and approved screenshot before selecting any mask/brush
+path; compare the fresh mapped-model result afterward.
+This adapts the *ideas* of Krita's Pixel Brush/Masked Brush
+(https://docs.krita.org/en/reference_manual/brushes/brush_engines/pixel_brush_engine.html),
+Aseprite's explicit shade ramps
+(https://www.aseprite.org/docs/shading/) and Adobe Substance
+texture mask generators
+(https://experienceleague.adobe.com/en/docs/substance-3d-painter/using/effects/generators/generator);
+it does not reuse vendor code or claim physical AO/curvature.
+Compiler completion is not a professional pixel-art verdict.
+
 ## SURFACE PATTERN PASS
 
 Apply the selected `surface_pattern` recipe to each material cohort only after BASE and VALUE/FORM are readable. Recipes describe directionality, cluster language, value behavior, edge behavior, secondary detail, and anti-patterns. They are not bitmap presets and never select transparency/glow/PBR by name.

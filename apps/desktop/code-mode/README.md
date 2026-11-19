@@ -1189,6 +1189,20 @@ PNG is supported. Reviewed `FORM_SHADING` preflight requires this
 native form receipt and an ordered shadow/base/highlight luminance
 ramp; neither is an artist verdict, automatic lighting placement,
 or a substitute for fresh matched reference/model images.
+
+The optional `MaterialWorkPacket.facePlans[].brushComposition` is a
+reviewer-selected **alternative** to explicit `clusters`. It uses
+face-local half-open row-span `mask.paintable`, optional excluded
+`mask.rest` (quiet/protected art), and ordered `strokes` with explicit
+palette roles, integer centerlines, square/diamond pixel tips
+(radius 0–2) and optional two-ended taper. The deterministic host-only
+composer produces 4-connected pixel masses, with total 64-span Paint
+budget, and sends exactly the same Rust `paint_cube_face_regions_guarded`
+operations through existing native UV/source-color/correction guards.
+It refuses masked-out centers, disconnected/overlapping shapes, unsafe
+bounds and invented palette roles. A mask is a proposed composition,
+not observed shading or approval; the actual Rust protected regions
+and selected visual-review context remain authoritative.
 Rotated hierarchies, other Bones, animation and world visibility are
 explicitly not certified. The underlying Rust guarded painter and
 separate authorization remain unchanged.

@@ -4,8 +4,10 @@ import {test} from 'node:test';
 import {createRustCodeModeClient} from './client.mjs';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest,
   validateMaterialWorkPacketOperations,compileMaterialClusterPaint,
-  paintOperationsFingerprint}
+  paintOperationsFingerprint,materialFaceClusters}
   from './material-work-packet.mjs';
+import {normalizedMaterialBrushComposition,compileMaterialBrushComposition}
+  from './material-brush-composition.mjs';
 
 const CUBE='00000000-0000-4000-8000-000000000002';
 const MODEL='a'.repeat(64);
@@ -217,6 +219,106 @@ test('a small identity detail can use a single color without fake forced shading
     normalizedMaterialWorkPacket(p),scope(),manualOps([180,20,20,255])),true);
 });
 
+function brushPacket(){
+  const p=packet();
+  const face=p.facePlans[0];
+  delete face.clusters;
+  face.brushComposition={
+    mask:{
+      reason:'Select only the reviewer-marked helmet material and preserve its quiet border.',
+      paintable:[0,1,2,3].map(y=>({y,x0:0,x1:4})),
+      rest:[{y:0,x0:3,x1:4}],
+    },
+    strokes:[
+      {id:'joint-shadow',role:'shadow',
+        formReason:'Place an intentionally connected dark joint mass near the recessed edge.',
+        points:[[0,0],[0,1],[1,1]],radius:0,tip:'square',taper:'none'},
+      {id:'bevel-highlight',role:'highlight',
+        formReason:'Keep the light-facing bevel as a small separate connected mass.',
+        points:[[3,2],[3,3]],radius:0,tip:'diamond',taper:'none'},
+    ],
+  };
+  return p;
+}
+test('source-selected brush masks compile into native guarded face-local Paint operations',()=>{
+  const source=brushPacket();
+  const plan=normalizedMaterialWorkPacket(source);
+  assert.equal(plan.facePlans[0].clusters,undefined);
+  assert.equal(plan.facePlans[0].brushComposition.mask.rest.length,1);
+  const clusters=materialFaceClusters(plan.facePlans[0]);
+  assert.deepEqual(clusters.map(c=>c.role),['shadow','highlight']);
+  assert.deepEqual(clusters[0].spans,[
+    {y:0,x0:0,x1:1},{y:1,x0:0,x1:2},
+  ]);
+  assert.deepEqual(clusters[1].spans,[
+    {y:2,x0:3,x1:4},{y:3,x0:3,x1:4},
+  ]);
+  const compiled=compileMaterialClusterPaint(source);
+  assert.equal(compiled[0].op,'paint_cube_face_regions_guarded');
+  assert.equal(compiled[0].regions.length,4);
+  assert.equal(validateMaterialWorkPacketOperations(plan,scope(),compiled),true);
+  assert.equal(materialWorkPacketDigest(source),materialWorkPacketDigest(plan));
+  const samePixelsDifferentPaths=structuredClone(source);
+  samePixelsDifferentPaths.facePlans[0].brushComposition.strokes[0].points=[
+    [0,0],[0,1],[0,1] // invalid duplicate endpoint must not normalize
+  ];
+  assert.throws(()=>normalizedMaterialWorkPacket(samePixelsDifferentPaths),
+    /MATERIAL_BRUSH_COMPOSITION_INVALID|MATERIAL_WORK_PACKET_INVALID/);
+});
+test('rest mask, off-mask strokes, overlapping shade roles and unsafe brush controls refuse',()=>{
+  const original=brushPacket();
+  const b=original.facePlans[0].brushComposition;
+  const cases=[
+    {...b,mask:{...b.mask,rest:[{y:0,x0:4,x1:5}]}},
+    {...b,strokes:[{...b.strokes[0],points:[[0,0],[5,0]]},b.strokes[1]]},
+    {...b,strokes:[{...b.strokes[0],radius:3},b.strokes[1]]},
+    {...b,strokes:[{...b.strokes[0],tip:'soft'},b.strokes[1]]},
+    {...b,strokes:[{...b.strokes[0],taper:'random'},b.strokes[1]]},
+    {...b,strokes:[{...b.strokes[0],role:'fake-role'},b.strokes[1]]},
+    {...b,strokes:[{...b.strokes[0],points:[[0,0],[1,1]]},
+      {...b.strokes[1],points:[[1,1],[2,1]]}]},
+    {...b,strokes:[{...b.strokes[0],points:[[3,0],[2,0]]},b.strokes[1]]},
+    {...b,strokes:[{...b.strokes[0],points:[[0,0],[0,3]],radius:1},
+      {...b.strokes[1],points:[[3,2],[3,3]],radius:1}]},
+  ];
+  for(const bad of cases){
+    const input=brushPacket();
+    input.facePlans[0].brushComposition=bad;
+    assert.throws(()=>normalizedMaterialWorkPacket(input),
+      /MATERIAL_BRUSH_COMPOSITION_INVALID|MATERIAL_WORK_PACKET_INVALID/);
+  }
+  const overlap=brushPacket();
+  overlap.facePlans[0].clusters=packet().facePlans[0].clusters;
+  assert.throws(()=>normalizedMaterialWorkPacket(overlap),
+    /MATERIAL_WORK_PACKET_INVALID/);
+  const alpha=brushPacket();
+  alpha.shadingIntent='ALPHA_SILHOUETTE';
+  assert.throws(()=>normalizedMaterialWorkPacket(alpha),
+    /MATERIAL_WORK_PACKET_INVALID/);
+  const spanless=brushPacket();
+  spanless.facePlans[0].brushComposition.mask.paintable=[];
+  assert.throws(()=>normalizedMaterialWorkPacket(spanless),
+    /MATERIAL_BRUSH_COMPOSITION_INVALID/);
+});
+test('pixel brush tip/taper is deterministic and preserves quiet mask pixels',()=>{
+  const body={
+    mask:{reason:'Only the selected metal rim is editable; the rest must stay clear.',
+      paintable:[0,1,2,3,4].map(y=>({y,x0:0,x1:7})),
+      rest:[{y:0,x0:0,x1:7}]},
+    strokes:[{id:'tapered-rim',role:'highlight',
+      formReason:'Taper the painted edge light toward both ends of the rim.',
+      points:[[1,2],[5,2]],radius:1,tip:'diamond',taper:'ends'}],
+  };
+  const r=compileMaterialBrushComposition(body,['highlight']);
+  assert.equal(r.length,1);
+  assert.ok(r[0].spans.some(s=>s.y===1));
+  assert.ok(r[0].spans.every(s=>s.y!==0));
+  assert.deepEqual(r,compileMaterialBrushComposition(
+    normalizedMaterialBrushComposition(body,['highlight']),['highlight']));
+  const same=structuredClone(body);
+  same.strokes[0].tip='square';
+  assert.notDeepEqual(compileMaterialBrushComposition(same,['highlight']),r);
+});
 test('operator approval sees the plan digest and description but cannot bypass the Rust write guard',async()=>{
   let approvals=0,runs=0;
   const p=packet();

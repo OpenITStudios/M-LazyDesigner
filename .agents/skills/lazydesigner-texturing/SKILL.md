@@ -133,6 +133,25 @@ technical guard is not a test of pleasing hue, light realism or
 material mastery. Unsupported source-light correspondence requires
 an independent reviewer decision, not made-up normal-based lighting.
 
+**Rust reviewed material brush composition (source-only; NOT_EXECUTED):**
+When explicit row-span clusters would force unnatural, straight-edged
+geometry, a reviewer may choose one face-local `brushComposition`
+within the existing `materialWorkPacket` instead of `clusters`.
+The source-bound `mask.paintable` must identify exactly where the
+chosen stroke could go; `mask.rest` protects deliberately quiet
+pixels. Each hard pixel brush path needs a material role, form reason,
+integer Cube-face local points, tip, radius and optional taper.
+It is NOT a generic "make it professional" effect: infer neither
+the target pixels nor stroke directions from the material label,
+and never synthesize highlights, wear, scratches or AO from static
+contact candidates alone. The trusted host compiles only bounded,
+connected row spans into its existing Rust guarded Paint operation;
+negative mask, UV, shared-atlas, protected-RGBA and reviewer gates
+remain. Select an actual reference-bound sample first and review
+fresh shaded model views before propagating. The same explicit
+artist palette role colors remain authoritative; don't auto-generate
+a formulaic metal/wood color ramp.
+
 **Rust reviewed material propagation plan (source-only):**
 Before *broad reviewed* Texture propagation, the AI must submit one
 bounded `materialWorkPacket` with approved/current SHA binding, latest
