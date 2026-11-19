@@ -2825,6 +2825,9 @@ test('source correction transport admits many reviewed RGBAs without a 16-slot c
 test('exact source color selector pages can be requested without broad atlas reads', async()=>{
   let calls=0;
   const client=createRustCodeModeClient({binary:BIN,runner:async argv=>{
+    if(argv[0]==='inspect')return {
+      status:'OK',sha256:SHA,summary:{revision:0},
+    };
     calls++;
     assert.equal(argv[0],'inspect-batch');
     const req=JSON.parse(await readFile(argv[argv.indexOf('--queries')+1],'utf8'));
