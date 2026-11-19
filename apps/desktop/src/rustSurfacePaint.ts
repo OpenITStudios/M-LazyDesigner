@@ -14,6 +14,7 @@ export type SurfaceHit={
 export type SurfaceGesture=SurfaceHit&{
   epoch:number;revision:number;textureUuid:string;
   points:Array<[number,number]>;
+  contextKey:string;
 };
 export type ProtectionRect={from:[number,number];to:[number,number]};
 /** Exact affine inverse of the four Blockbench/Three UV vertex corners.
@@ -36,11 +37,11 @@ export function hitFaceLocalTexel(
   if(!natural.every(x=>Number.isInteger(x)&&x>0&&x<=256))return null;
   const size:[number,number]=rotation===90||rotation===270?
     [natural[1],natural[0]]:[natural[0],natural[1]];
-  const [a,b,c,d,e,f]=renderedCorners;
-  const dx=b-a,dy=c-d,ex=e-a,ey=f-d;
+  const [u0,v0,u1,v1,u2,v2]=renderedCorners;
+  const dx=u1-u0,dy=v1-v0,ex=u2-u0,ey=v2-v0;
   const det=dx*ey-dy*ex;
   if(!Number.isFinite(det)||Math.abs(det)<1e-12)return null;
-  const rx=hitUv[0]-a,ry=hitUv[1]-d;
+  const rx=hitUv[0]-u0,ry=hitUv[1]-v0;
   const s=(rx*ey-ry*ex)/det;
   const t=(dx*ry-dy*rx)/det;
   // Edge vertices may resolve to adjacent face texels; never guess ownership.

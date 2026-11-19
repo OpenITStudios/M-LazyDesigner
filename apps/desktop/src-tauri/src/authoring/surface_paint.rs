@@ -178,7 +178,9 @@ mod tests{
         assert_eq!(receipt.revision,3);
         let data=paint::decode_for_uv_inspection(
             &s.document().texture_assets[0],128,128).unwrap();
-        let pixel=|x:usize,y:usize|&data[(y*128+x)*4..(y*128+x)*4+4];
+        let pixel=|x:usize,y:usize| -> [u8;4] {
+            data[(y*128+x)*4..(y*128+x)*4+4].try_into().unwrap()
+        };
         assert_eq!(pixel(0,0),[140,150,160,255]);
         assert_eq!(pixel(1,1),[80,100,120,255]); // same-color identity mask
         assert_eq!(pixel(2,2),[80,100,120,255]); // near red source landmark

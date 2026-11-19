@@ -37,6 +37,7 @@
   export let surfacePaintEpoch = 0;
   export let surfacePaintRevision = 0;
   export let surfacePaintTextureUuid: string | null = null;
+  export let surfacePaintContextKey = '';
   export let onSurfaceStroke:(value:SurfaceGesture)=>void=()=>{};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
   type GizmoMode = 'translate' | 'rotate' | 'scale';
@@ -670,7 +671,9 @@
   function moveSurfacePointer(event:PointerEvent){
     const current=surfaceGesture;
     if(!current||current.pointerId!==event.pointerId||current.stopped)return;
-    if(!surfacePaintEnabled||current.epoch!==surfacePaintEpoch||
+    if(!surfacePaintEnabled||
+       current.contextKey!==surfacePaintContextKey||
+       current.epoch!==surfacePaintEpoch||
        current.revision!==surfacePaintRevision||
        !surfacePaintTextureUuid||
        current.textureUuid!==surfacePaintTextureUuid){
@@ -699,12 +702,13 @@
     if(!cancelled&&!completed.overflow&&surfacePaintEnabled&&
        completed.epoch===surfacePaintEpoch&&
        completed.revision===surfacePaintRevision&&
-       completed.textureUuid===surfacePaintTextureUuid){
+       completed.textureUuid===surfacePaintTextureUuid&&
+       completed.contextKey===surfacePaintContextKey){
       onSurfaceStroke({cubeUuid:completed.cubeUuid,face:completed.face,
         textureIndex:completed.textureIndex,texel:completed.texel,
         size:completed.size,epoch:completed.epoch,
         revision:completed.revision,textureUuid:completed.textureUuid,
-        points:completed.points});
+        contextKey:completed.contextKey,points:completed.points});
     }
   }
   function pointerMove(event:PointerEvent){
@@ -720,7 +724,8 @@
       if(!hit)return;
       surfaceGesture={...hit,epoch:surfacePaintEpoch,
         revision:surfacePaintRevision,
-        textureUuid:surfacePaintTextureUuid!,points:[hit.texel],
+        textureUuid:surfacePaintTextureUuid!,
+        contextKey:surfacePaintContextKey,points:[hit.texel],
         pointerId:event.pointerId,overflow:false,stopped:false};
       canvas.setPointerCapture(event.pointerId);
       event.preventDefault();
