@@ -22,6 +22,7 @@ use lazydesigner::authoring::{
     saved_timeline_markers, valid_saved_markers, SavedTimelineMarker,
     BezierKeyframeHandles,
     AuthoringDocument, Bone, Cube, EditOperation, EditPlan, EditorSession,
+    SemanticMaterialIntent, SemanticMaterialProposal,
     OutlinerNode, MAX_MODEL_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES, MAX_PAINT_TEXTURES,
 };
 use base64::{engine::general_purpose::STANDARD, read::DecoderReader, Engine as _};
@@ -228,6 +229,36 @@ pub struct ReviewCaptureReceipt {
     file_name: String,
     byte_count: usize,
     preview_scope: &'static str,
+}
+
+/// Operator-selected local reference image digest. Choosing a file does
+/// not prove that the image was accepted as the material style master.
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct SemanticMaterialReferenceReceipt {
+    png_sha256: String,
+    byte_count: usize,
+    reference_authority: &'static str,
+}
+
+/// Ephemeral candidate bitmap *for the existing Three.js viewport only*.
+/// It carries NO usable file path, live-model mutation or review verdict.
+/// The caller swaps one texture source and must restore the original on exit.
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct SemanticMaterialPreviewReceipt {
+    epoch: u64,
+    revision: u64,
+    source_model_sha256: String,
+    candidate_sha256: String,
+    cube_uuid: String,
+    texture_uuid: String,
+    texture_index: usize,
+    candidate_png_source: String,
+    material_evidence: Value,
+    preview_scope: &'static str,
+    visual_verdict: &'static str,
+    write_authority: &'static str,
 }
 
 /// Read-only geometry output receipt; native file paths never enter Svelte.
@@ -1103,6 +1134,155 @@ pub fn rust_editor_preflight(
         &state.store, expected_epoch, plan.expected_revision)?;
     Ok(json!({"status":"OK","epoch":expected_epoch,
         "revision":plan.expected_revision,"preflight":preflight}))
+}
+
+/// A source/reference picker does not transfer the bytes or filesystem path
+/// to the AI guest. Only the PNG hash enters the GUI's provisional intent.
+/// The user must still inspect the actual approved material artwork.
+#[tauri::command]
+pub async fn rust_editor_choose_semantic_reference(
+    state: State<'_, EditorState>,
+    expected_epoch: u64, expected_revision: u64,
+) -> Result<Option<SemanticMaterialReferenceReceipt>, DesktopError> {
+    let _session = frozen_read_session(&state.store, expected_epoch, expected_revision)?;
+    let selected = tauri::async_runtime::spawn_blocking(|| {
+        FileDialog::new().add_filter("Material reference PNG", &["png"]).pick_file()
+    }).await.map_err(|_| failure("RUST_EDITOR_PICKER_FAILED",
+        "Reference image picker did not complete."))?;
+    let Some(path)=selected else{return Ok(None)};
+    storage::png(&path).map_err(model_failure)?;
+    let bytes=storage::read_bounded(&path,MAX_IMPORT_PNG_BYTES).map_err(model_failure)?;
+    // Validate real PNG pixels, not an extension or caller-supplied digest.
+    let mut decoder=png::Decoder::new(std::io::Cursor::new(bytes.as_slice()));
+    decoder.set_transformations(png::Transformations::IDENTITY);
+    let mut reader=decoder.read_info().map_err(|_| failure(
+        "SEMANTIC_REFERENCE_PNG_INVALID","Could not read selected PNG."))?;
+    let info=reader.info();
+    if info.width==0 || info.height==0 || info.width>2048 || info.height>2048 ||
+       u64::from(info.width)*u64::from(info.height)>2_097_152 ||
+       reader.output_buffer_size()>8*1024*1024 {
+        return Err(failure("SEMANTIC_REFERENCE_PNG_UNSUPPORTED",
+            "Reference PNG exceeds the permitted dimensions."));
+    }
+    let mut image=vec![0u8;reader.output_buffer_size()];
+    reader.next_frame(&mut image).map_err(|_| failure(
+        "SEMANTIC_REFERENCE_PNG_INVALID","Selected PNG pixels are invalid."))?;
+    // A source model change during the picker invalidates this reference binding.
+    let _ = frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    Ok(Some(SemanticMaterialReferenceReceipt{
+        png_sha256:sha256(&bytes),byte_count:bytes.len(),
+        reference_authority:"USER_SELECTED_NOT_ARTISTICALLY_VERIFIED",
+    }))
+}
+
+fn preview_semantic_candidate(
+    source:&EditorSession, intent:&SemanticMaterialIntent,
+) -> Result<(SemanticMaterialProposal,EditorSession),DesktopError> {
+    let proposal=source.plan_semantic_material(intent).map_err(model_failure)?;
+    let mut candidate=source.clone();
+    candidate.apply_with_correction_scope(
+        intent.expected_revision,&proposal.plan.operations,
+        proposal.plan.correction_scope.as_ref(),
+    ).map_err(model_failure)?;
+    let candidate_sha=candidate.canonical_sha256().map_err(model_failure)?;
+    if proposal.preflight["candidate_sha256"].as_str()!=Some(candidate_sha.as_str()) ||
+       proposal.preflight["visual_verdict"]!="UNVERIFIED" ||
+       proposal.preflight["write_authority"]!="NOT_GRANTED" {
+        return Err(failure("SEMANTIC_PREVIEW_NATIVE_MISMATCH",
+            "The provisional candidate did not match the Rust dry-run."));
+    }
+    Ok((proposal,candidate))
+}
+
+/// Generate a candidate from an immutable in-memory Rust source. The
+/// published EditorStore, Undo and original .bbmodel are never touched.
+#[tauri::command(async)]
+pub fn rust_editor_preview_semantic_material(
+    state: State<'_, EditorState>, expected_epoch:u64,
+    expected_revision:u64, intent:SemanticMaterialIntent,
+) -> Result<SemanticMaterialPreviewReceipt,DesktopError> {
+    if intent.expected_revision!=expected_revision {
+        return Err(failure("SEMANTIC_PREVIEW_REVISION_MISMATCH",
+            "Material intent targets another document revision."));
+    }
+    let source=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    let source_sha=source.canonical_sha256().map_err(model_failure)?;
+    let (proposal,candidate)=preview_semantic_candidate(&source,&intent)?;
+    let candidate_sha=candidate.canonical_sha256().map_err(model_failure)?;
+    let mut matches=candidate.document().texture_assets.iter().enumerate()
+        .filter(|(_,item)|item.get("uuid").and_then(Value::as_str)==
+            Some(intent.texture_uuid.as_str()));
+    let (texture_index,texture)=matches.next().ok_or_else(|| failure(
+        "SEMANTIC_PREVIEW_TEXTURE_UNKNOWN","Candidate texture is unavailable."))?;
+    if matches.next().is_some() {
+        return Err(failure("SEMANTIC_PREVIEW_TEXTURE_AMBIGUOUS",
+            "Candidate texture cannot be identified uniquely."));
+    }
+    let candidate_png_source=embedded_png_preview_source(texture)
+        .ok_or_else(|| failure("SEMANTIC_PREVIEW_PNG_UNSUPPORTED",
+            "The temporary material image cannot be previewed."))?;
+    // The source can change while the COW candidate is prepared; refuse any
+    // stale response rather than showing it as the current model.
+    let fresh=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
+    if fresh.canonical_sha256().map_err(model_failure)?!=source_sha {
+        return Err(failure("SEMANTIC_PREVIEW_SOURCE_STALE",
+            "The model changed while generating the candidate."));
+    }
+    Ok(SemanticMaterialPreviewReceipt{
+        epoch:expected_epoch,revision:expected_revision,
+        source_model_sha256:source_sha,candidate_sha256:candidate_sha,
+        cube_uuid:intent.cube_uuid,texture_uuid:intent.texture_uuid,
+        texture_index,candidate_png_source,
+        material_evidence:proposal.material_evidence,
+        preview_scope:"RUST_THREEJS_EPHEMERAL_CANDIDATE",
+        visual_verdict:"UNVERIFIED",write_authority:"NOT_GRANTED",
+    })
+}
+
+/// Direct, explicit editor-user Apply of precisely the last previewed source
+/// and candidate. Recomputes the protected Rust plan before committing.
+/// This is NOT a guest Code Mode Apply and NOT independent artistic review.
+#[tauri::command(async)]
+pub fn rust_editor_apply_preview_semantic_material(
+    state: State<'_,EditorState>, expected_epoch:u64,
+    expected_revision:u64,intent:SemanticMaterialIntent,
+    expected_source_sha256:String,expected_candidate_sha256:String,
+) -> Result<EditorSnapshot,DesktopError> {
+    if intent.expected_revision!=expected_revision ||
+       expected_source_sha256.len()!=64 ||
+       expected_candidate_sha256.len()!=64 ||
+       !expected_source_sha256.bytes().all(|c|c.is_ascii_hexdigit()) ||
+       !expected_candidate_sha256.bytes().all(|c|c.is_ascii_hexdigit()) {
+        return Err(failure("SEMANTIC_PREVIEW_BINDING_INVALID",
+            "Material preview has invalid revision or SHA binding."));
+    }
+    detached_edit(&state.store,&state.pending_edit,
+        expected_epoch,expected_revision,ProjectionReuse::default(),
+        Some("The model changed since the material preview."),
+        move |session|{
+            if session.canonical_sha256().map_err(model_failure)?
+                !=expected_source_sha256 {
+                return Err(failure("SEMANTIC_PREVIEW_SOURCE_STALE",
+                    "The original model changed since the candidate preview."));
+            }
+            let proposal=session.plan_semantic_material(&intent)
+                .map_err(model_failure)?;
+            if proposal.preflight["candidate_sha256"].as_str()
+                !=Some(expected_candidate_sha256.as_str()) {
+                return Err(failure("SEMANTIC_PREVIEW_CANDIDATE_STALE",
+                    "Regenerate and inspect the current material preview."));
+            }
+            session.apply_with_correction_scope(
+                expected_revision,&proposal.plan.operations,
+                proposal.plan.correction_scope.as_ref(),
+            ).map_err(model_failure)?;
+            if session.canonical_sha256().map_err(model_failure)?
+                !=expected_candidate_sha256 {
+                return Err(failure("SEMANTIC_PREVIEW_APPLY_MISMATCH",
+                    "The candidate changed during the protected Paint transaction."));
+            }
+            Ok(())
+        })
 }
 
 #[tauri::command(async)]
