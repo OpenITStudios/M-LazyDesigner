@@ -99,11 +99,12 @@ export function matchingSemanticCandidate(
 }
 export function semanticViewportSources(
   snapshot:EditorSnapshot|null,candidate:SemanticMaterialDraft|null,
-  displayCandidate:boolean,valid:boolean,
+  displayCandidate:boolean,valid:boolean,baseSources?:(string|null)[],
 ):(string|null)[] {
   if(!snapshot)return [];
-  if(!displayCandidate||!valid||!candidate)return snapshot.texturePreviewSources;
-  const sources=[...snapshot.texturePreviewSources];
+  const base=baseSources??snapshot.texturePreviewSources;
+  if(!displayCandidate||!valid||!candidate)return base;
+  const sources=[...base];
   sources[candidate.textureIndex]=candidate.candidatePngSource;
   return sources;
 }
