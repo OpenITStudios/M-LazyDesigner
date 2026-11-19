@@ -15,6 +15,8 @@ mod geometry;
 mod geometry_assembly;
 mod geometry_impact;
 pub use geometry_impact::inspect_geometry_impact;
+mod geometry_void;
+pub use geometry_void::{GeometryVoidZone,check_geometry_void_zones};
 mod geometry_sweep;
 pub use geometry_sweep::{GeometrySphereSweep, GeometrySweepStation};
 mod geometry_profile_sweep;

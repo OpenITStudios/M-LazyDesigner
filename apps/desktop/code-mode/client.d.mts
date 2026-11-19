@@ -206,10 +206,31 @@ export interface GeometryAssemblyPart {
   lofts?: GeometryAxialLoft[];
   revolves?: GeometryAxialRevolve[];
 }
+/** Optional exact source-local space which the G1 candidate must leave
+ * unfilled. This does NOT prove a through-hole, full-model collision clearance
+ * or visual similarity. Bounds are caller-declared model units.
+ */
+export interface GeometryVoidZone {
+  bone_uuid:string;
+  from:Vec3;
+  to:Vec3;
+}
+export interface GeometryVoidEvidence {
+  scope:"new_bone_saved_cube_bounds_empty_zone";
+  zones:GeometryVoidZone[];
+  zones_checked:number;
+  tested_cube_checks:number;
+  local_bounds_verdict:"CLEAR_OF_PROPOSED_AXIS_ALIGNED_CUBES";
+  whole_model_contact_verdict:"UNVERIFIED";
+  through_hole_verdict:"UNVERIFIED";
+  visual_verdict:"UNVERIFIED";
+  write_authority:"NOT_GRANTED";
+}
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */
   expected_revision: 0;
   parts: GeometryAssemblyPart[];
+  void_zones?: GeometryVoidZone[];
 }
 /** G2 transient face alignment in the same Bone/local frame.
  * Tangent axes: X -> [Y,Z], Y -> [X,Z], Z -> [X,Y].
@@ -730,6 +751,7 @@ export interface PreflightReceipt {
 }
 /** Read-only Rust G1 structure compiler; Apply still requires separate host approval. */
 export interface GeometryAssemblyReceipt {
+  void_evidence?:GeometryVoidEvidence;
   status: "OK";
   sha256: string;
   summary: DocumentSummary;

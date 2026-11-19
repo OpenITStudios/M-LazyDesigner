@@ -34,6 +34,7 @@ apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           │                         geometry_attachment.rs, geometry_propagation.rs,
           │                         geometry_obb.rs (static same-Bone SAT),
           │                         geometry_impact.rs (read-only dependency evidence),
+          │                         geometry_void.rs (optional G1 local empty-space guard),
           │                         subtree.rs, uv_sharing.rs
           ├─ Texture/Paint        → paint.rs, face_regions.rs, material_*.rs
           ├─ Animation            → animation_clip.rs, bezier.rs,
@@ -51,6 +52,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 | Change requested | First semantic owner | Adjacent consumers/checks |
 | --- | --- | --- |
 | Document identity, edit batch, Undo/Redo | `apps/desktop/src-tauri/src/authoring/mod.rs` | `authoring/tests.rs`, Tauri + CLI apply contracts |
+| **Geometry negative-space constraint (read-only)**: opt-in Cube-free volumes checked against one new Bone in G1 | `authoring/geometry_void.rs` | existing `plan-geometry-assembly` optional CLI argument, `code-mode/geometry-void.mjs`, SDK typed source guard; not global contact or visual PASS |
 | **Geometry impact reasoning (read-only)**: Bone ancestry, same-parent Cube candidates, common atlas users and matching animator keys | `authoring/geometry_impact.rs` | CLI `inspect-batch`, `code-mode/geometry-impact.mjs`, `client.mjs`, `client.d.mts` (advisory only, no mutation) |
 | **Geometri**: Cube/Bone hierarchy, pivot, bounds, UV-aware edits | `authoring/mod.rs` (`EditOperation`), `geometry_assembly.rs`, `geometry_sweep.rs`, `geometry_profile_sweep.rs`, `geometry_axial.rs` (pure helpers), `geometry_attachment.rs`, `geometry_propagation.rs`, `geometry_obb.rs`, `subtree.rs`, `geometry.rs`, `uv_sharing.rs` | `authoring/tests.rs`, `.bbmodel` + `.geo.json`, `RustViewport.svelte` |
 | **Texture**: RGBA8 Paint, face-local edits, atlas/material evidence | `authoring/paint.rs`, `face_regions.rs`, `palette.rs`, `material_styling.rs` | `correction_scope.rs`, `texture_coverage.rs`, `asset_handoff.rs`, Paint UI + PNG export |

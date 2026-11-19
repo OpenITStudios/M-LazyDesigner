@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest} from './material-work-packet.mjs';
 import {validGeometryImpact} from './geometry-impact.mjs';
+import {normalizedGeometryVoidZones,validGeometryVoidEvidence} from './geometry-void.mjs';
 
 const execFileAsync = promisify(execFile);
 const PLAN_LIMIT = 64 * 1024;
@@ -268,7 +269,10 @@ function serializeGeometryAssembly(assembly) {
       assembly.parts.length > 128) {
     throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID');
   }
-  const payload = JSON.stringify(assembly, (_key, value) => {
+  // Void-zone evidence is an optional read-only Rust CLI argument, not
+  // an unknown field added to the canonical G1 AssemblyRequest wire.
+  const {void_zones: _zones, ...canonicalAssembly} = assembly;
+  const payload = JSON.stringify(canonicalAssembly, (_key, value) => {
     if (typeof value === 'number' && !Number.isFinite(value)) {
       throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID');
     }
@@ -1036,15 +1040,22 @@ export function createRustCodeModeClient({
     async planGeometryAssembly({ input, expectedSha256, assembly }) {
       const digest = hash(expectedSha256).toLowerCase();
       const source = absolute(input, 'input');
+      const zones=normalizedGeometryVoidZones(assembly);
       const payload = serializeGeometryAssembly(assembly);
       const directory = await mkdtemp(join(tmpdir(), 'lazydesigner-geometry-plan-'));
       const file = join(directory, 'assembly.json');
       try {
         await writeFile(file, payload, { encoding:'utf8', mode:0o600, flag:'wx' });
-        // Read-only Rust compiler; actual apply remains separately approved.
-        const receipt = await call('plan-geometry-assembly', {
-          input:source, 'expected-sha256':digest, assembly:file,
-        });
+        // Read-only Rust compiler and opt-in saved-local negative-space
+        // checks. No new writer, geometry engine or image-derived bounds.
+        const args={input:source,'expected-sha256':digest,assembly:file};
+        if (zones!==null) {
+          const zoneFile=join(directory,'void-zones.json');
+          await writeFile(zoneFile,JSON.stringify(zones),
+            {encoding:'utf8',mode:0o600,flag:'wx'});
+          args['void-zones']=zoneFile;
+        }
+        const receipt = await call('plan-geometry-assembly',args);
         const plan = receipt.plan, preview = receipt.preflight;
         // Bind each returned UUID to one declared Bone, Cube or G3 blockout
         // panel. All shape calculation remains in the canonical Rust owner.
@@ -1261,6 +1272,9 @@ export function createRustCodeModeClient({
             receipt.write_authority !== 'NOT_GRANTED' ||
             receipt.visual_verdict !== 'UNVERIFIED') {
           throw new Error('CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID');
+        }
+        if (!validGeometryVoidEvidence(receipt.void_evidence,zones)) {
+          throw new Error('CODE_MODE_GEOMETRY_VOID_EVIDENCE_INVALID');
         }
         return receipt;
       } finally {

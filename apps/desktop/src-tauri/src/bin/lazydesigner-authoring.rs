@@ -7,6 +7,7 @@ use lazydesigner::authoring::{
     inspect_bedrock_asset_handoff_page, paint_texture_editable, inspect_material_pair, inspect_material_face_patch_with_spans, FaceLocalRowSpan, inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors_page, inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES, MaterialPatchRegion, AuthoringDocument, OutlinerNode, EditOperation, EditPlan, EditorSession, ValidatedInspection,
     MAX_MODEL_BYTES, MAX_PLAN_BYTES, MAX_IMPORT_PNG_BYTES, MAX_EXPORT_PNG_BYTES,
     GeometryAssemblyRequest, GeometryFaceAttachmentRequest, inspect_geometry_impact,
+    GeometryVoidZone, check_geometry_void_zones,
     GeometryResizePropagationRequest, SemanticMaterialIntent,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -851,7 +852,7 @@ fn execute() -> Result<Value> {
         "plan-geometry-assembly" => {
             // Read-only structure-first compilation; no output path, file
             // mutation, new authority or implicit artist/reference approval.
-            option_set(&options, &["--input", "--assembly", "--expected-sha256"])?;
+            option_set(&options, &["--input", "--assembly", "--expected-sha256", "--void-zones"])?;
             let input = PathBuf::from(option(&options, "--input")?);
             let (bytes, actual_sha) = read_verified_source(
                 &input, option(&options, "--expected-sha256")?
@@ -863,11 +864,21 @@ fn execute() -> Result<Value> {
                 .map_err(|_| fail("GEOMETRY_ASSEMBLY_INPUT_INVALID"))?;
             let session = EditorSession::open(&bytes)?;
             let proposed = session.plan_geometry_assembly(&request)?;
-            Ok(json!({
+            // Optional source-local negative-space guard. A passing local
+            // AABB check never certifies whole-model topology or visual fit.
+            let void_evidence = if let Some(path)=options.get("--void-zones") {
+                let content=read_bounded(Path::new(path),MAX_PLAN_BYTES)?;
+                let zones:Vec<GeometryVoidZone>=serde_json::from_slice(&content)
+                    .map_err(|_|fail("GEOMETRY_VOID_ZONE_INVALID"))?;
+                Some(check_geometry_void_zones(&proposed.plan,&zones)?)
+            } else {None};
+            let mut receipt=json!({
                 "status":"OK","sha256":actual_sha,"summary":session.summary(),
                 "plan":proposed.plan,"preflight":proposed.preflight,
                 "write_authority":"NOT_GRANTED","visual_verdict":"UNVERIFIED",
-            }))
+            });
+            if let Some(evidence)=void_evidence {receipt["void_evidence"]=evidence;}
+            Ok(receipt)
         }
         "plan-semantic-material" => {
             // P0 only: bounded reviewer-authored material intent, Rust

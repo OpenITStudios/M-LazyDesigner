@@ -973,6 +973,21 @@ Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.
 
 
+**G5 opt-in negative-space guard for existing G1 compiler (2026-11-20; SOURCE_ONLY):**
+`codemode.planGeometryAssembly({project,assembly})` may include
+`assembly.void_zones: [{bone_uuid,from,to}]` (1–16, exact model-unit
+bounds). The existing Rust G1 compiler still constructs the source-native
+Cube/Bone EditPlan; a separate Rust read-only module checks that each
+declared space lies inside its new Bone's proposed Cube envelope but has
+**no positive-volume Cube intersection** in that unrotated local frame.
+Rotations, inflate and stretch which make this AABB claim unsafe are
+refused. The output `void_evidence` is explicitly LOCAL, not whole-model
+collision, through-opening topology, reference fidelity or artist approval.
+Without this optional declaration the G1 CLI and SDK contracts are unchanged.
+No second geometry generator, saved graph, automatic parameter inference,
+new guest RPC, Apply permission, pixel edit or release. Rust and SDK
+negative-case source tests are NOT_EXECUTED under the existing hold.
+
 **G4 source-grounded Geometry impact inspection (2026-11-20; SOURCE_ONLY):**
 `codemode.inspectBatch([{kind:'geometry_impact',cube_uuid:'...',change:'reshape'}])`
 reuses the existing SHA-bound read-only Rust `inspect-batch` call. Supported
