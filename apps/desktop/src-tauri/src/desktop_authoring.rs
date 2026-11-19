@@ -1247,6 +1247,37 @@ pub fn rust_editor_preview_semantic_material(
     })
 }
 
+/// The same exact source/model/candidate contract applies to direct-user
+/// commits as to the last ephemeral visual preview. Never partially mutate
+/// even an intermediate EditorSession if the final candidate SHA diverges.
+fn apply_checked_semantic_candidate(
+    session:&mut EditorSession,
+    intent:&SemanticMaterialIntent,
+    expected_source_sha:&str,
+    expected_candidate_sha:&str,
+) -> Result<(),DesktopError> {
+    if session.canonical_sha256().map_err(model_failure)?!=expected_source_sha {
+        return Err(failure("SEMANTIC_PREVIEW_SOURCE_STALE",
+            "The original model changed since the candidate preview."));
+    }
+    let proposal=session.plan_semantic_material(intent).map_err(model_failure)?;
+    if proposal.preflight["candidate_sha256"].as_str()!=Some(expected_candidate_sha) {
+        return Err(failure("SEMANTIC_PREVIEW_CANDIDATE_STALE",
+            "Regenerate and inspect the current material preview."));
+    }
+    let mut candidate=session.clone();
+    candidate.apply_with_correction_scope(
+        intent.expected_revision,&proposal.plan.operations,
+        proposal.plan.correction_scope.as_ref(),
+    ).map_err(model_failure)?;
+    if candidate.canonical_sha256().map_err(model_failure)?!=expected_candidate_sha {
+        return Err(failure("SEMANTIC_PREVIEW_APPLY_MISMATCH",
+            "The candidate changed during the protected Paint transaction."));
+    }
+    *session=candidate; // Publish only after all checksum/source guards pass.
+    Ok(())
+}
+
 /// Direct, explicit editor-user Apply of precisely the last previewed source
 /// and candidate. Recomputes the protected Rust plan before committing.
 /// This is NOT a guest Code Mode Apply and NOT independent artistic review.
@@ -1267,30 +1298,9 @@ pub fn rust_editor_apply_preview_semantic_material(
     detached_edit(&state.store,&state.pending_edit,
         expected_epoch,expected_revision,ProjectionReuse::default(),
         Some("The model changed since the material preview."),
-        move |session|{
-            if session.canonical_sha256().map_err(model_failure)?
-                !=expected_source_sha256 {
-                return Err(failure("SEMANTIC_PREVIEW_SOURCE_STALE",
-                    "The original model changed since the candidate preview."));
-            }
-            let proposal=session.plan_semantic_material(&intent)
-                .map_err(model_failure)?;
-            if proposal.preflight["candidate_sha256"].as_str()
-                !=Some(expected_candidate_sha256.as_str()) {
-                return Err(failure("SEMANTIC_PREVIEW_CANDIDATE_STALE",
-                    "Regenerate and inspect the current material preview."));
-            }
-            session.apply_with_correction_scope(
-                expected_revision,&proposal.plan.operations,
-                proposal.plan.correction_scope.as_ref(),
-            ).map_err(model_failure)?;
-            if session.canonical_sha256().map_err(model_failure)?
-                !=expected_candidate_sha256 {
-                return Err(failure("SEMANTIC_PREVIEW_APPLY_MISMATCH",
-                    "The candidate changed during the protected Paint transaction."));
-            }
-            Ok(())
-        })
+        move |session|apply_checked_semantic_candidate(
+            session,&intent,&expected_source_sha256,&expected_candidate_sha256,
+        ))
 }
 
 #[tauri::command(async)]
@@ -2095,6 +2105,97 @@ pub async fn rust_editor_recovery_restore(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SOURCE_AUTHORED_NOT_RUN: the native Rust semantic preview uses one
+    // disposable candidate and cannot change original revision/Undo.
+    fn semantic_preview_fixture() -> (EditorSession,SemanticMaterialIntent) {
+        const TEXTURE: &str = "00000000-0000-4000-8000-000000000101";
+        const CUBE: &str = "00000000-0000-4000-8000-000000000002";
+        let mut doc=AuthoringDocument::import_bbmodel(
+            include_bytes!("../fixtures/bedrock-texture-interchange.bbmodel")
+        ).unwrap();
+        let mut pixels=vec![0u8;64*32*4];
+        for y in 2usize..6 { for x in 1usize..5 {
+            let index=(y*64+x)*4;
+            pixels[index..index+4].copy_from_slice(&[90,110,130,255]);
+        }}
+        let mut png_bytes=Vec::new();
+        {
+            let mut encoder=png::Encoder::new(&mut png_bytes,64,32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer=encoder.write_header().unwrap();
+            writer.write_image_data(&pixels).unwrap();
+        }
+        doc.texture_assets[0]=json!({
+            "uuid":TEXTURE,"name":"preview-metal.png",
+            "source":format!("data:image/png;base64,{}",
+                STANDARD.encode(&png_bytes)),
+            "internal":true,"wrap_mode":"limited",
+            "render_mode":"default","render_sides":"double",
+            "paint_owner":"lazydesigner-rgba8-v1",
+            "uv_width":64,"uv_height":32,
+        });
+        let session=EditorSession::from_document(doc).unwrap();
+        let intent=serde_json::from_value(json!({
+            "expected_revision":0,"reference_png_sha256":"b".repeat(64),
+            "cube_uuid":CUBE,"texture_uuid":TEXTURE,
+            "face":"north","material":"painted_metal",
+            "light_corner":"upper_left","contrast":"balanced",
+            "source_base_rgba":[90,110,130,255],
+            "shadow_rgb":[52,62,80],
+            "highlight_rgb":[160,175,195],
+            "protected_regions":[],"expected_before_pixels":[]
+        })).unwrap();
+        (session,intent)
+    }
+
+    #[test]
+    fn semantic_material_ephemeral_candidate_does_not_edit_source_or_history() {
+        let (source,intent)=semantic_preview_fixture();
+        let before=source.export().unwrap();
+        let before_hash=source.canonical_sha256().unwrap();
+        let (proposal,candidate)=preview_semantic_candidate(&source,&intent).unwrap();
+        assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
+        assert_eq!(proposal.preflight["candidate_sha256"],
+            candidate.canonical_sha256().unwrap());
+        assert_ne!(candidate.export().unwrap(),before);
+        assert_eq!(source.export().unwrap(),before);
+        assert_eq!(source.canonical_sha256().unwrap(),before_hash);
+        assert_eq!(source.summary().revision,0);
+        assert!(!source.can_undo());
+        assert!(!source.can_redo());
+        assert_eq!(candidate.summary().revision,1);
+    }
+
+    #[test]
+    fn semantic_material_sha_binding_refuses_replacement_without_partial_commit() {
+        let (mut source,intent)=semantic_preview_fixture();
+        let original=source.export().unwrap();
+        let original_sha=source.canonical_sha256().unwrap();
+        let (_proposal,candidate)=preview_semantic_candidate(&source,&intent).unwrap();
+        let candidate_sha=candidate.canonical_sha256().unwrap();
+        let wrong="c".repeat(64);
+        let err=apply_checked_semantic_candidate(
+            &mut source,&intent,&wrong,&candidate_sha).err().unwrap();
+        assert_eq!(err.code,"SEMANTIC_PREVIEW_SOURCE_STALE");
+        assert_eq!(source.export().unwrap(),original);
+        let err=apply_checked_semantic_candidate(
+            &mut source,&intent,&original_sha,&wrong).err().unwrap();
+        assert_eq!(err.code,"SEMANTIC_PREVIEW_CANDIDATE_STALE");
+        assert_eq!(source.export().unwrap(),original);
+        assert_eq!(source.summary().revision,0);
+        assert!(!source.can_undo());
+        apply_checked_semantic_candidate(
+            &mut source,&intent,&original_sha,&candidate_sha).unwrap();
+        assert_eq!(source.canonical_sha256().unwrap(),candidate_sha);
+        assert_eq!(source.summary().revision,1);
+        assert!(source.can_undo());
+        source.undo(1).unwrap();
+        assert_eq!(source.export().unwrap(),original);
+        assert_eq!(source.summary().revision,2);
+    }
+
 
     // SOURCE ONLY: frozen read consumes the same authoritative session as
     // the GUI; an older candidate is not a live edit or a stale success.
