@@ -2365,6 +2365,30 @@ test('representative material is constrained; propagation requires fresh accepte
         ],
       }],
     };
+    // The later material propagation uses an artist-authored pixel brush
+    // instead of source-supplied row spans. The canonical Rust operations
+    // and exact reviewer-approved sample remain identical.
+    const {clusters:oldClusters,...faceWithNoClusters}=workPacket.facePlans[0];
+    const brushPropagationPacket={...workPacket,facePlans:[{
+      ...faceWithNoClusters,
+      brushComposition:{
+        mask:{
+          reason:'Only the reviewed metal panel and its visible bevel may be painted.',
+          paintable:[0,1,2,3].map(y=>({y,x0:0,x1:4})),
+          rest:[{y:0,x0:2,x1:4}],
+        },
+        strokes:[
+          {id:'side-shadow',role:'shadow',
+            formReason:'Preserve the approved stepped shadow against the helmet joint.',
+            points:[[0,0],[1,0],[0,1],[1,1],[2,1]],
+            radius:0,tip:'square',taper:'none'},
+          {id:'rim-light',role:'highlight',
+            formReason:'Preserve the approved compact bevel reflection shape.',
+            points:[[2,2],[3,2],[3,3]],
+            radius:0,tip:'diamond',taper:'none'},
+        ],
+      },
+    }]};
     const samplePacket={
       ...workPacket,sourceModelSha256:HASH,
       reviewedIssueObservation:'Metal helmet needs one representative sample.',
@@ -2627,7 +2651,8 @@ test('representative material is constrained; propagation requires fresh accepte
               [{from:[8,8],to:[12,12]}],preserveAlpha:true},
           correctionIntent:intent,
           ...(!overlap&&!missingPacket?{materialWorkPacket:wrongReference?
-            {...workPacket,referencePngSha256:'d'.repeat(64)}:workPacket}:{}),
+            {...workPacket,referencePngSha256:'d'.repeat(64)}:
+            (step===9?brushPropagationPacket:workPacket)}:{}),
         }},value=>{
           if(overlap){
             assert.equal(value.ok,false);
@@ -2667,7 +2692,8 @@ test('representative material is constrained; propagation requires fresh accepte
     assert.equal(approvals,2);
     assert.match(actualApprovals[0].materialWorkPacketSha256,/^[0-9a-f]{64}$/);
     assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].face,'east');
-    assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].clusters.length,2);
+    assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].clusters,undefined);
+    assert.equal(actualApprovals[0].materialWorkPacket.facePlans[0].brushComposition.strokes.length,2);
     assert.deepEqual(actualApprovals[0].operationKinds,
       ['paint_cube_face_regions_guarded']);
     assert.deepEqual(actualApprovals[0].correctionScope.editableBeforeRgba,

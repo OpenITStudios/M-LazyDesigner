@@ -70,7 +70,8 @@ export declare function normalizedMaterialWorkPacket(
 export declare function materialWorkPacketDigest(packet:MaterialWorkPacket):string;
 /** Deterministic compiled source spans for Rust preflight; no native write. */
 export declare function materialFaceClusters(
-  face:MaterialWorkPacket["facePlans"][number]
+  face:MaterialWorkPacket["facePlans"][number],
+  palette:MaterialWorkPacket["palette"]
 ):NonNullable<MaterialWorkPacket["facePlans"][number]["clusters"]>;
 /** Deterministic host-only FORM_SHADING cluster compiler. Generates exactly
  * the existing Rust guarded face-local Paint operation family, never writes.

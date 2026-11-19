@@ -203,6 +203,8 @@ export function normalizedMaterialWorkPacket(value){
     if(face.clusters!==undefined && face.brushComposition!==undefined)fail();
     if(value.shadingIntent==='FORM_SHADING' &&
        face.clusters===undefined && face.brushComposition===undefined)fail();
+    if(face.brushComposition!==undefined &&
+       value.shadingIntent!=='FORM_SHADING')fail();
     if(value.shadingIntent==='ALPHA_SILHOUETTE' &&
        (face.clusters!==undefined || face.brushComposition!==undefined))fail();
     const brushComposition=face.brushComposition===undefined?undefined:
@@ -235,7 +237,7 @@ export function normalizedMaterialWorkPacket(value){
   if(new Set(faceKeys).size!==faceKeys.length ||
      new Set(rectKeys).size!==rectKeys.length)fail();
   if(plan.facePlans.reduce((sum,face)=>sum+
-      materialFaceClusters(face).reduce((n,c)=>n+c.spans.length,0),0)>MAX_SPANS){
+      materialFaceClusters(face,plan.palette).reduce((n,c)=>n+c.spans.length,0),0)>MAX_SPANS){
     fail();
   }
   const normalized=Object.freeze(plan);
@@ -285,10 +287,14 @@ export function materialWorkPacketDigest(packet){
 /** Source-normalized face clusters, from either legacy spans or mask+brush paths.
  * The composition is a review proposal, not independently approved paint.
  */
-export function materialFaceClusters(face){
+export function materialFaceClusters(face,palette){
   if(face.brushComposition) {
+    if(!Array.isArray(palette) || palette.length<1 ||
+       palette.some(entry=>typeof entry?.role!=='string')){
+      throw new TypeError('MATERIAL_WORK_PACKET_INVALID');
+    }
     return compileMaterialBrushComposition(face.brushComposition,
-      face.brushComposition.strokes.map(s=>s.role));
+      palette.map(swatch=>swatch.role));
   }
   return face.clusters??[];
 }
@@ -307,7 +313,7 @@ export function compileMaterialClusterPaint(packet){
   for(const face of plan.facePlans){
     let regions=groups.get(face.cubeUuid);
     if(!regions){regions=[];groups.set(face.cubeUuid,regions);}
-    for(const cluster of materialFaceClusters(face)){
+    for(const cluster of materialFaceClusters(face,plan.palette)){
       const rgba=[...palette.get(cluster.role),255];
       for(const span of cluster.spans){
         regions.push({

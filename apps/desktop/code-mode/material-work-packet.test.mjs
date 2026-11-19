@@ -245,8 +245,11 @@ test('source-selected brush masks compile into native guarded face-local Paint o
   const plan=normalizedMaterialWorkPacket(source);
   assert.equal(plan.facePlans[0].clusters,undefined);
   assert.equal(plan.facePlans[0].brushComposition.mask.rest.length,1);
-  const clusters=materialFaceClusters(plan.facePlans[0]);
+  const clusters=materialFaceClusters(plan.facePlans[0],plan.palette);
   assert.deepEqual(clusters.map(c=>c.role),['shadow','highlight']);
+  assert.throws(()=>materialFaceClusters(plan.facePlans[0],[
+    {role:'base',rgb:[90,105,125]}]),
+    /MATERIAL_BRUSH_COMPOSITION_INVALID/);
   assert.deepEqual(clusters[0].spans,[
     {y:0,x0:0,x1:1},{y:1,x0:0,x1:2},
   ]);
@@ -294,6 +297,10 @@ test('rest mask, off-mask strokes, overlapping shade roles and unsafe brush cont
   const alpha=brushPacket();
   alpha.shadingIntent='ALPHA_SILHOUETTE';
   assert.throws(()=>normalizedMaterialWorkPacket(alpha),
+    /MATERIAL_WORK_PACKET_INVALID/);
+  const detail=brushPacket();
+  detail.shadingIntent='SURFACE_DETAIL';
+  assert.throws(()=>normalizedMaterialWorkPacket(detail),
     /MATERIAL_WORK_PACKET_INVALID/);
   const spanless=brushPacket();
   spanless.facePlans[0].brushComposition.mask.paintable=[];
