@@ -251,6 +251,7 @@ pub struct SemanticMaterialPreviewReceipt {
     revision: u64,
     source_model_sha256: String,
     candidate_sha256: String,
+    reference_png_sha256: String,
     cube_uuid: String,
     texture_uuid: String,
     texture_index: usize,
@@ -1231,6 +1232,7 @@ pub fn rust_editor_preview_semantic_material(
     Ok(SemanticMaterialPreviewReceipt{
         epoch:expected_epoch,revision:expected_revision,
         source_model_sha256:source_sha,candidate_sha256:candidate_sha,
+        reference_png_sha256:intent.reference_png_sha256,
         cube_uuid:intent.cube_uuid,texture_uuid:intent.texture_uuid,
         texture_index,candidate_png_source,
         material_evidence:proposal.material_evidence,
