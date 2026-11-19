@@ -1,13 +1,12 @@
-//! Rust-owned source selection. A compact atlas bitmap is temporary evidence,
-//! never PNG ownership or edit authorization; every Apply recomputes the plan.
+//! Rust-owned original-RGBA selection. The native mask is ephemeral: only
+//! the existing Paint/Undo and source-revision guards can authorize a write.
 use super::{AuthoringDocument,EditorSession,Result,MAX_PLAN_BYTES,
     correction_scope::CorrectionRectangle,paint,surface_paint::{
         SurfacePaintSampleRequest,FaceBinding,admit_face,atlas_for_local,
     }};
+use base64::{engine::general_purpose::STANDARD,Engine as _};
 use serde::{Serialize,Deserialize};
 
-/// Only the transported preview is bounded. Selection area itself is not
-/// capped; fragmented selections remain valid even when overlay is omitted.
 const MAX_PREVIEW_RUNS:usize=4096;
 #[derive(Debug,Clone,Copy,Serialize,Deserialize,PartialEq,Eq)]
 #[serde(rename_all="snake_case")]
@@ -30,6 +29,14 @@ pub struct SurfaceSelectionRequest{
 }
 #[derive(Debug,Clone,Serialize)]
 pub struct SurfaceSelectionSpan{pub y:u32,pub x0:u32,pub x1:u32}
+/// Downsampled view-only occupancy. OR coverage is useful for inspecting
+/// highly fragmented masks but never supplies coordinates to native Apply.
+#[derive(Debug,Clone,Serialize)]
+pub struct SurfaceSelectionRaster{
+    pub width:u32,
+    pub height:u32,
+    pub packed_mask_base64:String,
+}
 #[derive(Debug,Clone,Serialize)]
 pub struct SurfaceSelectionReceipt{
     pub revision:u64,
@@ -41,33 +48,52 @@ pub struct SurfaceSelectionReceipt{
     pub pixel_count:usize,
     pub atlas_rows:Vec<SurfaceSelectionSpan>,
     pub preview_complete:bool,
+    pub preview_raster:Option<SurfaceSelectionRaster>,
     pub selection_steps:Vec<SelectionStep>,
     pub source_authority:&'static str,
     pub write_authority:&'static str,
     pub visual_verdict:&'static str,
 }
+/// Packed ownership: one bit per texel, independent of atlas color count.
+/// No global selection-area cap or byte-per-pixel bitmap duplication.
+struct PackedMask{
+    bits:Vec<u64>,
+    len:usize,
+}
+impl PackedMask{
+    fn new(len:usize)->Self{
+        Self{bits:vec![0;len.saturating_add(63)/64],len}
+    }
+    fn get(&self,index:usize)->bool{
+        index<self.len && self.bits.get(index/64)
+            .is_some_and(|word|((word>>(index%64))&1)!=0)
+    }
+    fn set(&mut self,index:usize,value:bool){
+        if index>=self.len{return;}
+        let bit=1u64<<(index%64);
+        if value{self.bits[index/64]|=bit;}
+        else{self.bits[index/64]&=!bit;}
+    }
+}
 pub(super) struct ComputedSelection{
     pub source_rgba:[u8;4],
     pub pixel_count:usize,
-    /// Byte bitmap indexed by physical atlas texel, not a giant HashSet.
-    /// This is never serialized into an editable document or trusted from UI.
-    pub atlas_mask:Vec<u8>,
+    atlas_mask:PackedMask,
     pub rows:Vec<SurfaceSelectionSpan>,
     pub preview_complete:bool,
 }
 impl ComputedSelection{
     pub fn contains(&self,at:&[u32;2],width:u32)->bool{
-        let index=at[1] as usize*width as usize+at[0] as usize;
-        self.atlas_mask.get(index)==Some(&1)
+        self.atlas_mask.get(at[1] as usize*width as usize+at[0] as usize)
     }
 }
 fn protected(at:[u32;2],regions:&[CorrectionRectangle])->bool{
     regions.iter().any(|rect|at[0]>=rect.from[0]&&at[0]<rect.to[0]&&
         at[1]>=rect.from[1]&&at[1]<rect.to[1])
 }
-/// Face pixel-space is affine for supported source UV and 90-degree rotations.
-/// Project only three canonical texels through the authoritative mapper, then
-/// apply signed integer steps for potentially millions of local texels.
+/// On supported original UV, the local-to-atlas mapping is affine. Admit
+/// three points through the existing Rust UV owner; avoid recalculating a
+/// rectangle for each of millions of selected texels.
 struct PixelProjector<'a>{
     face:&'a FaceBinding,
     origin:[i64;2],dx:[i64;2],dy:[i64;2],
@@ -100,10 +126,13 @@ fn sampled_rgba(original:&[u8],width:u32,at:[u32;2])->Result<[u8;4]>{
         "SURFACE_SELECTION_SOURCE_INVALID".to_owned())?
         .try_into().map_err(|_|"SURFACE_SELECTION_SOURCE_INVALID".into())
 }
+/// Span flood: large solid areas require a queue of runs rather than one
+/// queued u32 for each texel. Fragmented regions are represented by actual
+/// accepted texels in packed bitsets, with no artificial pixel-count cap.
 fn connected(
     projector:&PixelProjector<'_>,original:&[u8],seed:[u32;2],
     protected_regions:&[CorrectionRectangle],
-)->Result<(Vec<u8>,[u8;4])>{
+)->Result<(PackedMask,[u8;4])>{
     let face=projector.face;
     let (w,h)=(face.size[0],face.size[1]);
     let seed_at=projector.at(seed[0],seed[1])?;
@@ -112,29 +141,33 @@ fn connected(
     }
     let color=sampled_rgba(original,face.width,seed_at)?;
     let area=w as usize*h as usize;
-    let mut seen=vec![0u8;area];
-    let mut accepted=vec![0u8;area];
-    // u32 queue reduces large flood memory versus [u32;2] and HashSet.
-    let mut queue=vec![seed[1]*w+seed[0]];
-    seen[queue[0] as usize]=1;
-    let mut front=0;
-    while front<queue.len(){
-        let linear=queue[front];front+=1;
+    let mut scanned=PackedMask::new(area);
+    let mut accepted=PackedMask::new(area);
+    let eligible=|x:u32,y:u32,scanned:&PackedMask|->Result<bool>{
+        if scanned.get(y as usize*w as usize+x as usize){return Ok(false);}
+        let mapped=projector.at(x,y)?;
+        Ok(!protected(mapped,protected_regions)&&
+            sampled_rgba(original,face.width,mapped)?==color)
+    };
+    let mut pending=vec![seed[1]*w+seed[0]];
+    while let Some(linear)=pending.pop(){
         let x=linear%w;let y=linear/w;
-        let at=projector.at(x,y)?;
-        if protected(at,protected_regions)||
-            sampled_rgba(original,face.width,at)?!=color{continue;}
-        accepted[linear as usize]=1;
-        for neighbor in [
-            (x>0).then(||linear-1),
-            (x+1<w).then(||linear+1),
-            (y>0).then(||linear-w),
-            (y+1<h).then(||linear+w),
-        ].into_iter().flatten(){
-            let idx=neighbor as usize;
-            if seen[idx]==0{
-                seen[idx]=1;
-                queue.push(neighbor);
+        if !eligible(x,y,&scanned)?{continue;}
+        let mut left=x;
+        while left>0&&eligible(left-1,y,&scanned)?{left-=1;}
+        let mut right=x;
+        while right+1<w&&eligible(right+1,y,&scanned)?{right+=1;}
+        for xx in left..=right{
+            let index=y as usize*w as usize+xx as usize;
+            scanned.set(index,true);accepted.set(index,true);
+        }
+        for adjacent in [y.checked_sub(1),y.checked_add(1).filter(|row|*row<h)]{
+            let Some(next_y)=adjacent else{continue};
+            let mut active=false;
+            for xx in left..=right{
+                let matches=eligible(xx,next_y,&scanned)?;
+                if matches&&!active{pending.push(next_y*w+xx);}
+                active=matches;
             }
         }
     }
@@ -154,59 +187,86 @@ pub(super) fn compute_plan(
     let area=w.checked_mul(face.size[1] as usize)
         .ok_or_else(||"SURFACE_SELECTION_SOURCE_INVALID".to_owned())?;
     let projector=PixelProjector::new(face)?;
-    let mut selected=vec![0u8;area];
+    let mut selected=PackedMask::new(area);
     let mut source_rgba=[0u8;4];
-    for (step_index,step) in steps.iter().enumerate(){
-        if step_index==0 && !matches!(step.mode,SelectionMode::Replace|SelectionMode::Invert){
+    for (i,step) in steps.iter().enumerate(){
+        if i==0&&!matches!(step.mode,SelectionMode::Replace|SelectionMode::Invert){
             return Err("SURFACE_SELECTION_INITIAL_MODE_INVALID".into());
         }
         if step.mode==SelectionMode::Invert{
             if step.seed.is_some(){return Err("SURFACE_SELECTION_INVERT_SEED_INVALID".into());}
-            for (linear,cell) in selected.iter_mut().enumerate(){
+            for linear in 0..area{
                 let at=projector.at((linear%w) as u32,(linear/w) as u32)?;
-                *cell=if protected(at,protected_regions){0}else{u8::from(*cell==0)};
+                let value=!selected.get(linear);
+                selected.set(linear,!protected(at,protected_regions)&&value);
             }
             continue;
         }
         let seed=step.seed.ok_or_else(||"SURFACE_SELECTION_SEED_MISSING".to_owned())?;
         let (component,color)=connected(&projector,original,seed,protected_regions)?;
-        if step_index==0{source_rgba=color;}
-        for (entry,part) in selected.iter_mut().zip(component.into_iter()){
+        if i==0{source_rgba=color;}
+        for (entry,part) in selected.bits.iter_mut().zip(&component.bits){
             *entry=match step.mode{
-                SelectionMode::Replace=>part,
-                SelectionMode::Add=>*entry|part,
-                SelectionMode::Subtract=>*entry&(!part&1),
-                SelectionMode::Intersect=>*entry&part,
+                SelectionMode::Replace=>*part,
+                SelectionMode::Add=>*entry|*part,
+                SelectionMode::Subtract=>*entry&!*part,
+                SelectionMode::Intersect=>*entry&*part,
                 SelectionMode::Invert=>unreachable!(),
             };
         }
     }
-    let mut atlas_mask=vec![0u8;atlas_area];
+    let mut atlas_mask=PackedMask::new(atlas_area);
     let mut pixel_count=0usize;
-    for (linear,&member) in selected.iter().enumerate(){
-        if member==0{continue;}
-        let physical=projector.at((linear%w) as u32,(linear/w) as u32)?;
-        let at=physical[1] as usize*face.width as usize+physical[0] as usize;
-        if atlas_mask[at]==0{atlas_mask[at]=1;pixel_count+=1;}
+    for (word_idx,&word) in selected.bits.iter().enumerate(){
+        let mut remaining=word;
+        while remaining!=0{
+            let local=word_idx*64+remaining.trailing_zeros() as usize;
+            remaining&=remaining-1;
+            if local>=area{continue;}
+            let at=projector.at((local%w) as u32,(local/w) as u32)?;
+            let physical=at[1] as usize*face.width as usize+at[0] as usize;
+            if !atlas_mask.get(physical){
+                atlas_mask.set(physical,true);pixel_count+=1;
+            }
+        }
     }
-    // Preview rows have a budget, but unlike the original algorithm an
-    // extremely fragmented selection never loses its complete native mask.
     let mut rows=Vec::<SurfaceSelectionSpan>::new();
     let mut preview_complete=true;
-    'outer: for y in face.from[1]..face.to[1]{
+    'rows: for y in face.from[1]..face.to[1]{
         let mut x=face.from[0];
         while x<face.to[0]{
-            if atlas_mask[(y as usize*face.width as usize+x as usize)]==0{x+=1;continue;}
+            if !atlas_mask.get(y as usize*face.width as usize+x as usize){
+                x+=1;continue;
+            }
             let x0=x;
-            while x<face.to[0] &&
-                atlas_mask[(y as usize*face.width as usize+x as usize)]!=0{x+=1;}
+            while x<face.to[0]&&
+                atlas_mask.get(y as usize*face.width as usize+x as usize){x+=1;}
             if rows.len()>=MAX_PREVIEW_RUNS{
-                preview_complete=false;rows.clear();break 'outer;
+                preview_complete=false;rows.clear();break 'rows;
             }
             rows.push(SurfaceSelectionSpan{y,x0,x1:x});
         }
     }
     Ok(ComputedSelection{source_rgba,pixel_count,atlas_mask,rows,preview_complete})
+}
+fn occupancy_preview(mask:&PackedMask,width:u32,height:u32,side:u32)
+    ->SurfaceSelectionRaster{
+    let (w,h)=(width.min(side).max(1),height.min(side).max(1));
+    let mut bits=vec![0u8;((w as usize*h as usize)+7)/8];
+    for (word_idx,&word) in mask.bits.iter().enumerate(){
+        let mut remaining=word;
+        while remaining!=0{
+            let index=word_idx*64+remaining.trailing_zeros() as usize;
+            remaining&=remaining-1;
+            if index>=mask.len{continue;}
+            let x=index%width as usize;let y=index/width as usize;
+            let xx=(x as u64*u64::from(w)/u64::from(width)) as usize;
+            let yy=(y as u64*u64::from(h)/u64::from(height)) as usize;
+            let target=yy*w as usize+xx;
+            bits[target/8]|=1u8<<(target%8);
+        }
+    }
+    SurfaceSelectionRaster{width:w,height:h,packed_mask_base64:STANDARD.encode(bits)}
 }
 pub(super) fn compute(
     face:&FaceBinding,original:&[u8],seed:[u32;2],
@@ -241,16 +301,25 @@ pub(super) fn read(session:&EditorSession,
         seed:request.source.local,
         source_rgba:selected.source_rgba,
         pixel_count:selected.pixel_count,atlas_rows:selected.rows,
-        preview_complete:selected.preview_complete,
+        preview_complete:selected.preview_complete,preview_raster:None,
         selection_steps:steps,
         source_authority:"RUST_SAVED_RGBA8",
         write_authority:"NOT_GRANTED",visual_verdict:"UNVERIFIED",
     };
-    // A huge read-only overlay must not consume the plan transport budget.
-    // Keep the exact native result and allow a warning without lying visually.
-    if serde_json::to_vec(&receipt).is_err_or(|data|data.len()>MAX_PLAN_BYTES){
+    let oversized=serde_json::to_vec(&receipt)
+        .is_err_or(|data|data.len()>MAX_PLAN_BYTES);
+    if !receipt.preview_complete||oversized{
         receipt.atlas_rows.clear();
         receipt.preview_complete=false;
+        for side in [512,256,128,64]{
+            receipt.preview_raster=Some(occupancy_preview(
+                &selected.atlas_mask,face.width,face.height,side));
+            if serde_json::to_vec(&receipt)
+                .is_ok_and(|data|data.len()<=MAX_PLAN_BYTES){
+                break;
+            }
+            receipt.preview_raster=None;
+        }
     }
     Ok(receipt)
 }
@@ -258,6 +327,18 @@ pub(super) fn read(session:&EditorSession,
 mod tests{
     use super::*;
     use crate::authoring::{EditOperation,EditorSession,AuthoringDocument};
+    #[test]
+    fn packed_full_face_mask_and_disposable_preview_do_not_limit_selection(){
+        let mut mask=PackedMask::new(2048*2048);
+        assert_eq!(mask.bits.len()*8,512*1024);
+        mask.set(0,true);
+        mask.set(2048*2048-1,true);
+        let preview=occupancy_preview(&mask,2048,2048,512);
+        assert_eq!((preview.width,preview.height),(512,512));
+        assert!(mask.get(0)&&mask.get(2048*2048-1));
+        assert_eq!(STANDARD.decode(preview.packed_mask_base64)
+            .unwrap().len(),512*512/8);
+    }
     #[test]
     fn connected_island_is_exact_and_does_not_cross_a_detail_or_mask(){
         let mut doc=AuthoringDocument::new_bedrock(
