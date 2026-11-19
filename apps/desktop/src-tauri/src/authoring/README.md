@@ -145,6 +145,19 @@ authorized Apply are unchanged; no texture allocation or visual verdict.
 Source regressions AUTHORED_NOT_RUN; actual native quality/compatibility
 and comparison with Local remain UNVERIFIED.
 
+**G3.4c voxel-visible profile taper guard (2026-11-19; SOURCE ONLY):**
+The existing G3.4b occupancy pass now observes first/last occupied
+model-unit bands for each materially changing width/height, measured
+in the local transported section frame. A declared half-extent change
+of at least 1 model unit must produce at least a 0.5-unit directional
+difference in occupied-cell radial extent; otherwise Rust refuses
+`GEOMETRY_PROFILE_TAPER_UNREPRESENTED` before Cube partition/preflight.
+This reuses the SAME occupancy decisions, with fixed-size per-segment
+samples rather than a second raster or a parallel geometry compiler.
+No request fields, UUIDs, Code Mode permissions, Box UV allocation,
+existing untapered output, or artist/native acceptance change.
+One Rust positive/negative regression is AUTHORED_NOT_RUN.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and

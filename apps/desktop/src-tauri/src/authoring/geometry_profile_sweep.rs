@@ -14,6 +14,8 @@ type Vec3 = [f64; 3];
 const EPS: f64 = 1.0e-8;
 const MIN_UP_SINE: f64 = 1.0e-4;
 const MAX_STATIONS: usize = 8;
+const MATERIAL_TAPER_DELTA: f64 = 1.0;
+const MIN_OBSERVED_TAPER: f64 = 0.5;
 
 /// Coordinates in native model units. No inferred dimensions or rotation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +43,16 @@ struct Segment {
     from: Vec3, tangent: Vec3, normal: Vec3, binormal: Vec3,
     length: f64, half_width: [f64; 2], half_height: [f64; 2],
     low: Vec3, high: Vec3,
+}
+#[derive(Clone, Copy, Default)]
+struct TaperBand {
+    cells: usize,
+    radial: [f64; 2],
+}
+#[derive(Clone, Copy, Default)]
+struct TaperObservation {
+    start: TaperBand,
+    end: TaperBand,
 }
 fn dot(a: Vec3, b: Vec3) -> f64 {
     (0..3).map(|axis| a[axis] * b[axis]).sum()
@@ -208,6 +220,52 @@ fn contains(point:Vec3,segment:&Segment,section:Section)->bool{
         Section::Ellipse=>u*u+v*v<=1.0+EPS,
     }
 }
+fn needs_taper_review(segment: &Segment) -> bool {
+    [segment.half_width, segment.half_height]
+        .iter().any(|width| (width[1] - width[0]).abs() >= MATERIAL_TAPER_DELTA)
+}
+
+// Observe only occupied cells near each authored endpoint, in its local frame.
+fn observe_taper(point: Vec3, segment: &Segment, observed: &mut TaperObservation) {
+    let axial = dot(sub(point, segment.from), segment.tangent);
+    let band = (segment.length / 3.0).min(1.0);
+    let near_start = axial <= band + EPS;
+    let near_end = segment.length - axial <= band + EPS;
+    if !near_start && !near_end { return; }
+    let center = add(segment.from, mul(segment.tangent, axial.clamp(0.0, segment.length)));
+    let offset = sub(point, center);
+    let radial = [
+        dot(offset, segment.normal).abs(),
+        dot(offset, segment.binormal).abs(),
+    ];
+    let record = |sample: &mut TaperBand| {
+        sample.cells += 1;
+        for (max_radius, radius) in sample.radial.iter_mut().zip(radial) {
+            *max_radius = (*max_radius).max(radius);
+        }
+    };
+    if near_start { record(&mut observed.start); }
+    if near_end { record(&mut observed.end); }
+}
+
+fn require_taper_signal(segments: &[Segment], observed: &[TaperObservation]) -> Result<()> {
+    for (segment, sample) in segments.iter().zip(observed) {
+        if !needs_taper_review(segment) { continue; }
+        if sample.start.cells == 0 || sample.end.cells == 0 {
+            return Err(fail("GEOMETRY_PROFILE_TAPER_UNREPRESENTED"));
+        }
+        for (axis, width) in [segment.half_width, segment.half_height].iter().enumerate() {
+            let authored = width[1] - width[0];
+            if authored.abs() < MATERIAL_TAPER_DELTA { continue; }
+            let represented = (sample.end.radial[axis] - sample.start.radial[axis])
+                * authored.signum();
+            if !represented.is_finite() || represented < MIN_OBSERVED_TAPER - EPS {
+                return Err(fail("GEOMETRY_PROFILE_TAPER_UNREPRESENTED"));
+            }
+        }
+    }
+    Ok(())
+}
 fn index(x:usize,y:usize,z:usize,size:[usize;3])->usize{
     (y*size[2]+z)*size[0]+x
 }
@@ -281,6 +339,11 @@ pub(super) fn compile(
     let count=size[0]*size[1]*size[2];
     let mut owned=vec![0u8;count];
     let mut occupied=vec![false;count];
+    let mut review_taper = [false; MAX_STATIONS - 1];
+    let mut taper = [TaperObservation::default(); MAX_STATIONS - 1];
+    for (index, segment) in segments.iter().enumerate() {
+        review_taper[index] = needs_taper_review(segment);
+    }
     for y in 0..size[1]{for z in 0..size[2]{for x in 0..size[0]{
         let point=[low[0] as f64+x as f64+0.5,
             low[1] as f64+y as f64+0.5,low[2] as f64+z as f64+0.5];
@@ -289,6 +352,9 @@ pub(super) fn compile(
             if contains(point,frame,section){
                 owned[offset]|=1u8<<segment;
                 occupied[offset]=true;
+                if review_taper[segment] {
+                    observe_taper(point, frame, &mut taper[segment]);
+                }
             }
         }
     }}}
@@ -298,6 +364,7 @@ pub(super) fn compile(
         }
     }
     require_joints(&owned,size,low,&shape.stations)?;
+    require_taper_signal(&segments, &taper)?;
     let cubes=partition(&occupied,size,low,max_cubes.min(MAX_SWEEP_CUBES))?;
     Ok(cubes.into_iter().enumerate().map(|(i,(from,to))|
         blockout_cube(&cube_uuid(&shape.uuid_seed,i),
@@ -414,6 +481,27 @@ mod tests {
             .err().as_deref(),Some("GEOMETRY_SWEEP_CUBE_BUDGET"));
         assert_eq!(cube_uuid(SEED,0),cube_uuid(SEED,0));
         assert_ne!(cube_uuid(SEED,0),cube_uuid(SEED,1));
+    }
+    #[test]
+    fn material_taper_must_survive_one_unit_voxelization() {
+        let mut shape = GeometryProfileSweep {
+            name: "aliased".into(), uuid_seed: SEED.into(),
+            up_axis: "Y".into(), cross_section: "ELLIPSE".into(),
+            stations: vec![station(-2, 0, 0, 2, 1), station(2, 0, 0, 3, 1)],
+        };
+        // This narrow ellipse changes mathematically, but the voxel
+        // centers in both endpoint bands have the same lateral extent.
+        assert_eq!(compile(&shape, [0.0; 3], MAX_SWEEP_CUBES)
+            .err().as_deref(), Some("GEOMETRY_PROFILE_TAPER_UNREPRESENTED"));
+        // The identical taper on a rectangular section is visible.
+        shape.cross_section = "RECTANGLE".into();
+        assert!(!compile(&shape, [0.0; 3], MAX_SWEEP_CUBES)
+            .unwrap().is_empty());
+        // An untapered ellipse stays supported without an extra admission gate.
+        shape.cross_section = "ELLIPSE".into();
+        shape.stations[1].half_width = shape.stations[0].half_width;
+        assert!(!compile(&shape, [0.0; 3], MAX_SWEEP_CUBES)
+            .unwrap().is_empty());
     }
     #[test]
     fn joints_must_contact_near_station_not_through_distant_mass(){

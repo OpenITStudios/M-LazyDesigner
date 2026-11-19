@@ -1,3 +1,20 @@
+**Active Rust Geometry G3.4c — source-local voxel-visible taper (2026-11-19; SOURCE ONLY):**
+Building on Rust@c38edd09 and Local@422e4d7, G3.4b profile sweeps
+reuse the SAME occupied-cell raster to check meaningful authored
+half-width/half-height tapers against actual local-frame endpoint bands.
+Missing endpoint evidence or less than 0.5 unit of directional voxel
+extent change for an authored 1+ unit taper refuses before partition.
+Untapered profiles, previously representable profiles, G1 preflight,
+source SHA, Undo and independent Apply authorization remain unchanged;
+no second raster/solver, dependencies, CLI, Texture, or UV packer.
+Regression source includes aliased ELLIPSE refusal, representable
+RECTANGLE acceptance and untapered preservation; AUTHORED_NOT_RUN.
+Ponytail original publisher v5.3.3@7801d061 (Skill blob d64edd32)
+was reviewed as a REFERENCE_ONLY engineering method, not installed.
+Actual Rust/Node/Windows/Blockbench tests, artistic acceptance and
+Rust-over-Local performance/quality remain NOT_EXECUTED/UNVERIFIED.
+Geometry development remains priority; no CI or release.
+
 **Active Rust Geometry G3.4b — source-local anisotropic profile transport (2026-11-19; SOURCE ONLY):**
 Building from Rust@3dac78f and Local baseline@422e4d7, the existing
 G1 Geometry Assembly accepts explicitly authored LINEAR profile
