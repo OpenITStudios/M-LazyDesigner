@@ -12,6 +12,9 @@
   import type { BoneView, CubeView, HierarchyNode, Vec3 } from './rustEditorTypes';
   import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
   import { reviewCameraAxes, type ReviewViewId } from './rustReviewCapture';
+  import { extendPaintStroke } from './rustPaintStroke';
+  import { SURFACE_FACE_ORDER,hitFaceLocalTexel,sameSurface,
+    type SurfaceHit,type SurfaceGesture } from './rustSurfacePaint';
 
   export let cubes: CubeView[] = [];
   export let bones: BoneView[] = [];
@@ -28,6 +31,13 @@
   export let previewBoneTransforms: Record<string, BoneTransformPose> | null = null;
   export let selectedId: string | null = null;
   export let onSelect: (id: string | null) => void = () => {};
+  // Direct-user paint gesture only. The native command resolves actual
+  // texture UUID/UV and validates all face-local points before any mutation.
+  export let surfacePaintEnabled = false;
+  export let surfacePaintEpoch = 0;
+  export let surfacePaintRevision = 0;
+  export let surfacePaintTextureUuid: string | null = null;
+  export let onSurfaceStroke:(value:SurfaceGesture)=>void=()=>{};
   // One canonical Rust edit per completed 3D transform; preview never owns data.
   type GizmoMode = 'translate' | 'rotate' | 'scale';
   export let onTranslate: (uuid: string, delta: Vec3) => Promise<boolean> = async () => false;
@@ -62,7 +72,7 @@
   const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
   const failedTextureSources = new Set<string>();
   let projectedScene: SceneInputs | null = null;
-  const FACE_ORDER = ['east', 'west', 'up', 'down', 'south', 'north'] as const;
+  const FACE_ORDER = SURFACE_FACE_ORDER;
   let pivots = new Map<string, THREE.Group>();
   // Existing Bone scene nodes and bind rotations, not a mutable asset model.
   let bonePivots = new Map<string, {
@@ -79,6 +89,9 @@
   let skipPick = false;
   let frameRequest = 0;
   let mouseStart: [number, number] | null = null;
+  let surfaceGesture:(SurfaceGesture&{
+    pointerId:number;overflow:boolean;stopped:boolean;
+  })|null=null;
 
   const COLORS = [0xa6bbc3, 0x8cacc1, 0xb4a2bb, 0xb9a384, 0x90afa0, 0xbc8f8f];
 
@@ -616,12 +629,109 @@
     })();
   }
 
+  function surfacePick(event:PointerEvent):SurfaceHit|null{
+    if(!camera||!canvas||!surfacePaintEnabled||scopedTexturePreview||
+       !surfacePaintTextureUuid||!ready)return null;
+    const rect=canvas.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0)return null;
+    const ray=new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(
+      (event.clientX-rect.left)/rect.width*2-1,
+      -(event.clientY-rect.top)/rect.height*2+1,
+    ),camera);
+    const first=ray.intersectObjects(pickMeshes,false)[0];
+    if(!first?.uv||!first.face)return null;
+    const face=FACE_ORDER[first.face.materialIndex];
+    const cubeUuid=first.object.userData.cubeUuid;
+    if(!face||typeof cubeUuid!=='string')return null;
+    const cube=cubes.find(item=>item.uuid===cubeUuid);
+    const data=cube?.faces[face];
+    if(!cube||!data||data.enabled===false)return null;
+    const index=bedrockTextureForFace(data,previewTextureIndex,
+      texturePreviewSources.length,scopedTexturePreview,
+      cube.previewTextureIndex);
+    if(index===null||!texturePreviewSources[index]||
+       !(data.texture===surfacePaintTextureUuid ||
+         data.texture===index))return null;
+    // Raycast hits are derived THREE geometry evidence only. Never accept
+    // an unloaded/untextured face for a native PNG paint operation.
+    const texture=textureCache.get(index);
+    if(!texture||texture.source!==texturePreviewSources[index]||
+       !(texture.texture.image instanceof HTMLImageElement)||
+       !texture.texture.image.complete||
+       texture.texture.image.naturalWidth!==textureResolution[0]||
+       texture.texture.image.naturalHeight!==textureResolution[1])return null;
+    const corners=faceUvCoordinates(data,textureResolution,cube.boxUv);
+    const local=corners?hitFaceLocalTexel(data,corners,[first.uv.x,first.uv.y]):null;
+    if(!local)return null;
+    return {cubeUuid,face,textureIndex:index,
+      texel:local.texel,size:local.size};
+  }
+  function moveSurfacePointer(event:PointerEvent){
+    const current=surfaceGesture;
+    if(!current||current.pointerId!==event.pointerId||current.stopped)return;
+    if(!surfacePaintEnabled||current.epoch!==surfacePaintEpoch||
+       current.revision!==surfacePaintRevision||
+       !surfacePaintTextureUuid||
+       current.textureUuid!==surfacePaintTextureUuid){
+      surfaceGesture={...current,stopped:true,overflow:true};
+      return;
+    }
+    const hit=surfacePick(event);
+    if(!hit||!sameSurface(current,hit)){
+      surfaceGesture={...current,stopped:true};
+      return;
+    }
+    const expanded=extendPaintStroke(current.points,hit.texel,
+      current.size[0],current.size[1]);
+    surfaceGesture=expanded
+      ? {...current,points:expanded}
+      : {...current,stopped:true,overflow:true};
+  }
+  function finishSurfacePointer(event:PointerEvent,cancelled=false){
+    const held=surfaceGesture;
+    if(!held||held.pointerId!==event.pointerId)return;
+    if(!cancelled)moveSurfacePointer(event);
+    const completed=surfaceGesture??held;
+    surfaceGesture=null;
+    if(canvas.hasPointerCapture(event.pointerId))
+      canvas.releasePointerCapture(event.pointerId);
+    if(!cancelled&&!completed.overflow&&surfacePaintEnabled&&
+       completed.epoch===surfacePaintEpoch&&
+       completed.revision===surfacePaintRevision&&
+       completed.textureUuid===surfacePaintTextureUuid){
+      onSurfaceStroke({cubeUuid:completed.cubeUuid,face:completed.face,
+        textureIndex:completed.textureIndex,texel:completed.texel,
+        size:completed.size,epoch:completed.epoch,
+        revision:completed.revision,textureUuid:completed.textureUuid,
+        points:completed.points});
+    }
+  }
+  function pointerMove(event:PointerEvent){
+    if(surfaceGesture)moveSurfacePointer(event);
+  }
+  function pointerLost(event:PointerEvent){
+    if(surfaceGesture?.pointerId===event.pointerId)surfaceGesture=null;
+  }
   function pointerDown(event: PointerEvent) {
+    if(surfacePaintEnabled && event.button===0){
+      const hit=surfacePick(event);
+      mouseStart=null;
+      if(!hit)return;
+      surfaceGesture={...hit,epoch:surfacePaintEpoch,
+        revision:surfacePaintRevision,
+        textureUuid:surfacePaintTextureUuid!,points:[hit.texel],
+        pointerId:event.pointerId,overflow:false,stopped:false};
+      canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      return;
+    }
     if (!gizmo?.dragging) skipPick = false;
     mouseStart = event.button === 0 ? [event.clientX, event.clientY] : null;
   }
 
   function pointerCancel() {
+    surfaceGesture=null;
     mouseStart = null;
     if (drag) {
       gizmo?.reset();
@@ -633,6 +743,11 @@
   }
 
   function pointerUp(event: PointerEvent) {
+    if(surfaceGesture && surfaceGesture.pointerId===event.pointerId){
+      finishSurfacePointer(event);
+      event.preventDefault();return;
+    }
+    if(surfacePaintEnabled && event.button===0)return;
     if (skipPick) {
       skipPick = false;
       mouseStart = null;
@@ -661,6 +776,9 @@
   $: if (ready) {
     updateSelection(selectedId);
     syncGizmo(canTransform, transformMode);
+    // In 3D paint, left-drag cannot also orbit. Right/middle navigation stays.
+    if(controls)controls.mouseButtons.LEFT=surfacePaintEnabled
+      ? (-1 as typeof controls.mouseButtons.LEFT) : THREE.MOUSE.ROTATE;
   }
 
   onMount(() => {
@@ -716,6 +834,7 @@
       gizmo?.removeFromParent();
       gizmo = null;
       drag = null;
+      surfaceGesture=null;
       mutationPending = false;
       if (modelRoot) {
         disposeNode(modelRoot);
@@ -742,8 +861,13 @@
 </script>
 
 <div class="view" bind:this={host} aria-label="3D model viewport">
-  <canvas bind:this={canvas} tabindex="0" onpointerdown={pointerDown} onpointerup={pointerUp} onpointercancel={pointerCancel}
-    aria-label="Geometry preview with supported embedded PNG textures. Select a Cube and use its Move, Rotate or Scale gizmo to request one Rust edit; drag background to orbit, scroll to zoom." />
+  <canvas bind:this={canvas} tabindex="0"
+    onpointerdown={pointerDown} onpointermove={pointerMove}
+    onpointerup={pointerUp} onpointercancel={pointerCancel}
+    onlostpointercapture={pointerLost}
+    aria-label={surfacePaintEnabled
+      ? 'Paint on the selected 3D Cube face with one-pixel exact RGBA strokes. Right drag pans, mouse wheel zooms. Source markings and shared UV are protected by Rust.'
+      : 'Geometry preview with embedded PNG textures. Select a Cube and use Move, Rotate or Scale gizmo; drag to orbit, scroll to zoom.'} />
   {#if unavailable}
     <div class="viewer-unavailable" role="status">3D viewport could not initialize. Model files remain safe.</div>
   {/if}
