@@ -6,7 +6,7 @@ use super::{
     correction_scope::{CorrectionRectangle,TextureCorrectionScope},
     face_regions, face_uv, material_face, paint, uv_sharing, EditOperation,
     EditorSession, MaterialPatchRegion, MutationReceipt, Result, FACE_NAMES,
-    AuthoringDocument, surface_seam,
+    AuthoringDocument, surface_seam, surface_selection::{self,SelectionStep},
     MAX_PLAN_BYTES,
 };
 use serde::{Deserialize,Serialize};
@@ -64,6 +64,9 @@ pub struct SurfacePaintIntent {
     /// None means the original unrestricted-by-island guarded mode.
     #[serde(default)]
     pub selection_seed:Option<[u32;2]>,
+    /// Complete source-selected expression; never trust a WebView bitmap.
+    #[serde(default)]
+    pub selection_steps:Vec<SelectionStep>,
     /// The artist's hard pixel-tip only; clipping never spills across faces.
     #[serde(default="one_pixel")]
     pub brush_radius:u8,
@@ -196,7 +199,7 @@ fn gather(
     source:&[u8],face:&FaceBinding,centers:&[[u32;2]],
     base:[u8;4],radius:u8,tip:SurfaceBrushTip,
     protected:&[CorrectionRectangle],
-    selection:Option<&HashSet<[u32;2]>>,
+    selection:Option<&surface_selection::ComputedSelection>,
     seen:&mut HashSet<[u32;2]>,out:&mut Vec<[u32;2]>,
 )->Result<()>{
     if centers.is_empty()||centers.len()>paint::MAX_STROKE_POINTS{
@@ -220,7 +223,7 @@ fn gather(
                 if !seen.insert(at){continue;}
                 let idx=((at[1] as usize)*face.width as usize+
                     at[0] as usize)*4;
-                if selection.is_some_and(|set|!set.contains(&at))||
+                if selection.is_some_and(|set|!set.contains(&at,face.width))||
                    source.get(idx..idx+4)!=Some(base.as_slice())||
                    protected.iter().any(|r|
                        at[0]>=r.from[0]&&at[0]<r.to[0]&&
@@ -280,19 +283,26 @@ pub(super) fn apply(
         }
         Ok(admitted)
     }).transpose()?;
-    if intent.selection_seed.is_some()&&second.is_some(){
+    if (intent.selection_seed.is_some()||!intent.selection_steps.is_empty())&&second.is_some(){
         return Err("SURFACE_SELECTION_SEAM_UNSUPPORTED".into());
     }
     let rgba=paint::decode_for_uv_inspection(
         &doc.texture_assets[first.texture_index],first.width,first.height)?;
-    let selected=intent.selection_seed.map(|seed|{
-        let mask=super::surface_selection::compute(
-            &first,&rgba,seed,&intent.protected_regions)?;
-        if mask.source_rgba!=intent.source_base_rgba{
-            return Err("SURFACE_SELECTION_SOURCE_MISMATCH".into());
-        }
-        Ok(mask.physical)
-    }).transpose()?;
+    if intent.selection_seed.is_some() && !intent.selection_steps.is_empty(){
+        return Err("SURFACE_SELECTION_PLAN_AMBIGUOUS".into());
+    }
+    let selected=if !intent.selection_steps.is_empty(){
+        Some(surface_selection::compute_plan(
+            &first,&rgba,&intent.selection_steps,&intent.protected_regions)?)
+    }else{
+        intent.selection_seed.map(|seed|{
+            let mask=surface_selection::compute(&first,&rgba,seed,&intent.protected_regions)?;
+            if mask.source_rgba!=intent.source_base_rgba{
+                return Err("SURFACE_SELECTION_SOURCE_MISMATCH".into());
+            }
+            Ok(mask)
+        }).transpose()?
+    };
     let mut seen=HashSet::new();
     let mut points=Vec::new();
     gather(&rgba,&first,&intent.points,intent.source_base_rgba,
@@ -364,7 +374,7 @@ mod tests{
             source_base_rgba:[80,100,120,255],
             paint_rgba:[140,150,160,255],
             points:vec![[0,0],[1,1],[2,2],[3,3]],
-            selection_seed:None,
+            selection_seed:None,selection_steps:vec![],
             brush_radius:1,brush_tip:SurfaceBrushTip::Square,seam:None,
             protected_regions:vec![CorrectionRectangle{
                 from:[1,1],to:[2,2],

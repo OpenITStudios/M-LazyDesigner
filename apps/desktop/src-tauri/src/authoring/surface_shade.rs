@@ -3,7 +3,7 @@
 use super::{EditorSession,Result,MAX_PLAN_BYTES,
     correction_scope::{CorrectionRectangle,TextureCorrectionScope},
     surface_paint::{SurfaceBrushTip,admit_face,hard_footprint},
-    surface_selection,paint,EditOperation,ExactPixelPatch};
+    surface_selection::{self,SelectionStep},paint,EditOperation,ExactPixelPatch};
 use serde::{Deserialize,Serialize};
 use std::collections::{HashMap,HashSet};
 
@@ -25,6 +25,8 @@ pub struct SurfaceShadeInkIntent{
     pub brush_tip:SurfaceBrushTip,
     #[serde(default)]
     pub selection_seed:Option<[u32;2]>,
+    #[serde(default)]
+    pub selection_steps:Vec<SelectionStep>,
     #[serde(default)]
     pub protected_regions:Vec<CorrectionRectangle>,
     /// Ordered from darkest to lightest. Each RGBA is exact and user-chosen.
@@ -56,16 +58,22 @@ pub(super) fn apply(
         &intent.face,intent.expected_face_uv,intent.expected_face_rotation)?;
     let original=paint::decode_for_uv_inspection(
         &doc.texture_assets[face.texture_index],face.width,face.height)?;
-    let selection=intent.selection_seed.map(|seed|{
-        surface_selection::compute(&face,&original,seed,
-            &intent.protected_regions).map(|selected|selected.physical)
-    }).transpose()?;
+    if intent.selection_seed.is_some()&&!intent.selection_steps.is_empty(){
+        return Err("SURFACE_SELECTION_PLAN_AMBIGUOUS".into());
+    }
+    let selection=if !intent.selection_steps.is_empty(){
+        Some(surface_selection::compute_plan(&face,&original,
+            &intent.selection_steps,&intent.protected_regions)?)
+    }else{
+        intent.selection_seed.map(|seed|surface_selection::compute(
+            &face,&original,seed,&intent.protected_regions)).transpose()?
+    };
     let candidates=hard_footprint(&face,&intent.points,
         intent.brush_radius,intent.brush_tip)?;
     let mut patches=Vec::new();
     let mut seen=HashSet::new();
     for at in candidates{
-        if !seen.insert(at)||selection.as_ref().is_some_and(|s|!s.contains(&at))||
+        if !seen.insert(at)||selection.as_ref().is_some_and(|s|!s.contains(&at,face.width))||
            intent.protected_regions.iter().any(|r|
                at[0]>=r.from[0]&&at[0]<r.to[0]&&
                at[1]>=r.from[1]&&at[1]<r.to[1]){continue;}
@@ -165,7 +173,7 @@ mod tests{
             expected_face_uv:[0.0,0.0,4.0,4.0],
             expected_face_rotation:0,points:vec![[0,0],[0,0],[2,2]],
             brush_radius:1,brush_tip:SurfaceBrushTip::Square,
-            selection_seed:None,protected_regions:vec![],
+            selection_seed:None,selection_steps:vec![],protected_regions:vec![],
             shade_ramp:vec![[40,50,60,255],[90,100,110,255],
                 [150,160,170,255]],
             direction:ShadeInkDirection::Lighten,

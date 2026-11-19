@@ -45,7 +45,7 @@ mod surface_selection;
 mod surface_shade;
 mod surface_seam;
 pub use surface_paint::{SurfacePaintIntent,SurfacePaintSampleRequest,SurfaceSourceSample,SurfaceBrushTip};
-pub use surface_selection::{SurfaceSelectionRequest,SurfaceSelectionReceipt};
+pub use surface_selection::{SurfaceSelectionRequest,SurfaceSelectionReceipt,SelectionStep,SelectionMode};
 pub use surface_shade::{SurfaceShadeInkIntent,ShadeInkDirection};
 pub use surface_seam::SurfaceSeamPatch;
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
