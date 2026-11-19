@@ -1,3 +1,47 @@
+## 2026-11-19 — Rust P0 semantic material intent/mask/native plan (SOURCE ONLY)
+
+Source user goal: AI no longer hand-assembles pixel-by-pixel Texture;
+Rust creates a bounded candidate from material identity, current
+paintable original pixels, declared palette, saved Cube/UV and
+style/light preference. Existing approved data must remain intact,
+and new quality must be verified against the previously rejected
+Local Pillager Tier 2/3 imagery, not inferred from code changes.
+
+Observed source: AuthoringDocument/EditorSession unchanged as the
+only atlas/Undo authority; `material_synthesis.rs` builds a
+one-face painted-metal candidate using the native signed/rotated
+face pixel mapping, opaque original source RGB matching,
+exclusive saved UV ownership and exact protected/source-color
+correction scope. Discarded preview via `session.preflight`
+returns only an EditPlan/candidate SHA with
+`VALIDATED_NOT_APPLIED`. CLI
+`plan-semantic-material --input --expected-sha256 --intent`
+has no output path/publisher. Typed Code Mode SDK and
+permission-denied guest RPC expose read-only
+`planSemanticMaterial` only, with SHA/receipt validation.
+New Rust and Node positive/negative source fixtures include
+source preservation, stale revision, absent/shared face,
+inverted palette, protected pixel, forged approval and
+no-write guest planning. The source fixture is NOT a test
+execution result. No new GPU, secondary painter,
+user asset mutation, dependency or cross-branch write.
+
+Boundaries: exact user/reviewer-approved reference swatches
+must be independently sourced and bound; a caller-provided
+image SHA or RGB cannot by itself prove an accepted image.
+Computed corner masks are geometry/UV-bound proposals,
+NOT learned material semantics, true AO/lighting,
+independent rendered material pass or artist quality PASS.
+One selected face (4–32 texels/axis) is supported in P0;
+large face/multi-part cases are explicitly not yet
+available. Native tests, TypeScript, Windows,
+Blockbench/editor runtime, matched images, accepted
+quality and measured speed are NOT_EXECUTED/UNVERIFIED
+under the existing project test hold. P0-D visual
+preview and P0-E reviewed Apply remain separate.
+Validation categories: SOURCE_COMMITTED/SOURCE_REVIEWED,
+TEST_AUTHORED_NOT_RUN, LOCAL_TEST_DEFERRED.
+
 ## 2026-11-19 — Rust TC2.1 brush preparation reuse (SOURCE ONLY)
 
 Selected Rust source increment

@@ -482,6 +482,43 @@ remains the sole comparative quality case. This is
 source-only, not an automatic light/curvature/occlusion
 solver, new renderer, layer store, or accepted asset.
 
+### P0 Semantic Material Synthesis — restricted painted-metal proof slice (SOURCE ONLY)
+
+One SHA-pinned `SemanticMaterialIntent` selects exactly one
+saved Cube/face and owned Texture, a declared approved reference
+PNG SHA, the **observed exact original opaque RGBA** permitted
+to change, approved shadow/highlight swatches, a relative
+upper-left/upper-right light corner and a subtle/balanced
+form-contrast parameter. No AI-supplied individual pixels,
+rectangles, strokes, atlas UV or mandatory procedural noise.
+
+Rust `material_synthesis.rs` uses the actual face UV
+mapping and original PNG bitmap to propose sparse, tapering
+corner form masks. Nonmatching RGB/alpha is not touched.
+The compiler returns only an existing guarded
+`PaintCubeFaceRegionsGuarded` EditPlan with a
+source-original-RGBA whitelist, allowed face UV rectangle,
+optional exact protected areas and a disposable native
+EditorSession preflight. Unsupported/shared/ambiguous
+UV, absent face, missing base source color, unsupported
+face size and palette ordering fail closed. Actual
+response always remains `UNVERIFIED` for visual style.
+
+This *safe candidate geometry* is intentionally modest,
+not automatically a convincing painted-metal material.
+No image meaning, light/environment, geometry curvature,
+true AO, per-part style transfer or accepted artistic
+master is inferred by source code or reference hash alone.
+The independent image-capable reviewer must see and
+reject/accept the actual mapped model result, protecting
+approved artwork throughout all relevant faces.
+A quality win over the previous Local session requires
+matched Golden Pillager A/B; a correct EditPlan alone
+does not establish quality or efficiency improvement.
+TC1/TC2 stroke tools remain fallback for reviewed
+complex details. P0-D image preview and P0-E review-bound
+Apply have not yet been implemented as part of this slice.
+
 ## SURFACE PATTERN PASS
 
 Apply the selected `surface_pattern` recipe to each material cohort only after BASE and VALUE/FORM are readable. Recipes describe directionality, cluster language, value behavior, edge behavior, secondary detail, and anti-patterns. They are not bitmap presets and never select transparency/glow/PBR by name.

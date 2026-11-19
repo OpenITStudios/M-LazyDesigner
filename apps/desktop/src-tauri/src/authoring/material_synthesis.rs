@@ -69,7 +69,7 @@ fn luminance(rgb: [u8;3]) -> f64 {
 }
 fn is_source_base(bytes: &[u8], atlas_width: u32, at: [u32;2], rgba: [u8;4]) -> bool {
     let i=((at[1] as usize)*(atlas_width as usize)+(at[0] as usize))*4;
-    bytes.get(i..i+4).is_some_and(|pixels| pixels == rgba)
+    bytes.get(i..i+4).is_some_and(|pixels| pixels == rgba.as_slice())
 }
 /// Read-only compiler, using exact supported face-local UV transformation
 /// and a sampled original RGBA. The wedges are only conservative candidate

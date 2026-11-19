@@ -1,3 +1,45 @@
+**Active Rust Texturing P0-A/B/C — semantic painted-metal candidate (2026-11-19; SOURCE ONLY):**
+Selected user direction supersedes manual pixel-by-pixel/stroke authoring
+as the default *AI authoring interface* without removing TC1/TC2 fallback.
+From Rust@fd0fe56b76ea1846470ae1e3aac6985bc0599b22, the first
+semantic painted-metal source slice is tracked by
+Rust@79ed84253c2bc573dbbfb2c7a9b5bd3c2c796854 and
+Rust@be00ae096558ebad6b8e96898460f42bf38652fd, followed by
+read-only Code Mode host allowlist/types/tests in a later source commit.
+Exact source selected Cube UUID/face/owned texture, original opaque RGBA,
+reviewer-selected shadow/highlight swatches, relative light direction
+and modest contrast replace hand-authored face-local pixel rows.
+Rust material_synthesis compiles tapered opposed-edge candidate masks
+from face UV/original source colors, omits non-base pixel changes,
+refuses shared/unsupported UV/size/role errors and proposes only the
+existing guarded face-Paint EditPlan plus native source/protected
+correction scope and disposable EditorSession preflight.
+SDK and restricted Deno guest can request a SHA-pinned
+`planSemanticMaterial` **read-only**. No new guest Apply authorization,
+no second bitmap editor, caching/rendering service, CI, branch change,
+release or localtest.
+
+P0 is one selected painted-metal Cube face only, 4–32 source pixels
+per local axis. It does not yet synthesize full character material
+cohorts, infer a true world light, extract reference imagery,
+bake AO, judge material style, or show a candidate screenshot.
+The source-provided reference SHA and RGB claims are NOT
+independently approved by Rust; later real trusted reviewer/source
+binding is indispensable. Prior Local Pillager flat helmet/bands,
+shield/face-identity drift, variant color contamination and unseen
+back/underside defects remain mandatory negative baselines.
+Golden PILL-03/05/06/07/09 is the owner for proving whether any
+candidate is actually better; unreviewed formulaic corner masks
+must NOT be promoted merely because they differ from stripes.
+
+Current proof ceiling: SOURCE_COMMITTED/SOURCE_REVIEWED,
+TEST_AUTHORED_NOT_RUN, LOCAL_TEST_DEFERRED. Rust/Node/TypeScript/
+Windows/Blockbench execution, real image quality, speed/calls to
+accepted art and Rust>Local superiority all NOT_EXECUTED/UNVERIFIED.
+P0-D temporary rendered preview and P0-E host-reviewed Apply
+are later distinct implementation scope; no implicit authorization
+to run held tests, publish an asset or claim artistic acceptance.
+
 **Rust Texture Craft TC2.1 — source-only single-preparation efficiency (2026-11-19):**
 From TC2 curve source `86e046649a25295e8c46d840489497d98ce77e34`,
 follow-on `6784b516fc97a76587c4f8c5f9ba314c54c0f977` now

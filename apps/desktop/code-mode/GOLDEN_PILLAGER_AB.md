@@ -93,6 +93,44 @@ for source equivalence, 4-neighbour connectivity, rest
 preservation, malformed curves and 256-wide row boundaries
 are NOT_EXECUTED under the test hold.
 
+## P0 semantic material source-first acceptance (NOT_EXECUTED)
+
+P0 introduces one deterministic Rust painted-metal candidate as a
+**new control**, not an A/B winner by construction.
+
+- Use PILL-03: same current approved Tier 1 helmet material source,
+  selected Tier 2/3 Cube-face UV, close-up views, light/framing and
+  original opaque base swatches. Compare the candidate's sculpted
+  corner value masses **against** the prior flat stripe and any
+  genuinely better manually painted cluster. More colors or wedges
+  are not quality evidence; the candidate may also be rejected.
+- Use PILL-01/PILL-04/PILL-05: record original neutral hardware,
+  face marks, shield symbols and approved legacy identity. The
+  proposal must leave all original non-base pixels untouched,
+  keep alpha and abort a protected-region conflict before Apply.
+  If an approved mark shares the selected base swatch, an exact
+  reference-provided protected region is required; source RGB
+  selection alone cannot tell artwork from base.
+- Use PILL-06: the mask comes from the actual signed/rotated native
+  Cube face projection and refuses atlas-aliased, absent, unsupported,
+  uneditable, and broad faces. A successful one-face preview cannot
+  stand in for an all-face inventory or a 3D rendered approval.
+- Use PILL-07/PILL-09: one reviewable candidate per selected part.
+  On visual rejection, change the diagnosis/reference or treatment
+  family; do not repeat the same corner formula under new names.
+  `VALIDATED_NOT_APPLIED`, a candidate SHA and a source RGB
+  whitelist do not mean the reference was seen or accepted.
+- Efficiency must be measured as **time/tool calls/corrections to
+  accepted artwork** against the matched Local workflow, not lines
+  of source code or raw bytes/pixel. The P0 semantic intent removes
+  AI-authored pixel paths but still requires actual ref-grounded
+  palette selection and final visual judgment.
+
+This is a source-authored acceptance extension to the existing Golden
+Pillager review. P0-D disposable rendered preview and P0-E
+reviewer-bound Apply integration remain separate work; no native
+Pillager test, image-capable review or quality win was executed.
+
 ## Frozen acceptance cases
 
 | Case ID | Prior user feedback | Acceptance evidence to obtain |

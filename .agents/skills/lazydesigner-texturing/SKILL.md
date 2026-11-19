@@ -165,6 +165,27 @@ the original mask/rest and current Rust native UV/source-color
 guards. Fewer coordinates and sparse mask iteration are
 design goals, not measured time or artistic quality improvements.
 
+**P0 Rust semantic painted-metal source candidate (NOT_EXECUTED):**
+Prefer `planSemanticMaterial` when an actual reviewed
+*single painted-metal Cube face* and approved original source
+swatches are available. The AI supplies target identity,
+current opaque base RGBA, selected shadow/highlight colors,
+relative light-corner direction and a small contrast intent,
+not a stroke list or atlas pixel coordinates. Rust checks
+actual saved UV/face/source ownership and proposes compact
+tapered corner value masses only over the exact base RGBA,
+using guarded existing face Paint and a disposable preflight.
+The reference SHA is unverified caller context until the
+independent reviewer/host confirms the real image; a source
+candidate is never an approved finish or a substitute for
+artistically chosen masks on complex/curved surfaces.
+Respect intentional flatness, approved identity, original alpha,
+protected details and source image style; one-face read
+does not imply all-face complete. If the formula does not
+improve the real mapped view, reject it and use reviewed
+`MaterialWorkPacket`/manual brush fallback rather than
+applying generic wedges repeatedly. No auto Apply, CI or PC test.
+
 **Rust reviewed material propagation plan (source-only):**
 Before *broad reviewed* Texture propagation, the AI must submit one
 bounded `materialWorkPacket` with approved/current SHA binding, latest

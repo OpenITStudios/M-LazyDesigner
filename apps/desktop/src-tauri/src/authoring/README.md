@@ -10,7 +10,7 @@ Undo/Redo; domain modules own their specialized semantics.
 | Jobdesk | Read these implementations first |
 | --- | --- |
 | Geometri | `mod.rs` (EditOperation), `geometry.rs`, `subtree.rs`, `uv_sharing.rs` |
-| Texture | `paint.rs`, `face_regions.rs`, `material_face.rs`, `material_form.rs`, `material_styling.rs`, `texture_coverage.rs` |
+| Texture | `paint.rs`, `face_regions.rs`, `material_face.rs`, `material_form.rs`, `material_synthesis.rs`, `material_styling.rs`, `texture_coverage.rs` |
 | Animasi | `animation_clip.rs`, `bezier.rs`, `animation_export.rs`, `effects.rs` |
 | Cross-domain export/validation | `bbmodel.rs`, `asset_handoff.rs`, `storage.rs`, `tests.rs` |
 

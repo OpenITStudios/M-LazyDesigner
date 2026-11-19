@@ -1160,6 +1160,39 @@ decisions that need a fresh visual review, for ambiguous targets, or when
 the required operation/data are not supported. Source-authored regressions
 remain NOT_EXECUTED; measured token/call/latency savings are UNVERIFIED.
 
+### P0 — semantic painted-metal material candidate (SOURCE ONLY)
+
+`project.planSemanticMaterial(intent)` is a read-only SHA-pinned Rust
+`plan-semantic-material` request. Unlike manual `MaterialWorkPacket`
+clusters or brush paths, it accepts **one source-selected Cube face**,
+the exact current original opaque base swatch, approved shadow/highlight
+RGB roles, relative face-local light corner and modest contrast level.
+It does **not** accept paint coordinates, path points, arbitrary material
+presets or automatic RGB/noise generation.
+
+The native `material_synthesis.rs` compiler verifies supported
+saved face texture/UV identity and exclusive atlas ownership, reads
+actual saved pixels, and calculates conservative *tapered opposed-edge
+corner masks*, preserving every nonmatching source color and transparent
+pixel. It returns the existing `paint_cube_face_regions_guarded`
+operation and exact source RGBA/protected-area correction scope through
+disposable Rust EditorSession preflight. Source requests with unsupported
+faces or insufficient base pixels refuse. One 4–32 texel-per-axis
+face is the P0 limit; this is not full multi-part/full-body treatment.
+
+`reference_png_sha256` in the intent is a **caller declaration**, not
+proof of approval or access to that image. `material_evidence` must say
+`reference_authority:NOT_VERIFIED_BY_RUST`,
+`style_quality:NOT_EVALUATED` and `visual_verdict:UNVERIFIED`.
+The guest planner returns no preview image and grants no new Apply
+method. The previously scoped reviewer workflow still owns
+real image review, protected original pixels, authorization and
+fresh native saved output. For a professional quality claim,
+review mapped close-ups and all relevant faces against the
+approved master and compare with the same Local baseline.
+The current deterministic mask is a **source-safe candidate**,
+not a demonstrated better metal material or curvature/AO bake.
+
 ### Batch inspection: one model load for several focused reads
 
 For Code Mode reasoning across a catalog, Cube UVs, Paint data and audit,
