@@ -14,6 +14,7 @@
   import { poseBoneIdsToUpdate, type BoneTransformPose } from './rustAnimationPose';
   import { reviewCameraAxes, type ReviewViewId } from './rustReviewCapture';
   import { appendPaintStrokeInPlace } from './rustPaintStroke';
+  import {alphaFromImageData,isVisibleAlphaTexel} from './rustVisibleTexel';
   import { SURFACE_FACE_ORDER,hitFaceLocalTexel,sameSurface,
     canBeginSurfaceSeam,type SurfaceHit,type SurfaceGesture,
     type SurfaceSampleHit } from './rustSurfacePaint';
@@ -76,6 +77,9 @@
   };
   let paintMaterialsByTexture = new Map<number, IndexedPaintMaterial[]>();
   const textureCache = new Map<number, { source: string; texture: THREE.Texture }>();
+  // Disposable alpha-only preview data; never an editable RGBA bitmap.
+  const alphaCache=new Map<number,{source:string;alpha:Uint8Array;
+    width:number;height:number}>();
   const failedTextureSources = new Set<string>();
   let projectedScene: SceneInputs | null = null;
   const FACE_ORDER = SURFACE_FACE_ORDER;
@@ -126,6 +130,7 @@
     const cached = textureCache.get(index);
     if (cached?.source === source) return cached.texture;
     if (cached) { cached.texture.dispose(); textureCache.delete(index); }
+    alphaCache.delete(index);
     // Distinguish this request from an older load of the exact same URI.
     // A stale image callback must not invalidate a newer GPU texture.
     const entry = { source, texture: null as THREE.Texture | null };
@@ -142,6 +147,7 @@
       () => {
         if (!isActiveTextureRequest(textureCache, index, entry)) return;
         textureCache.delete(index);
+        alphaCache.delete(index);
         failedTextureSources.add(source);
         entry.texture?.dispose();
         projectedScene = null;
@@ -164,6 +170,7 @@
     }
     for (const [index, cached] of textureCache) {
       if (texturePreviewSources[index] !== cached.source) {
+        alphaCache.delete(index);
         cached.texture.dispose();
         textureCache.delete(index);
       }
@@ -635,6 +642,29 @@
     })();
   }
 
+  function alphaPreview(index:number,source:string,
+    image:HTMLImageElement):Uint8Array|null{
+    const cached=alphaCache.get(index);
+    if(cached?.source===source&&cached.width===textureResolution[0]&&
+       cached.height===textureResolution[1])return cached.alpha;
+    alphaCache.delete(index);
+    const [width,height]=textureResolution;
+    if(image.naturalWidth!==width||image.naturalHeight!==height)return null;
+    try{
+      const canvas=document.createElement('canvas');
+      canvas.width=width;canvas.height=height;
+      const context=canvas.getContext('2d',{willReadFrequently:true});
+      if(!context)return null;
+      context.drawImage(image,0,0,width,height);
+      const alpha=alphaFromImageData(context.getImageData(
+        0,0,width,height).data,width,height);
+      if(!alpha)return null;
+      alphaCache.set(index,{source,alpha,width,height});
+      return alpha;
+    }catch{
+      return null;
+    }
+  }
   function surfacePick(event:PointerEvent):SurfaceHit|null{
     if(!camera||!canvas||!surfacePaintEnabled||scopedTexturePreview||
        !surfacePaintTextureUuid||!ready)return null;
@@ -645,36 +675,47 @@
       (event.clientX-rect.left)/rect.width*2-1,
       -(event.clientY-rect.top)/rect.height*2+1,
     ),camera);
-    const first=ray.intersectObjects(pickMeshes,false)[0];
-    if(!first?.uv||!first.face)return null;
-    const face=FACE_ORDER[first.face.materialIndex];
-    const cubeUuid=first.object.userData.cubeUuid;
-    if(!face||typeof cubeUuid!=='string')return null;
-    const cube=cubes.find(item=>item.uuid===cubeUuid);
-    const data=cube?.faces[face];
-    if(!cube||!data||data.enabled===false)return null;
-    const index=bedrockTextureForFace(data,previewTextureIndex,
-      texturePreviewSources.length,scopedTexturePreview,
-      cube.previewTextureIndex);
-    if(index===null||!texturePreviewSources[index]||
-       !(data.texture===surfacePaintTextureUuid ||
-         data.texture===index))return null;
-    // Raycast hits are derived THREE geometry evidence only. Never accept
-    // an unloaded/untextured face for a native PNG paint operation.
-    const texture=textureCache.get(index);
-    if(!texture||texture.source!==texturePreviewSources[index]||
-       !(texture.texture.image instanceof HTMLImageElement)||
-       !texture.texture.image.complete||
-       texture.texture.image.naturalWidth!==textureResolution[0]||
-       texture.texture.image.naturalHeight!==textureResolution[1])return null;
-    const corners=faceUvCoordinates(data,textureResolution,cube.boxUv);
-    const local=corners?hitFaceLocalTexel(data,corners,[first.uv.x,first.uv.y]):null;
-    const rotation=supportedFaceUvRotation(data);
-    if(!local||rotation===null)return null;
-    return {cubeUuid,face,textureIndex:index,
-      texel:local.texel,size:local.size,
-      sourceUv:[data.uv[0],data.uv[1],data.uv[2],data.uv[3]],
-      sourceRotation:rotation};
+    const hits=ray.intersectObjects(pickMeshes,false);
+    const byUuid=new Map(cubes.map(cube=>[cube.uuid,cube]));
+    for(const first of hits){
+      if(!first.uv||!first.face)continue;
+      const face=FACE_ORDER[first.face.materialIndex];
+      const cubeUuid=first.object.userData.cubeUuid;
+      if(!face||typeof cubeUuid!=='string')return null;
+      const cube=byUuid.get(cubeUuid);
+      const data=cube?.faces[face];
+      if(!cube||!data||data.enabled===false)return null;
+      const index=bedrockTextureForFace(data,previewTextureIndex,
+        texturePreviewSources.length,scopedTexturePreview,
+        cube.previewTextureIndex);
+      // Unknown texture or alpha cannot prove that a lower hit is visible.
+      if(index===null||!texturePreviewSources[index])return null;
+      const texture=textureCache.get(index);
+      if(!texture||texture.source!==texturePreviewSources[index]||
+         !(texture.texture.image instanceof HTMLImageElement)||
+         !texture.texture.image.complete||
+         texture.texture.image.naturalWidth!==textureResolution[0]||
+         texture.texture.image.naturalHeight!==textureResolution[1])return null;
+      const alpha=alphaPreview(index,texture.source,texture.texture.image);
+      if(!alpha)return null;
+      if(!isVisibleAlphaTexel(alpha,[first.uv.x,first.uv.y],
+        textureResolution[0],textureResolution[1],
+        BEDROCK_PREVIEW_ALPHA_TEST))continue;
+      // The *first visible* hit is not writable unless it is the explicitly
+      // selected owned atlas. Do not silently paint a covered rear face.
+      if(!(data.texture===surfacePaintTextureUuid ||
+           data.texture===index))return null;
+      const corners=faceUvCoordinates(data,textureResolution,cube.boxUv);
+      const local=corners?hitFaceLocalTexel(
+        data,corners,[first.uv.x,first.uv.y]):null;
+      const rotation=supportedFaceUvRotation(data);
+      if(!local||rotation===null)return null;
+      return {cubeUuid,face,textureIndex:index,
+        texel:local.texel,size:local.size,
+        sourceUv:[data.uv[0],data.uv[1],data.uv[2],data.uv[3]],
+        sourceRotation:rotation};
+    }
+    return null;
   }
   function moveSurfacePointer(event:PointerEvent){
     const current=surfaceGesture;
@@ -885,6 +926,7 @@
       }
       for (const { texture } of textureCache.values()) texture.dispose();
       textureCache.clear();
+      alphaCache.clear();
       failedTextureSources.clear();
       renderer?.dispose();
       renderer = null;
