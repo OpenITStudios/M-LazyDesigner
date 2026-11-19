@@ -36,6 +36,8 @@ mod material_styling;
 pub use material_styling::{inspect_texture_styling_region, inspect_texture_styling_regions, inspect_texture_styling_face, inspect_texture_source_colors};
 mod material_face;
 mod material_form;
+mod material_synthesis;
+pub use material_synthesis::{SemanticMaterialIntent, SemanticMaterialProposal};
 pub use material_face::{inspect_material_face_patch,inspect_material_face_patch_with_spans,FaceLocalRowSpan};
 mod visual_pair;
 pub use visual_pair::{inspect_visual_png_pair, MAX_VISUAL_PNG_BYTES};
@@ -3350,6 +3352,13 @@ impl EditorSession {
         &self, request: &GeometryAssemblyRequest,
     ) -> Result<GeometryAssemblyProposal> {
         geometry_assembly::compile(self, request)
+    }
+
+    /// Source-only P0 material candidate, never a direct bitmap/approval API.
+    pub fn plan_semantic_material(
+        &self, intent: &SemanticMaterialIntent,
+    ) -> Result<SemanticMaterialProposal> {
+        material_synthesis::compile(self, intent)
     }
 
     /// G2: propose an explicit same-Bone face alignment with UV-aware Rust
