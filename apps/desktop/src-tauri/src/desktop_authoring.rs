@@ -230,7 +230,9 @@ pub struct SelectedTexturePreviewReceipt {
     revision: u64,
     texture_index: usize,
     texture_uuid: String,
-    texture_source: String,
+    texture_source: Option<String>,
+    source_sha256: String,
+    source_reused: bool,
     texture_resolution: [u32; 2],
     source_authority: &'static str,
     write_authority: &'static str,
@@ -1446,7 +1448,13 @@ pub fn rust_editor_snapshot(state: State<'_, EditorState>) -> Result<Option<Edit
 pub fn rust_editor_read_texture_preview(
     state: State<'_, EditorState>, expected_epoch: u64,
     expected_revision: u64, texture_index: usize, texture_uuid: String,
+    known_source_sha256: Option<String>,
 ) -> Result<SelectedTexturePreviewReceipt, DesktopError> {
+    if known_source_sha256.as_deref().is_some_and(|key|
+        key.len()!=64 || !key.bytes().all(|ch|ch.is_ascii_hexdigit())) {
+        return Err(failure("SELECTED_PREVIEW_KEY_INVALID",
+            "Selected preview source fingerprint is invalid."));
+    }
     let frozen=frozen_read_session(&state.store,expected_epoch,expected_revision)?;
     let doc=frozen.document();
     if preview_uv_mode(doc)!=PreviewUvMode::ProjectAtlas {
@@ -1466,9 +1474,13 @@ pub fn rust_editor_read_texture_preview(
     let grid=project_atlas_preview_grid(doc,texture,width,height).ok_or_else(||
         failure("SELECTED_PREVIEW_UV_MISMATCH",
             "Selected atlas UV and PNG dimensions differ."))?;
+    let source_digest=sha256(source.as_bytes());
+    let reused=known_source_sha256.as_deref()==Some(source_digest.as_str());
     let receipt=SelectedTexturePreviewReceipt{
         epoch:expected_epoch,revision:expected_revision,
-        texture_index,texture_uuid,texture_source:source.to_owned(),
+        texture_index,texture_uuid,
+        texture_source:(!reused).then(||source.to_owned()),
+        source_sha256:source_digest,source_reused:reused,
         texture_resolution:grid,source_authority:"RUST_VALIDATED_EMBEDDED_PNG",
         write_authority:"NOT_GRANTED",
         preview_scope:"SELECTED_PROJECT_ATLAS_ONLY",
