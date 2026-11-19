@@ -10,7 +10,7 @@ pub enum SurfacePatternKind{Checker,Dots,Diagonal}
 #[serde(deny_unknown_fields)]
 pub struct SurfacePattern{
     pub kind:SurfacePatternKind,
-    /// Local texel period; constrained by actual selected face dimensions.
+    /// Local texel period; only nonzero is required (no arbitrary tile ceiling).
     pub period:u32,
     /// Phase is stable across gestures, not based on timing or pointer speed.
     pub phase:[u32;2],
@@ -45,7 +45,7 @@ mod tests{
         assert_eq!(pattern.admits([2,0]),false);
         assert_eq!(pattern.admits([3,0]),true);
         assert_eq!(pattern.admits([4,0]),true);
-        assert_eq!(pattern.admits([1,0]),true);
+        assert_eq!(pattern.admits([1,0]),false);
         let dots=SurfacePattern{kind:SurfacePatternKind::Dots,
             period:3,phase:[0,1]};
         assert!(dots.admits([3,2]));

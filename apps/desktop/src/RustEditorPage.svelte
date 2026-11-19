@@ -1193,7 +1193,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
     const width = requestedAtlasWidth, height = requestedAtlasHeight;
     if (!Number.isInteger(width) || !Number.isInteger(height) ||
         width < 1 || height < 1 || width > MAX_PAINT_ATLAS_SIDE || height > MAX_PAINT_ATLAS_SIDE) {
-      error = 'Atlas width and height must each be integers from 1 to 2048.';
+      error = 'Atlas width and height must each be integers from 1 to 4096.';
       return;
     }
     if (width === snapshot.textureResolution[0] &&
@@ -2388,7 +2388,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   <section class="paint-workspace" aria-label="Paint workspace">
     <div class="paint-workspace-heading">
       <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
-      <span>RGBA8 · up to 2048 × 2048 · {snapshot?.scopedTexturePreview
+      <span>RGBA8 · up to the current project-supported 4096 × 4096 · {snapshot?.scopedTexturePreview
         ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
@@ -2584,7 +2584,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
             title="Choose a local RGBA8 PNG with the same dimensions as this project; the source file is never modified">
             Import PNG…
           </button>
-          <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 20 MiB); the local file is not modified.</p>
+          <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 80 MiB, subject to project size); the local file is not modified.</p>
           <div class="surface-paint-panel" aria-label="Source-bound 3D pixel painting">
             <label><input type="checkbox" bind:checked={surfacePaint3d}
               disabled={busy || loading || !!paintStroke || !!surfaceMaskDrag}/>

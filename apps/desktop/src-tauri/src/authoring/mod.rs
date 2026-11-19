@@ -82,23 +82,23 @@ pub fn paint_texture_adoptable(texture: &Value, width: u32, height: u32) -> bool
     paint::adoptable(texture, width, height)
 }
 
-pub const MAX_MODEL_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_MODEL_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_PLAN_BYTES: usize = 64 * 1024;
 /// Maximum native/import-png PNG file size before embedded base64 encoding.
-pub const MAX_IMPORT_PNG_BYTES: usize = 20 * 1024 * 1024;
-/// 2K maximum per axis for editable RGBA8 atlases, independent of palette size.
-pub const MAX_PAINT_ATLAS_SIDE: u32 = 2048;
+pub const MAX_IMPORT_PNG_BYTES: usize = 80 * 1024 * 1024;
+/// Match the existing .bbmodel project resolution range; 2K is a baseline,
+/// not a separate Paint/brush quality or palette limit.
+pub const MAX_PAINT_ATLAS_SIDE: u32 = 4096;
 /// Shared bound for native Paint creation/import and the supported 3D preview.
 pub const MAX_PAINT_TEXTURES: usize = 16;
 // Bound decoded read-only inspection caches by both atlas count and bytes.
 const MAX_INSPECTION_PNG_CACHE: usize = 8;
 const MAX_INSPECTION_RGBA_CACHE_BYTES: usize = 32 * 1024 * 1024;
 /// Maximum validated RGBA8 PNG source bytes emitted without re-encoding.
-pub const MAX_EXPORT_PNG_BYTES: usize = 20 * 1024 * 1024;
-/// Keep high-resolution embedded PNG project memory bounded before serialization.
-const MAX_EMBEDDED_PNG_SOURCE_BYTES: usize = 48 * 1024 * 1024;
-/// History is bounded by source bytes as well as its normal revision count.
-const MAX_PAINT_HISTORY_SOURCE_BYTES: usize = 128 * 1024 * 1024;
+pub const MAX_EXPORT_PNG_BYTES: usize = 80 * 1024 * 1024;
+// No second embedded-PNG aggregate cap or silent Undo eviction: project
+// serialization remains guarded by MAX_MODEL_BYTES and existing history
+// ownership. Avoid sacrificing artwork or Undo depth as a RAM shortcut.
 const MAX_ELEMENTS: usize = 65_536;
 const MAX_OPERATIONS: usize = 128;
 const MAX_HISTORY: usize = 32;
@@ -873,11 +873,6 @@ impl AuthoringDocument {
         }
         if !(1..=4096).contains(&self.resolution.width) || !(1..=4096).contains(&self.resolution.height) {
             return Err(fail("BBMODEL_RESOLUTION_INVALID"));
-        }
-        if self.texture_assets.iter().filter_map(|asset|asset.get("source").and_then(Value::as_str))
-            .try_fold(0usize, |total, source|total.checked_add(source.len()))
-            .is_none_or(|total|total>MAX_EMBEDDED_PNG_SOURCE_BYTES) {
-            return Err(fail("BBMODEL_EMBEDDED_PNG_BUDGET"));
         }
         if self.cubes.len() > MAX_ELEMENTS || self.bones.len() > MAX_ELEMENTS ||
            self.texture_assets.len() > MAX_ELEMENTS || self.animation_assets.len() > MAX_ELEMENTS {
@@ -3390,21 +3385,6 @@ impl EditorSession {
         Ok(Self { doc: Arc::new(doc), revision: 0, undo: Vec::new(), redo: Vec::new() })
     }
     pub fn document(&self) -> &AuthoringDocument { self.doc.as_ref() }
-    /// Keep ordinary small-texture history at 32; large atlases use a
-    /// conservative encoded-source-byte budget to avoid unbounded Undo RAM.
-    fn trim_undo_source_history(&mut self) {
-        fn source_bytes(doc: &AuthoringDocument) -> usize {
-            doc.texture_assets.iter().filter_map(|asset|
-                asset.get("source").and_then(Value::as_str)).map(str::len).sum()
-        }
-        let current=source_bytes(&self.doc);
-        let mut retained:usize=self.undo.iter().map(|doc|source_bytes(doc)).sum();
-        while self.undo.len()>1 &&
-            current.saturating_add(retained)>MAX_PAINT_HISTORY_SOURCE_BYTES {
-            let oldest=self.undo.remove(0);
-            retained=retained.saturating_sub(source_bytes(&oldest));
-        }
-    }
     /// A revision-fixed immutable view for read-only projection outside an
     /// editor store lock. Sharing never allows a GUI caller to mutate source.
     pub fn snapshot_document(&self) -> Arc<AuthoringDocument> {
@@ -3611,7 +3591,6 @@ impl EditorSession {
         let prior = std::mem::replace(&mut self.doc, Arc::new(next));
         if self.undo.len() == MAX_HISTORY { self.undo.remove(0); }
         self.undo.push(prior);
-        self.trim_undo_source_history();
         self.redo.clear();
         self.revision += 1;
         Ok(MutationReceipt { revision: self.revision, operation_count: operations.len(), changed_uuids: changed })
@@ -3631,7 +3610,6 @@ impl EditorSession {
         let prior = std::mem::replace(&mut self.doc, next);
         if self.undo.len() == MAX_HISTORY { self.undo.remove(0); }
         self.undo.push(prior);
-        self.trim_undo_source_history();
         self.revision += 1;
         Ok(MutationReceipt { revision: self.revision, operation_count: 1, changed_uuids: Vec::new() })
     }

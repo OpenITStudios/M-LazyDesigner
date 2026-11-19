@@ -424,9 +424,9 @@ fn texture_preview_side(texture: &Value) -> Option<&'static str> {
 // A bounded WebView preview candidate. This never changes Rust-owned assets.
 fn embedded_png_preview_candidate(texture: &Value) -> Option<(&str, u32, u32)> {
     const PREFIX: &str = "data:image/png;base64,";
-    const MAX_BASE64: usize = 28 * 1024 * 1024;
-    const MAX_DIMENSION: u32 = 2048;
-    const MAX_PIXELS_PER_IMAGE: u64 = 4 * 1024 * 1024;
+    const MAX_BASE64: usize = 112 * 1024 * 1024;
+    const MAX_DIMENSION: u32 = 4096;
+    const MAX_PIXELS_PER_IMAGE: u64 = 16 * 1024 * 1024;
     texture_preview_side(texture)?;
     if texture.get("wrap_mode").and_then(Value::as_str).is_some_and(|mode| mode != "limited") {
         return None;
@@ -517,8 +517,10 @@ fn texture_preview_assets(doc: &AuthoringDocument) -> Vec<Option<(&str, [u32; 2]
 fn texture_preview_assets_in_mode(
     doc: &AuthoringDocument, mode: PreviewUvMode,
 ) -> Vec<Option<(&str, [u32; 2])>> {
-    const MAX_PROJECTED_PIXELS: u64 = 4 * 1024 * 1024;
-    let mut remaining_source_bytes = 28 * 1024 * 1024;
+    // A bounded snapshot view is not a global texture/paint capacity. WebView
+    // resources are disposable and not the authoritative Rust bitmap.
+    const MAX_PROJECTED_PIXELS: u64 = 16 * 1024 * 1024;
+    let mut remaining_source_bytes = 112 * 1024 * 1024;
     let mut remaining_pixels = MAX_PROJECTED_PIXELS;
     let mut admitted = 0usize;
     doc.texture_assets.iter().map(|texture| {

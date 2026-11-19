@@ -28,7 +28,7 @@ export function planSurfacePattern(mode:PatternMode,period:number,
 export function validBrushSettings(v:unknown):v is BrushSettings{
   if(!v||typeof v!=='object')return false;
   const o=v as Partial<BrushSettings>;
-  return Number.isInteger(o.radius)&&o.radius!>=1&&o.radius!<=4&&
+  return Number.isInteger(o.radius)&&o.radius! >= 1&&o.radius! <= 4&&
     (o.tip==='square'||o.tip==='diamond')&&
     (o.inkMode==='color'||o.inkMode==='shade_ink')&&
     typeof o.shadeRamp==='string'&&o.shadeRamp.length<=12*1024&&
