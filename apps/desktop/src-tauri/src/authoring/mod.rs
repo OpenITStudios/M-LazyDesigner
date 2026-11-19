@@ -21,6 +21,7 @@ mod geometry_axial;
 pub use geometry_axial::{GeometryAxialLoft, GeometryLoftSection, GeometryAxialRevolve, GeometryRevolveSection};
 pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest, GeometryRectangularFrame, GeometryHollowBox, GeometryArch};
 mod geometry_attachment;
+mod geometry_obb;
 pub use geometry_attachment::{GeometryFaceAttachmentRequest, GeometryFaceAttachmentProposal};
 mod geometry_propagation;
 pub use geometry_propagation::{

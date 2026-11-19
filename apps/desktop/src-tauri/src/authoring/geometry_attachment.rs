@@ -116,11 +116,13 @@ pub(super) fn axis_aligned_overlap_review(
     let by_uuid: HashMap<&str, &Cube> = doc.cubes.iter()
         .map(|cube| (cube.uuid.as_str(), cube)).collect();
     let mut siblings = Vec::new();
+    let mut all_siblings = Vec::new();
     let mut unsupported = 0usize;
     for node in children {
         if let super::OutlinerNode::Cube(uuid) = node {
             let cube = *by_uuid.get(uuid.as_str())
                 .ok_or_else(|| fail("GEOMETRY_OVERLAP_SOURCE_INCONSISTENT"))?;
+            all_siblings.push(cube);
             if bounded_unrotated_box(cube).is_ok() {
                 siblings.push(cube);
             } else {
@@ -174,6 +176,8 @@ pub(super) fn axis_aligned_overlap_review(
             }
         }
     }
+    let rotated_neighbor_obb = super::geometry_obb::rotated_neighbor_review(
+        &all_siblings, changed);
     Ok(json!({
         "scope":"affected_vs_same_bone_axis_aligned_cube_aabb",
         "affected_cube_count":changed.len(),
@@ -182,6 +186,7 @@ pub(super) fn axis_aligned_overlap_review(
         "preexisting_overlap_count":preexisting,
         "resolved_overlap_count":resolved,
         "unsupported_neighbor_count":unsupported,
+        "rotated_neighbor_obb":rotated_neighbor_obb,
         "introduced_samples":samples,
         "samples_truncated":introduced > MAX_OVERLAP_SAMPLES,
         "whole_model_collision_verdict":"UNVERIFIED",
@@ -522,6 +527,36 @@ mod tests {
     }
 
 
+    #[test]
+    fn rotated_sibling_obb_complements_aabb_without_authorizing_apply() {
+        const ROTATED: &str = "00000000-0000-4000-8000-000000002125";
+        let mut session=prepared();
+        let mut neighbor=sample_cube(ROTATED,[4.0,0.0,0.0]);
+        neighbor.origin=Some([6.0,2.0,2.0]);
+        neighbor.extra.insert("rotation".into(),json!([0,45,0]));
+        session.apply(1,&[EditOperation::AddCube {
+            cube:neighbor,bone_uuid:BONE_A.into(),
+        }]).unwrap();
+        let source=session.document().clone();
+        let proposal=compile(&session,&GeometryFaceAttachmentRequest {
+            expected_revision:2,..request()
+        }).unwrap();
+        let aabb=&proposal.diagnostic["aabb_overlap_review"];
+        assert_eq!(aabb["unsupported_neighbor_count"],1);
+        let obb=&aabb["rotated_neighbor_obb"];
+        assert_eq!(obb["scope"],"affected_vs_rotated_direct_same_bone_cube_obb");
+        assert_eq!(obb["checked_pair_count"],1);
+        assert_eq!(obb["introduced_intersection_count"],1);
+        assert_eq!(obb["introduced_samples"][0]["cube_uuids"],
+            json!([MOVING,ROTATED]));
+        assert!(obb["introduced_samples"][0]["penetration_depth"].as_f64()
+            .is_some_and(|v|v>0.0));
+        assert_eq!(obb["whole_model_collision_verdict"],"UNVERIFIED");
+        assert_eq!(proposal.diagnostic["collision_verdict"],"NOT_EVALUATED");
+        assert_eq!(proposal.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(proposal.preflight["visual_verdict"],"UNVERIFIED");
+        assert_eq!(session.document(),&source);
+    }
     #[test]
     fn overlap_report_caps_samples_without_hiding_total_pair_count() {
         let mut session=prepared();

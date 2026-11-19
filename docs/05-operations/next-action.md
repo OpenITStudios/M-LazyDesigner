@@ -1,3 +1,23 @@
+**Active Rust Geometry G2.4 — scoped rotated-neighbor OBB review (2026-11-19; SOURCE ONLY):**
+From Rust@cf0d11b and Local@422e4d7, G2/G2.2 plans now
+supplement unchanged same-Bone AABB diagnostics with advisory OBB
+separating-axis contact for affected unrotated Cubes against rotated
+direct siblings. Geometry positions derive from saved Cube bounds,
+pivot and ZYX Euler convention used by the Rust viewport. Reports
+separate introduced, preexisting and resolved penetrations, newly
+touching contacts, unsupported neighbors and bounded 16-sample detail.
+Only static same-Bone rigid frames are in scope; inflate, stretch,
+unknown pivots, cross-Bone, animation poses and intentional visual
+overlap are NOT certified. No model mutation, new CLI command, engine,
+process, dependency, geometry store, permission bypass or cloud CI.
+Original G2 restrictions, SHA-bound native preflight, Undo and
+independent Apply remain unchanged. SDK receipt guards and Rust/Node
+positive/negative regressions SOURCE_AUTHORED_NOT_RUN.
+Actual Cargo/Node/Windows/Blockbench tests, reference-view fidelity,
+static/world pose agreement, artistic acceptance, CPU/RAM and
+Rust-vs-Local quality/performance remain NOT_EXECUTED/UNVERIFIED.
+Geometry still owns the current development priority; no release.
+
 **Active Rust Geometry G3.5 — bounded LOFT + REVOLVE blockouts (2026-11-19; SOURCE ONLY):**
 Building from Rust@17bab2f and Local@422e4d7, two opt-in axial
 constructions now compile inside one G1 EditPlan. Rectangular LOFT

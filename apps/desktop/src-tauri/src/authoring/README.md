@@ -237,6 +237,26 @@ overlaps still need a separate review. This adds no persistent graph,
 new mutation gate, forced overlap rejection or visual approval.
 Source regressions are AUTHORED_NOT_RUN, native acceptance DEFERRED.
 
+**G2.4 static rotated-neighbor OBB advisory (2026-11-19; SOURCE ONLY):**
+Existing G2 attachment and resize-propagation read-only plans retain
+their original AABB report and include a nested
+`aabb_overlap_review.rotated_neighbor_obb` hint. This uses each saved
+Cube's positive bounds, authored rotation pivot and ZYX Euler order as
+the source Rust viewport for direct same-Bone siblings. One separating-
+axis test checks only affected UNROTATED Cube proposals against supported
+ROTATED neighbors in the shared rigid Bone-local frame. Preexisting,
+introduced and resolved intersections, newly touching faces and at most
+16 introduced penetration samples are distinguished. Unknown pivot,
+inflate, stretch, degenerate shapes, nested/cross-Bone or animated poses
+do not silently count as clear. Unsupported neighbors and
+`whole_model_collision_verdict=UNVERIFIED` remain explicit.
+This is static source QA, not exact live Blockbench/GPU/motion/visual
+proof or reference-matched silhouette evaluation. The original G2
+attachment restrictions, AABB metrics, preflight and independent Apply
+are unchanged. No new process, CLI command, mutation, dependency,
+model store or second geometry engine; Rust/Node positive/negative
+source regressions AUTHORED_NOT_RUN.
+
 ## Dated source history (preserved)
 
 **P0 editable-project/export fingerprint closure (2026-11-18; SOURCE ONLY):**

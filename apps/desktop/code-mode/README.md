@@ -183,6 +183,20 @@ artist-approved intentional overlap, and it does not change host
 approval, source SHA, execution isolation or file publication.
 Rust/Node/Deno/Windows/native tests remain NOT_EXECUTED.
 
+**G2.4 supplementary OBB source diagnostics (2026-11-19; SOURCE ONLY):**
+The existing G2/G2.2 read-only `diagnostic.aabb_overlap_review` now
+contains `rotated_neighbor_obb`, a bounded static SAT report for
+affected unrotated Cubes versus supported rotated direct same-Bone
+neighbors. It distinguishes introduced/preexisting/resolved penetration
+and newly touching contacts, with explicit unsupported neighbors,
+capped samples, and whole-model `UNVERIFIED`. The SDK validates
+nested counts, sample ownership/ordering, bounded penetration, and
+refuses fabricated `CLEAR` or permission claims. This does not
+expand attachment eligibility, choose an automatic correction, compare
+reference images or claim native/model-quality PASS. Rust/Node source
+regressions AUTHORED_NOT_RUN; execution and actual visual fidelity
+remain held.
+
 ## Dated source history (preserved)
 
 **P0 editable .bbmodel identity in asset handoff (2026-11-18; SOURCE ONLY):**

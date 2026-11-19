@@ -14,6 +14,14 @@ function geometryReview(affectedCount) {
     introduced_overlap_count:0,preexisting_overlap_count:0,
     resolved_overlap_count:0,unsupported_neighbor_count:0,
     introduced_samples:[],samples_truncated:false,
+    rotated_neighbor_obb:{
+      scope:'affected_vs_rotated_direct_same_bone_cube_obb',
+      checked_pair_count:0,introduced_intersection_count:0,
+      preexisting_intersection_count:0,resolved_intersection_count:0,
+      introduced_touching_count:0,unsupported_neighbor_count:0,
+      introduced_samples:[],samples_truncated:false,
+      whole_model_collision_verdict:'UNVERIFIED',
+    },
     whole_model_collision_verdict:'UNVERIFIED'};
 }
 
@@ -725,6 +733,21 @@ test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',
   });
   assert.equal(result.plan.operations[0].uuid,'moving');
   assert.equal(result.diagnostic.collision_verdict,'NOT_EVALUATED');
+  const rotated={...geometryReview(1).rotated_neighbor_obb,
+    checked_pair_count:1,introduced_intersection_count:1,
+    introduced_samples:[{cube_uuids:['moving','rotated'],
+      penetration_depth:1.25}]};
+  const withRotated={...receipt,diagnostic:{...receipt.diagnostic,
+    aabb_overlap_review:{...geometryReview(1),rotated_neighbor_obb:rotated}}};
+  const supplemental=createRustCodeModeClient({
+    binary:BIN,runner:async()=>withRotated,
+  });
+  const reviewed=await supplemental.planGeometryAttachment({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,attachment,
+  });
+  assert.equal(reviewed.diagnostic.aabb_overlap_review
+    .rotated_neighbor_obb.introduced_intersection_count,1);
+  assert.equal(reviewed.diagnostic.collision_verdict,'NOT_EVALUATED');
   assert.equal(approvals,0);
   for(const invalid of [
     {...attachment,expected_revision:1},
@@ -744,6 +767,16 @@ test('Code Mode G2 forwards exact face attachment and refuses a forged receipt',
     {...receipt,diagnostic:{...receipt.diagnostic,collision_verdict:'CLEAR'}},
     {...receipt,diagnostic:{...receipt.diagnostic,
       aabb_overlap_review:{...geometryReview(1),whole_model_collision_verdict:'CLEAR'}}},
+    {...receipt,diagnostic:{...receipt.diagnostic,
+      aabb_overlap_review:{...geometryReview(1),
+        rotated_neighbor_obb:{...geometryReview(1).rotated_neighbor_obb,
+          whole_model_collision_verdict:'CLEAR'}}}},
+    {...receipt,diagnostic:{...receipt.diagnostic,
+      aabb_overlap_review:{...geometryReview(1),
+        rotated_neighbor_obb:{...geometryReview(1).rotated_neighbor_obb,
+          introduced_intersection_count:1,
+          introduced_samples:[{cube_uuids:['other','rotated'],
+            penetration_depth:1}]}}}},
     {...receipt,diagnostic:{...receipt.diagnostic,
       aabb_overlap_review:{...geometryReview(1),introduced_overlap_count:1,
         introduced_samples:[{cube_uuids:['other','unknown'],overlap:[1,2,3]}]}}},

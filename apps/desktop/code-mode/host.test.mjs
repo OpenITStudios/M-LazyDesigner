@@ -18,6 +18,14 @@ function geometryReview(affectedCount) {
     introduced_overlap_count:0,preexisting_overlap_count:0,
     resolved_overlap_count:0,unsupported_neighbor_count:0,
     introduced_samples:[],samples_truncated:false,
+    rotated_neighbor_obb:{
+      scope:'affected_vs_rotated_direct_same_bone_cube_obb',
+      checked_pair_count:0,introduced_intersection_count:0,
+      preexisting_intersection_count:0,resolved_intersection_count:0,
+      introduced_touching_count:0,unsupported_neighbor_count:0,
+      introduced_samples:[],samples_truncated:false,
+      whole_model_collision_verdict:'UNVERIFIED',
+    },
     whole_model_collision_verdict:'UNVERIFIED'};
 }
 

@@ -743,6 +743,18 @@ export interface GeometryAssemblyReceipt {
  * Positive-volume overlap is distinct from touching faces.
  * No global collision clearance, host approval or visual proof.
  */
+export interface GeometryRotatedNeighborObbReview {
+  scope:"affected_vs_rotated_direct_same_bone_cube_obb";
+  checked_pair_count:number;
+  introduced_intersection_count:number;
+  preexisting_intersection_count:number;
+  resolved_intersection_count:number;
+  introduced_touching_count:number;
+  unsupported_neighbor_count:number;
+  introduced_samples:Array<{cube_uuids:[string,string];penetration_depth:number}>;
+  samples_truncated:boolean;
+  whole_model_collision_verdict:"UNVERIFIED";
+}
 export interface GeometryAxisAlignedOverlapReview {
   scope:"affected_vs_same_bone_axis_aligned_cube_aabb";
   affected_cube_count:number;
@@ -751,6 +763,7 @@ export interface GeometryAxisAlignedOverlapReview {
   preexisting_overlap_count:number;
   resolved_overlap_count:number;
   unsupported_neighbor_count:number;
+  rotated_neighbor_obb:GeometryRotatedNeighborObbReview;
   introduced_samples:Array<{cube_uuids:[string,string];overlap:Vec3}>;
   samples_truncated:boolean;
   whole_model_collision_verdict:"UNVERIFIED";
