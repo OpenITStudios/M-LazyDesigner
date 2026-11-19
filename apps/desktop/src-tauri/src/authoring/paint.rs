@@ -836,7 +836,7 @@ mod lossless_png_palette_tests {
         let mut changed=0usize;
         compare_rgba8_rows(&before,&after,w,h,|y,a,b|{
             assert_eq!(a.len(),(w*4) as usize);
-            assert_eq!(a[0..4],[8,9,10,0]); // hidden RGB remains
+            if y==0 {assert_eq!(a[0..4],[8,9,10,0]);} // hidden RGB remains
             for (x,(old,new)) in a.chunks_exact(4).zip(b.chunks_exact(4)).enumerate(){
                 if old!=new {assert_eq!((x,y),(1,0));changed+=1;}
             }

@@ -2388,7 +2388,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
   <section class="paint-workspace" aria-label="Paint workspace">
     <div class="paint-workspace-heading">
       <div><strong>Paint</strong><p>Pixel atlas · Rust-owned strokes and Undo/Redo</p></div>
-      <span>RGBA8 · up to the current project-supported 4096 × 4096 · {snapshot?.scopedTexturePreview
+      <span>RGBA8 · {snapshot?.textureResolution[0]} × {snapshot?.textureResolution[1]} atlas · {snapshot?.scopedTexturePreview
         ? '3D preview follows Cube scopes' : '3D preview follows Paint texture selection'}</span>
     </div>
     {#if snapshot}
