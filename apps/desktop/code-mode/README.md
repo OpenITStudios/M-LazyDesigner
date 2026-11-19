@@ -72,6 +72,22 @@ ownership to the declared input and refuses fabricated write approval.
 No new CLI command, Deno geometry solver, Texture/UV step or mutation.
 Regressions AUTHORED_NOT_RUN; native/visual quality UNVERIFIED.
 
+**G3.3 variable-radius LINEAR Sweep in G1 Code Mode (2026-11-19; SOURCE ONLY):**
+Optional `assembly.parts[].sweeps` has a name, UUID seed and 2–8
+explicit integer-position/radius stations (2–6 model units).
+Rust owns the voxelized Geometry, disjoint-Cube partition, source
+SHA-bound preflight, resulting ordinary Cube/Undo operations, and all
+safety bounds. No new CLI command or Code Mode execution permission.
+The Node SDK checks that generated Cube names and UUIDs follow the
+versioned deterministic seed/index namespace, belong to the declared
+Bone, and remain `NOT_GRANTED / UNVERIFIED`.
+This checks identity/authority only; JavaScript is not another 3D solver.
+The number of Cubes depends on the source raster, capped at 64 per
+Sweep and 128 total assembly operations. A changed shape can renumber
+generated IDs: do not treat the seed as a persisted Recipe identity.
+Source-only SDK/guest fixture checks AUTHORED_NOT_RUN; native quality
+and relative performance remain UNVERIFIED.
+
 **G2 Face-to-Face Geometry attachment in Code Mode (2026-11-18; SOURCE ONLY):**
 `codemode.planGeometryAttachment({project,attachment})` is a bounded
 read-only request that sends caller-authored Cube UUIDs, opposite

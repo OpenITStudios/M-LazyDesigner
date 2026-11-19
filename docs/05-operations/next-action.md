@@ -1,3 +1,21 @@
+**Active Rust Geometry G3.3 — bounded varying-radius LINEAR Sweep (2026-11-19; SOURCE ONLY):**
+Building on Rust@16d0c9d8 and comparing Local@422e4d7, one pure
+`geometry_sweep.rs` source helper now proposes a connected 3D
+variable-radius swept solid from 2–8 caller-declared integer-model-unit
+stations. A limited one-unit occupancy grid uses exact quadratic
+membership for linearly changing sphere radius, 6-neighbour connectivity,
+and deterministic disjoint-Cuboid partition with a 64-Cube per-shape cap.
+The sole Rust G1 Assembly/EditorSession, SHA-bound Code Mode read-only
+planning and separately-approved Apply are unchanged; deterministic
+seed-derived Cube UUIDs avoid 64 individual identifier/tool requests.
+No new persistent shape store, mesh, UV packer, parser, native runtime
+path or CI. Source regressions are AUTHORED_NOT_RUN.
+This is a LINEAR, circular-profile voxel approximation, not Local's
+Catmull–Rom or transported anisotropic PROFILE_SWEEP with twist.
+No Rust performance/visual superiority or native Blockbench proof is
+claimed. Unresolved: taper representability in real artifact,
+reference-fidelity/texture-UV acceptance and more complex curves/OBB.
+
 **Active Rust Geometry G3.2 — supported structural arch (2026-11-19; SOURCE ONLY):**
 Building on Rust@6c895a1 (Local baseline @422e4d7), the existing G1
 assembly now compiles a source-authored semicircular structural

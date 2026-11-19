@@ -1,5 +1,6 @@
 // Source-authored only. Repository tests remain ON_HOLD / NOT_EXECUTED.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { createRustCodeModeClient, openRustCodeModeProject } from './client.mjs';
@@ -335,6 +336,89 @@ test('G3.2 curved arch binds piers and crown IDs without inferring geometry',asy
     arches:[{...assembly.parts[0].arches[0],cube_uuids:ids.slice(1)}]}]};
   await assert.rejects(build(async()=>receipt).planGeometryAssembly({
     input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:bad,
+  }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  assert.equal(calls,1);
+  assert.equal(approvals,0);
+});
+
+// SOURCE_AUTHORED_NOT_RUN: mock only the G1 transport/identity contract,
+// never the physical output of Rust rasterization or native verification.
+test('G3.3 variable-radius sweep binds seed-derived IDs and remains read-only',async()=>{
+  const seed='00000000-0000-4000-8000-000000003501';
+  const uuid=i=>{
+    const hash=createHash('sha256').update(
+      'lazydesigner:geometry-sweep-v1\0'+seed+'\0'+i).digest('hex');
+    return hash.slice(0,8)+'-'+hash.slice(8,12)+'-4'+hash.slice(13,16)+
+      '-8'+hash.slice(17,20)+'-'+hash.slice(20,32);
+  };
+  const ids=[uuid(0),uuid(1)];
+  const assembly={expected_revision:0,parts:[{
+    bone:{uuid:'sweep-bone',name:'branch_bone',origin:[0,0,0]},
+    parent_uuid:null,cubes:[],sweeps:[{
+      name:'branch',uuid_seed:seed,stations:[
+        {position:[-4,0,0],radius:2},
+        {position:[0,2,0],radius:3},
+        {position:[4,3,1],radius:2},
+      ],
+    }],
+  }]};
+  const ops=[
+    {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+    ...ids.map((id,i)=>({op:'add_cube',cube:{
+      uuid:id,name:'branch_v_'+i,box_uv:true,
+    },bone_uuid:'sweep-bone'})),
+  ];
+  const receipt={status:'OK',sha256:SHA,summary:{revision:0},
+    plan:{expected_revision:0,operations:ops,correction_scope:null},
+    preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+      mutation:{revision:1,operation_count:3,
+        changed_uuids:['sweep-bone',...ids]},
+      candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+    write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+  let calls=0,approvals=0;
+  const build=runner=>createRustCodeModeClient({
+    binary:BIN,runner,
+    authorizeMutation:async()=>{approvals++;return true;},
+  });
+  const client=build(async argv=>{
+    calls++;
+    assert.equal(argv[0],'plan-geometry-assembly');
+    assert.equal(argv[argv.indexOf('--expected-sha256')+1,SHA);
+    assert.deepEqual(JSON.parse(await readFile(
+      argv[argv.indexOf('--assembly')+1],'utf8')),assembly);
+    return receipt;
+  });
+  const result=await client.planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+  });
+  assert.deepEqual(result.plan.operations.map(op=>
+    op.op==='add_bone'?op.bone.uuid:op.cube.uuid),['sweep-bone',...ids]);
+  assert.equal(result.write_authority,'NOT_GRANTED');
+  assert.equal(calls,1);
+  for(const forged of [
+    {...receipt,write_authority:'GRANTED'},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],cube:{...ops[1].cube,uuid:'unlisted'}},ops[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],cube:{...ops[1].cube,name:'other'}},ops[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],bone_uuid:'foreign'},ops[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],{...ops[1],cube:{...ops[1].cube,box_uv:false}},ops[2]]}},
+    {...receipt,plan:{...receipt.plan,operations:[
+      ops[0],ops[2],ops[1]]}},
+    {...receipt,preflight:{...receipt.preflight,mutation:{
+      ...receipt.preflight.mutation,changed_uuids:['sweep-bone','other',ids[1]]}}},
+  ]){
+    await assert.rejects(build(async()=>forged).planGeometryAssembly({
+      input:'/abs/model.bbmodel',expectedSha256:SHA,assembly,
+    }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
+  }
+  const invalid={...assembly,parts:[{...assembly.parts[0],
+    sweeps:[{...assembly.parts[0].sweeps[0],stations:[]}]}]};
+  await assert.rejects(build(async()=>receipt).planGeometryAssembly({
+    input:'/abs/model.bbmodel',expectedSha256:SHA,assembly:invalid,
   }),/CODE_MODE_GEOMETRY_ASSEMBLY_RECEIPT_INVALID/);
   assert.equal(calls,1);
   assert.equal(approvals,0);

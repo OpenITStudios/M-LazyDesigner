@@ -136,6 +136,22 @@ export interface GeometryArch {
   rise: number;
   cube_uuids: string[];
 }
+/** G3.3 source-local LINEAR variable-radius swept solid.
+ * Station positions are integer model units, radii are 2..6 units.
+ * A maximum of eight stations is voxelized into at most 64 disjoint
+ * native Cubes. Cube UUIDs are deterministically derived from uuid_seed
+ * and source-local partition index; they are NOT durable recipe identity.
+ * Does not accept a mesh, Catmull-Rom, twist, elliptical profiles or paint.
+ */
+export interface GeometrySweepStation {
+  position: [number,number,number];
+  radius: number;
+}
+export interface GeometrySphereSweep {
+  name: string;
+  uuid_seed: string;
+  stations: GeometrySweepStation[];
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
@@ -143,6 +159,7 @@ export interface GeometryAssemblyPart {
   frames?: GeometryRectangularFrame[];
   hollow_boxes?: GeometryHollowBox[];
   arches?: GeometryArch[];
+  sweeps?: GeometrySphereSweep[];
 }
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */

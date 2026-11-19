@@ -28,6 +28,7 @@ apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
           ↓
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           ├─ Geometry/Rig/UV      → geometry.rs, geometry_assembly.rs,
+          │                         geometry_sweep.rs (pure G1 helper),
           │                         geometry_attachment.rs, geometry_propagation.rs,
           │                         subtree.rs, uv_sharing.rs
           ├─ Texture/Paint        → paint.rs, face_regions.rs, material_*.rs
@@ -46,7 +47,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 | Change requested | First semantic owner | Adjacent consumers/checks |
 | --- | --- | --- |
 | Document identity, edit batch, Undo/Redo | `apps/desktop/src-tauri/src/authoring/mod.rs` | `authoring/tests.rs`, Tauri + CLI apply contracts |
-| **Geometri**: Cube/Bone hierarchy, pivot, bounds, UV-aware edits | `authoring/mod.rs` (`EditOperation`), `geometry_assembly.rs`, `geometry_attachment.rs`, `geometry_propagation.rs`, `subtree.rs`, `geometry.rs`, `uv_sharing.rs` | `authoring/tests.rs`, `.bbmodel` + `.geo.json`, `RustViewport.svelte` |
+| **Geometri**: Cube/Bone hierarchy, pivot, bounds, UV-aware edits | `authoring/mod.rs` (`EditOperation`), `geometry_assembly.rs`, `geometry_sweep.rs` (pure helper), `geometry_attachment.rs`, `geometry_propagation.rs`, `subtree.rs`, `geometry.rs`, `uv_sharing.rs` | `authoring/tests.rs`, `.bbmodel` + `.geo.json`, `RustViewport.svelte` |
 | **Texture**: RGBA8 Paint, face-local edits, atlas/material evidence | `authoring/paint.rs`, `face_regions.rs`, `palette.rs`, `material_styling.rs` | `correction_scope.rs`, `texture_coverage.rs`, `asset_handoff.rs`, Paint UI + PNG export |
 | **Animasi**: clips, keyframes, curves, effects | `authoring/mod.rs`, `animation_clip.rs`, `bezier.rs`, `animation_export.rs` | `effects.rs`, `timeline_markers.rs`, `rustAnimationPose.ts` (view-only), .animation.json |
 | Editable Blockbench file and source provenance | `authoring/bbmodel.rs`, `storage.rs`, `asset_handoff.rs` | `EditorSession::export`, `authoring/tests.rs`, CLI `asset_handoff` inspector |

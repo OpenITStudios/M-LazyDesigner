@@ -13,6 +13,8 @@ mod bbmodel;
 mod semantic_map;
 mod geometry;
 mod geometry_assembly;
+mod geometry_sweep;
+pub use geometry_sweep::{GeometrySphereSweep, GeometrySweepStation};
 pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest, GeometryRectangularFrame, GeometryHollowBox, GeometryArch};
 mod geometry_attachment;
 pub use geometry_attachment::{GeometryFaceAttachmentRequest, GeometryFaceAttachmentProposal};

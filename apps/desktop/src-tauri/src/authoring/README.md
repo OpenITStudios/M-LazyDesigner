@@ -81,6 +81,27 @@ Positive/negative Rust source regressions cover both X/Z spans,
 piers, curvature, disjoint volume, no-mutation preflight, Undo/reopen
 and existing G1 request compatibility. Tests NOT_EXECUTED.
 
+**G3.3 bounded linear variable-radius Sweep (2026-11-19; SOURCE ONLY):**
+`geometry_sweep.rs` is a pure Rust G1 source helper, not a second geometry
+engine. `parts[].sweeps` accepts one named 2–8-station 3D centerline with
+integer model-unit positions and radius 2–6, plus an exact UUID seed.
+The explicitly declared polyline is rasterized at one model-unit cell
+centres as a union of varying-radius swept spheres along straight chords.
+A single ≤32,768-cell raster must be 6-face connected; deterministic
+X/Z/Y greedy partition returns at most 64 disjoint Box-UV Cubes.
+Each Cube UUID is SHA-256-derived from a versioned namespace, the seed and
+partition index. Changing source Geometry can shift later UUID indices;
+this is NOT a persistent parametric identity or revision engine.
+Existing parent-first G1 EditPlan, bounded preflight, no-texture blockout,
+atlas/UV admission and independent Apply/Undo remain authoritative.
+Reversal, degenerate segments, inaccessible grid, disconnected material,
+empty/unrepresented segments, excessive Cubes and UUID collisions refuse
+without mutating the source. The method does not claim Catmull-Rom curves,
+anisotropic Profile Sweep, transported frames, twist, mesh/CAD accuracy,
+accepted 3D silhouette or visual quality.
+Source regressions AUTHORED_NOT_RUN. Local/Blockbench comparison and native
+Windows/Cargo/Node execution remain DEFERRED/UNVERIFIED.
+
 **G2 same-Bone face attachment planner (2026-11-18; SOURCE ONLY):**
 `geometry_attachment.rs` proposes one exact, axis-aligned Face-to-Face
 Cube alignment with a caller-specified nonnegative clearance and

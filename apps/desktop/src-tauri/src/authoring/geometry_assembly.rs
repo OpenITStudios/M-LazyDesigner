@@ -9,6 +9,7 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use super::geometry_sweep::{self, GeometrySphereSweep};
 use std::collections::HashSet;
 
 /// The parent is an existing or simultaneously declared Bone UUID.
@@ -29,6 +30,10 @@ pub struct GeometryAssemblyPart {
     /// G3.2 structural arch blockouts; omitted by older G1/G3 callers.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub arches: Vec<GeometryArch>,
+    /// Optional source-local, connected, variable-radius 3D voxel sweep.
+    /// The transient derived UUIDs are not persisted as parametric metadata.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sweeps: Vec<GeometrySphereSweep>,
 }
 
 /// Source-authored through-opening. Axis is the normal to its opening;
@@ -186,7 +191,7 @@ fn compile_arch(shape: &GeometryArch, bone_origin: [f64; 3]) -> Result<Vec<Cube>
 
 /// One ordinary, untextured Bedrock Cube source shape, shared by G3
 /// primitives. Box UV is provisional; this does not allocate atlas space.
-fn blockout_cube(
+pub(super) fn blockout_cube(
     uuid: &str, name: String,
     from: [f64; 3], to: [f64; 3], bone_origin: [f64; 3],
 ) -> Cube {
@@ -358,9 +363,14 @@ pub(super) fn compile(
     let mut used_names: HashSet<String> = doc.bones.iter()
         .map(|bone| bone.name.to_ascii_lowercase()).collect();
     let mut count = 0usize;
+    // Only generated sweep IDs require owned storage: other IDs borrow from
+    // the admitted request or document. Check both sets on every new UUID.
+    let mut sweep_ids: HashSet<String> = HashSet::new();
     let mut generated: Vec<Vec<Cube>> = Vec::with_capacity(request.parts.len());
     for part in &request.parts {
-        if !valid_uuid(&part.bone.uuid) || !used_ids.insert(part.bone.uuid.as_str()) {
+        if !valid_uuid(&part.bone.uuid) ||
+           sweep_ids.contains(&part.bone.uuid) ||
+           !used_ids.insert(part.bone.uuid.as_str()) {
             return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
         }
         if !geometry::valid_bone_name(&part.bone.name) ||
@@ -379,6 +389,7 @@ pub(super) fn compile(
             .and_then(|panels| part.arches.iter()
                 .try_fold(panels, |count, arch|
                     count.checked_add(arch.cube_uuids.len())))
+            .and_then(|panels| panels.checked_add(part.sweeps.len()))
             .and_then(|panels| 1usize.checked_add(part.cubes.len())?
                 .checked_add(panels))
             .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
@@ -396,6 +407,9 @@ pub(super) fn compile(
             }
             if !part.arches.is_empty() {
                 return Err(fail("GEOMETRY_ARCH_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
+            if !part.sweeps.is_empty() {
+                return Err(fail("GEOMETRY_SWEEP_TEXTURED_PROJECT_UNSUPPORTED"));
             }
         }
         let mut panels = Vec::with_capacity(additions - 1 - part.cubes.len());
@@ -416,6 +430,25 @@ pub(super) fn compile(
                 part.bone.origin.ok_or_else(||
                     fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?)?);
         }
+        let explicit_panels = panels.len();
+        // The operation count above reserves one Cube per sweep. Replace
+        // each reservation with its real bounded partition count below.
+        if part.sweeps.len() > 4 {
+            return Err(fail("GEOMETRY_SWEEP_COUNT_INVALID"));
+        }
+        for sweep in &part.sweeps {
+            let remaining = MAX_OPERATIONS - count + 1;
+            let cubes = geometry_sweep::compile(sweep,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?,
+                remaining)?;
+            count = count.checked_add(cubes.len() - 1)
+                .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
+            if count > MAX_OPERATIONS {
+                return Err(fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"));
+            }
+            panels.extend(cubes);
+        }
         // Bind UUID membership to the source request, not temporary Cubes.
         // These IDs outlive the generated operation buffer and preflight.
         for uuid in part.cubes.iter().map(|cube| cube.uuid.as_str())
@@ -425,7 +458,14 @@ pub(super) fn compile(
                 hollow.cube_uuids.iter().map(String::as_str)))
             .chain(part.arches.iter().flat_map(|arch|
                 arch.cube_uuids.iter().map(String::as_str))) {
-            if !valid_uuid(uuid) || !used_ids.insert(uuid) {
+            if !valid_uuid(uuid) ||
+               sweep_ids.contains(uuid) || !used_ids.insert(uuid) {
+                return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+            }
+        }
+        for cube in panels.iter().skip(explicit_panels) {
+            if used_ids.contains(cube.uuid.as_str()) ||
+               !sweep_ids.insert(cube.uuid.clone()) {
                 return Err(fail("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
             }
         }
@@ -446,7 +486,9 @@ pub(super) fn compile(
                 } else if index < part.frames.len() * 4 +
                     part.hollow_boxes.len() * 5 {
                     "GEOMETRY_HOLLOW_UV_ATLAS_TOO_SMALL"
-                } else { "GEOMETRY_ARCH_UV_ATLAS_TOO_SMALL" };
+                } else if index < explicit_panels {
+                    "GEOMETRY_ARCH_UV_ATLAS_TOO_SMALL"
+                } else { "GEOMETRY_SWEEP_UV_ATLAS_TOO_SMALL" };
                 return Err(fail(code));
             }
         }
@@ -531,7 +573,7 @@ mod tests {
         GeometryAssemblyPart {
             bone, parent_uuid: parent.map(str::to_owned), cubes: vec![cube],
             frames: Vec::new(), hollow_boxes: Vec::new(),
-            arches: Vec::new(),
+            arches: Vec::new(), sweeps: Vec::new(),
         }
     }
 
@@ -1225,6 +1267,136 @@ mod tests {
         assert!(existing.get("frames").is_none());
         assert!(existing.get("hollow_boxes").is_none());
         assert!(existing.get("arches").is_none());
+    }
+
+
+    const SWEEP_SEED: &str = "00000000-0000-4000-8000-000000003501";
+    fn sweep_request() -> GeometryAssemblyRequest {
+        let mut part=part(ROOT,"sweep_bone",None,CUBE_A);
+        part.cubes.clear();
+        part.sweeps.push(GeometrySphereSweep {
+            name:"branch".into(),
+            uuid_seed:SWEEP_SEED.into(),
+            stations:vec![
+                super::super::geometry_sweep::GeometrySweepStation {
+                    position:[-4,0,0],radius:2,
+                },
+                super::super::geometry_sweep::GeometrySweepStation {
+                    position:[0,2,0],radius:3,
+                },
+                super::super::geometry_sweep::GeometrySweepStation {
+                    position:[4,3,1],radius:2,
+                },
+            ],
+        });
+        GeometryAssemblyRequest{expected_revision:0,parts:vec![part]}
+    }
+
+    #[test]
+    fn g33_sweep_uses_one_readonly_g1_plan_with_deterministic_cubes_and_reversible_export(){
+        let mut session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Sweep","sweep").unwrap()
+        ).unwrap();
+        let before=session.document().clone();
+        let proposed=compile(&session,&sweep_request()).unwrap();
+        assert_eq!(proposed.preflight["status"],"VALIDATED_NOT_APPLIED");
+        assert_eq!(proposed.preflight["write_authority"],"NOT_GRANTED");
+        assert_eq!(proposed.preflight["visual_verdict"],"UNVERIFIED");
+        assert_eq!(session.document(),&before);
+        assert!(!session.can_undo());
+        let count=proposed.plan.operations.len();
+        assert!((3..=65).contains(&count)); // one Bone, bounded Cuboid partition
+        for (i,op) in proposed.plan.operations[1..].iter().enumerate(){
+            let EditOperation::AddCube {cube,bone_uuid}=op
+                else {panic!("Sweep must produce only AddCube operations");};
+            assert_eq!(bone_uuid,ROOT);
+            assert_eq!(cube.uuid,super::super::geometry_sweep::cube_uuid(SWEEP_SEED,i));
+            assert_eq!(cube.name.as_deref(),Some(format!("branch_v_{i}").as_str()));
+            assert_eq!(cube.extra.get("box_uv"),Some(&Value::Bool(true)));
+            assert!(cube.faces.values().all(|v|v.get("texture").is_none()));
+            assert_eq!(cube.origin,Some([0.0;3]));
+        }
+        let committed=session.apply(0,&proposed.plan.operations).unwrap();
+        assert_eq!(committed.operation_count,count);
+        let after=session.document().clone();
+        assert_eq!(after.cubes.len(),count-1);
+        let bytes=session.export().unwrap();
+        assert_eq!(proposed.preflight["candidate_sha256"],sha256(&bytes));
+        assert_eq!(EditorSession::open(&bytes).unwrap().document(),&after);
+        assert!(geometry::export_bedrock_geometry(&after).is_ok());
+        session.undo(1).unwrap();
+        assert_eq!(session.document(),&before);
+        session.redo(2).unwrap();
+        assert_eq!(session.document(),&after);
+    }
+
+    #[test]
+    fn g33_sweep_refuses_existing_id_collisions_texture_and_atlas_without_mutation(){
+        let session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Sweep","sweep").unwrap()
+        ).unwrap();
+        let baseline=session.document().clone();
+        let generated_id=super::super::geometry_sweep::cube_uuid(SWEEP_SEED,0);
+        let mut same_part=sweep_request();
+        let mut explicit=part(CHILD,"newpart",None,CUBE_B);
+        explicit.cubes[0].uuid=generated_id.clone();
+        same_part.parts[0].cubes.push(explicit.cubes[0].clone());
+        assert_eq!(compile(&session,&same_part).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+
+        let mut later_part=sweep_request();
+        let mut other=part(CHILD,"later",None,CUBE_B);
+        other.cubes[0].uuid=generated_id.clone();
+        later_part.parts.push(other);
+        assert_eq!(compile(&session,&later_part).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+
+        let mut repeated=sweep_request();
+        repeated.parts[0].sweeps[0].stations=vec![
+            super::super::geometry_sweep::GeometrySweepStation {
+                position:[-2,0,0],radius:2,
+            },
+            super::super::geometry_sweep::GeometrySweepStation {
+                position:[2,0,0],radius:2,
+            },
+        ];
+        repeated.parts[0].sweeps.push(repeated.parts[0].sweeps[0].clone());
+        assert_eq!(compile(&session,&repeated).err().as_deref(),
+            Some("GEOMETRY_ASSEMBLY_UUID_CONFLICT"));
+        assert_eq!(session.document(),&baseline);
+        assert!(!session.can_undo());
+
+        let mut textured=session.clone();
+        textured.apply(0,&[EditOperation::CreatePaintTexture {
+            uuid:"00000000-0000-4000-8000-000000003502".into(),
+            name:"atlas".into(),
+        }]).unwrap();
+        assert_eq!(compile(&textured,&GeometryAssemblyRequest {
+            expected_revision:1,..sweep_request()
+        }).err().as_deref(),Some("GEOMETRY_SWEEP_TEXTURED_PROJECT_UNSUPPORTED"));
+
+        let mut tiny=session.clone();
+        tiny.apply(0,&[EditOperation::SetEmptyAtlasResolution{
+            width:4,height:4,
+        }]).unwrap();
+        assert_eq!(compile(&tiny,&GeometryAssemblyRequest {
+            expected_revision:1,..sweep_request()
+        }).err().as_deref(),Some("GEOMETRY_SWEEP_UV_ATLAS_TOO_SMALL"));
+
+        let mut too_many=sweep_request();
+        let first=too_many.parts[0].sweeps[0].clone();
+        too_many.parts[0].sweeps=vec![first;5];
+        assert_eq!(compile(&session,&too_many).err().as_deref(),
+            Some("GEOMETRY_SWEEP_COUNT_INVALID"));
+        assert_eq!(compile(&session,&GeometryAssemblyRequest{
+            expected_revision:1,..sweep_request()
+        }).err().as_deref(),Some("DOCUMENT_REVISION_STALE"));
+        assert!(serde_json::from_value::<GeometrySphereSweep>(json!({
+            "name":"branch","uuid_seed":SWEEP_SEED,"stations":[],
+            "foreign":true
+        })).is_err());
+        let legacy=serde_json::to_value(part(CHILD,"legacy",None,CUBE_B)).unwrap();
+        assert!(legacy.get("sweeps").is_none());
     }
 
 }

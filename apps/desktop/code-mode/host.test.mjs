@@ -417,6 +417,68 @@ test('G3.2 arch guest RPC remains one read-only G1 geometry plan',()=>
     assert.equal(approvals.length,0);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: one bounded varying-radius sweep traverses the
+// same G1 Deno -> trusted Node -> Rust read-only route without write rights.
+test('G3.3 sweep guest RPC preserves the single G1 source boundary',()=>
+  fixture(async input=>{
+    const seed='00000000-0000-4000-8000-000000003501';
+    const uuid=i=>{
+      const h=createHash('sha256').update(
+        'lazydesigner:geometry-sweep-v1\0'+seed+'\0'+i).digest('hex');
+      return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+
+        '-8'+h.slice(17,20)+'-'+h.slice(20,32);
+    };
+    const ids=[uuid(0),uuid(1)];
+    const assembly={expected_revision:0,parts:[{
+      bone:{uuid:'sweep-bone',name:'branch_bone',origin:[0,0,0]},
+      parent_uuid:null,cubes:[],sweeps:[{
+        name:'branch',uuid_seed:seed,stations:[
+          {position:[-4,0,0],radius:2},{position:[0,2,0],radius:3},
+          {position:[4,3,1],radius:2},
+        ],
+      }],
+    }]};
+    const ops=[
+      {op:'add_bone',bone:assembly.parts[0].bone,parent_uuid:null},
+      ...ids.map((id,i)=>({op:'add_cube',cube:{
+        uuid:id,name:'branch_v_'+i,box_uv:true,
+      },bone_uuid:'sweep-bone'})),
+    ];
+    const calls=[],approvals=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:args=>{approvals.push(args);return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'plan-geometry-assembly');
+        assert.deepEqual(JSON.parse(
+          await readFile(argv[argv.indexOf('--assembly')+1],'utf8')
+        ),assembly);
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          plan:{expected_revision:0,operations:ops,correction_scope:null},
+          preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+            mutation:{revision:1,operation_count:3,
+              changed_uuids:['sweep-bone',...ids]},
+            candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+            write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+          write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+      },
+      spawnImpl:()=>fakeGuest({method:'planGeometryAssembly',args:{
+        project:'p0',assembly,
+      }},response=>{
+        assert.equal(response.ok,true);
+        assert.equal(response.result.plan.operations.length,3);
+        assert.equal(response.result.write_authority,'NOT_GRANTED');
+        return {count:response.result.plan.operations.length};
+      }),
+    });
+    const result=await host.execute({code:'return codemode.planGeometryAssembly({});'});
+    assert.equal(result.value.count,3);
+    assert.deepEqual(calls,['inspect','plan-geometry-assembly']);
+    assert.equal(approvals.length,0);
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: the Deno RPC is a read-only geometry proposal,
 // never permission to write the selected model or a paired GUI session.
 test('G2 face attachment Code Mode RPC keeps write approval separate',()=>

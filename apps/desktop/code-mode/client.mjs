@@ -241,6 +241,16 @@ function serializePlan(operations, normalizedScope) {
   return payload;
 }
 
+/** G3.3 identity only. Rust remains the sole geometric/raster authority.
+ * Match the versioned Rust UUID namespace, not an inferred Cube layout. */
+function generatedSweepCubeUuid(seed, index) {
+  const digest=createHash('sha256')
+    .update('lazydesigner:geometry-sweep-v1\0'+seed+'\0'+index)
+    .digest('hex');
+  return digest.slice(0,8)+'-'+digest.slice(8,12)+'-4'+
+    digest.slice(13,16)+'-8'+digest.slice(17,20)+'-'+digest.slice(20,32);
+}
+
 /** Bounded transport only. Rust validates every Bone/Cube/parent and
  * performs authoritative disposable preflight. No JS geometry compiler. */
 function serializeGeometryAssembly(assembly) {
@@ -915,6 +925,8 @@ export function createRustCodeModeClient({
         // Bind each returned UUID to one declared Bone, Cube or G3 blockout
         // panel. All shape calculation remains in the canonical Rust owner.
         const declared = new Map();
+        const proposedOperations = Array.isArray(plan?.operations)
+          ? plan.operations : [];
         let declarationValid = true;
         for (const part of assembly.parts) {
           if (!part || typeof part !== 'object' || !part.bone ||
@@ -923,7 +935,9 @@ export function createRustCodeModeClient({
               (part.hollow_boxes !== undefined &&
                 !Array.isArray(part.hollow_boxes)) ||
               (part.arches !== undefined &&
-                !Array.isArray(part.arches))) {
+                !Array.isArray(part.arches)) ||
+              (part.sweeps !== undefined &&
+                !Array.isArray(part.sweeps))) {
             declarationValid = false;
             break;
           }
@@ -974,6 +988,28 @@ export function createRustCodeModeClient({
             ids.slice(2).forEach((uuid,i) =>
               declare(uuid, 'add_cube', part.bone.uuid,
                 arch.name+'_curve_'+(i+1),true));
+          }
+          for (const sweep of part.sweeps ?? []) {
+            if (!sweep || typeof sweep.uuid_seed !== 'string' ||
+                typeof sweep.name !== 'string' ||
+                !Array.isArray(sweep.stations) ||
+                sweep.stations.length < 2 || sweep.stations.length > 8) {
+              declarationValid = false;
+              break;
+            }
+            // Number of raster Cubes is known only after canonical Rust
+            // partition. Bind each observed index to its seed-derived UUID;
+            // missing indices, unexpected outputs and foreign owners fail.
+            let count=0;
+            while (count < 64) {
+              const uuid=generatedSweepCubeUuid(sweep.uuid_seed,count);
+              if (!proposedOperations.some(op =>
+                op?.op === 'add_cube' && op.cube?.uuid === uuid)) break;
+              declare(uuid,'add_cube',part.bone.uuid,
+                sweep.name+'_v_'+count,true);
+              count++;
+            }
+            if (count === 0) declarationValid = false;
           }
         }
         const used = new Set();
