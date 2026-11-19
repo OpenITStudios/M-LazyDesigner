@@ -1220,13 +1220,12 @@
       clearSemanticComparison();
     }
     try{
-      // Flush the same-geometry texture swap and one browser frame before
-      // capturing. The viewport independently requires its GPU source to
-      // match this exact PNG and be fully loaded; never count a button
-      // click as a successful view/capture.
+      // Flush same-geometry texture bindings. The viewport renders the
+      // fixed camera synchronously and independently refuses an unloaded,
+      // stale or mismatched GPU atlas source. Do not await an animation frame:
+      // it can be indefinitely suspended when the desktop is hidden.
       await tick();
-      await new Promise<void>(resolve=>
-        window.requestAnimationFrame(()=>resolve()));
+      if(document.hidden)throw new Error('SEMANTIC_COMPARISON_WINDOW_INACTIVE');
       const png=viewport.captureReviewPng(view,{index,source});
       if(semanticPreview!==expected || !validSemanticPreview ||
          reviewViewId!==view)throw new Error('SEMANTIC_COMPARISON_STALE');
