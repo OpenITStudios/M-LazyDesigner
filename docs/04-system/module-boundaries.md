@@ -159,6 +159,18 @@ private-parent imports and actual fixture paths were adjusted for nesting.
 No production logic, transaction, validation or test assertions changed.
 These regressions remain TEST_AUTHORED_NOT_RUN under the project hold.
 
+**Rust EditOperation category ownership (2026-11-20):** The 64 exhaustive
+typed operation arms are delegated by one `edit_operations.rs` router to
+`edit_operations/hierarchy_edits.rs` (Bone/Cube hierarchy),
+`geometry_edits.rs` (transforms/dimensions),
+`animation_edits.rs` (clips/keys),
+`texture_edits.rs` (RGBA8/material patches), and
+`uv_edits.rs` (atlas and UV coordinates).
+Original Rust arm bodies are preserved and a source-authored regression
+enumerates the canonical operation enum and both routing layers. Category
+handlers have no independent document/Undo/store; they refuse a category
+mismatch. Rust compilation and regressions NOT_EXECUTED under the hold.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

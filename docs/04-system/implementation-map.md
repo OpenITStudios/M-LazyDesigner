@@ -34,7 +34,8 @@ apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
   └─ desktop_authoring/preview_texture.rs (read-only texture/UV preview projection)
           ↓
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
-          ├─ edit_operations.rs (typed edit dispatcher; no history owner)
+          ├─ edit_operations.rs (single 64-arm semantic category router; no history owner)
+          │    └─ edit_operations/{hierarchy,geometry,animation,texture,uv}_edits.rs
           ├─ inspections.rs (source-bound, read-only inspection facade)
           ├─ Geometry/Rig/UV      → geometry.rs, geometry_assembly.rs (tests: geometry_assembly/tests.rs),
           │                         geometry_sweep.rs, geometry_profile_sweep.rs,
@@ -67,7 +68,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 
 | Change requested | First semantic owner | Adjacent consumers/checks |
 | --- | --- | --- |
-| Document identity, edit batch, Undo/Redo | `apps/desktop/src-tauri/src/authoring/mod.rs` (sole transaction owner), `authoring/edit_operations.rs` (typed operation dispatcher), `authoring/inspections.rs` (read-only source inspection) | `authoring/tests.rs`, Tauri + CLI apply contracts |
+| Document identity, edit batch, Undo/Redo | `apps/desktop/src-tauri/src/authoring/mod.rs` (sole transaction owner), `authoring/edit_operations.rs` (exhaustive router to domain mutation handlers), `authoring/inspections.rs` (read-only source inspection) | `authoring/tests.rs`, Tauri + CLI apply contracts |
 | **G6 repeated structural Cubes**: uniform integer-spaced ribs with deterministic source identities, via original G1 and preflight | `authoring/geometry_rib_array.rs` | `geometry_assembly.rs`, existing `plan-geometry-assembly` Code Mode SDK and regression fixtures; not source texture, scene runtime or visual approval |
 | **Geometry negative-space constraint (read-only)**: opt-in Cube-free volumes checked against one new Bone in G1 | `authoring/geometry_void.rs` | existing `plan-geometry-assembly` optional CLI argument, `code-mode/geometry-void.mjs`, SDK typed source guard; not global contact or visual PASS |
 | **Geometry impact reasoning (read-only)**: Bone ancestry, same-parent Cube candidates, common atlas users and matching animator keys | `authoring/geometry_impact.rs` | CLI `inspect-batch`, `code-mode/geometry-impact.mjs`, `client.mjs`, `client.d.mts` (advisory only, no mutation) |
