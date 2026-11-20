@@ -46,7 +46,9 @@ apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           └─ Formats/Persistence  → bbmodel.rs, storage.rs
 
 apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
-   → host.mjs (trusted Node permissions/RPC) → client.mjs
+   → host.mjs (trusted Node permission/RPC composition)
+   → visual-review-policy.mjs (trusted reviewer admission and correction guards)
+   → client.mjs (typed Rust CLI SDK)
    → apps/desktop/src-tauri/src/bin/lazydesigner-authoring.rs
    → SAME Rust authoring core, independent SHA-bound saved-file session
 ```
@@ -64,8 +66,8 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 | **Existing Animation P0 (read-only)**: selected numeric existing clip inspection and one optional user-bounded existing-key correction | `authoring/animation_existing.rs` | `review-existing-animation` native CLI; `code-mode/existing-animation-review.mjs` and typed SDK/host; existing `EditPlan` and independent approved Apply, no new keyframe writer or automatic visual repair |
 | **Animasi**: clips, keyframes, curves, effects | `authoring/mod.rs`, `animation_clip.rs`, `bezier.rs`, `animation_export.rs` | `effects.rs`, `timeline_markers.rs`, `rustAnimationPose.ts` (view-only), .animation.json |
 | Editable Blockbench file and source provenance | `authoring/bbmodel.rs`, `storage.rs`, `asset_handoff.rs` | `EditorSession::export`, `authoring/tests.rs`, CLI `asset_handoff` inspector |
-| Desktop active model, recovery, optional live reads | `desktop_authoring.rs`, `editor_recovery.rs`, `live_read_bridge.rs` | `RustEditorPage.svelte` and snapshot/epoch guards; live-read default-off |
-| AI scripting, authorization and compact inspection | `code-mode/host.mjs`, `client.mjs`, `task-context.mjs` | `sandbox-worker.mjs`, CLI, `code-mode/*.test.mjs` |
+| Desktop active model, recovery, optional live reads | `desktop_authoring.rs` (Tauri commands), `editor_recovery.rs`, `live_read_bridge.rs` | `desktop_authoring/tests.rs` (native-only tests), `RustEditorPage.svelte` and snapshot/epoch guards; live-read default-off |
+| AI scripting, authorization and compact inspection | `code-mode/host.mjs` (session/RPC/approval), `client.mjs` (typed SDK), `task-context.mjs` (focused read), `visual-review-policy.mjs` (review admission) | `sandbox-worker.mjs`, `code-mode/*.test.mjs`, CLI `bin/lazydesigner-authoring.rs` and `bin/lazydesigner-authoring/tests.rs` |
 
 **Stage order for further work:** Geometri → Texture → Animasi. Reuse
 the existing shared `EditPlan`, `asset_handoff`, `bbmodel` codec and

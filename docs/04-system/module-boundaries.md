@@ -87,6 +87,21 @@ Svelte page or Code Mode host merely for file size. Split only when an
 actual independent semantic owner and its affected callers can be
 moved coherently while preserving the current contracts and proof gates.
 
+**Rust modularity source increment (2026-11-20):** Existing Tauri and
+headless CLI inline `#[cfg(test)]` suites have become `tests.rs`
+child modules. The original test functions remain, with fixture paths
+re-based on the new file location. `visual-review-policy.mjs` now owns
+the trusted reviewer-declaration and pixel guard validation previously
+embedded in the Code Mode RPC host. No host approval, Rust transaction,
+source SHA, no-overwrite publisher or visual acceptance rule was removed.
+
+**Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
+UI controller/template; `authoring/mod.rs` is the Rust document/edit
+authority; `desktop_authoring.rs` and `host.mjs` remain substantial
+composition modules. Size alone does not authorize splitting shared
+state or changing Tauri/Code Mode consumers. Do not call all godfiles
+eliminated without native checks and a separate ownership review.
+
 ## Layer direction
 
 ```text
