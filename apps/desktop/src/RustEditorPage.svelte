@@ -7,6 +7,9 @@
   import RustViewport from './RustViewport.svelte';
   import RustAnimationWorkspace from './RustAnimationWorkspace.svelte';
   import RustTexturesDock from './RustTexturesDock.svelte';
+  import RustPaintExternalCandidate from './RustPaintExternalCandidate.svelte';
+  import RustPaintSemanticCandidate from './RustPaintSemanticCandidate.svelte';
+  import RustPaintAtlasCanvas from './RustPaintAtlasCanvas.svelte';
   import RustRecoveryDialog from './RustRecoveryDialog.svelte';
   import RustLiveReadPairingDialog from './RustLiveReadPairingDialog.svelte';
   import type { ReviewViewId } from './rustReviewCapture';
@@ -28,7 +31,6 @@
     type ExternalFaceTextureIntent,type ExternalFaceTextureDraft,
     type ExternalFaceTextureReceipt } from './rustExternalTexturePreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
-  import {drawSurfaceSelectionOverlay} from './rustSelectionOverlay';
   import { protectedAtlasRectangle,
     type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
   import {parseShadeRamp,bindSourceSelection,selectionStepsForStroke,
@@ -218,6 +220,7 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
 
   const AXES = ['X', 'Y', 'Z'] as const;
   const FACES = ['north', 'east', 'south', 'west', 'up', 'down'] as const;
+  const faces: readonly string[] = FACES;
 
   $: selectedCube = snapshot?.cubes.find((cube) => cube.uuid === selectedId) ?? null;
   $: selectedBone = snapshot?.bones.find((bone) => bone.uuid === selectedBoneId) ?? null;
@@ -2380,166 +2383,27 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
             disabled={busy || loading || !!paintStroke}>Load selected atlas preview</button>
         </div>
       {/if}
-      <section class="paint-starter semantic-material-panel" aria-label="External pixel editor PNG">
-        <div class="dock-title"><span>EXTERNAL PIXEL EDITOR</span></div>
-        <p class="hint">Export the current atlas PNG and edit it in Aseprite,
-          Pixelorama, Photoshop or Krita. Reimport as a disposable candidate
-          for one explicitly mapped, non-shared Cube face. Only the selected
-          original base RGB may change; alpha and other original details cannot.</p>
-        <div class="semantic-material-fields">
-          <label>Face
-            <select bind:value={selectedFace} disabled={busy || !!paintStroke}
-              onchange={clearSemanticPreview}>
-              {#each FACES as face}<option value={face}>{face}</option>{/each}
-            </select>
-          </label>
-          <label>Original editable RGB
-            <input type="color" bind:value={externalBase}
-              disabled={busy || !!paintStroke} onchange={clearExternalPreview}/>
-          </label>
-        </div>
-        <button type="button" disabled={busy || loading || !!paintStroke ||
-            !selectedId || !snapshot.paintEditableTextures[paintTextureIndex] ||
-            !snapshot.texturePreviewSources[paintTextureIndex]}
-          onclick={() => void chooseExternalTextureCandidate()}>
-          Choose edited PNG…
-        </button>
-        {#if validExternalPreview}
-          <p class="hint">Selected PNG {externalPreview?.selectedPngSha256.slice(0,12)}
-            · model unchanged. Capture both renders using the same fixed camera.</p>
-          <div class="semantic-material-actions" role="group" aria-label="External PNG comparison">
-            <button type="button" disabled={busy}
-              onclick={() => void showExternalTextureCandidate(false)}>Capture Source</button>
-            <button type="button" disabled={busy}
-              onclick={() => void showExternalTextureCandidate(true)}>Capture Candidate</button>
-            <button type="button" disabled={busy}
-              onclick={clearExternalPreview}>Discard</button>
-          </div>
-          {#if externalSourceCapture || externalCandidateCapture}
-            <div class="semantic-material-comparison" aria-label="External PNG source candidate renders">
-              {#if externalSourceCapture}
-                <figure><img src={externalSourceCapture} draggable="false"
-                  alt={'Source at '+externalCapturedView}/>
-                  <figcaption>Source · {externalCapturedView}</figcaption></figure>
-              {/if}
-              {#if externalCandidateCapture}
-                <figure><img src={externalCandidateCapture} draggable="false"
-                  alt={'External PNG candidate at '+externalCapturedView}/>
-                  <figcaption>Candidate · {externalCapturedView}</figcaption></figure>
-              {/if}
-            </div>
-          {/if}
-          <label class="semantic-material-review">
-            <input type="checkbox" bind:checked={externalReviewed}
-              disabled={busy || !externalViewedSource || !externalViewedCandidate ||
-                !matchingRenderedMaterialPair(externalSourceCapture,externalCandidateCapture,
-                  externalCapturedView,reviewViewId)}/>
-            I compared the matching renders and checked existing markings.
-          </label>
-          <button type="button" disabled={busy || !externalReadyForApply}
-            onclick={() => void applyExternalTextureCandidate()}>Apply reviewed external PNG</button>
-          <p class="hint">RGBA8 PNG must have the exact atlas dimensions. Marks
-            with the same base RGB cannot be recognized automatically; preserve
-            them before acknowledging the comparison.</p>
-        {/if}
-      </section>
-      <section class="paint-starter semantic-material-panel" aria-label="Semantic painted-metal candidate">
-        <div class="dock-title"><span>SEMANTIC PAINTED METAL</span></div>
-        <p class="hint">Source-aware candidate only. Select a reference PNG and the actual
-          Cube, face, base RGB and approved shade colors; the reference is not automatically verified.</p>
-        <button type="button" disabled={busy || loading || !!paintStroke}
-          onclick={() => void chooseSemanticReference()}>Choose reference PNG…</button>
-        {#if semanticReferenceStatus}<p class="hint">{semanticReferenceStatus}</p>{/if}
-        {#if semanticReferenceImage}
-          <img class="semantic-material-reference"
-            src={semanticReferenceImage} draggable="false"
-            alt="User-selected material reference; artistic approval is not verified"/>
-        {/if}
-        <div class="semantic-material-fields">
-          <label>Face
-            <select bind:value={selectedFace} disabled={busy || !!paintStroke}
-              onchange={clearSemanticPreview}>
-              {#each FACES as face}<option value={face}>{face}</option>{/each}
-            </select>
-          </label>
-          <label>Base RGB <input type="color" bind:value={semanticBase}
-            disabled={busy || !!paintStroke} onchange={clearSemanticPreview}/></label>
-          <label>Shadow RGB <input type="color" bind:value={semanticShadow}
-            disabled={busy || !!paintStroke} onchange={clearSemanticPreview}/></label>
-          <label>Highlight RGB <input type="color" bind:value={semanticHighlight}
-            disabled={busy || !!paintStroke} onchange={clearSemanticPreview}/></label>
-          <label>Light corner
-            <select bind:value={semanticCorner} disabled={busy || !!paintStroke}
-              onchange={clearSemanticPreview}>
-              <option value="upper_left">Upper left</option>
-              <option value="upper_right">Upper right</option>
-            </select>
-          </label>
-          <label>Contrast
-            <select bind:value={semanticContrast} disabled={busy || !!paintStroke}
-              onchange={clearSemanticPreview}>
-              <option value="subtle">Subtle</option>
-              <option value="balanced">Balanced</option>
-            </select>
-          </label>
-        </div>
-        {#if semanticRejectionNote}<p class="hint">{semanticRejectionNote}</p>{/if}
-        <button type="button" disabled={busy || loading || !!paintStroke ||
-          !selectedId || !semanticReferenceSha ||
-          !snapshot.paintEditableTextures[paintTextureIndex]}
-          onclick={() => void previewSemanticMaterial()}>Preview material</button>
-        {#if validSemanticPreview}
-          <div class="semantic-material-actions" role="group" aria-label="Capture matched material comparison">
-            <button type="button" aria-pressed={!semanticShowCandidate}
-              disabled={busy} onclick={() => void showSemanticCandidate(false)}>Capture Source</button>
-            <button type="button" aria-pressed={semanticShowCandidate}
-              disabled={busy} onclick={() => void showSemanticCandidate(true)}>Capture Candidate</button>
-            <button type="button" disabled={busy} onclick={clearSemanticPreview}>Discard</button>
-          </div>
-          <label>Reason if rejected
-            <select bind:value={semanticRejectReason} disabled={busy}>
-              <option value="flat_volume">Flat or poorly formed shading</option>
-              <option value="identity_risk">Approved identity at risk</option>
-              <option value="style_mismatch">Material/style mismatch</option>
-              <option value="other">Other visual defect</option>
-            </select>
-          </label>
-          <button type="button" disabled={busy}
-            onclick={rejectSemanticCandidate}>Reject and revise</button>
-          <p class="hint">Use the camera selector above, then capture Source and
-            Candidate at that same fixed view. The capture refuses unloaded
-            textures; if an image is still loading, retry its button.
-            Rejected exact treatments cannot be repeated unchanged.</p>
-          {#if semanticSourceCapture || semanticCandidateCapture}
-            <div class="semantic-material-comparison" aria-label="Matched fixed-camera source and candidate">
-              {#if semanticSourceCapture}
-                <figure><img src={semanticSourceCapture} draggable="false"
-                  alt={'Original Rust preview at ' + semanticCapturedView}/>
-                  <figcaption>Source · {semanticCapturedView}</figcaption></figure>
-              {/if}
-              {#if semanticCandidateCapture}
-                <figure><img src={semanticCandidateCapture} draggable="false"
-                  alt={'Candidate Rust preview at ' + semanticCapturedView}/>
-                  <figcaption>Candidate · {semanticCapturedView}</figcaption></figure>
-              {/if}
-            </div>
-          {/if}
-          {#if semanticSourceCapture && semanticCandidateCapture &&
-            semanticSourceCapture===semanticCandidateCapture}
-            <p class="hint">No rendered difference from this camera.
-              Choose a view showing the selected face and capture both again.</p>
-          {/if}
-          <label class="semantic-material-review">
-            <input type="checkbox" bind:checked={semanticReviewed}
-              disabled={busy || !semanticViewedSource || !semanticViewedCandidate}/>
-            I compared both fixed-camera captures with the selected reference and checked visible identity markings.
-          </label>
-          <button type="button" disabled={busy || !semanticReadyForApply}
-            onclick={() => void applySemanticCandidate()}>Apply inspected candidate</button>
-          <p class="hint">This is a user-selected treatment, not an independent artistic PASS.
-            Full-face review remains required.</p>
-        {/if}
-      </section>
+      <RustPaintExternalCandidate {snapshot} {busy} {loading}
+        strokeActive={!!paintStroke} {selectedId} {paintTextureIndex}
+        {faces} bind:selectedFace bind:externalBase {validExternalPreview}
+        {externalPreview} {externalSourceCapture} {externalCandidateCapture}
+        {externalCapturedView} {externalViewedSource} {externalViewedCandidate}
+        bind:externalReviewed {externalReadyForApply}
+        matchedRenders={matchingRenderedMaterialPair(externalSourceCapture,
+          externalCandidateCapture,externalCapturedView,reviewViewId)}
+        {clearSemanticPreview} {clearExternalPreview} {chooseExternalTextureCandidate}
+        {showExternalTextureCandidate} {applyExternalTextureCandidate} />
+      <RustPaintSemanticCandidate {snapshot} {busy} {loading}
+        strokeActive={!!paintStroke} {selectedId} {paintTextureIndex}
+        {faces} bind:selectedFace {semanticReferenceStatus} {semanticReferenceImage}
+        {semanticReferenceSha} bind:semanticBase bind:semanticShadow
+        bind:semanticHighlight bind:semanticCorner bind:semanticContrast
+        {semanticRejectionNote} {validSemanticPreview} {semanticShowCandidate}
+        bind:semanticRejectReason {semanticSourceCapture} {semanticCandidateCapture}
+        {semanticCapturedView} {semanticViewedSource} {semanticViewedCandidate}
+        bind:semanticReviewed {semanticReadyForApply}
+        {clearSemanticPreview} {chooseSemanticReference} {previewSemanticMaterial}
+        {showSemanticCandidate} {rejectSemanticCandidate} {applySemanticCandidate} />
       <section class="paint-starter paint-workspace-tools" aria-label="Basic Rust-owned Paint">
           <div class="dock-title"><span>ATLAS &amp; BRUSH</span></div>
           {#if snapshot.atlasResolutionEditable}
@@ -2796,48 +2660,11 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
             <label>Alpha
               <input type="number" min="0" max="255" step="1" bind:value={paintAlpha} disabled={busy || !!paintStroke}/>
             </label>
-            <div class="surface-atlas-frame">
-              <img class="paint-atlas paint-workspace-atlas" draggable="false"
-                src={paintAtlasSource ?? ''}
-                alt={validSemanticPreview || validExternalPreview ?
-                  'Read-only source/candidate material atlas for comparison' :
-                  surfaceProtectMode ?
-                    'Drag on the source atlas to protect a rectangle against 3D painting' :
-                    'Editable texture atlas; drag to paint one Rust-owned stroke'}
-                onpointerdown={startPaintStroke} onpointermove={movePaintStroke}
-                onpointerup={finishPaintStroke}
-                onpointercancel={(event) => finishPaintStroke(event, true)}
-                onlostpointercapture={(event) => finishPaintStroke(event, true)}/>
-              {#if validSurfaceSelection &&
-                (surfaceSelection?.previewComplete || surfaceSelection?.previewRaster)}
-                <canvas class="surface-selection-overlay"
-                  width={surfaceSelection?.previewRaster?.width ??
-                    Math.min(snapshot.textureResolution[0],512)}
-                  height={surfaceSelection?.previewRaster?.height ??
-                    Math.min(snapshot.textureResolution[1],512)}
-                  use:drawSurfaceSelectionOverlay={{rows:surfaceSelection?.atlasRows ?? [],
-                    width:snapshot.textureResolution[0],
-                    height:snapshot.textureResolution[1],
-                    raster:surfaceSelection?.previewRaster ?? null}}
-                  aria-hidden="true"></canvas>
-              {/if}
-              {#each guardedSurfaceMasks as rect}
-                <span class="surface-mask-mark"
-                  style:left={(rect.from[0]/snapshot.textureResolution[0]*100)+'%'}
-                  style:top={(rect.from[1]/snapshot.textureResolution[1]*100)+'%'}
-                  style:width={((rect.to[0]-rect.from[0])/snapshot.textureResolution[0]*100)+'%'}
-                  style:height={((rect.to[1]-rect.from[1])/snapshot.textureResolution[1]*100)+'%'}
-                  aria-hidden="true"></span>
-              {/each}
-              {#if pendingSurfaceMask}
-                <span class="surface-mask-mark preview"
-                  style:left={(pendingSurfaceMask.from[0]/snapshot.textureResolution[0]*100)+'%'}
-                  style:top={(pendingSurfaceMask.from[1]/snapshot.textureResolution[1]*100)+'%'}
-                  style:width={((pendingSurfaceMask.to[0]-pendingSurfaceMask.from[0])/snapshot.textureResolution[0]*100)+'%'}
-                  style:height={((pendingSurfaceMask.to[1]-pendingSurfaceMask.from[1])/snapshot.textureResolution[1]*100)+'%'}
-                  aria-hidden="true"></span>
-              {/if}
-            </div>
+             <RustPaintAtlasCanvas {snapshot}
+               source={paintAtlasSource} comparing={!!validSemanticPreview || !!validExternalPreview}
+               protectMode={surfaceProtectMode} {validSurfaceSelection}
+               {surfaceSelection} {guardedSurfaceMasks} {pendingSurfaceMask}
+               {startPaintStroke} {movePaintStroke} {finishPaintStroke} />
             <p class="dock-note">Pencil and Eraser use circular strokes. Filled Rectangle uses two corners. Each completed gesture is one Rust Undo step. Atlas selection changes only the Paint preview, not saved model face references.</p>
           {:else}
             <p class="dock-note">Only LazyDesigner-owned or explicitly enabled embedded RGBA8 PNGs can be painted. External paths, layers and unsupported formats stay read-only.</p>
@@ -3528,5 +3355,4 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
   .paint-starter { display: grid; gap: 8px; padding: 10px; border-top: 1px solid #374151; }
   .paint-starter label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
   .paint-starter select { min-width: 0; max-width: 100%; flex: 1; }
-  .paint-starter .paint-atlas { display: block; width: 100%; max-width: 256px; height: auto; aspect-ratio: auto; image-rendering: pixelated; touch-action: none; cursor: crosshair; border: 1px solid #475569; background-color: #4b5563; background-image: linear-gradient(45deg,#374151 25%,transparent 25%),linear-gradient(-45deg,#374151 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#374151 75%),linear-gradient(-45deg,transparent 75%,#374151 75%); background-size: 12px 12px; }
 </style>

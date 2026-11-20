@@ -171,6 +171,17 @@ enumerates the canonical operation enum and both routing layers. Category
 handlers have no independent document/Undo/store; they refuse a category
 mismatch. Rust compilation and regressions NOT_EXECUTED under the hold.
 
+**Paint review and canvas presentation split (2026-11-20):** The
+external PNG candidate comparison, semantic material candidate review, and
+Paint atlas/mask/pointer canvas now have focused typed Svelte components
+(`RustPaintExternalCandidate.svelte`, `RustPaintSemanticCandidate.svelte`,
+`RustPaintAtlasCanvas.svelte`). The parent retains all native commands,
+approved-source state, selection, revalidation, epochs/revisions and Paint
+gesture/Undo. Pointer cancel/lost-capture, source review/disabled guards and
+scoped styles were preserved in the moved views. Tests AUTHORED_NOT_RUN;
+Windows/Svelte and visual parity NOT_EXECUTED. Main brush-control panel and
+state controller remain large.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
