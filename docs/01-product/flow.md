@@ -37,6 +37,17 @@ FINALIZATION
 
 ### Rust authoring path (source-authored; native validation held)
 
+**Primary Rust production flow:** prompt in Codex/Agent App →
+Geometry authoring/review/approval → Geometry-owned production UV PASS →
+Texturing/review/approval → Animation/review only when required →
+Finalization and editable export. The trusted host now checks existing
+asset README Stage declarations and exact model SHA before AI mutations.
+Mixed/premature domains refuse; confirmed Rust sibling files continue
+within one stage without per-edit workspace updates. Stage transitions
+require a fresh host/source binding. GUI Edit/Paint/Animate tabs remain
+manual controls, not Stage approval; missing clips cannot imply Animation
+Required NO.
+
 ```text
 USER + APPROVED REFERENCE / EXPLICIT CONSTRAINTS
 → OPERATOR-BOUND WORKSPACE / SELECTED MODEL / SOURCE SHA

@@ -109,6 +109,18 @@ and visual quality, file-format compatibility and speed remain UNVERIFIED.
 
 # LazyDesigner Rust Code Mode — source-only agent bridge
 
+**2026-11-20 Rust Stage Gate (SOURCE ONLY):** The external trusted host
+now binds `README.md` beside the selected saved `.bbmodel`, including
+current Stage, upstream approvals, `Animation Required` and exact file SHA.
+It rejects unknown, mixed, premature or stale AI writes before independent
+user permission and rechecks README freshness at native launch. New models
+start at Geometry; UV follows approved Geometry; Texturing follows UV PASS;
+Animation follows approved Texturing only when required. Rust-verified
+new siblings can continue within the same host session; stage changes
+require rebind. No GUI AI, separate stage store or native PASS.
+Source regressions AUTHORED_NOT_RUN.
+
+
 ## P0-D/E desktop visual preview versus Code Mode guest (SOURCE ONLY)
 
 The native Rust Tauri editor (not the permission-denied Deno

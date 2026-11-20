@@ -499,6 +499,8 @@ export interface CodeModeHostOptions {
   outputDirectory?: string;
   /** Missing callback = all writes denied. Must be owned by the real host. */
   authorizeMutation?: (request: Readonly<MutationRequest>) => boolean | Promise<boolean>;
+  /** Trusted test seam only. Production host discovers sibling README itself. */
+  workflowFile?: string;
   /** Optional file chosen by the operator; guest never selects its path. */
   preselectedPngPath?: string;
   /** Exact existing master texture UUID independently selected by the operator

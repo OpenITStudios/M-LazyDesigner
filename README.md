@@ -53,6 +53,13 @@ runtime. Start at
 [Code Mode host setup](apps/desktop/code-mode/HOST_INTEGRATION.md) and
 [Code Mode migration contract](docs/04-system/code-mode-migration.md).
 
+**Rust production Stage Gate (source contract, native unverified):**
+The external trusted Code Mode host validates the existing asset README
+and model source SHA before AI writes. Geometry → UV PASS → Texturing →
+Animation if required is the production order; GUI tabs remain manual.
+No new AI interface or model/workflow store is added. See
+[workspace lifecycle](workspace/README.md).
+
 **Rust operator flow (source contract, native unverified):** The user gives
 prompts only to **Codex or another authorized external Agent App**. Its trusted
 host runs Code Mode/Deno and the first-party Rust CLI against a specifically

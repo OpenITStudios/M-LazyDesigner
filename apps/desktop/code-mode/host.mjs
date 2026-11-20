@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { createRustCodeModeClient, openRustCodeModeProject, normalizedCorrectionScope, normalizedMaterialCorrectionIntent } from './client.mjs';
 import { createLiveReadClient } from './live-read-client.mjs';
 import { compactTaskContext, preflightGuidance } from './task-context.mjs';
+import {createWorkflowGate} from './workflow-gate.mjs';
 import {normalizedMaterialWorkPacket,validateMaterialWorkPacketOperations,
   materialWorkPacketDigest,compileMaterialClusterPaint,materialFaceClusters,
   paintOperationsFingerprint} from './material-work-packet.mjs';
@@ -982,7 +983,7 @@ export async function createCodeModeHost({
   preselectedVisualPair, preselectedGeometryLandmark,
   approvedReferencePackagePath,
   reviewVisualPair, runner, spawnImpl, liveReadPairing, liveReadClient,
-  observeExecutionMetrics,
+  observeExecutionMetrics, workflowFile,
 } = {}) {
   // A pure live read-only session has no disk model, no file publisher and
   // does not use the CLI. Requiring a separate Rust binary in that mode
@@ -991,7 +992,7 @@ export async function createCodeModeHost({
   if (pureLiveRead && [
     authorizeMutation, preselectedPngPath, approvedMaterialReferenceUuid,
     preselectedVisualPair, preselectedGeometryLandmark,
-    approvedReferencePackagePath, reviewVisualPair,
+    approvedReferencePackagePath, reviewVisualPair, workflowFile,
   ].some(value => value !== undefined)) {
     // A live-only host cannot contain any disk-writer, texture-import or
     // reference-pair declaration. Those require an independent saved source
@@ -1086,6 +1087,15 @@ export async function createCodeModeHost({
   }
   const referenceMaster = approvedMaterialReferenceUuid ?? null;
 
+  // External production host: canonical existing README, never guest input.
+  // Injected runner is a trusted test seam; explicit workflowFile opts in.
+  const workflowTarget=folder===null?null:join(folder,'README.md');
+  if(workflowFile!==undefined &&
+     requireAbsolute(workflowFile,'workflowFile')!==workflowTarget){
+    throw new Error('CODE_MODE_WORKFLOW_PATH_INVALID');
+  }
+  const gateEnabled=folder!==null&&(runner===undefined||workflowFile!==undefined);
+  let workflowGate=null;
   // Only one code session may be active per host. Operator approval is
   // invalidated when that session exits or times out.
   let activeExecution = null;
@@ -1113,6 +1123,13 @@ export async function createCodeModeHost({
       catch { return false; }
       if (typeof authorizeMutation !== 'function' ||
           execution.closed || activeExecution !== execution) return false;
+      const selectedModel=request.input===undefined?null:
+        [...projects.values()].find(p=>p.input===request.input &&
+          p.expectedSha256===request.expectedSha256);
+      // Gate EVERY write before user approval; source SHA and native Rust
+      // transaction checks still happen independently at Apply.
+      const stageLease=workflowGate===null?null:
+        await workflowGate.authorize(request,selectedModel?.summary);
       execution.pause();
       const approvalStarted = execution.metrics.mark();
       let approved;
@@ -1133,15 +1150,17 @@ export async function createCodeModeHost({
       // Prevent a delayed approval from reviving a timed-out guest.
       const valid = approved === true &&
         !execution.closed && activeExecution === execution;
-      if (valid) approvedGuest.set(request, execution);
+      if (valid) approvedGuest.set(request,{execution,stageLease});
       return valid;
     },
     // Synchronous last lease check, directly before the SDK launches Rust.
     // No async work may occur between this check and the execFile request.
     permitWriteLaunch: (request) => {
-      const owner = approvedGuest.get(request);
+      const approved = approvedGuest.get(request);
       approvedGuest.delete(request);
-      return owner !== undefined && owner === activeExecution && !owner.closed &&
+      return approved!==undefined &&
+        approved.execution===activeExecution && !approved.execution.closed &&
+        (workflowGate===null || workflowGate.leaseValid(approved.stageLease)) &&
         (!visualPair?.referencePackageBinding ||
           referencePackageLeaseValid(visualPair.referencePackageBinding)) &&
         (visualPair===null || visualViews.every(view=>
@@ -1152,6 +1171,9 @@ export async function createCodeModeHost({
   const projects = new Map();
   const initialProject = source === null ? null :
     await openRustCodeModeProject(client, source);
+  if(gateEnabled)workflowGate=createWorkflowGate({
+    folder,source,sourceSha:initialProject?.expectedSha256??null,
+  });
   if (referenceMaster!==null) {
     await bindApprovedReference(initialProject,referenceMaster);
   }
@@ -1216,6 +1238,7 @@ export async function createCodeModeHost({
       throw new Error('CODE_MODE_RUST_PUBLISHED_OUTPUT_SHA_MISMATCH');
     }
     const handle = 'p' + nextProject++;
+    if(workflowGate!==null)workflowGate.register(path,project.expectedSha256);
     projects.set(handle, project);
     return { project: handle, sha256: project.expectedSha256,
       summary: project.summary };

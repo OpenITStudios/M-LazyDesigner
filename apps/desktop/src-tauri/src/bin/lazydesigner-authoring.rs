@@ -1377,7 +1377,9 @@ mod tests {
         assert_eq!(results[0]["handoff"]["bbmodel"]["bytes"],
             json!(session.export().unwrap().len()));
         assert_eq!(results[0]["handoff"]["faces"]["selected_texture"],6);
-        assert_eq!(results[0]["handoff"]["animation"]["status"],"not_required");
+        assert_eq!(results[0]["handoff"]["animation"]["status"],"no_saved_clips");
+        assert_eq!(results[0]["handoff"]["animation_requirement"],
+            "UNKNOWN_FROM_MODEL_SOURCE");
         assert_eq!(results[0]["handoff"]["geometry"]["visible_bounds_source"],"computed_static");
         assert_eq!(results[0]["handoff"]["geometry"]["visible_bounds"]["width"],json!(2.0));
         assert_eq!(results[0]["handoff"]["visual_verdict"],"UNVERIFIED");

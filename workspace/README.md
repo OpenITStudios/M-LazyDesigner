@@ -48,6 +48,7 @@ Animation Required: YES | NO | UNSPECIFIED
 Current Stage + stage states
 UV Layout gate
 Current model file
+Workflow Model SHA256 (for Rust external Agent App, exact selected file)
 Material handoff constraints (scale/front_direction/pose override when material)
 Current next step — one concrete step
 Known blocker(s), if any
@@ -110,6 +111,45 @@ blocker: <none|specific blocker>
 ```
 
 Do not persist `phase` as a new semantic concept. Existing protocol/settings fields containing `phase` are compatibility identifiers only.
+
+### Rust external Codex Stage Gate
+
+The **existing** sibling asset README is read by the external trusted
+Code Mode host at **AI write authorization**, not by LazyDesigner GUI.
+For new assets, complete intake and declare `Current Stage: GEOMETRY`,
+`Geometry: IN_PROGRESS`, `Animation Required: YES | NO`, the other
+Stage fields and a truthful blocker state before first creation.
+
+For an existing saved model or a newly resumed Codex session, also bind:
+
+```text
+Current model file: `<saved-filename>.bbmodel`
+Workflow Model SHA256: sha256:<sha256 of the selected saved model>
+```
+
+This is a source identity, **not** a new approval store or evidence that
+a human reviewed the model. The trusted operator obtains the digest from
+the current file; an AI guest declaration is never permission.
+
+AI mutation order is enforced by the existing Stage states:
+Geometry IN_PROGRESS → Geometry APPROVED then UV IN_PROGRESS →
+UV PASS then Texturing IN_PROGRESS → Texturing APPROVED then
+Animation IN_PROGRESS (only if explicitly required YES).
+Unknown/mixed-domain plans, stale files and premature transitions refuse.
+A correction within the active Stage can still resolve its own blocker.
+The FINALIZATION/COMPLETE export gate needs Geometry/Texture APPROVED,
+UV PASS, no blockers, and either required Animation APPROVED with saved
+clips or explicit Animation Required NO with no clips. A technical export
+during earlier Stage work does not establish acceptance.
+
+One host session may continue using Rust-verified new sibling models
+without rewriting the README after each Cube or keyframe. On a new host
+session or Stage transition, update the selected file/SHA once and
+the affected existing Stage declarations. A changed README while the
+operator is approving a write invalidates that write. There is no AI
+prompt UI in LazyDesigner, no new state manager and no relaxation of
+Rust SHA, Undo, permission or no-overwrite contracts. Injected
+`runner` fixtures are source-test seams only; tests/native QA held.
 
 Do not turn README into a decision log, per-Cube plan, UUID registry, or tool transcript.
 

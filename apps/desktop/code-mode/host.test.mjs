@@ -5402,3 +5402,37 @@ test('existing saved Animation review routes through one guest-to-Rust read, no 
     assert.deepEqual(calls,['inspect','review-existing-animation']);
     assert.equal(approvals,0);
   }));
+
+
+test('trusted agent stage gate denies premature Paint before approval or Rust write',()=>
+  fixture(async input=>{
+    const workflowFile=join(dirname(input),'README.md');
+    await writeFile(workflowFile,[
+      'Current Stage: GEOMETRY','Geometry: IN_PROGRESS',
+      'UV Layout: NOT_STARTED','Texturing: NOT_STARTED',
+      'Animation: NOT_STARTED','Animation Required: YES',
+      'Known blocker(s): none','Current model file: source.bbmodel',
+      'Workflow Model SHA256: sha256:'+HASH,
+    ].join('\n'));
+    let approved=0,writes=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,workflowFile,
+      authorizeMutation:()=>{approved++;return true;},
+      runner:async args=>{
+        if(args[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        writes++;throw Error('Rust write must be blocked');
+      },
+      spawnImpl:()=>fakeGuest({method:'apply',args:{
+        project:'p0',output:'premature.bbmodel',
+        operations:[{op:'paint_texture_pixel',texture_index:0,
+          x:0,y:0,rgba:[1,2,3,255]}],
+      }},response=>{
+        assert.equal(response.ok,false);
+        assert.equal(response.code,'CODE_MODE_WORKFLOW_STAGE_BLOCKED');
+        return {blocked:true};
+      }),
+    });
+    const reply=await host.execute({code:'return codemode.apply({});'});
+    assert.equal(reply.value.blocked,true);
+    assert.equal(approved,0);assert.equal(writes,0);
+  }));

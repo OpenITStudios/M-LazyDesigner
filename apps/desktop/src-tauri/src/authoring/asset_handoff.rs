@@ -615,16 +615,17 @@ pub fn inspect_bedrock_asset_handoff_page(
     };
     let png_output = export_paint_png(doc, texture_uuid);
     let (texture, png_ok) = export_evidence(png_output.as_ref().map(Vec::as_slice));
-    let animation_required = !doc.animation_assets.is_empty();
-    let compiled_animation = if animation_required {
+    // Existing clips do not establish whether Animation was requested.
+    let animation_present = !doc.animation_assets.is_empty();
+    let compiled_animation = if animation_present {
         Some(export_bedrock_animations(doc))
     } else { None };
     let (mut animation, anim_ok) = if let Some(result) = &compiled_animation {
         export_evidence(result.as_ref().map(Vec::as_slice))
     } else {
-        (json!({"status":"not_required","sha256":null,"bytes":null}), true)
+        (json!({"status":"no_saved_clips","sha256":null,"bytes":null}), true)
     };
-    if animation_required {
+    if animation_present {
         animation["curve_fidelity"] = json!(bedrock_animation_curve_fidelity(doc));
         // Advisory cross-domain quality evidence: neither an exporter blocker
         // nor a claim of smooth visual playback. The same validated document
@@ -652,6 +653,7 @@ pub fn inspect_bedrock_asset_handoff_page(
     let coherent = blockers.is_empty();
     Ok(json!({
         "scope":"bedrock_single_atlas_export_handoff",
+        "animation_requirement":"UNKNOWN_FROM_MODEL_SOURCE",
         "status":if coherent {"source_consistent"} else {"blocked"},
         "visual_verdict":"UNVERIFIED",
         "native_verdict":"NOT_EXECUTED",
