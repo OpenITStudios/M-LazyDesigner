@@ -182,6 +182,15 @@ scoped styles were preserved in the moved views. Tests AUTHORED_NOT_RUN;
 Windows/Svelte and visual parity NOT_EXECUTED. Main brush-control panel and
 state controller remain large.
 
+**Code Mode typed SDK selector domains (2026-11-20):** The client
+continues to own its single authenticated Rust CLI transport, native call
+metrics and write permission request. Shared bounded input primitives move
+to `sdk-inputs.mjs`, read-only selector serialization and refusal to
+`inspection-selectors.mjs`, and purely advisory changed-Cube overlap receipt
+checks to `geometry-overlap-review.mjs`. No new SDK, sandbox, authorizer,
+publisher or permissive fallback is created. Existing export names stay in
+`client.mjs`; read-only source regression authored, NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

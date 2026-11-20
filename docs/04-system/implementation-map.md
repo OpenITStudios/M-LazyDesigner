@@ -64,6 +64,9 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
    ├─ source-face-coverage.mjs (bounded Rust read-only face evidence)
    ├─ visual-review-policy.mjs (trusted reviewer admission and correction guards)
    └─ client.mjs (typed Rust CLI SDK)
+      ├─ sdk-inputs.mjs (shared bounded input primitives)
+      ├─ inspection-selectors.mjs (read-only selector transport)
+      └─ geometry-overlap-review.mjs (advisory same-Bone collision evidence)
    → apps/desktop/src-tauri/src/bin/lazydesigner-authoring.rs
    → SAME Rust authoring core, independent SHA-bound saved-file session
 ```
