@@ -719,9 +719,15 @@ Cube/texture identities instead of inventing UUIDs from image appearance.
 It remains a *source face inventory*, **not proof a source face corresponds
 to a particular camera pixel**. The original single reviewer payload remains capped at 256 source
 faces. Paging-aware review supports four separately bound 256-face
-pages when a complete source scan includes up to 256 Cubes. Larger
-or incomplete inventories are represented as `complete:false` or
-explicitly BLOCKED; missing/occluded faces remain UNVERIFIED.
+pages when the saved source inventory is complete and within the
+independent 1,024-face reviewer cap. The Rust source coverage scanner
+can now inspect up to 1,024 Cubes in 128 bounded eight-Cube pages;
+for models larger than 256 Cubes it groups two adjacent pages into
+one SHA-bound `inspectBatch` call (two native response pages remain
+separately checked). This is **not** permission to accept 1,024
+fully textured Cubes: models exceeding the 1,024-face visual review
+capacity or an incomplete source scan remain explicitly BLOCKED.
+Missing/occluded faces remain UNVERIFIED.
 
 The reviewer must actually inspect the decoded reference and current PNG
 bytes through its own visual-capable implementation. It writes one compact
@@ -830,7 +836,8 @@ the seen material/face at meaningful depth; this is never accepted from
 model-written code. All unmeasured faces, malformed links, source coverage
 gaps, falsely-STYLED flat faces, and unacknowledged invisible faces remain BLOCKED. The host SHA-rechecks
 every selected image before decision and pages the existing model
-texture coverage read (bounded to 256 Cubes; larger scans are partial).
+texture coverage read (bounded to 1,024 Cubes; larger scans are partial, and
+reviewer face limits remain separate).
 Even a coherent checkpoint is **REVIEWER_DECLARED_READY_FOR_USER_DECISION**
 not source-certified texture perfection, native PASS or user approval.
 Selected reviewed faces are not proof every occluded face was seen.

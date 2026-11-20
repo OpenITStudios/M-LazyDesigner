@@ -4133,6 +4133,160 @@ test('Texturing readiness reads all saved Cube coverage only after independently
     assert.equal(inspectedPages,10); // One early source-face binding plus nine terminal scans.
   }));
 
+
+test('large-model texture coverage reads all 1, 256, 257 and 513 Cubes without a false visual PASS',()=>
+  Promise.all([1,256,257,513].map(cubeCount=>fixture(async input=>{
+    const folder=dirname(input);
+    const directions=['front','back','left','right','top','bottom'];
+    const sides=['north','east','south','west','up','down'];
+    const chosen=[];
+    for(const id of directions){
+      const referencePngPath=join(folder,'many-ref-'+id+'.png');
+      const capturePngPath=join(folder,'many-now-'+id+'.png');
+      await writeFile(referencePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('ref-'+id)]));
+      await writeFile(capturePngPath,Buffer.concat([
+        Buffer.from('89504e470d0a1a0a','hex'),Buffer.from('current-'+id)]));
+      chosen.push({viewId:id,referencePngPath,capturePngPath});
+    }
+    let nativeCoverageCalls=0,nativePages=0;
+    let reviewerCalls=0,round=0,denyLaterCoverage=false;
+    const criterion={id:'face-fidelity',partId:'full-model',
+      kind:'CORRECT',requirement:'Every required face matches the approved material.',
+      viewId:'front',referencePngSha256:createHash('sha256').update(
+        await readFile(chosen[0].referencePngPath)).digest('hex'),
+      textureUuid:'owned-atlas',
+      allowedRegions:[{from:[0,0],to:[4,4]}]};
+    const reviewer=async binding=>{
+      reviewerCalls++;
+      const inventory=binding.sourceFaceInventory;
+      assert.equal(inventory.complete,true);
+      const faces=inventory.faces;
+      assert.ok(faces.length>=1&&faces.length<=256);
+      if(cubeCount>256){
+        assert.equal(inventory.scope,'trusted_saved_cube_face_inventory_page');
+        assert.equal(inventory.page_index,reviewerCalls-1);
+        assert.equal(inventory.page_count,Math.ceil(cubeCount/256));
+      }
+      return {decision:'ACCEPTED',issues:[],
+        criteriaReviews:[{id:'face-fidelity',verdict:'MET',
+          observation:'The approved model and material views were independently checked.'}],
+        viewReviews:directions.map(viewId=>({viewId,decision:'ACCEPTED',
+          observation:'Reviewed actual source-bound mapped material faces.'})),
+        reviewedFaces:faces.map(face=>({
+          cubeUuid:face.cube_uuid,face:face.face,textureUuid:face.texture_uuid,
+          style:'STYLED',observedInViewId:'front',
+          observation:'Source face shading follows the approved reference.'})),
+      };
+    };
+    reviewer.requiresSourceFaceInventory=true;
+    reviewer.supportsPagedSourceFaceReview=true;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      preselectedVisualPair:{...chosen[0],captureModelSha256:HASH,
+        supportingViews:chosen.slice(1),requireSixDirections:true,
+        reviewCriteria:[criterion]},
+      reviewVisualPair:reviewer,
+      runner:async args=>{
+        if(args[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        if(args[0]==='inspect-visual-pair'){
+          const reference= args[args.indexOf('--reference-sha256')+1];
+          const capture=args[args.indexOf('--capture-sha256')+1];
+          return {status:'OK',source_model_sha256:HASH,
+            reference_png_sha256:reference,capture_png_sha256:capture,
+            comparison:{scope:'operator_selected_saved_png_pair',
+              reference_png_sha256:reference,capture_png_sha256:capture,
+              visual_verdict:'UNVERIFIED'}};
+        }
+        assert.equal(args[0],'inspect-batch');
+        const query=JSON.parse(await readFile(args[args.indexOf('--queries')+1],'utf8'));
+        if(query.requests[0]?.kind==='texture_styling_face'){
+          return {status:'OK',sha256:HASH,summary:SUMMARY,
+            results:query.requests.map(item=>({
+              kind:'texture_styling_face',styling:{
+                scope:'saved_cube_face_local_pixels',
+                texture_uuid:item.texture_uuid,cube_uuid:item.cube_uuid,
+                face:item.face,status:'NOT_EVALUATED',visible_pixels:16,
+                review_hints:[],visual_verdict:'UNVERIFIED',
+                texture_completion_attested:false,
+              }}))};
+        }
+        nativeCoverageCalls++;
+        if(denyLaterCoverage && query.requests.length===2) {
+          throw new Error('SIMULATED_NATIVE_BATCH_UNAVAILABLE');
+        }
+        assert.ok(query.requests.length>=1&&query.requests.length<=2);
+        if(query.requests.length===2){
+          assert.ok(cubeCount>256);
+          assert.equal(query.requests[1].offset,query.requests[0].offset+8);
+        }
+        nativePages+=query.requests.length;
+        return {status:'OK',sha256:HASH,summary:SUMMARY,
+          results:query.requests.map(({offset,limit})=>{
+            const count=Math.min(limit,cubeCount-offset);
+            assert.ok(count>=1&&count<=8);
+            return {kind:'model_texture_coverage',coverage:{
+              scope:'saved_face_texture_coverage_page',
+              offset,total_cubes:cubeCount,reviewed_cubes:count,
+              review_candidates:0,unresolved_reference_or_mapping_faces:0,
+              next_offset:offset+count===cubeCount?null:offset+count,
+              cubes:Array.from({length:count},(_,i)=>({
+                cube_uuid:'many-'+(offset+i),review_candidates:0,
+                faces:sides.map((side,j)=>({
+                  side,texture_uuid:j===0?'owned-atlas':null,
+                  status:j===0?'measured_nontransparent_pixels':'absent_declared',
+                })),
+              })),
+            }};
+          })};
+      },
+      spawnImpl:()=>fakeGuest({method:round++===0?
+        'inspectSelectedVisualPair':'texturingReadiness',args:{project:'p0'}},
+        response=>{
+          assert.equal(response.ok,true);
+          if(response.result.review_feedback){
+            assert.equal(response.result.review_feedback.decision,'ACCEPTED');
+            assert.equal(response.result.texture_completion_attested,undefined);
+            return {reviewed:true};
+          }
+          if(denyLaterCoverage){
+            assert.equal(response.result.status,'BLOCKED');
+            assert.ok(response.result.blockers.includes(
+              'SOURCE_FACE_SCAN_UNAVAILABLE'));
+            assert.ok(response.result.blockers.includes(
+              'SOURCE_FACE_SCAN_INCOMPLETE'));
+            assert.equal(response.result.texture_completion_attested,false);
+            return {sourceBlocked:true};
+          }
+          assert.equal(response.result.status,
+            'REVIEWER_DECLARED_READY_FOR_USER_DECISION');
+          assert.equal(response.result.face_scan.scanned_cubes,cubeCount);
+          assert.equal(response.result.face_scan.required_source_faces,cubeCount);
+          assert.equal(response.result.face_scan.complete,true);
+          assert.equal(response.result.texture_completion_attested,false);
+          assert.equal(response.result.visual_verdict,'UNVERIFIED');
+          return {completeSourceScan:true};
+        }),
+    });
+    assert.equal((await host.execute({code:
+      'return codemode.inspectSelectedVisualPair({project:"p0"});'})).value.reviewed,true);
+    assert.equal((await host.execute({code:
+      'return codemode.texturingReadiness({project:"p0"});'})).value.completeSourceScan,true);
+    const perScan=Math.ceil(cubeCount/8);
+    assert.equal(nativePages,perScan*2);
+    assert.ok(nativeCoverageCalls<=perScan*2);
+    if(cubeCount>256){
+      assert.ok(nativeCoverageCalls<perScan*2);
+      // A failed second native source page must never inherit the previous
+      // visual review as a completed source inspection.
+      denyLaterCoverage=true;
+      assert.equal((await host.execute({code:
+        'return codemode.texturingReadiness({project:"p0"});'}))
+        .value.sourceBlocked,true);
+    }
+    assert.equal(reviewerCalls,Math.ceil(cubeCount/256));
+  }))));
+
 test('paged reviewer closes 260 saved faces without exposing them through guest RPC',()=>
   fixture(async input=>{
     const folder=dirname(input);

@@ -197,6 +197,19 @@ routing/operation-efficiency change, not a new SDK tool, safety bypass,
 native measurement or visual acceptance. See
 [host integration](HOST_INTEGRATION.md) for precise conditions.
 
+**P1 source Texture QA coverage (2026-11-20; SOURCE_ONLY):** The existing
+host review inventory and terminal `texturingReadiness` inspect up to
+1,024 saved Cubes with 128 eight-Cube source pages. For more than 256
+Cubes, two adjacent page selectors are grouped in one SHA-bound native
+`inspectBatch` to reduce repeated Rust model opens without enlarging
+the 96-KiB native batch or 128-KiB RPC output budgets. The visual reviewer
+still accepts at most **four independently validated 256-face pages**;
+a fully textured 500-Cube model exceeds that visual capacity and must
+remain BLOCKED even when its source-only inventory is complete. A partial,
+malformed or stale scan is not a PASS. Existing source and artist gates
+remain unchanged; source regressions for 1, 256, 257 and 513 Cubes are
+AUTHORED_NOT_RUN.
+
 For the exact domain owner, use [the system map](../../../docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints).
 Only trusted host approval may authorize a separately saved file mutation;
 Deno itself cannot grant rights. Source tests, native sandbox and
