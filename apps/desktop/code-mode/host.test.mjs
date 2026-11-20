@@ -5470,9 +5470,13 @@ test('Stage Gate accepts reviewed Geometry source and independent write approval
         assert.equal(reply.ok,true);
         assert.equal(reply.result.project,'p1');
         assert.equal(reply.result.sha256,next);
+        assert.equal(reply.result.candidateFile,'candidate.bbmodel');
         return {candidate:reply.result.project};
       }),
     });
+    assert.equal(host.initial.workflow.status,'SOURCE_BOUND');
+    assert.equal(host.initial.workflow.currentStage,'GEOMETRY');
+    assert.equal(host.initial.workflow.approvalEvidence,'NOT_ATTESTED');
     const reply=await host.execute({code:'return codemode.apply({});'});
     assert.equal(reply.value.candidate,'p1');
     assert.deepEqual(calls,['inspect','apply','inspect']);
@@ -5517,4 +5521,29 @@ test('Stage Gate refuses an approval after the bound README changes',()=>
     assert.equal(reply.value.stale,true);
     assert.equal(approvals,1);
     assert.equal(writes,0);
+  }));
+
+
+test('Code Mode exposes missing workspace as read-only BLOCKED orientation',()=>
+  fixture(async input=>{
+    const workflowFile=join(dirname(input),'README.md');
+    let approvals=0,nativeMutations=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      workflowFile,authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        nativeMutations++;
+        throw Error('No mutation in read-only orientation');
+      },
+      spawnImpl:()=>fakeGuest({method:'inspect',args:{project:'p0'}},
+        reply=>{assert.equal(reply.ok,true);return {readOnly:true};}),
+    });
+    assert.deepEqual(host.initial.workflow,{
+      status:'BLOCKED',reason:'CODE_MODE_WORKFLOW_README_REQUIRED',
+    });
+    const response=await host.execute({code:'return codemode.inspect({project:"p0"});'});
+    assert.equal(response.value.readOnly,true);
+    assert.equal(approvals,0);
+    assert.equal(nativeMutations,0);
   }));

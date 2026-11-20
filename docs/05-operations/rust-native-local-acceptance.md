@@ -27,6 +27,14 @@ Build the independent first-party CLI using the existing `apps/desktop/src-tauri
 
 Use an **existing asset README** alongside the exact source model. For existing models, bind the true `Current model file` and `Workflow Model SHA256`; for a new model, declare GEOMETRY IN_PROGRESS without a saved source. Record Animation Required YES or NO explicitly and never invent approval.
 
+Positive: `codemode.initial.workflow` shows SOURCE_BOUND only when the
+selected file/SHA matches the README, otherwise BLOCKED with a bounded
+reason. A missing README must not prevent read-only inspection. Neither
+status attests artistic review or skips later write checks.
+Each successful New/Apply/Import must return the actual `candidateFile`
+and `sha256` for manual Open Model review. Stage transitions update the
+same README and require a new host session.
+
 Positive: Geometry plan/read/preflight and one independently approved new sibling; same-session revision continuation; after actual Geometry approval, rebind file/SHA for UV, then Texturing after UV PASS, and Animation only after Texture approval if required. Open the candidate using the **manual** GUI File → Open action. Negative: premature Texture/Animation, mixed operations, unknown operation, stale/missing/duplicate SHA field, changed README during approval, denied permission, invalid path/filename, crash/unknown write outcome. Every refusal must leave the original safe; do not blindly replay an uncertain write.
 
 Before functional acceptance, include the source-parity regression: the host's closed operation inventory and 128-operation limit must match the current canonical Rust EditOperation enum. Unknown/mixed edit kinds refuse before host approval; this check is technical, not artistic approval.

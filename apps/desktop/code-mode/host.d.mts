@@ -20,11 +20,28 @@ export interface CodeModeProjectReference {
   project: string;
   sha256: string;
   summary: DocumentSummary;
+  /** New/Apply/Import: actual verified sibling name, for manual GUI review. */
+  candidateFile?: string;
+}
+export interface CodeModeWorkflowOrientation {
+  status:"SOURCE_BOUND"|"BLOCKED";
+  reason?:string;
+  currentStage?:"INTAKE"|"GEOMETRY"|"TEXTURING"|"ANIMATION"|"FINALIZATION"|"COMPLETE";
+  geometry?:"NOT_STARTED"|"IN_PROGRESS"|"READY_FOR_USER_REVIEW"|"APPROVED"|"INVALIDATED"|"BLOCKED";
+  uvLayout?:"NOT_STARTED"|"IN_PROGRESS"|"PASS"|"INVALIDATED"|"BLOCKED";
+  texturing?:"NOT_STARTED"|"IN_PROGRESS"|"READY_FOR_USER_REVIEW"|"APPROVED"|"INVALIDATED"|"BLOCKED";
+  animation?:"NOT_REQUIRED"|"NOT_STARTED"|"IN_PROGRESS"|"READY_FOR_USER_REVIEW"|"APPROVED"|"INVALIDATED"|"BLOCKED";
+  animationRequired?:"YES"|"NO";
+  hasBlockers?:boolean;
+  /** Explicit: README approvals are declarations, not independently attested. */
+  approvalEvidence?:"NOT_ATTESTED";
 }
 export interface CodeModeInitialReference {
   project: string | null;
   sha256: string | null;
   summary: DocumentSummary | null;
+  /** Optional read-only Start/Resume declaration, not mutation authority. */
+  workflow?: CodeModeWorkflowOrientation;
   /** Indicates a trusted read-only local bridge, not a mutable project handle. */
   liveReadOnly?: true;
 }

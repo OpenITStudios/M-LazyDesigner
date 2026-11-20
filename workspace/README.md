@@ -142,11 +142,27 @@ UV PASS, no blockers, and either required Animation APPROVED with saved
 clips or explicit Animation Required NO with no clips. A technical export
 during earlier Stage work does not establish acceptance.
 
+At Start/Resume, the trusted host reads these existing fields once
+and provides `codemode.initial.workflow`. `SOURCE_BOUND` confirms only
+that the selected saved model filename/SHA matches this README, not
+that Geometry, Texture or Animation were artistically approved.
+`BLOCKED` includes the missing/invalid/stale workspace reason. This is
+read-only orientation, not a separate model registry or extra RPC.
+A write always rechecks the current README and permissions.
+
 One host session may continue using Rust-verified new sibling models
-without rewriting the README after each Cube or keyframe. On a new host
-session or Stage transition, update the selected file/SHA once and
-the affected existing Stage declarations. A changed README while the
-operator is approving a write invalidates that write. There is no AI
+without rewriting the README after each Cube or keyframe. New/Apply/Import
+returns the Rust-verified `candidateFile` and `sha256`; the last
+successful sibling is the review candidate, **not** an approved deliverable.
+The user still opens it manually through LazyDesigner Open Model.
+
+At a meaningful Stage transition, the operator confirms the selected
+candidate's real file/SHA and the actual stage-specific review evidence,
+updates the SAME README's current file/SHA, stage and only materially
+affected downstream statuses, then starts a new Code Mode host session.
+No automatic acceptance, overwrite or live GUI replacement is added.
+A changed README while the operator is approving a write invalidates
+that write. There is no AI
 prompt UI in LazyDesigner, no new state manager and no relaxation of
 Rust SHA, Undo, permission or no-overwrite contracts. Injected
 `runner` fixtures are source-test seams only; tests/native QA held.
@@ -237,7 +253,13 @@ materially affected stage/gate   → INVALIDATED → repair → required approva
 
 Geometry changes invalidate UV only when mapping assumptions change. UV changes invalidate only affected Texture assumptions. Do not reset all stages automatically.
 
-## Codex Resume Rule
+## Codex Resume Rule — legacy Local Gateway/Control
+
+The following resume sequence belongs to the retained Blockbench-hosted
+`Local` Gateway/Control, not the independent `Rust` Code Mode. For
+Rust use the sibling README and `codemode.initial.workflow` above;
+do not load legacy Gateway tools just to orient Rust Stage status.
+
 
 ```text
 user names/continues asset

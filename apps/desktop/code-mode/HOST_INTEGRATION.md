@@ -1292,7 +1292,26 @@ The only model-visible tool argument is a JavaScript code string (at most 32 KiB
 
 ### Model-authored Code Mode example
 
+At Start/Resume the host reads the existing sibling README once and
+projects its recorded Stage into `codemode.initial.workflow`.
+`SOURCE_BOUND` means only the actual selected model filename/SHA matches
+the declared workspace. `BLOCKED` gives a bounded reason for missing,
+invalid or stale declarations, without suppressing read-only inspections.
+Neither status is independent artistic review or write approval. All
+writes still recheck the current README, source SHA and host authorization.
+
+New/Apply/Import now returns `candidateFile` with the existing saved
+project handle and SHA. The final candidate is manually opened in the
+GUI; no automatic file switch, state writer or second AI interface was
+added. On a Stage transition record only the real accepted evidence and
+current candidate file/SHA in the same README before starting a new
+host session.
+
 ~~~js
+const workflow = codemode.initial.workflow;
+if (workflow && workflow.status !== 'SOURCE_BOUND') {
+  return {status:'BLOCKED',reason:workflow.reason};
+}
 const source = codemode.initial.project; // p0: bound to a SHA
 const scan = await codemode.inspectBatch({
   project: source,
@@ -1317,6 +1336,7 @@ const review = await codemode.inspectCubeSurfaces({
 });
 return {
   output_sha256: saved.sha256,
+  candidate_file: saved.candidateFile,
   mutation: saved.receipt.mutation,
   source_surfaces: review.surfaces,
   visual_verdict: 'UNVERIFIED',

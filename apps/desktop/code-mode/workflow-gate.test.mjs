@@ -110,3 +110,47 @@ test('Workflow Gate operation kinds and limits match the canonical Rust EditOper
     operationKinds:Array(limit+1).fill('add_cube'),
   }),/CODE_MODE_WORKFLOW_OP_UNKNOWN/);
 });
+
+
+test('read-only Start/Resume orientation binds exactly one saved asset',async()=>{
+  const folder=await mkdtemp(join(tmpdir(),'ld-orient-'));
+  try{
+    const source=join(folder,'source.bbmodel');
+    const file=join(folder,'README.md');
+    const gate=createWorkflowGate({folder,source,sourceSha:A});
+    assert.deepEqual(await gate.orient(),{
+      status:'BLOCKED',reason:'CODE_MODE_WORKFLOW_README_REQUIRED',
+    });
+    await writeFile(file,note());
+    const bound=await gate.orient();
+    assert.equal(bound.status,'SOURCE_BOUND');
+    assert.equal(bound.currentStage,'GEOMETRY');
+    assert.equal(bound.geometry,'IN_PROGRESS');
+    assert.equal(bound.uvLayout,'NOT_STARTED');
+    assert.equal(bound.animationRequired,'YES');
+    assert.equal(bound.approvalEvidence,'NOT_ATTESTED');
+    await writeFile(file,note({stage:'TEXTURING',g:'APPROVED',
+      uv:'PASS',t:'IN_PROGRESS'}));
+    assert.equal((await gate.orient()).currentStage,'TEXTURING');
+    const stale=createWorkflowGate({folder,source,sourceSha:B});
+    assert.deepEqual(await stale.orient(),{
+      status:'BLOCKED',reason:'CODE_MODE_WORKFLOW_SOURCE_STALE',
+    });
+    await assert.rejects(stale.authorize({operation:'apply',
+      input:source,expectedSha256:B,operationKinds:['paint_texture_pixel']}),
+      /CODE_MODE_WORKFLOW_SOURCE_STALE/);
+  }finally{await rm(folder,{recursive:true,force:true})}
+});
+
+test('new asset orientation requires no previously bound model or approval',async()=>{
+  const folder=await mkdtemp(join(tmpdir(),'ld-orient-new-'));
+  try{
+    const file=join(folder,'README.md');
+    const gate=createWorkflowGate({folder,source:null,sourceSha:null});
+    await writeFile(file,note({model:null,sha:null}));
+    assert.equal((await gate.orient()).status,'SOURCE_BOUND');
+    assert.equal((await gate.orient()).approvalEvidence,'NOT_ATTESTED');
+    await writeFile(file,note());
+    assert.equal((await gate.orient()).status,'BLOCKED');
+  }finally{await rm(folder,{recursive:true,force:true})}
+});

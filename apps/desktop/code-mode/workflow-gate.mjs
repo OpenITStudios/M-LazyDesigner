@@ -98,6 +98,28 @@ export function createWorkflowGate({folder,source,sourceSha}){
     if(pinned!==null&&pinned!==key)refuse('README_CHANGED');
     return {key,w:parseWorkflow(bytes.toString('utf8'))};
   }
+  // One read-only Stage orientation at Start/Resume. Never grants approval,
+  // persists state, or pins the README; each mutation still rechecks it.
+  async function orient(){
+    let w;
+    try{({w}=await read())}catch(error){
+      if(typeof error?.message!=='string'||
+         !error.message.startsWith('CODE_MODE_WORKFLOW_'))throw error;
+      return Object.freeze({status:'BLOCKED',reason:error.message});
+    }
+    const bound=source===null
+      ?w.model===null&&w.sha===null
+      :w.model===basename(source)&&w.sha===sourceSha;
+    if(!bound)return Object.freeze({
+      status:'BLOCKED',reason:'CODE_MODE_WORKFLOW_SOURCE_STALE',
+    });
+    return Object.freeze({
+      status:'SOURCE_BOUND',currentStage:w.stage,geometry:w.g,
+      uvLayout:w.uv,texturing:w.t,animation:w.a,
+      animationRequired:w.required,hasBlockers:w.blocked,
+      approvalEvidence:'NOT_ATTESTED',
+    });
+  }
   async function authorize(req,summary){
     const {key,w}=await read(),domain=writeDomain(req);
     if(domain==='NEW'){
@@ -128,5 +150,5 @@ export function createWorkflowGate({folder,source,sourceSha}){
     if(!pinned||dirname(filePath)!==folder||!SHA.test(sha))refuse('REGISTER_INVALID');
     children.set(filePath,sha);
   }
-  return Object.freeze({authorize,leaseValid,register});
+  return Object.freeze({orient,authorize,leaseValid,register});
 }
