@@ -6,7 +6,8 @@
 **Evidence:** `SOURCE_REVIEWED` / `SOURCE_COMMITTED` where supported; authored regressions are `TEST_AUTHORED_NOT_RUN`. No native/Windows, performance, or visual PASS.  
 **Hold:** CI, localtest, Codex execution and native Blockbench validation remain deferred until an explicitly selected PC-local phase. No cloud substitute.  
 **Latest source increment:** Existing Rust `inspectBatch` now shares the bounded decoded atlas between Cube alpha, coverage and repeated same-atlas `texture_styling_face` reads. Standalone inspection keeps full validation, and parity/refusal regression tests are authored but NOT_EXECUTED.  
-**Next source decision:** No speculative new layers. Further optimization needs a concrete caller, measured bottleneck and the existing quality/permission gates.
+**P0 source routing (2026-11-20):** The single existing Code Mode tool now gives bounded Geometry/Texturing/Animation selection rules, prevents duplicate named-target lookup guidance, and avoids recommending a second preflight for an unchanged first-party Rust planner receipt. Native Apply, SHA/revision and host approval still revalidate; test fixtures are AUTHORED_NOT_RUN.  
+**Next source decision:** STOP this P0 scope at source proof; further optimization requires a concrete repeated caller and matched performance/quality evidence.
 
 ## Locked product decisions
 

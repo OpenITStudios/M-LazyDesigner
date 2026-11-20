@@ -48,6 +48,7 @@ test('exact task context compacts existing Rust inspect batch without raw face o
   assert.equal(ctx.target.face_links[0].reference_kind,'uuid');
   assert.equal(ctx.write_authority,'NOT_GRANTED');
   assert.equal(ctx.visual_verdict,'UNVERIFIED');
+  assert.match(ctx.next,/without an identical Rust planner preflight/);
   assert.equal(ctx.target.faces,undefined);
   assert.equal(JSON.stringify(ctx).includes('"source":{'),false);
   assert.ok(Buffer.byteLength(JSON.stringify(ctx)) < 8192);

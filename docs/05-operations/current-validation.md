@@ -8,7 +8,7 @@
 | Surface | Verified at source level | Still NOT_EXECUTED / UNVERIFIED |
 | --- | --- | --- |
 | Architecture | The Rust `EditorSession` is the single transaction/history/document owner; Tauri and Code Mode use the same Rust engine but independent saved-file/GUI sessions | Native behavior, synchronization across sessions, live editing |
-| AI composition | One Code Mode guest-to-trusted-host-to-typed-SDK-to-CLI path, bounded reads and single authorized `EditPlan` source | Actual sandbox isolation, secure OS permissions, user-PC Codex integration |
+| AI composition | One Code Mode guest-to-trusted-host-to-typed-SDK-to-CLI path, bounded reads and single authorized `EditPlan` source; AI-facing one-path-per-task routing and no repeat guidance/preflight for unchanged Rust planner receipts | Actual sandbox isolation, secure OS permissions, user-PC Codex integration or measured task savings |
 | Geometry | Rust Geometry assembly, transforms, rig, UV, read-only impact/negative-space guard and deterministic rib-array source | Real shape similarity, collision/clearance, pivot correctness in Blockbench |
 | Texturing | Source guards for RGBA8, source colors/alpha, UV aliasing, scoped Paint/Undo, 2K+ atlas policies and selected preview; one bounded inspection scratch shared by alpha, coverage and face-style queries | Native Paint accuracy, real multi-atlas memory, seams, blindspots, artistic material quality and measured performance |
 | Animation | Source numeric Bone/clip/keyframe/curve and export paths; latest periodic rotation is a read-only plan | Native replay, dynamics, continuity, visual timing, controller semantics outside supported subset |

@@ -181,6 +181,22 @@ sandbox-worker.mjs (Deno: restricted model-authored code)
   **no live AI write** and no implicit GUI/CLI session synchronization.
 - `*.test.mjs`: regression source; actual execution remains on hold.
 
+**P0 minimal Code Mode workflow (2026-11-20, SOURCE_ONLY):** Select the
+shortest valid domain path. Exact Cube/Bone/Texture/Animation UUIDs do not
+need name discovery; for one unknown name use `taskContext`, or use
+`inspectBatch` to combine genuinely related questions. Do not run
+both discovery paths for the same target. Prefer one bounded Geometry
+assembly for dependent Cube/Bone cohorts, one guarded Texturing cohort
+after representative visual review, and one coherent Animation clip/key
+batch. Existing Rust planners return a validated **read-only preflight**:
+when source SHA and the exact operations/correction scope are unchanged,
+do not repeat `preflightGuidance` or `preflight`; a changed plan requires
+fresh native preflight. Actual `Apply` always rechecks authorization,
+source revision, Rust invariants and output publication. This is an AI
+routing/operation-efficiency change, not a new SDK tool, safety bypass,
+native measurement or visual acceptance. See
+[host integration](HOST_INTEGRATION.md) for precise conditions.
+
 For the exact domain owner, use [the system map](../../../docs/04-system/implementation-map.md#rust-source-ownership-and-entrypoints).
 Only trusted host approval may authorize a separately saved file mutation;
 Deno itself cannot grant rights. Source tests, native sandbox and

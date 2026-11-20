@@ -140,7 +140,7 @@ export function compactTaskContext(receipt, {
     write_authority: 'NOT_GRANTED',
     visual_verdict: 'UNVERIFIED',
     next: exact ?
-      'Use only this exact saved UUID. For sensitive changes, preflight the typed plan; actual Apply still needs separate permission and fresh SHA.' :
+      'Use only this exact saved UUID. For nontrivial edits without an identical Rust planner preflight, dry-run the typed plan; Apply still needs separate permission and fresh SHA.' :
       'Resolve the exact, unique saved target identity before any edit.',
   };
   const encoded = JSON.stringify(context);

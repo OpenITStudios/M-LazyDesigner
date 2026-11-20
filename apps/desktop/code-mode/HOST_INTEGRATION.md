@@ -9,13 +9,27 @@ extensions, raw PNG or a second model store into Deno. Ambiguous saved names
 produce target:null, not a selected object. The result remains UNVERIFIED
 for artistic correctness and NOT_GRANTED for mutation authority.
 
-preflightGuidance({project,operations,correctionScope}) is advice computed
-without a Rust invocation. Only one fully formed rename_node is OPTIONAL;
-multi-operation, Geometry/UV/Texturing/Animation, unknown and other edits
-are RECOMMENDED for existing native preflight. This does not run preflight
-or waive any actual Rust Apply validation or operator approval. If
-recommended and the task warrants it, call the current source-SHA-pinned
-preflight before requesting a separately authorized Apply.
+Code Mode routing is **one path per task**, not a second router: use an exact
+UUID directly; use `taskContext` for one unknown-name lookup, or `inspectBatch`
+when several related read selectors belong together, not both for the same
+lookup. Geometry cohorts use the existing `planGeometryAssembly`; exact
+guarded Paint uses the existing Rust `EditPlan`, while source-selected
+painted-metal candidates use `planSemanticMaterial`; Animation uses
+exact key/clip edits or `planPeriodicRotation` only for suitable looping
+numeric rotation. Keep the existing stage/quality constraints.
+
+`preflightGuidance({project,operations,correctionScope})` remains **advisory**
+and does not call Rust. Its `RECOMMENDED` result applies only when the current
+plan has not already passed an identical first-party Rust planner preflight.
+`planGeometryAssembly`, `planSemanticMaterial`, `planPeriodicRotation` and
+other supported planners already return a read-only preflight. If the
+**same verified source SHA, exact operations and correction scope** are
+unchanged, skip a second guidance/preflight RPC. If a plan is changed,
+unverified or lacks preflight, perform native `preflight` for nontrivial
+changes. This saves *optional duplicate work only*: `Apply` independently
+checks SHA/revision, Rust validation, user/host approval, correction scope,
+and publishes only a new file. Planner receipts never grant write or visual
+authority; a guest-supplied fabricated preflight must not be trusted.
 
 After Apply succeeds, inspect the NEW output project handle using
 mutation.changed_uuids as hints for focused inspectBatch selectors.
