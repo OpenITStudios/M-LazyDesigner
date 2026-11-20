@@ -69,6 +69,8 @@ pub use animation_periodic::{PeriodicRotationIntent,PeriodicRotationProposal};
 mod animation_semantic;
 pub use animation_semantic::{SemanticAnimationIntent,SemanticAnimationProposal};
 mod animation_trajectory;
+mod animation_existing;
+pub use animation_existing::{ExistingAnimationIntent,ExistingAnimationReview};
 mod animation_export;
 pub use animation_export::{export_bedrock_animations, bedrock_animation_curve_fidelity};
 mod asset_handoff;
@@ -3461,6 +3463,13 @@ impl EditorSession {
     pub fn plan_semantic_animation(&self, intent: &SemanticAnimationIntent)
         -> Result<SemanticAnimationProposal> {
         animation_semantic::compile(self,intent)
+    }
+
+    /// Review a selected saved numeric animation; optionally propose exactly
+    /// one source-preconditioned keyframe change using the SAME EditPlan.
+    pub fn review_existing_animation(&self,intent:&ExistingAnimationIntent)
+        -> Result<ExistingAnimationReview> {
+        animation_existing::review(self,intent)
     }
 
     /// External editor pixels use the same immutable Rust transaction and

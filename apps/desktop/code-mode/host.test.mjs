@@ -5350,3 +5350,55 @@ test('trusted observer records a refused guest without exposing guest source or 
     assert.equal(JSON.stringify(samples).includes('never logged'),false);
     assert.equal(JSON.stringify(samples).includes(input),false);
   }));
+
+
+// SOURCE_AUTHORED_NOT_RUN — no executable host/native/Blockbench proof.
+test('existing saved Animation review routes through one guest-to-Rust read, no write',()=>
+  fixture(async input=>{
+    const clip='00000000-0000-4000-8000-000000009001';
+    const intent={expected_revision:0,animation_uuid:clip};
+    const analysis={
+      scope:'source_bound_existing_numeric_animation_review',
+      animation_uuid:clip,recognized:true,status:'no_source_candidates',
+      loop_mode:'loop',length_seconds:1,tracks_total:1,keyframe_count:1,
+      issues_total:0,issues:[],track_summaries:[{
+        bone_uuid:'00000000-0000-4000-8000-000000000001',
+        channel:'rotation',key_count:1,first_time:0,last_time:0,
+        contains_nonlinear_keys:false,max_authored_linear_segment_speed:0,
+      }],truncated:false,analysis_limit:'NUMERIC_SAVED_KEYS_ONLY',
+      native_playback_verdict:'NOT_EXECUTED',visual_verdict:'UNVERIFIED',
+      write_authority:'NOT_GRANTED'
+    };
+    const report={status:'OK',sha256:HASH,summary:SUMMARY,analysis,
+      plan:null,preflight:null,correction_evidence:null,
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'};
+    const calls=[];let approvals=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'review-existing-animation');
+        assert.equal(argv[argv.indexOf('--expected-sha256')+1,HASH);
+        assert.deepEqual(JSON.parse(await readFile(
+          argv[argv.indexOf('--intent')+1],'utf8')),intent);
+        return report;
+      },
+      spawnImpl:()=>fakeGuest({method:'reviewExistingAnimation',
+        args:{project:'p0',intent}},value=>{
+          assert.equal(value.ok,true);
+          assert.equal(value.result.analysis.recognized,true);
+          assert.equal(value.result.plan,null);
+          return {review:value.result.analysis.status,
+            writes:value.result.write_authority};
+        }),
+    });
+    const response=await host.execute({
+      code:'return codemode.reviewExistingAnimation({});',
+    });
+    assert.equal(response.value.review,'no_source_candidates');
+    assert.equal(response.value.writes,'NOT_GRANTED');
+    assert.deepEqual(calls,['inspect','review-existing-animation']);
+    assert.equal(approvals,0);
+  }));

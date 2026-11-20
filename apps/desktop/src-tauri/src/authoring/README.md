@@ -1,3 +1,8 @@
+**2026-11-20 — Existing Animation intelligence & one-key correction (SOURCE_ONLY / NOT_EXECUTED)**
+
+- `animation_existing.rs` reviews a SHA-pinned, selected **existing** Bedrock numeric clip, grouping Bone UUID/channel/time identities and reporting at most 16 loop/winding issues and 24 channel summaries. Opaque scripts, unknown expressions and imported unsupported tracks stay unsupported, not implicitly normalized. Saved effects, other animations, geometry, UV/texture, and marker payloads remain untouched.
+- An opt-in caller-selected `close_loop_endpoint` permits only small exact numeric endpoint differences (max axis delta <= 0.05) with full source-key identity and all-linear channel admission. `replace_exact_key` uses a caller-provided exact source time/value and new value with bounded delta. Both compile **one** canonical UpdateBoneTransformKeyframe operation and call existing `EditorSession::preflight`; no automatic Apply, new editor authority, IK, visual PASS or assumed motion improvement. Meaningful Euler winding or nonlinear channels refuse, even if numeric endpoints look close.
+
 **2026-11-20 — Source-bound Bone marker trajectory and viewport bind fix (SOURCE_ONLY / NOT_EXECUTED)**
 
 - The same `plan-semantic-animation` request can optionally declare up to four source Bone-pivot-local 3D marker probes. `animation_trajectory.rs` projects saved hierarchy/Bone origins, bind ZYX rotations and admitted **linear** numeric key channels through bounded 3D samples. Source path length/displacement/speed are diagnostic values, not measured native foot sliding, collision, IK reachability, floor support or continuous animation correctness.

@@ -13,6 +13,7 @@ import type {
   SemanticMaterialIntent, SemanticMaterialProposalReceipt,
   PeriodicRotationIntent, PeriodicRotationReceipt,
   SemanticAnimationIntent, SemanticAnimationReceipt,
+  ExistingAnimationIntent, ExistingAnimationReviewReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -164,6 +165,10 @@ export interface CodeModeGuestAPI {
   planSemanticAnimation(args:{
     project:string;intent:SemanticAnimationIntent;
   }):Promise<SemanticAnimationReceipt>;
+  /** Existing saved numeric clip review, optional one-key exact preflight. */
+  reviewExistingAnimation(args:{
+    project:string;intent:ExistingAnimationIntent;
+  }):Promise<ExistingAnimationReviewReceipt>;
   /** G2 read-only same-Bone face alignment, never a persistent relation. */
   planGeometryAttachment(args: {
     project:string; attachment:GeometryFaceAttachmentRequest;

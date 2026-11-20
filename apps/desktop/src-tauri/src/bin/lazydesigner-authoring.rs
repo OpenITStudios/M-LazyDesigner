@@ -9,7 +9,7 @@ use lazydesigner::authoring::{
     GeometryAssemblyRequest, GeometryFaceAttachmentRequest, inspect_geometry_impact,
     GeometryVoidZone, check_geometry_void_zones,
     GeometryResizePropagationRequest, SemanticMaterialIntent,
-    PeriodicRotationIntent, SemanticAnimationIntent,
+    PeriodicRotationIntent, SemanticAnimationIntent, ExistingAnimationIntent,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use lazydesigner::authoring::storage::{bbmodel, png, geometry_json, animation_json, publish_new, publish_new_png, publish_new_geometry, publish_new_animation, read_bounded, same_directory};
@@ -932,6 +932,27 @@ fn execute() -> Result<Value> {
                 "status":"OK","sha256":actual_sha,"summary":session.summary(),
                 "plan":proposal.plan,"preflight":proposal.preflight,
                 "motion_evidence":proposal.motion_evidence,
+                "write_authority":"NOT_GRANTED","visual_verdict":"UNVERIFIED"
+            }))
+        }
+        "review-existing-animation" => {
+            // Source-SHA-bound review; optional exact key correction is one
+            // uncommitted native EditPlan, NOT a write/publisher or visual pass.
+            option_set(&options,&["--input","--intent","--expected-sha256"])?;
+            let input=PathBuf::from(option(&options,"--input")?);
+            let (bytes,actual_sha)=read_verified_source(
+                &input,option(&options,"--expected-sha256")?)?;
+            let data=read_bounded(
+                Path::new(option(&options,"--intent")?),MAX_PLAN_BYTES)?;
+            let request:ExistingAnimationIntent=serde_json::from_slice(&data)
+                .map_err(|_|fail("EXISTING_ANIMATION_INTENT_INVALID"))?;
+            let session=EditorSession::open(&bytes)?;
+            let review=session.review_existing_animation(&request)?;
+            Ok(json!({
+                "status":"OK","sha256":actual_sha,"summary":session.summary(),
+                "analysis":review.analysis,"plan":review.plan,
+                "preflight":review.preflight,
+                "correction_evidence":review.correction_evidence,
                 "write_authority":"NOT_GRANTED","visual_verdict":"UNVERIFIED"
             }))
         }

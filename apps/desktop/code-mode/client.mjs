@@ -16,6 +16,7 @@ import {validGeometryImpact} from './geometry-impact.mjs';
 import {normalizedGeometryVoidZones,validGeometryVoidEvidence} from './geometry-void.mjs';
 import {serializePeriodicRotation,validPeriodicRotationReceipt} from './periodic-rotation.mjs';
 import {serializeSemanticAnimation,validSemanticAnimationReceipt} from './semantic-animation.mjs';
+import {serializeExistingAnimationIntent,validExistingAnimationReviewReceipt} from './existing-animation-review.mjs';
 
 const execFileAsync = promisify(execFile);
 const PLAN_LIMIT = 64 * 1024;
@@ -1347,6 +1348,22 @@ export function createRustCodeModeClient({
         return receipt;
       }finally{await rm(directory,{recursive:true,force:true});}
     },
+    async reviewExistingAnimation({input,expectedSha256,intent}) {
+      const digest=hash(expectedSha256).toLowerCase();
+      const payload=serializeExistingAnimationIntent(intent);
+      const directory=await mkdtemp(join(tmpdir(),'lazydesigner-existing-motion-'));
+      try {
+        const file=join(directory,'existing-motion.json');
+        await writeFile(file,payload,{encoding:'utf8',mode:0o600,flag:'wx'});
+        const receipt=await call('review-existing-animation',{
+          input:absolute(input,'input'),'expected-sha256':digest,intent:file,
+        });
+        if(!validExistingAnimationReviewReceipt(receipt,intent,digest)){
+          throw new Error('CODE_MODE_EXISTING_ANIMATION_RECEIPT_INVALID');
+        }
+        return receipt;
+      }finally{await rm(directory,{recursive:true,force:true});}
+    },
     async planSemanticMaterial({ input, expectedSha256, intent }) {
       const digest=hash(expectedSha256).toLowerCase();
       const payload=serializeSemanticMaterialIntent(intent);
@@ -1691,6 +1708,8 @@ export async function openRustCodeModeProject(client, input) {
       client.planPeriodicRotation({input:path,expectedSha256,intent}),
     planSemanticAnimation: (intent) =>
       client.planSemanticAnimation({input:path,expectedSha256,intent}),
+    reviewExistingAnimation: (intent) =>
+      client.reviewExistingAnimation({input:path,expectedSha256,intent}),
     planGeometryAttachment: (attachment) =>
       client.planGeometryAttachment({ input:path, expectedSha256, attachment }),
     planGeometryResizePropagation: (propagation) =>

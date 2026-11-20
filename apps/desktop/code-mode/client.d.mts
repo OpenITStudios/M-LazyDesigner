@@ -357,6 +357,63 @@ export interface SemanticAnimationReceipt {
   preflight:PreflightReceipt["preflight"];motion_evidence:SemanticAnimationEvidence;
   write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
 }
+/** SHA-pinned saved-clip source diagnosis. No automatic fixes, IK or playback. */
+export type ExistingAnimationCorrection =
+  | {kind:"close_loop_endpoint";bone_uuid:string;channel:"rotation"|"position"|"scale";
+      start_keyframe_uuid:string;end_keyframe_uuid:string;
+      expected_start_value:Vec3;expected_end_value:Vec3;max_axis_delta:number}
+  | {kind:"replace_exact_key";bone_uuid:string;channel:"rotation"|"position"|"scale";
+      keyframe_uuid:string;expected_time:number;expected_value:Vec3;
+      replacement_value:Vec3;max_axis_delta:number};
+export interface ExistingAnimationIntent {
+  expected_revision:0;animation_uuid:string;
+  /** Optional; caller selects exactly one source-preconditioned key change. */
+  correction?:ExistingAnimationCorrection;
+}
+export interface ExistingAnimationIssue {
+  kind:"euler_winding_unresolved"|"loop_boundary_not_explicit"|
+    "loop_endpoint_value_difference";
+  bone_uuid:string;channel:"rotation"|"position"|"scale";
+  start_keyframe_uuid?:string;end_keyframe_uuid?:string;
+  start_value?:Vec3;end_value?:Vec3;
+  bounded_close_candidate?:boolean;
+  automatic_correction?:"NOT_SAFE";
+  native_continuity?:"UNVERIFIED";
+}
+export interface ExistingAnimationAnalysis {
+  scope:"source_bound_existing_numeric_animation_review";
+  animation_uuid:string;
+  recognized:boolean;status:"unsupported"|"needs_review"|"no_source_candidates";
+  reason?:"OPAQUE_OR_UNSUPPORTED_CLIP";
+  loop_mode?:"once"|"loop"|"hold";length_seconds?:number;
+  tracks_total:number|null;keyframe_count:number|null;
+  issues_total:number|null;issues:ExistingAnimationIssue[];
+  track_summaries:Array<{bone_uuid:string;channel:"rotation"|"position"|"scale";
+    key_count:number;first_time:number;last_time:number;
+    contains_nonlinear_keys:boolean;
+    max_authored_linear_segment_speed:number|null}>;
+  truncated:boolean;analysis_limit?:"NUMERIC_SAVED_KEYS_ONLY";
+  native_playback_verdict:"NOT_EXECUTED";visual_verdict:"UNVERIFIED";
+  write_authority:"NOT_GRANTED";
+}
+export interface ExistingAnimationCorrectionEvidence {
+  scope:"source_bound_existing_animation_key_correction";
+  kind:ExistingAnimationCorrection["kind"];animation_uuid:string;
+  bone_uuid:string;channel:"rotation"|"position"|"scale";
+  keyframe_uuid:string;time:number;
+  source_before:Vec3;replacement:Vec3;max_axis_delta:number;
+  source_authority:"EXACT_SAVED_NUMERIC_KEY";
+  native_playback_verdict:"NOT_EXECUTED";
+  visual_verdict:"UNVERIFIED";write_authority:"NOT_GRANTED";
+}
+export interface ExistingAnimationReviewReceipt {
+  status:"OK";sha256:string;summary:DocumentSummary;
+  analysis:ExistingAnimationAnalysis;
+  plan:{expected_revision:0;operations:EditOperation[];correction_scope:null}|null;
+  preflight:PreflightReceipt["preflight"]|null;
+  correction_evidence:ExistingAnimationCorrectionEvidence|null;
+  write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
+}
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */
   expected_revision: 0;
@@ -1466,6 +1523,9 @@ export interface RustCodeModeClient {
   planSemanticAnimation(input:{
     input:string;expectedSha256:string;intent:SemanticAnimationIntent;
   }):Promise<SemanticAnimationReceipt>;
+  reviewExistingAnimation(input:{
+    input:string;expectedSha256:string;intent:ExistingAnimationIntent;
+  }):Promise<ExistingAnimationReviewReceipt>;
   planGeometryAttachment(input: {
     input: string; expectedSha256: string; attachment: GeometryFaceAttachmentRequest;
   }): Promise<GeometryFaceAttachmentReceipt>;
@@ -1572,6 +1632,7 @@ export interface RustCodeModeProject {
   planSemanticMaterial(intent:SemanticMaterialIntent):Promise<SemanticMaterialProposalReceipt>;
   planPeriodicRotation(intent:PeriodicRotationIntent):Promise<PeriodicRotationReceipt>;
   planSemanticAnimation(intent:SemanticAnimationIntent):Promise<SemanticAnimationReceipt>;
+  reviewExistingAnimation(intent:ExistingAnimationIntent):Promise<ExistingAnimationReviewReceipt>;
   planGeometryAttachment(attachment: GeometryFaceAttachmentRequest): Promise<GeometryFaceAttachmentReceipt>;
   planGeometryResizePropagation(propagation: GeometryResizePropagationRequest): Promise<GeometryResizePropagationReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;
