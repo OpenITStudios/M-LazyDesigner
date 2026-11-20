@@ -430,6 +430,20 @@ Rust core owns actual bitmap edits/Undo. Exact original implementation
 bodies and refusal messages were preserved; source regression authored
 NOT_EXECUTED. Cargo/Windows/Bedrock acceptance remains held.
 
+**Rust Editor dock interaction controller (2026-11-21):**
+Panel floating/return, docking, attached tabs, keyboard controls, pointer
+resize and browser-local layout persistence now live in
+`apps/desktop/src/rustDockInteractions.ts`, not the large
+`RustEditorPage.svelte` controller. The exact original 26 UI
+interaction functions use typed live getters/setters bound to the
+ONE parent `dockLayout`, floating/resize gestures and UI status;
+no independent store, model, native command, history or event bus
+was introduced. Existing Svelte lifecycle still restores the same
+versioned localStorage layout, observes size, and owns all model/Undo
+and Paint state. Global editor CSS/markup unchanged.
+Source regression AUTHORED_NOT_RUN; Svelte/Windows/UI visual verification
+held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

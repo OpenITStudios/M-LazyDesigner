@@ -52,15 +52,14 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
   import {makeRows,revealOutlinerPath,outlinerParentId,boneContains,
     type Row} from './rustOutlinerView';
   import {
-    defaultDockLayout, restoreDockLayout, serializeDockLayout,
-    measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
-    attachDockTabs, detachDockTabs, selectDockTab,
-    measureFloatRect, floatDock, dockPanel, dockSide, moveFloat, resizeFloat,
-    dropSideForPointer, crossedDragThreshold,
+    defaultDockLayout, restoreDockLayout, measureDocks, measureFloatRect,
     RUST_DOCK_LAYOUT_KEY, LEGACY_DOCK_LAYOUT_V2_KEY, LEGACY_DOCK_LAYOUT_KEY,
     DOCK_SPLITTER, MIN_DOCK, MAX_DOCK,
-    type DockLayout, type DockPanel, type DockSide, type FloatRect,
+    type DockLayout, type DockPanel, type DockSide,
   } from './rustDockLayout';
+  import {createRustDockInteractions,
+    type FloatingGesture, type DockResize, type InspectorResize
+  } from './rustDockInteractions';
 
   export let onLegacy: () => void = () => {};
   type Menu = 'file' | 'edit' | 'view' | null;
@@ -187,28 +186,10 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
   let editorWidth = 980;
   let editorHeight = 550;
   let dockLayout: DockLayout = defaultDockLayout();
-  type FloatingGesture = {
-    panel: DockPanel;
-    pointerId: number;
-    kind: 'move' | 'resize';
-    startX: number;
-    startY: number;
-    original: FloatRect;
-    baseline: DockLayout;
-    moved: boolean;
-  };
   let floatingGesture: FloatingGesture | null = null;
   let floatingOnTop: DockPanel | null = null;
   let pendingDockSide: DockSide | null = null;
   let dockPersistenceError = false;
-  type DockResize = {
-    side: DockSide; pointerId: number; startX: number;
-    startWidth: number; baseline: DockLayout;
-  };
-  type InspectorResize = {
-    pointerId: number; startY: number; startPercent: number;
-    height: number; baseline: DockLayout;
-  };
   let dockResize: DockResize | null = null;
   let inspectorResize: InspectorResize | null = null;
 
@@ -2008,283 +1989,29 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
     if (key === 'y') { event.preventDefault(); history('redo'); }
   }
 
-  // Panel state is UI-only; never persist the active model, UUID, paths, or
-  // Rust document/Undo revisions through browser storage.
-  function persistDocks() {
-    try {
-      window.localStorage.setItem(RUST_DOCK_LAYOUT_KEY, serializeDockLayout(dockLayout));
-      dockPersistenceError = false;
-    } catch {
-      dockPersistenceError = true;
-    }
-  }
-  function setLayout(next: DockLayout) {
-    dockLayout = next;
-    persistDocks();
-    closeMenus();
-  }
-  function floatPanel(panel: DockPanel) {
-    floatingGesture = null;
-    pendingDockSide = null;
-    floatingOnTop = panel;
-    setLayout(floatDock(dockLayout, panel, editorWidth, editorHeight));
-    void tick().then(() => {
-      document.querySelector<HTMLElement>(
-        '.rust-editor .rust-floating-window[data-panel="' + panel + '"] .floating-title'
-      )?.focus();
-    });
-  }
-
-  function attachPanel(panel: DockPanel, side: DockSide) {
-    floatingGesture = null;
-    pendingDockSide = null;
-    setLayout(dockPanel(dockLayout, panel, side));
-    void tick().then(() => {
-      const owner = document.querySelector<HTMLElement>(
-        '.rust-editor .' + (panel === 'textures' ? 'textures-dock' : 'inspector-dock')
-      );
-      owner?.querySelector<HTMLElement>('.dock-controls button')?.focus();
-    });
-  }
-
-  function returnPanel(panel: DockPanel) {
-    attachPanel(panel, dockSide(dockLayout, panel));
-  }
-
-  function startFloating(panel: DockPanel, kind: 'move' | 'resize', event: PointerEvent) {
-    if (event.button !== 0 || floatingGesture || dockResize || inspectorResize ||
-        (kind === 'move' && event.target instanceof Element &&
-          !!event.target.closest('button'))) return;
-    const original = dockLayout.floating[panel];
-    if (!original) return;
-    floatingGesture = {
-      panel, kind, pointerId: event.pointerId,
-      startX: event.clientX, startY: event.clientY,
-      original: measureFloatRect(original, editorWidth, editorHeight),
-      baseline: dockLayout, moved: false,
-    };
-    pendingDockSide = null;
-    floatingOnTop = panel;
-    const target = event.currentTarget as HTMLElement;
-    try {
-      target.setPointerCapture(event.pointerId);
-    } catch {
-      floatingGesture = null;
-      return;
-    }
-    event.preventDefault();
-  }
-
-  function moveFloating(event: PointerEvent) {
-    const state = floatingGesture;
-    if (!state || state.pointerId !== event.pointerId) return;
-    const x = event.clientX - state.startX;
-    const y = event.clientY - state.startY;
-    if (crossedDragThreshold(x, y)) state.moved = true;
-    if (!state.moved) return;
-    if (state.kind === 'move') {
-      dockLayout = moveFloat(
-        state.baseline, state.panel, state.original.x + x, state.original.y + y,
-        editorWidth, editorHeight,
-      );
-      const rect = editorBody.getBoundingClientRect();
-      pendingDockSide = dropSideForPointer(event.clientX - rect.left, editorWidth);
-    } else {
-      dockLayout = resizeFloat(
-        state.baseline, state.panel,
-        state.original.width + x, state.original.height + y,
-        editorWidth, editorHeight,
-      );
-    }
-  }
-
-  function finishFloating(event: PointerEvent, cancelled = false) {
-    const gesture = floatingGesture;
-    if (!gesture || gesture.pointerId !== event.pointerId) return;
-    const rect = editorBody.getBoundingClientRect();
-    const side = !cancelled && gesture.kind === 'move' && gesture.moved
-      ? dropSideForPointer(event.clientX - rect.left, editorWidth) : null;
-    floatingGesture = null;
-    pendingDockSide = null;
-    if (cancelled) dockLayout = gesture.baseline;
-    else if (side) attachPanel(gesture.panel, side);
-    else persistDocks();
-  }
-
-  function keyFloatingMove(panel: DockPanel, event: KeyboardEvent) {
-    const arrows: Record<string, [number, number]> = {
-      ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-      ArrowUp: [0, -1], ArrowDown: [0, 1],
-    };
-    const axis = arrows[event.key];
-    const rect = dockLayout.floating[panel];
-    if (!axis || !rect) return;
-    const step = event.shiftKey ? 25 : 10;
-    setLayout(moveFloat(
-      dockLayout, panel, rect.x + axis[0] * step, rect.y + axis[1] * step,
-      editorWidth, editorHeight,
-    ));
-    event.preventDefault();
-  }
-
-  function keyFloatingSize(panel: DockPanel, event: KeyboardEvent) {
-    const arrows: Record<string, [number, number]> = {
-      ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-      ArrowUp: [0, -1], ArrowDown: [0, 1],
-    };
-    const axis = arrows[event.key];
-    const rect = dockLayout.floating[panel];
-    if (!axis || !rect) return;
-    const step = event.shiftKey ? 25 : 10;
-    setLayout(resizeFloat(
-      dockLayout, panel,
-      rect.width + axis[0] * step, rect.height + axis[1] * step,
-      editorWidth, editorHeight,
-    ));
-    event.preventDefault();
-  }
-
-  function hideDock(panel: DockPanel, hidden: boolean) {
-    setLayout(setDockHidden(dockLayout, panel, hidden));
-    // The initiating button is unmounted on fold/restore. Preserve keyboard focus
-    // on the corresponding visible rail or panel control after Svelte updates.
-    void tick().then(() => {
-      const owner = document.querySelector<HTMLElement>(
-        '.rust-editor .' + (panel === 'textures' ? 'textures-dock' : 'inspector-dock')
-      );
-      const target = owner?.querySelector<HTMLElement>(
-        hidden ? '.dock-rail' : '.dock-controls button'
-      );
-      target?.focus();
-    });
-  }
-  function swapDocks() {
-    setLayout(swapDockSides(dockLayout));
-  }
-  function resetDocks() {
-    setLayout(defaultDockLayout());
-  }
-
-  function focusActiveTab() {
-    void tick().then(() => {
-      document.querySelector<HTMLElement>('.rust-editor .attached-tab[aria-selected="true"]')?.focus();
-    });
-  }
-
-  function attachTabs(side: DockSide) {
-    floatingGesture = null;
-    pendingDockSide = null;
-    setLayout(attachDockTabs(dockLayout, side));
-    focusActiveTab();
-  }
-
-  function separateTabs() {
-    if (dockLayout.attachedSide === null) return;
-    const panel = dockLayout.activeAttached;
-    setLayout(detachDockTabs(dockLayout));
-    void tick().then(() => {
-      const slot = document.querySelector<HTMLElement>(
-        '.rust-editor .' + (panel === 'textures' ? 'textures-dock' : 'inspector-dock')
-      );
-      slot?.querySelector<HTMLElement>('.dock-controls button')?.focus();
-    });
-  }
-
-  function activateAttachedTab(panel: DockPanel) {
-    if (dockLayout.attachedSide === null) return;
-    setLayout(selectDockTab(dockLayout, panel));
-  }
-
-  function keyAttachedTab(event: KeyboardEvent, panel: DockPanel) {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    const next: DockPanel = event.key === 'Home' ? 'textures'
-      : event.key === 'End' ? 'inspector'
-      : panel === 'textures' ? 'inspector' : 'textures';
-    event.preventDefault();
-    activateAttachedTab(next);
-    focusActiveTab();
-  }
-  function startDockResize(side: DockSide, event: PointerEvent) {
-    if (event.button !== 0 || dockResize || inspectorResize ||
-        (side === 'left' ? measuredDocks.leftHidden : measuredDocks.rightHidden)) return;
-    const node = event.currentTarget as HTMLElement;
-    dockResize = {
-      side, pointerId: event.pointerId, startX: event.clientX,
-      startWidth: side === 'left' ? measuredDocks.leftWidth : measuredDocks.rightWidth,
-      baseline: dockLayout,
-    };
-    try {
-      node.setPointerCapture(event.pointerId);
-    } catch {
-      dockResize = null;
-      return;
-    }
-    event.preventDefault();
-  }
-  function moveDockResize(event: PointerEvent) {
-    const state = dockResize;
-    if (!state || state.pointerId !== event.pointerId) return;
-    const direction = state.side === 'left' ? 1 : -1;
-    dockLayout = resizeDock(
-      state.baseline, state.side,
-      state.startWidth + (event.clientX - state.startX) * direction,
-      editorWidth,
-    );
-  }
-  function finishDockResize(event: PointerEvent, cancelled = false) {
-    if (!dockResize || dockResize.pointerId !== event.pointerId) return;
-    const state = dockResize;
-    dockResize = null;
-    if (cancelled) dockLayout = state.baseline;
-    else persistDocks();
-  }
-  function keyDockResize(side: DockSide, event: KeyboardEvent) {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    const sign = event.key === 'ArrowRight' ? 1 : -1;
-    const outward = side === 'left' ? sign : -sign;
-    const step = event.shiftKey ? 25 : 10;
-    const oldWidth = side === 'left' ? measuredDocks.leftWidth : measuredDocks.rightWidth;
-    setLayout(resizeDock(dockLayout, side, oldWidth + outward * step, editorWidth));
-    event.preventDefault();
-  }
-  function startInspectorResize(event: PointerEvent) {
-    if (event.button !== 0 || inspectorResize || dockResize) return;
-    const node = event.currentTarget as HTMLElement;
-    const parent = node.parentElement;
-    if (!parent || parent.clientHeight < 120) return;
-    inspectorResize = {
-      pointerId: event.pointerId, startY: event.clientY,
-      startPercent: dockLayout.inspectorSplit,
-      height: parent.clientHeight, baseline: dockLayout,
-    };
-    try {
-      node.setPointerCapture(event.pointerId);
-    } catch {
-      inspectorResize = null;
-      return;
-    }
-    event.preventDefault();
-  }
-  function moveInspectorResize(event: PointerEvent) {
-    const state = inspectorResize;
-    if (!state || state.pointerId !== event.pointerId) return;
-    const percent = state.startPercent + (event.clientY - state.startY) / state.height * 100;
-    dockLayout = setInspectorSplit(state.baseline, percent);
-  }
-  function finishInspectorResize(event: PointerEvent, cancelled = false) {
-    if (!inspectorResize || inspectorResize.pointerId !== event.pointerId) return;
-    const state = inspectorResize;
-    inspectorResize = null;
-    if (cancelled) dockLayout = state.baseline;
-    else persistDocks();
-  }
-  function keyInspectorResize(event: KeyboardEvent) {
-    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-    const step = event.shiftKey ? 10 : 5;
-    const sign = event.key === 'ArrowDown' ? 1 : -1;
-    setLayout(setInspectorSplit(dockLayout, dockLayout.inspectorSplit + sign * step));
-    event.preventDefault();
-  }
+  const {
+    floatPanel, attachPanel, returnPanel, startFloating, moveFloating, finishFloating, keyFloatingMove, keyFloatingSize, hideDock, swapDocks, resetDocks, attachTabs, separateTabs, activateAttachedTab, keyAttachedTab, startDockResize, moveDockResize, finishDockResize, keyDockResize, startInspectorResize, moveInspectorResize, finishInspectorResize, keyInspectorResize
+  } = createRustDockInteractions({
+    get dockLayout() { return dockLayout; },
+    set dockLayout(value:DockLayout) { dockLayout = value; },
+    get floatingGesture() { return floatingGesture; },
+    set floatingGesture(value:FloatingGesture|null) { floatingGesture = value; },
+    get floatingOnTop() { return floatingOnTop; },
+    set floatingOnTop(value:DockPanel|null) { floatingOnTop = value; },
+    get pendingDockSide() { return pendingDockSide; },
+    set pendingDockSide(value:DockSide|null) { pendingDockSide = value; },
+    get dockPersistenceError() { return dockPersistenceError; },
+    set dockPersistenceError(value:boolean) { dockPersistenceError = value; },
+    get dockResize() { return dockResize; },
+    set dockResize(value:DockResize|null) { dockResize = value; },
+    get inspectorResize() { return inspectorResize; },
+    set inspectorResize(value:InspectorResize|null) { inspectorResize = value; },
+    get editorWidth() { return editorWidth; },
+    get editorHeight() { return editorHeight; },
+    get editorBody() { return editorBody; },
+    get measuredDocks() { return measuredDocks; },
+    closeMenus,
+  });
 
   onMount(() => {
     try {

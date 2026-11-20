@@ -32,6 +32,7 @@ apps/desktop/src/main.ts → RustEditorRoot.svelte → RustEditorPage.svelte
   ├─ RustSurfacePaintControls.svelte (3D Paint, shade, selection/protection UI)
   ├─ RustBrushPresetControls.svelte (brush preset form; parent owns storage)
   ├─ RustEditorMenuToolbar.svelte (File/Edit/View, workspace tabs and tools)
+  ├─ rustDockInteractions.ts (UI dock gestures, keyboard/focus and preferences)
   ├─ rustSelectionOverlay.ts (read-only Paint mask canvas)
   ├─ RustRecoveryDialog.svelte / RustLiveReadPairingDialog.svelte (display only)
   └─ RustViewport.svelte / rustAnimationPose.ts (derived UI/viewport)
