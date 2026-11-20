@@ -70,3 +70,13 @@ test('same-session verified sibling allowed; changed README, stale model fail',a
     await resumed.authorize(request(next,B,'paint_texture_pixel'));
   }finally{await rm(folder,{recursive:true,force:true})}
 });
+
+test('saved SHA256 field is parsed, checked and not silently omitted',()=>{
+  const parsed=parseWorkflow(note());
+  assert.equal(parsed.model,'source.bbmodel');
+  assert.equal(parsed.sha,A);
+  assert.throws(()=>parseWorkflow(note()+'\nWorkflow Model SHA256: sha256:'+A),
+    /FIELD_DUPLICATED/);
+  assert.throws(()=>parseWorkflow(note({sha:'z'.repeat(64)})),/SHA_INVALID/);
+  assert.equal(parseWorkflow(note({sha:null})).sha,null);
+});

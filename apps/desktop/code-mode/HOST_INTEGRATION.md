@@ -1244,6 +1244,31 @@ Model-written code is executed by the restricted Deno subprocess, **never** eval
 
 ## Trusted host integration
 
+### Real agent setup before a separately authorized Rust localtest
+
+The existing external trusted Node host owns exactly one model-facing
+`lazydesigner_code_mode({code})` descriptor. Repository source does NOT
+register this tool into Codex CLI/IDE automatically, install Deno, or bundle
+the headless `lazydesigner-authoring` CLI with the Tauri GUI. `run.mjs` is
+an operator probe, not installed Codex integration. Actual agent-host
+registration must follow that authenticated host's supported interface.
+
+When local testing is independently authorized, pin the exact Rust HEAD,
+verify Node 24, Rust, Deno and the first-party authoring binary on the
+user PC. Bind an existing asset README and actual model filename/SHA,
+not a copied fixture checksum. Use `npm run verify:source`, which now
+includes `npm run verify:code-mode`; an unconfigured real-Deno sandbox
+test skips and is NOT a sandbox PASS. `node code-mode/run.mjs` needs absolute
+`--rust`, `--deno`, `--code`, and either `--input` or `--output-dir`.
+Mutations through that manual runner additionally require
+`--approve-interactive` and a real terminal. No AI runs inside Svelte/Tauri.
+
+Use the dedicated [Rust PC-local acceptance plan]
+(../../../docs/05-operations/rust-native-local-acceptance.md), separate
+from the legacy Local Gateway/Blockbench test plan. All source fixtures
+remain NOT_EXECUTED while the current hold applies.
+
+
 A local host needs actual verified absolute paths to Deno and the compiled first-party Rust CLI, plus **either** an existing user-selected model **or** an authorized empty-model output directory. It must implement authorization outside the model-generated program.
 
 ~~~js

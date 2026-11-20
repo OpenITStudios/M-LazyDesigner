@@ -26,7 +26,7 @@ export function parseWorkflow(source){
   if(typeof source!=='string'||Buffer.byteLength(source,'utf8')>MAX)refuse('README_INVALID');
   const entries=new Map(),tick=String.fromCharCode(96);
   for(const line of source.split(/\r?\n/)){
-    const m=/^\s*(?:[-*]\s*)?([A-Za-z][A-Za-z ()]+):\s*(.*?)\s*$/.exec(line);
+    const m=/^\s*(?:[-*]\s*)?([A-Za-z][A-Za-z0-9 ()]+):\s*(.*?)\s*$/.exec(line);
     if(!m||!keys.has(m[1]))continue;
     if(entries.has(m[1]))refuse('FIELD_DUPLICATED');
     let v=m[2].trim();

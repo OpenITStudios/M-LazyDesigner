@@ -5436,3 +5436,85 @@ test('trusted agent stage gate denies premature Paint before approval or Rust wr
     assert.equal(reply.value.blocked,true);
     assert.equal(approved,0);assert.equal(writes,0);
   }));
+
+// SOURCE_AUTHORED_NOT_RUN: the mock host does not prove Deno/Windows behavior.
+test('Stage Gate accepts reviewed Geometry source and independent write approval',()=>
+  fixture(async input=>{
+    const workflowFile=join(dirname(input),'README.md');
+    await writeFile(workflowFile,[
+      'Current Stage: GEOMETRY','Geometry: IN_PROGRESS',
+      'UV Layout: NOT_STARTED','Texturing: NOT_STARTED',
+      'Animation: NOT_STARTED','Animation Required: YES',
+      'Known blocker(s): none','Current model file: source.bbmodel',
+      'Workflow Model SHA256: sha256:'+HASH,
+    ].join('\n'));
+    const calls=[],approvals=[],next='b'.repeat(64);
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,workflowFile,
+      authorizeMutation:request=>{approvals.push(request);return true;},
+      runner:async args=>{
+        calls.push(args[0]);
+        if(args[0]==='inspect'){
+          const updated=basename(args[args.indexOf('--input')+1])==='candidate.bbmodel';
+          return {status:'OK',sha256:updated?next:HASH,summary:SUMMARY};
+        }
+        assert.equal(args[0],'apply');
+        return {status:'OK',source_sha256:HASH,output_sha256:next,
+          summary:{...SUMMARY,revision:1},
+          mutation:{revision:1,operation_count:1,changed_uuids:['cube-1']}};
+      },
+      spawnImpl:()=>fakeGuest({method:'apply',args:{
+        project:'p0',output:'candidate.bbmodel',
+        operations:[{op:'translate_cube',uuid:'cube-1',delta:[1,0,0]}],
+      }},reply=>{
+        assert.equal(reply.ok,true);
+        assert.equal(reply.result.project,'p1');
+        assert.equal(reply.result.sha256,next);
+        return {candidate:reply.result.project};
+      }),
+    });
+    const reply=await host.execute({code:'return codemode.apply({});'});
+    assert.equal(reply.value.candidate,'p1');
+    assert.deepEqual(calls,['inspect','apply','inspect']);
+    assert.equal(approvals.length,1);
+    assert.deepEqual(approvals[0].operationKinds,['translate_cube']);
+  }));
+
+test('Stage Gate refuses an approval after the bound README changes',()=>
+  fixture(async input=>{
+    const workflowFile=join(dirname(input),'README.md');
+    const valid=[
+      'Current Stage: GEOMETRY','Geometry: IN_PROGRESS',
+      'UV Layout: NOT_STARTED','Texturing: NOT_STARTED',
+      'Animation: NOT_STARTED','Animation Required: YES',
+      'Known blocker(s): none','Current model file: source.bbmodel',
+      'Workflow Model SHA256: sha256:'+HASH,
+    ].join('\n');
+    await writeFile(workflowFile,valid);
+    let approvals=0,writes=0;
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,workflowFile,
+      authorizeMutation:async()=>{
+        approvals++;
+        await writeFile(workflowFile,valid.replace(
+          'Known blocker(s): none','Known blocker(s): review reopened'));
+        return true;
+      },
+      runner:async args=>{
+        if(args[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        writes++;throw Error('Stale approval must not launch Rust');
+      },
+      spawnImpl:()=>fakeGuest({method:'apply',args:{
+        project:'p0',output:'stale.bbmodel',
+        operations:[{op:'translate_cube',uuid:'cube-1',delta:[1,0,0]}],
+      }},reply=>{
+        assert.equal(reply.ok,false);
+        assert.equal(reply.code,'CODE_MODE_MUTATION_SESSION_STALE');
+        return {stale:true};
+      }),
+    });
+    const reply=await host.execute({code:'return codemode.apply({});'});
+    assert.equal(reply.value.stale,true);
+    assert.equal(approvals,1);
+    assert.equal(writes,0);
+  }));
