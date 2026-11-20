@@ -18,7 +18,8 @@ const fields=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
 function inputPlan(intent) {
   if(!fields(intent,['expected_revision','animation_uuid','name',
     'length_seconds','loop_mode','poses','contacts'])||
-    intent.expected_revision!==0||!id.test(intent.animation_uuid)||
+    intent.expected_revision!==0||
+    typeof intent.animation_uuid!=='string'||!id.test(intent.animation_uuid)||
     typeof intent.name!=='string'||intent.name!==intent.name.trim()||
     !intent.name||[...intent.name].length>128||
     /[\x00-\x1f\x7f]/.test(intent.name)||
@@ -115,7 +116,10 @@ export function validSemanticAnimationReceipt(receipt,intent,expectedSha){
       e.contact_windows.length!==intent.contacts.length||
       !Array.isArray(e.temporal_review_times)||
       e.temporal_review_times.length<2||e.temporal_review_times.length>8||
-      e.temporal_review_times.some(t=>!clock(t)||t>intent.length_seconds)
+      e.temporal_review_times.some((t,i)=>!clock(t)||t>intent.length_seconds||
+        (i>0&&t-e.temporal_review_times[i-1]<=1e-9))||
+      !e.temporal_review_times.includes(0)||
+      !e.temporal_review_times.includes(intent.length_seconds)
     )return false;
     const seen=new Set();
     for(const t of e.tracks){

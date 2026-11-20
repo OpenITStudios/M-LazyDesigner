@@ -80,6 +80,8 @@ test('semantic action compiles once through source-SHA-bound Rust, never request
 test('invalid phase/IDs, clock, missing contact owner, or forged proof fail closed',async()=>{
  for(const input of [
   {...intent,expected_revision:1},
+  {...intent,animation_uuid:null},
+  {...intent,animation_uuid:123},
   {...intent,poses:[]},
   {...intent,poses:intent.poses.map((p,i)=>i===1?{...p,phase:'ghost'}:p)},
   {...intent,poses:intent.poses.map((p,i)=>i===1?{...p,time:0}:p)},
@@ -95,6 +97,7 @@ test('invalid phase/IDs, clock, missing contact owner, or forged proof fail clos
   {...receipt(),plan:{...receipt().plan,operations:operations.map((o,i)=>
    i===2?{...o,value:[999,0,0]}:o)}},
   {...receipt(),motion_evidence:{...evidence,world_contact_verdict:'PASS'}},
+  {...receipt(),motion_evidence:{...evidence,temporal_review_times:[0,0.5,0.2,1]}},
   {...receipt(),motion_evidence:{...evidence,
    contact_windows:[{...evidence.contact_windows[0],observed_world_samples:99}]}},
   {...receipt(),preflight:{...receipt().preflight,write_authority:'GRANTED'}},
