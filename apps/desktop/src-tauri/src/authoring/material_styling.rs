@@ -320,12 +320,24 @@ pub fn inspect_texture_styling_face(
     doc:&AuthoringDocument, texture_uuid:&str, cube_uuid:&str, side:&str
 )->Result<Value>{
     doc.validate()?;
+    let mut decoded = Vec::new();
+    inspect_texture_styling_face_validated(
+        doc, texture_uuid, cube_uuid, side, &mut decoded,
+    )
+}
+
+/// Private validated-session path. Public callers still validate the entire
+/// document. Scratch expires with the immutable SHA-bound inspection view.
+pub(super) fn inspect_texture_styling_face_validated(
+    doc:&AuthoringDocument, texture_uuid:&str, cube_uuid:&str, side:&str,
+    decoded:&mut Vec<(usize, Vec<u8>)>,
+)->Result<Value>{
     if !FACE_NAMES.contains(&side) {
         return Err("TEXTURE_STYLING_FACE_INVALID".into());
     }
     let matches:Vec<_>=doc.texture_assets.iter().enumerate().filter(|(_,t)|
         t.get("uuid").and_then(Value::as_str)==Some(texture_uuid)).collect();
-    let (texture_index,texture)=match matches.as_slice() {
+    let (texture_index,_texture)=match matches.as_slice() {
         [] => return Err("TEXTURE_STYLING_TEXTURE_NOT_FOUND".into()),
         [item] => (item.0,item.1),
         _ => return Err("TEXTURE_STYLING_TEXTURE_AMBIGUOUS".into()),
@@ -380,8 +392,7 @@ pub fn inspect_texture_styling_face(
             "texture_completion_attested":false
         }));
     }
-    let atlas=paint::decode_for_uv_inspection(texture,
-        doc.resolution.width,doc.resolution.height)
+    let atlas=super::cached_inspection_atlas(doc,texture_index,decoded)
         .map_err(|_|"TEXTURE_STYLING_BITMAP_UNSUPPORTED".to_string())?;
     let mut local=vec![0u8;(width*height*4) as usize];
     for y in 0..height { for x in 0..width {

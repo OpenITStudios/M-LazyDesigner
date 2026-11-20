@@ -608,8 +608,12 @@ fn inspect_batch_with_view(
                 json!({"kind":"texture_source_colors","colors":colors})
             },
             InspectBatchQuery::TextureStylingFace {texture_uuid,cube_uuid,face} => {
-                let styling=inspect_texture_styling_face(doc,
-                    batch_id(&texture_uuid)?,batch_id(&cube_uuid)?,&face)?;
+                let texture_uuid=batch_id(&texture_uuid)?;
+                let cube_uuid=batch_id(&cube_uuid)?;
+                let styling=match validated {
+                    Some(view)=>view.texture_styling_face(texture_uuid,cube_uuid,&face)?,
+                    None=>inspect_texture_styling_face(doc,texture_uuid,cube_uuid,&face)?,
+                };
                 json!({"kind":"texture_styling_face","styling":styling})
             },
             InspectBatchQuery::Catalog { category, offset, limit } => {
@@ -1552,6 +1556,48 @@ mod tests {
             inspect_batch(session.document(), direct.requests).unwrap()
         );
         assert_eq!(session.document(), &before);
+    }
+
+    // SOURCE_AUTHORED_NOT_RUN: cross-selector atlas reuse must preserve
+    // exactly the independent, source-validated batch JSON and refusals.
+    #[test]
+    fn code_mode_face_styling_batch_matches_standalone() {
+        let mut session=EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        let texture_id="00000000-0000-4000-8000-000000009976";
+        let cube_id="00000000-0000-4000-8000-000000000002";
+        session.apply(0,&[
+            EditOperation::CreatePaintTexture {
+                uuid:texture_id.into(),name:"shared.png".into(),
+            },
+            EditOperation::AssignCubeTexture {
+                cube_uuid:cube_id.into(),texture_uuid:texture_id.into(),
+            },
+        ]).unwrap();
+        let before=session.document().clone();
+        let batch=json!({"requests":[
+            {"kind":"cube_face_alpha","uuid":cube_id},
+            {"kind":"texture_styling_face","texture_uuid":texture_id,
+             "cube_uuid":cube_id,"face":"north"},
+            {"kind":"texture_styling_face","texture_uuid":texture_id,
+             "cube_uuid":cube_id,"face":"east"},
+            {"kind":"model_texture_coverage","offset":0,"limit":1,
+             "attention_only":false}
+        ]});
+        let a:InspectBatchInput=serde_json::from_value(batch.clone()).unwrap();
+        let b:InspectBatchInput=serde_json::from_value(batch).unwrap();
+        assert_eq!(inspect_batch_session(&session,a.requests).unwrap(),
+            inspect_batch(session.document(),b.requests).unwrap());
+        let invalid=json!({"requests":[
+            {"kind":"texture_styling_face","texture_uuid":texture_id,
+             "cube_uuid":cube_id,"face":"invalid"}
+        ]});
+        let a:InspectBatchInput=serde_json::from_value(invalid.clone()).unwrap();
+        let b:InspectBatchInput=serde_json::from_value(invalid).unwrap();
+        assert_eq!(inspect_batch_session(&session,a.requests).unwrap_err(),
+            inspect_batch(session.document(),b.requests).unwrap_err());
+        assert_eq!(session.document(),&before);
     }
 
     #[test]

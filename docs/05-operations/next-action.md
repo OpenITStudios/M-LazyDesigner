@@ -5,7 +5,8 @@
 **Work surface:** `CHATGPT_GITHUB` — source inspection and authorized source edits only.  
 **Evidence:** `SOURCE_REVIEWED` / `SOURCE_COMMITTED` where supported; authored regressions are `TEST_AUTHORED_NOT_RUN`. No native/Windows, performance, or visual PASS.  
 **Hold:** CI, localtest, Codex execution and native Blockbench validation remain deferred until an explicitly selected PC-local phase. No cloud substitute.  
-**Next source decision:** Reuse existing authoring owners and simplify a **demonstrably duplicated** high-frequency step only after its real caller, affected consumers, safety gates and benchmark can be identified. No speculative feature expansion.
+**Latest source increment:** Existing Rust `inspectBatch` now shares the bounded decoded atlas between Cube alpha, coverage and repeated same-atlas `texture_styling_face` reads. Standalone inspection keeps full validation, and parity/refusal regression tests are authored but NOT_EXECUTED.  
+**Next source decision:** No speculative new layers. Further optimization needs a concrete caller, measured bottleneck and the existing quality/permission gates.
 
 ## Locked product decisions
 

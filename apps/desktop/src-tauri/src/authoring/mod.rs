@@ -1739,6 +1739,31 @@ fn inspect_cube_uv_alpha_with_cache(
     inspect_cube_uv_alpha_validated(doc, cube, decoded, &texture_indices)
 }
 
+/// Share a decoded atlas only inside one validated immutable inspection
+/// batch. Reuse the existing bounded PNG scratch, never authored bitmap state.
+fn cached_inspection_atlas<'a>(
+    doc: &AuthoringDocument, texture_index: usize,
+    decoded: &'a mut Vec<(usize, Vec<u8>)>,
+) -> Result<&'a [u8]> {
+    if !decoded.iter().any(|(i, _)| *i == texture_index) {
+        let width = doc.resolution.width;
+        let height = doc.resolution.height;
+        let next_rgba_bytes = (width as usize).saturating_mul(height as usize).saturating_mul(4);
+        let cached_bytes: usize = decoded.iter().map(|(_, rgba)| rgba.len()).sum();
+        if decoded.len() >= MAX_INSPECTION_PNG_CACHE ||
+           cached_bytes.saturating_add(next_rgba_bytes) > MAX_INSPECTION_RGBA_CACHE_BYTES {
+            decoded.clear();
+        }
+        let texture = doc.texture_assets.get(texture_index)
+            .ok_or_else(|| fail("PAINT_UV_CACHE_INCONSISTENT"))?;
+        let png = paint::decode_for_uv_inspection(texture, width, height)?;
+        decoded.push((texture_index, png));
+    }
+    decoded.iter().find(|(i, _)| *i == texture_index)
+        .map(|(_, rgba)| rgba.as_slice())
+        .ok_or_else(|| fail("PAINT_UV_CACHE_INCONSISTENT"))
+}
+
 /// An immutable page validates once before iterating its own Cubes. This
 /// function must receive a Cube reference from that validated document and
 /// never suppress an independently requested public validation.
@@ -1810,24 +1835,8 @@ fn inspect_cube_uv_alpha_validated(
             json!({"status":"unsupported","reason":message})
         } else {
             let texture_index = index.ok_or_else(|| fail("CUBE_INSPECT_FACES_INVALID"))?;
-            if !decoded.iter().any(|(i, _)| *i == texture_index) {
-                // Reuse decoded pixels only inside one immutable inspection
-                // view. Bound retained RGBA8 memory even for an eight-query
-                // Code Mode batch with many distinct imported atlases.
-                let next_rgba_bytes=(width as usize).saturating_mul(height as usize).saturating_mul(4);
-                let cached_bytes:usize=decoded.iter().map(|(_,rgba)|rgba.len()).sum();
-                if decoded.len() >= MAX_INSPECTION_PNG_CACHE ||
-                   cached_bytes.saturating_add(next_rgba_bytes)>MAX_INSPECTION_RGBA_CACHE_BYTES {
-                    decoded.clear();
-                }
-                let png = paint::decode_for_uv_inspection(
-                    &doc.texture_assets[texture_index], width, height
-                )?;
-                decoded.push((texture_index, png));
-            }
-            let png = decoded.iter().find(|(i, _)| *i == texture_index)
-                .ok_or_else(|| fail("PAINT_UV_CACHE_INCONSISTENT"))?;
-            match paint::uv_region_alpha_stats(&png.1, width, height, rect) {
+            let png = cached_inspection_atlas(doc, texture_index, decoded)?;
+            match paint::uv_region_alpha_stats(png, width, height, rect) {
                 Ok(mut region) => {
                     if derived_box.is_some() {
                         region["scope"] = json!("derived_box_uv_alpha_pixels");
@@ -3356,6 +3365,17 @@ impl<'a> ValidatedInspection<'a> {
 
     pub fn texture_alpha(&self, uuid: &str) -> Result<Value> {
         inspect_paint_alpha_validated(self.doc, uuid)
+    }
+
+    /// Existing scratch for repeated same-atlas face-style reads; no
+    /// persistent pixels or permission/visual authority.
+    pub fn texture_styling_face(
+        &self, texture_uuid: &str, cube_uuid: &str, side: &str,
+    ) -> Result<Value> {
+        let mut decoded = self.decoded_pngs.borrow_mut();
+        material_styling::inspect_texture_styling_face_validated(
+            self.doc, texture_uuid, cube_uuid, side, &mut decoded,
+        )
     }
 
     pub fn model_texture_coverage(

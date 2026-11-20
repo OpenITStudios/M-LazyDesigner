@@ -77,6 +77,17 @@ fn validated_batch_inspection_shares_bounded_texture_scratch() {
     assert_eq!(view.decoded_pngs.borrow().len(), 1);
     assert_eq!(view.cube_face_alpha(CUBE).unwrap(), first);
     assert_eq!(view.decoded_pngs.borrow().len(), 1);
+    // Source-backed style reads on the same atlas reuse the alpha decode
+    // but keep standalone output and refusal semantics identical.
+    for side in ["north", "east", "west", "north"] {
+        let styled=view.texture_styling_face(texture_id,CUBE,side).unwrap();
+        assert_eq!(styled,inspect_texture_styling_face(
+            session.document(),texture_id,CUBE,side).unwrap());
+        assert_eq!(view.decoded_pngs.borrow().len(),1);
+    }
+    assert_eq!(view.texture_styling_face(texture_id,CUBE,"invalid").unwrap_err(),
+        inspect_texture_styling_face(
+            session.document(),texture_id,CUBE,"invalid").unwrap_err());
     for attention_only in [false, true] {
         assert_eq!(view.model_texture_coverage(0, 1, attention_only).unwrap(),
             inspect_model_texture_coverage_filtered(
@@ -90,6 +101,8 @@ fn validated_batch_inspection_shares_bounded_texture_scratch() {
         "CUBE_NOT_FOUND");
     assert_eq!(view.decoded_pngs.borrow().len(), 1);
     assert_eq!(session.document(), &before);
+    drop(view);
+    assert!(session.inspections().decoded_pngs.borrow().is_empty());
 
     // Simulate a full scratch buffer of unrelated previously decoded atlases.
     // The next miss must evict it before retaining this authored 128² PNG.
