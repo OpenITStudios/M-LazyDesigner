@@ -37,7 +37,9 @@
 import {BRUSH_PRESET_STORAGE_KEY,planSurfacePattern,readBrushPresets,
     serializeBrushPresets,upsertBrushPreset,validBrushSettings,
     type PatternMode,type BrushPreset,type BrushSettings} from './rustBrushPresets';
-import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
+import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframeView, Vec3, Vec4 } from './rustEditorTypes';
+  import {makeRows,revealOutlinerPath,outlinerParentId,boneContains,
+    type Row} from './rustOutlinerView';
   import {
     defaultDockLayout, restoreDockLayout, serializeDockLayout,
     measureDocks, resizeDock, swapDockSides, setDockHidden, setInspectorSplit,
@@ -51,7 +53,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
 
   export let onLegacy: () => void = () => {};
   type Menu = 'file' | 'edit' | 'view' | null;
-  type Row = { uuid: string; name: string; depth: number; kind: 'cube' | 'bone'; visible: boolean };
 
   let snapshot: EditorSnapshot | null = null;
   // One optional, revision-bound, native-owned PNG shown only on request.
@@ -212,26 +213,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
 
   const AXES = ['X', 'Y', 'Z'] as const;
   const FACES = ['north', 'east', 'south', 'west', 'up', 'down'] as const;
-
-  function makeRows(nodes: HierarchyNode[], cubes: CubeView[], bones: EditorSnapshot['bones'], folded: Set<string>): Row[] {
-    const cubesById = new Map(cubes.map((cube) => [cube.uuid, cube] as const));
-    const bonesById = new Map(bones.map((bone) => [bone.uuid, bone] as const));
-    const rows: Row[] = [];
-    function walk(items: HierarchyNode[], depth: number) {
-      for (const item of items) {
-        if (typeof item === 'string') {
-          const cube = cubesById.get(item);
-          rows.push({ uuid: item, name: cube?.name ?? 'Cube', depth, kind: 'cube', visible: cube?.visible ?? true });
-        } else {
-          const bone = bonesById.get(item.uuid);
-          rows.push({ uuid: item.uuid, name: bone?.name ?? 'Bone', depth, kind: 'bone', visible: bone?.visible ?? true });
-          if (!folded.has(item.uuid)) walk(item.children, depth + 1);
-        }
-      }
-    }
-    walk(nodes, 0);
-    return rows;
-  }
 
   $: selectedCube = snapshot?.cubes.find((cube) => cube.uuid === selectedId) ?? null;
   $: selectedBone = snapshot?.bones.find((bone) => bone.uuid === selectedBoneId) ?? null;
@@ -886,43 +867,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
         collapsed = opened;
       }
     }
-  }
-
-  function revealOutlinerPath(nodes: HierarchyNode[], uuid: string, open: Set<string>): boolean {
-    for (const node of nodes) {
-      if (typeof node === 'string') {
-        if (node === uuid) return true;
-      } else {
-        if (node.uuid === uuid || revealOutlinerPath(node.children, uuid, open)) {
-          open.delete(node.uuid);
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  // Hierarchy navigation is read from the current Rust snapshot only.
-  function outlinerParentId(nodes: HierarchyNode[], uuid: string, parent = ''): string {
-    for (const node of nodes) {
-      if (typeof node === 'string') {
-        if (node === uuid) return parent;
-      } else {
-        if (node.uuid === uuid) return parent;
-        const found = outlinerParentId(node.children, uuid, node.uuid);
-        if (found) return found;
-      }
-    }
-    return '';
-  }
-  function boneContains(nodes: HierarchyNode[], ancestor: string, target: string): boolean {
-    const descendantsContain = (children: HierarchyNode[]): boolean =>
-      children.some((child) => typeof child !== 'string' &&
-        (child.uuid === target || descendantsContain(child.children)));
-    return nodes.some((node) => typeof node !== 'string' &&
-      (node.uuid === ancestor
-        ? descendantsContain(node.children)
-        : boneContains(node.children, ancestor, target)));
   }
 
   async function renameSelected(uuid: string, previousName: string, input: HTMLInputElement) {

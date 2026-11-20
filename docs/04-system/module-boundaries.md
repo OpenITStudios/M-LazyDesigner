@@ -95,6 +95,19 @@ the trusted reviewer-declaration and pixel guard validation previously
 embedded in the Code Mode RPC host. No host approval, Rust transaction,
 source SHA, no-overwrite publisher or visual acceptance rule was removed.
 
+**Scoped Rust modularization (2026-11-20):** The one-authority
+`EditorSession` and EditPlan transaction/revision/Undo history remain in
+`authoring/mod.rs`, while typed operation dispatch now belongs in
+`authoring/edit_operations.rs`. Tauri's read-only Animation clip projection
+belongs in `desktop_authoring/preview_animation.rs`; it cannot publish or
+mutate saved data. Svelte's pure hierarchy row/reveal/parent selectors belong
+in `rustOutlinerView.ts`, leaving reactive selections, focus, and IPC in
+`RustEditorPage.svelte`. Existing Rust regressions retain their access to
+the same projection/dispatcher through parent-local imports. Source-only
+UI tests are included in the future canonical `verify:source` command
+alongside Code Mode and Cargo checks. Nothing has been compiled or
+executed in the held source-development phase.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
