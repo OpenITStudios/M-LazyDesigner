@@ -103,7 +103,10 @@ belongs in `desktop_authoring/preview_animation.rs`; it cannot publish or
 mutate saved data. Svelte's pure hierarchy row/reveal/parent selectors belong
 in `rustOutlinerView.ts`, leaving reactive selections, focus, and IPC in
 `RustEditorPage.svelte`. Existing Rust regressions retain their access to
-the same projection/dispatcher through parent-local imports. Source-only
+the same projection/dispatcher through parent-local imports.
+Tauri read-only texture and UV preview admission now lives in
+`desktop_authoring/preview_texture.rs`; it does not own Paint, UV
+mutations or independent model/bitmap state. Source-only
 UI tests are included in the future canonical `verify:source` command
 alongside Code Mode and Cargo checks. Nothing has been compiled or
 executed in the held source-development phase.

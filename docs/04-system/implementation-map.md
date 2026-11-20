@@ -26,7 +26,8 @@ apps/desktop/src/main.ts → RustEditorRoot.svelte → RustEditorPage.svelte
   └─ RustViewport.svelte / rustAnimationPose.ts (derived UI/viewport)
           ↓ Tauri IPC
 apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
-  └─ desktop_authoring/preview_animation.rs (read-only clip projection)
+  ├─ desktop_authoring/preview_animation.rs (read-only clip projection)
+  └─ desktop_authoring/preview_texture.rs (read-only texture/UV preview projection)
           ↓
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           ├─ edit_operations.rs (typed edit dispatcher; no history owner)
@@ -69,7 +70,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 | **Existing Animation P0 (read-only)**: selected numeric existing clip inspection and one optional user-bounded existing-key correction | `authoring/animation_existing.rs` | `review-existing-animation` native CLI; `code-mode/existing-animation-review.mjs` and typed SDK/host; existing `EditPlan` and independent approved Apply, no new keyframe writer or automatic visual repair |
 | **Animasi**: clips, keyframes, curves, effects | `authoring/mod.rs`, `animation_clip.rs`, `bezier.rs`, `animation_export.rs` | `effects.rs`, `timeline_markers.rs`, `rustAnimationPose.ts` (view-only), .animation.json |
 | Editable Blockbench file and source provenance | `authoring/bbmodel.rs`, `storage.rs`, `asset_handoff.rs` | `EditorSession::export`, `authoring/tests.rs`, CLI `asset_handoff` inspector |
-| Desktop active model, recovery, optional live reads | `desktop_authoring.rs` (Tauri commands), `desktop_authoring/preview_animation.rs` (read-only numeric clips), `editor_recovery.rs`, `live_read_bridge.rs` | `desktop_authoring/tests.rs` (native-only tests), `RustEditorPage.svelte` + `rustOutlinerView.ts` (hierarchy selectors) and snapshot/epoch guards; live-read default-off |
+| Desktop active model, recovery, optional live reads | `desktop_authoring.rs` (Tauri commands), `desktop_authoring/preview_animation.rs` (read-only numeric clips), `desktop_authoring/preview_texture.rs` (read-only texture/UV projection), `editor_recovery.rs`, `live_read_bridge.rs` | `desktop_authoring/tests.rs` (native-only tests), `RustEditorPage.svelte` + `rustOutlinerView.ts` (hierarchy selectors) and snapshot/epoch guards; live-read default-off |
 | AI scripting, authorization and compact inspection | `code-mode/host.mjs` (session/RPC/approval), `client.mjs` (typed SDK), `task-context.mjs` (focused read), `visual-review-policy.mjs` (review admission) | `sandbox-worker.mjs`, `code-mode/*.test.mjs`, CLI `bin/lazydesigner-authoring.rs` and `bin/lazydesigner-authoring/tests.rs` |
 
 **Stage order for further work:** Geometri → Texture → Animasi. Reuse
