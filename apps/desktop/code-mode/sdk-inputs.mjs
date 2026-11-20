@@ -1,6 +1,7 @@
 /** SDK-only input primitives, shared by the CLI facade and read-only selector guards.
  * No filesystem, Rust runner, sandbox or mutation authority lives here. */
 export const PLAN_LIMIT = 64 * 1024;
+export const SHA256 = /^[a-f0-9]{64}$/i;
 export function nonempty(value, name) {
   if (typeof value !== 'string' || !value.trim() || value.startsWith('--') || value.includes('\0')) {
     throw new TypeError(name + ' must be a nonempty string without option prefixes or NUL');

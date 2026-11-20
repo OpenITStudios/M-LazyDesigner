@@ -255,6 +255,19 @@ The original projection bodies and tests remain, and parent-private symbols
 continue to serve the same callers. Source regression AUTHORED_NOT_RUN;
 Rust compile and Windows UI/native parity NOT_EXECUTED.
 
+**Code Mode SDK input naming and ownership (2026-11-20):** The
+large `client.mjs` now delegates three *input and receipt* concerns
+to explicit semantic owners: `geometry-plan-input-transport.mjs` handles
+deterministic Geometry plan identifiers and bounded proposal payloads;
+`texture-correction-contract.mjs` holds the source-bound Texture correction
+scope, reviewer diagnosis and Rust receipt checks; and
+`semantic-material-intent-transport.mjs` validates a bounded material
+proposal. The shared input digest format belongs to `sdk-inputs.mjs`.
+Two existing public `client.mjs` exports retain their exact names and
+bindings. These modules do not run Rust, grant permissions or implement
+Geometry/Paint; the original trusted host and CLI remain authoritative.
+Regression cases have been AUTHORED_NOT_RUN; native/Node parity not certified.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

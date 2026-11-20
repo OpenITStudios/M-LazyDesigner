@@ -13,7 +13,18 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest} from './material-work-packet.mjs';
 import {validGeometryImpact} from './geometry-impact.mjs';
-import {PLAN_LIMIT,nonempty,wholeNumber} from './sdk-inputs.mjs';
+import {PLAN_LIMIT,SHA256,nonempty,wholeNumber} from './sdk-inputs.mjs';
+import {
+  normalizedCorrectionScope, normalizedMaterialCorrectionIntent, checkedScopedApplyReceipt,
+} from './texture-correction-contract.mjs';
+import {
+  generatedBlockoutCubeUuid, generatedSweepCubeUuid, generatedProfileCubeUuid,
+  serializeGeometryAssembly, serializeGeometryAttachment, serializeGeometryPropagation,
+} from './geometry-plan-input-transport.mjs';
+import {serializeSemanticMaterialIntent} from './semantic-material-intent-transport.mjs';
+
+// Preserve the exact public SDK imports used by external trusted hosts.
+export {normalizedCorrectionScope, normalizedMaterialCorrectionIntent};
 import {serializeInspectionQueries} from './inspection-selectors.mjs';
 import {validAxisAlignedOverlapReview} from './geometry-overlap-review.mjs';
 import {normalizedGeometryVoidZones,validGeometryVoidEvidence} from './geometry-void.mjs';
@@ -23,7 +34,6 @@ import {serializeExistingAnimationIntent,validExistingAnimationReviewReceipt} fr
 
 const execFileAsync = promisify(execFile);
 const OUTPUT_LIMIT = 128 * 1024;
-const SHA256 = /^[a-f0-9]{64}$/i;
 const WRITE_COMMANDS = new Set([
   'new', 'apply', 'import-png', 'export-png', 'export-geometry', 'export-animation',
 ]);
@@ -89,134 +99,6 @@ async function runBinary(binary, args) {
   }
   return parseResponse(stdout);
 }
-// Exact source-pixel bounds, not artistic reference or user approval.
-export function normalizedCorrectionScope(scope) {
-  if (scope === undefined) return undefined;
-  if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
-      Object.keys(scope).some(key =>
-        !['textureUuid', 'allowedRegions', 'preserveAlpha',
-          'protectedRegions','expectedBeforePixels','editableBeforeRgba'].includes(key))) {
-    throw new TypeError('CORRECTION_SCOPE_INVALID');
-  }
-  const textureUuid = nonempty(scope.textureUuid, 'textureUuid');
-  if (Buffer.byteLength(textureUuid, 'utf8') > 128 || /\s/.test(textureUuid) ||
-      !Array.isArray(scope.allowedRegions) ||
-      scope.allowedRegions.length < 1 || scope.allowedRegions.length > 16 ||
-      (scope.preserveAlpha !== undefined && typeof scope.preserveAlpha !== 'boolean')) {
-    throw new TypeError('CORRECTION_SCOPE_INVALID');
-  }
-  const point = (value,max) => {
-    if (!Array.isArray(value) || value.length !== 2) {
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    return value.map(n => Number(wholeNumber(n, 'coordinate', 0, max)));
-  };
-  const rectangle = rect => {
-    if (!rect || typeof rect !== 'object' || Array.isArray(rect) ||
-        Object.keys(rect).some(key => !['from','to'].includes(key))) {
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    const from = point(rect.from,256),to = point(rect.to,256);
-    if(from[0]>=to[0]||from[1]>=to[1]){
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    return {from,to};
-  };
-  const rectangles=scope.allowedRegions.map(rectangle);
-  let protectedRegions;
-  if(scope.protectedRegions!==undefined){
-    if(!Array.isArray(scope.protectedRegions) ||
-       scope.protectedRegions.length>16){
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    protectedRegions=scope.protectedRegions.map(rectangle);
-  }
-  let expectedBeforePixels;
-  if(scope.expectedBeforePixels!==undefined){
-    if(!Array.isArray(scope.expectedBeforePixels) ||
-       scope.expectedBeforePixels.length>64){
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    const seen=new Set();
-    expectedBeforePixels=scope.expectedBeforePixels.map(entry=>{
-      if(!entry || typeof entry!=='object' || Array.isArray(entry) ||
-         Object.keys(entry).some(key=>!['at','rgba'].includes(key)) ||
-         !Array.isArray(entry.rgba) || entry.rgba.length!==4){
-        throw new TypeError('CORRECTION_SCOPE_INVALID');
-      }
-      const at=point(entry.at,255);
-      if(!entry.rgba.every(n=>Number.isInteger(n)&&n>=0&&n<=255)){
-        throw new TypeError('CORRECTION_SCOPE_INVALID');
-      }
-      const key=at.join(',');
-      if(seen.has(key))throw new TypeError('CORRECTION_SCOPE_INVALID');
-      seen.add(key);
-      return {at,rgba:[...entry.rgba]};
-    });
-  }
-  let editableBeforeRgba;
-  if(scope.editableBeforeRgba!==undefined){
-    if(!Array.isArray(scope.editableBeforeRgba) ||
-       scope.editableBeforeRgba.length<1 ||
-       scope.editableBeforeRgba.length>256*256 ||
-       Buffer.byteLength(JSON.stringify(scope.editableBeforeRgba),'utf8')>PLAN_LIMIT){
-      throw new TypeError('CORRECTION_SCOPE_INVALID');
-    }
-    const seen=new Set();
-    editableBeforeRgba=scope.editableBeforeRgba.map(rgba=>{
-      if(!Array.isArray(rgba)||rgba.length!==4 ||
-         !rgba.every(v=>Number.isInteger(v)&&v>=0&&v<=255)){
-        throw new TypeError('CORRECTION_SCOPE_INVALID');
-      }
-      const key=rgba.join(',');
-      if(seen.has(key))throw new TypeError('CORRECTION_SCOPE_INVALID');
-      seen.add(key);
-      return [...rgba];
-    });
-  }
-  return {texture_uuid:textureUuid, allowed_regions:rectangles,
-    preserve_alpha:scope.preserveAlpha ?? false,
-    ...(protectedRegions===undefined?{}:{protected_regions:protectedRegions}),
-    ...(expectedBeforePixels===undefined?{}:{expected_before_pixels:expectedBeforePixels}),
-    ...(editableBeforeRgba===undefined?{}:{editable_before_rgba:editableBeforeRgba})};
-}
-// Descriptive diagnosis only. No self-certifying visual quality claim.
-const CORRECTION_MATERIALS = new Set([
-  'metal','wood','stone','cloth','skin','glass','other',
-]);
-const CORRECTION_TREATMENTS = new Set([
-  'form_value_masses','contact_shadows','hand_painted_clusters',
-  'palette_roles','alpha_silhouette','artwork_footprint',
-]);
-export function normalizedMaterialCorrectionIntent(value) {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      Object.keys(value).some(key => ![
-        'issueId','approachId','partId','material','cause','treatment',
-        'expectedChange',
-      ].includes(key))) {
-    throw new TypeError('MATERIAL_CORRECTION_INTENT_INVALID');
-  }
-  const token = input => typeof input === 'string' &&
-    /^[a-z][a-z0-9_-]{0,63}$/.test(input);
-  const statement = input => typeof input === 'string' &&
-    input.length >= 16 && input.length <= 240 &&
-    input.trim() === input && !/[\x00-\x1f\x7f]/.test(input);
-  if (!token(value.issueId) || !token(value.approachId) ||
-      !token(value.partId) ||
-      !CORRECTION_MATERIALS.has(value.material) ||
-      !CORRECTION_TREATMENTS.has(value.treatment) ||
-      !statement(value.cause) || !statement(value.expectedChange)) {
-    throw new TypeError('MATERIAL_CORRECTION_INTENT_INVALID');
-  }
-  return Object.freeze({
-    issueId:value.issueId, approachId:value.approachId,
-    partId:value.partId, material:value.material,
-    cause:value.cause, treatment:value.treatment,
-    expectedChange:value.expectedChange,
-  });
-}
-
 function serializePlan(operations, normalizedScope) {
   if (!Array.isArray(operations) || operations.length < 1 || operations.length > 128) {
     throw new TypeError('operations must contain 1 through 128 typed Rust operations');
@@ -235,160 +117,6 @@ function serializePlan(operations, normalizedScope) {
     throw new TypeError('EDIT_PLAN_SIZE_INVALID');
   }
   return payload;
-}
-
-/** Geometry identity only, never a second JS voxel or frame compiler.
- * Keep Rust's versioned per-method UUID namespace and formatting. */
-function generatedBlockoutCubeUuid(namespace, seed, index) {
-  const digest=createHash('sha256')
-    .update('lazydesigner:'+namespace+'\0'+seed+'\0'+index)
-    .digest('hex');
-  return digest.slice(0,8)+'-'+digest.slice(8,12)+'-4'+
-    digest.slice(13,16)+'-8'+digest.slice(17,20)+'-'+digest.slice(20,32);
-}
-function generatedSweepCubeUuid(seed, index) {
-  return generatedBlockoutCubeUuid('geometry-sweep-v1',seed,index);
-}
-function generatedProfileCubeUuid(seed, index) {
-  return generatedBlockoutCubeUuid('geometry-profile-v1',seed,index);
-}
-
-/** Bounded transport only. Rust validates every Bone/Cube/parent and
- * performs authoritative disposable preflight. No JS geometry compiler. */
-function serializeGeometryAssembly(assembly) {
-  if (!assembly || typeof assembly !== 'object' ||
-      Array.isArray(assembly) || assembly.expected_revision !== 0 ||
-      !Array.isArray(assembly.parts) || assembly.parts.length < 1 ||
-      assembly.parts.length > 128) {
-    throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID');
-  }
-  // Void-zone evidence is an optional read-only Rust CLI argument, not
-  // an unknown field added to the canonical G1 AssemblyRequest wire.
-  const {void_zones: _zones, ...canonicalAssembly} = assembly;
-  const payload = JSON.stringify(canonicalAssembly, (_key, value) => {
-    if (typeof value === 'number' && !Number.isFinite(value)) {
-      throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_INVALID');
-    }
-    return value;
-  });
-  if (!payload || Buffer.byteLength(payload, 'utf8') > PLAN_LIMIT) {
-    throw new TypeError('CODE_MODE_GEOMETRY_ASSEMBLY_INPUT_TOO_LARGE');
-  }
-  return payload;
-}
-
-/** Transport validation only. Rust owns surface geometry, source pixels,
- * region synthesis, correction safety and the disposable preflight.
- * This request intentionally has no pixel rows, strokes or freehand UV.
- */
-function serializeSemanticMaterialIntent(intent) {
-  const fields=['expected_revision','reference_png_sha256','cube_uuid',
-    'texture_uuid','face','material','light_corner','contrast',
-    'source_base_rgba','shadow_rgb','highlight_rgb',
-    'protected_regions','expected_before_pixels'];
-  const invalid=()=>{throw new TypeError('CODE_MODE_SEMANTIC_MATERIAL_INPUT_INVALID');};
-  if (!intent || typeof intent!=='object' || Array.isArray(intent) ||
-      Object.keys(intent).some(key=>!fields.includes(key)) ||
-      intent.expected_revision!==0 ||
-      typeof intent.reference_png_sha256!=='string' ||
-      !SHA256.test(intent.reference_png_sha256) ||
-      !['north','east','south','west','up','down'].includes(intent.face) ||
-      intent.material!=='painted_metal' ||
-      !['upper_left','upper_right'].includes(intent.light_corner) ||
-      !['subtle','balanced'].includes(intent.contrast))invalid();
-  for(const name of ['cube_uuid','texture_uuid']) {
-    const id=intent[name];
-    if(typeof id!=='string' || id.length<1 || id.length>128 ||
-       /[\s\x00-\x1f\x7f]/.test(id))invalid();
-  }
-  const rgba=(v,n)=>Array.isArray(v)&&v.length===n &&
-    v.every(x=>Number.isInteger(x)&&x>=0&&x<=255);
-  if(!rgba(intent.source_base_rgba,4) || intent.source_base_rgba[3]!==255 ||
-     !rgba(intent.shadow_rgb,3) || !rgba(intent.highlight_rgb,3))invalid();
-  const rect=r=>r && typeof r==='object' && !Array.isArray(r) &&
-    Object.keys(r).length===2 &&
-    Object.keys(r).every(k=>['from','to'].includes(k)) &&
-    [r.from,r.to].every(pt=>Array.isArray(pt) && pt.length===2 &&
-      pt.every(v=>Number.isInteger(v)&&v>=0&&v<=256)) &&
-    r.from.every((v,i)=>v<r.to[i]);
-  const protectedRegions=intent.protected_regions??[];
-  const expectedPixels=intent.expected_before_pixels??[];
-  if(!Array.isArray(protectedRegions) || protectedRegions.length>16 ||
-     !protectedRegions.every(rect) ||
-     !Array.isArray(expectedPixels) || expectedPixels.length>64 ||
-     !expectedPixels.every(v=>v && typeof v==='object' &&
-       !Array.isArray(v) && Object.keys(v).length===2 &&
-       Object.keys(v).every(k=>['at','rgba'].includes(k)) &&
-       Array.isArray(v.at) && v.at.length===2 &&
-       v.at.every(n=>Number.isInteger(n)&&n>=0&&n<256) &&
-       rgba(v.rgba,4)))invalid();
-  const payload=JSON.stringify(intent);
-  if(Buffer.byteLength(payload,'utf8')>PLAN_LIMIT)invalid();
-  return payload;
-}
-
-/** G2 transport only: Rust owns every geometric validity decision. */
-function serializeGeometryAttachment(attachment) {
-  if (!attachment || typeof attachment !== 'object' ||
-      Array.isArray(attachment) || attachment.expected_revision !== 0) {
-    throw new TypeError('CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_INVALID');
-  }
-  const payload = JSON.stringify(attachment, (_key, value) => {
-    if (typeof value === 'number' && !Number.isFinite(value)) {
-      throw new TypeError('CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_INVALID');
-    }
-    return value;
-  });
-  if (!payload || Buffer.byteLength(payload, 'utf8') > PLAN_LIMIT) {
-    throw new TypeError('CODE_MODE_GEOMETRY_ATTACHMENT_INPUT_TOO_LARGE');
-  }
-  return payload;
-}
-
-/** Transport-only gate. Rust validates every semantic and numeric constraint. */
-function serializeGeometryPropagation(request) {
-  if (!request || typeof request !== 'object' || Array.isArray(request) ||
-      request.expected_revision !== 0 ||
-      !Array.isArray(request.links) || request.links.length < 1 ||
-      request.links.length > 32) {
-    throw new TypeError('CODE_MODE_GEOMETRY_PROPAGATION_INPUT_INVALID');
-  }
-  const payload = JSON.stringify(request, (_key, value) => {
-    if (typeof value === 'number' && !Number.isFinite(value)) {
-      throw new TypeError('CODE_MODE_GEOMETRY_PROPAGATION_INPUT_INVALID');
-    }
-    return value;
-  });
-  if (!payload || Buffer.byteLength(payload, 'utf8') > PLAN_LIMIT) {
-    throw new TypeError('CODE_MODE_GEOMETRY_PROPAGATION_INPUT_TOO_LARGE');
-  }
-  return payload;
-}
-
-// Require a native *matched* correction receipt before any scoped Paint
-// call can be reported as successful to Code Mode. Rust may already have
-// published its no-overwrite sibling when a malformed success is observed:
-// do NOT auto-retry, remove that file or pretend its provenance is known.
-function checkedScopedApplyReceipt(receipt,scope,expectedSourceSha,operationCount) {
-  if (!scope) return receipt;
-  const verified=receipt?.correction_scope;
-  const count=(field,values)=>verified?.[field] === (values?.length??0);
-  if (receipt?.source_sha256!==expectedSourceSha.toLowerCase() ||
-      receipt?.mutation?.operation_count!==operationCount ||
-      !Number.isSafeInteger(receipt?.mutation?.revision) ||
-      receipt.mutation.revision<1 ||
-      receipt?.summary?.revision!==receipt.mutation.revision ||
-      typeof receipt?.output_sha256!=='string' ||
-      !SHA256.test(receipt.output_sha256) ||
-      verified?.status!=='enforced' ||
-      verified.texture_uuid!==scope.texture_uuid ||
-      verified.visual_verdict!=='UNVERIFIED' ||
-      !count('protected_regions',scope.protected_regions) ||
-      !count('expected_before_pixels',scope.expected_before_pixels) ||
-      !count('editable_before_rgba',scope.editable_before_rgba)) {
-    throw new Error('CODE_MODE_RUST_CORRECTION_RECEIPT_UNVERIFIED');
-  }
-  return receipt;
 }
 
 /**
