@@ -366,6 +366,18 @@ without making a second review database. Original inspection body
 and refusal codes retained; source regression AUTHORED_NOT_RUN.
 No Node/Deno/Windows/native runtime validation was performed.
 
+**Rust editor chrome presentation split (2026-11-21):**
+The source-faithful File/Edit/View menu, model title, Edit/Paint/Animate
+mode tabs and model/transform/review-camera toolbar are now rendered by
+`RustEditorMenuToolbar.svelte`. The page retains all action callbacks,
+native `invoke`, source revision, Undo, modal gating, keyboard/outside
+click handlers, viewport state and all dock layout/persistence ownership.
+The three transient menu/tool/view selections use Svelte two-way bindings
+with no independent view store. Existing global `rust-editor.css`,
+disabled reasons and camera/PNG review warnings remain. A source-only
+regression was authored, TEST_AUTHORED_NOT_RUN; Svelte/Windows and native
+visual parity NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
