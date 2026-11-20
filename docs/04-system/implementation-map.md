@@ -52,8 +52,11 @@ apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
 
 apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
    → host.mjs (trusted Node permission/RPC composition)
-   → visual-review-policy.mjs (trusted reviewer admission and correction guards)
-   → client.mjs (typed Rust CLI SDK)
+   ├─ trusted-local-files.mjs (file/path admission; no publisher)
+   ├─ visual-source-binding.mjs (trusted PNG and SHA binding)
+   ├─ source-face-coverage.mjs (bounded Rust read-only face evidence)
+   ├─ visual-review-policy.mjs (trusted reviewer admission and correction guards)
+   └─ client.mjs (typed Rust CLI SDK)
    → apps/desktop/src-tauri/src/bin/lazydesigner-authoring.rs
    → SAME Rust authoring core, independent SHA-bound saved-file session
 ```
@@ -72,7 +75,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 | **Animasi**: clips, keyframes, curves, effects | `authoring/mod.rs`, `animation_clip.rs`, `bezier.rs`, `animation_export.rs` | `effects.rs`, `timeline_markers.rs`, `rustAnimationPose.ts` (view-only), .animation.json |
 | Editable Blockbench file and source provenance | `authoring/bbmodel.rs`, `storage.rs`, `asset_handoff.rs` | `EditorSession::export`, `authoring/tests.rs`, CLI `asset_handoff` inspector |
 | Desktop active model, recovery, optional live reads | `desktop_authoring.rs` (Tauri commands), `desktop_authoring/preview_animation.rs` (read-only numeric clips), `desktop_authoring/preview_texture.rs` (read-only texture/UV projection), `editor_recovery.rs`, `live_read_bridge.rs` | `desktop_authoring/tests.rs` (native-only tests), `RustEditorPage.svelte` + `rustOutlinerView.ts` (hierarchy selectors) and snapshot/epoch guards; live-read default-off |
-| AI scripting, authorization and compact inspection | `code-mode/host.mjs` (session/RPC/approval), `client.mjs` (typed SDK), `task-context.mjs` (focused read), `visual-review-policy.mjs` (review admission) | `sandbox-worker.mjs`, `code-mode/*.test.mjs`, CLI `bin/lazydesigner-authoring.rs` and `bin/lazydesigner-authoring/tests.rs` |
+| AI scripting, authorization and compact inspection | `code-mode/host.mjs` (session/RPC/approval), `client.mjs` (typed SDK), `task-context.mjs` (focused read), `trusted-local-files.mjs` (path admission), `visual-source-binding.mjs` (pinned PNG), `source-face-coverage.mjs` (review inventory), `visual-review-policy.mjs` (review admission) | `sandbox-worker.mjs`, `code-mode/*.test.mjs`, CLI `bin/lazydesigner-authoring.rs` and `bin/lazydesigner-authoring/tests.rs` |
 
 **Stage order for further work:** Geometri → Texture → Animasi. Reuse
 the existing shared `EditPlan`, `asset_handoff`, `bbmodel` codec and

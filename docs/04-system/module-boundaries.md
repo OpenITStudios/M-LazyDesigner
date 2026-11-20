@@ -121,6 +121,16 @@ Undo/Redo and saved file publisher remain unchanged in their owners.
 No second model, bitmap cache, or editor engine was introduced. All
 Rust tests remain NOT_EXECUTED under the active hold.
 
+**Trusted host input modules (2026-11-20):** The trusted Code Mode
+RPC/session/approval owner remains `host.mjs`. Its original path and
+fresh-file rules belong to `trusted-local-files.mjs`; operator-picked
+PNG/geometry evidence and synchronous fresh-image leases belong to
+`visual-source-binding.mjs`; bounded SHA-pinned face inventory reads
+belong to `source-face-coverage.mjs`. The code moved without changing
+those validation decisions, guest capabilities, write authorization or
+Rust no-overwrite publisher. Existing host regressions still exercise
+these paths; focused source-authored regressions were added, not run.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
