@@ -212,6 +212,16 @@ one deeper module directory. Production source, public functions, file
 permission boundaries and native Rust authoring state were not changed.
 No tests or compilation were executed due to the active test hold.
 
+**Headless Rust CLI categories (2026-11-20):** The single
+`bin/lazydesigner-authoring.rs` executable now delegates pure saved-model
+projections to `focused_projections.rs`, bounded read-only selector/batch
+queries to `inspection_batch.rs`, and its original native command switch
+(including source SHA, fresh sibling publication and errors) to
+`command_routes.rs`. Main/arguments/source checksum guards remain in the
+binary root. No new binary, entrypoint, authoring engine, command name, file
+publisher or write authority is introduced. Existing child Rust tests can
+still reference parent-imported helpers. Source regression NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

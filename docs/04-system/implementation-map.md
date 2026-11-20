@@ -69,6 +69,9 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
       ├─ inspection-selectors.mjs (read-only selector transport)
       └─ geometry-overlap-review.mjs (advisory same-Bone collision evidence)
    → apps/desktop/src-tauri/src/bin/lazydesigner-authoring.rs
+      ├─ focused_projections.rs (bounded read-only model views)
+      ├─ inspection_batch.rs (typed bounded read queries)
+      └─ command_routes.rs (original single CLI command switch)
    → SAME Rust authoring core, independent SHA-bound saved-file session
 ```
 
