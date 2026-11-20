@@ -29,6 +29,8 @@ Use an **existing asset README** alongside the exact source model. For existing 
 
 Positive: Geometry plan/read/preflight and one independently approved new sibling; same-session revision continuation; after actual Geometry approval, rebind file/SHA for UV, then Texturing after UV PASS, and Animation only after Texture approval if required. Open the candidate using the **manual** GUI File → Open action. Negative: premature Texture/Animation, mixed operations, unknown operation, stale/missing/duplicate SHA field, changed README during approval, denied permission, invalid path/filename, crash/unknown write outcome. Every refusal must leave the original safe; do not blindly replay an uncertain write.
 
+Before functional acceptance, include the source-parity regression: the host's closed operation inventory and 128-operation limit must match the current canonical Rust EditOperation enum. Unknown/mixed edit kinds refuse before host approval; this check is technical, not artistic approval.
+
 Finalization requires a recorded upstream approval chain, no blockers, and a real saved Animation when requested. An explicit static asset can skip Animation only if Animation Required is NO; absence of clips alone is not an approval. The user types prompts only in external Codex/Agent App.
 
 ## 4. Report and stop

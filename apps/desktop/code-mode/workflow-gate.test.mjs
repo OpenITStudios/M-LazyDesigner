@@ -1,7 +1,7 @@
 // SOURCE-AUTHORED_NOT_RUN; native/PC acceptance remains deferred.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {parseWorkflow,writeDomain,admits,createWorkflowGate} from './workflow-gate.mjs';
@@ -79,4 +79,34 @@ test('saved SHA256 field is parsed, checked and not silently omitted',()=>{
     /FIELD_DUPLICATED/);
   assert.throws(()=>parseWorkflow(note({sha:'z'.repeat(64)})),/SHA_INVALID/);
   assert.equal(parseWorkflow(note({sha:null})).sha,null);
+});
+
+
+test('Workflow Gate operation kinds and limits match the canonical Rust EditOperation enum',async()=>{
+  // Static source parity: future native operations must not silently bypass
+  // the external-host stage inventory. Executed only in later PC-local phase.
+  const source=await readFile(
+    new URL('../src-tauri/src/authoring/mod.rs',import.meta.url),'utf8');
+  const declared=source.match(/pub enum EditOperation \{([\s\S]*?)^\}/m);
+  assert.ok(declared,'Rust EditOperation enum must be readable');
+  const toSnake=name=>name.replace(/[A-Z]/g,
+    (letter,index)=>(index?'_':'')+letter.toLowerCase());
+  const kinds=[...declared[1].matchAll(/^    ([A-Z][A-Za-z0-9]+)\s*\{/gm)]
+    .map(match=>toSnake(match[1]));
+  assert.ok(kinds.length>=1);
+  assert.equal(new Set(kinds).size,kinds.length);
+  // All Rust operations are classified in the trusted host, rather
+  // than quietly defaulting to Geometry when the compiler adds a variant.
+  for(const kind of kinds){
+    assert.doesNotThrow(()=>writeDomain({
+      operation:'apply',operationKinds:[kind],
+    }),kind+' needs an explicit production Stage');
+  }
+  const limit=Number(source.match(/const MAX_OPERATIONS: usize = (\d+);/)?.[1]);
+  assert.equal(limit,128,'native transaction limit changed; reconcile the host');
+  const allowed={operation:'apply',operationKinds:Array(limit).fill('add_cube')};
+  assert.equal(writeDomain(allowed),'GEOMETRY');
+  assert.throws(()=>writeDomain({operation:'apply',
+    operationKinds:Array(limit+1).fill('add_cube'),
+  }),/CODE_MODE_WORKFLOW_OP_UNKNOWN/);
 });

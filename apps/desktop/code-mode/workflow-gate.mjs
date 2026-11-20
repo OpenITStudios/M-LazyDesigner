@@ -56,7 +56,9 @@ export function writeDomain(req){
   if(req?.operation==='importPng')return 'TEXTURING';
   if(['exportGeometry','exportPng','exportAnimations'].includes(req?.operation))return 'EXPORT';
   const ops=req?.operationKinds;
-  if(req?.operation!=='apply'||!Array.isArray(ops)||!ops.length||ops.length>256)refuse('OP_UNKNOWN');
+  // Mirror the native EditPlan batch ceiling (Rust Core MAX_OPERATIONS=128).
+  // The typed SDK already enforces 128; this is the same independent host gate.
+  if(req?.operation!=='apply'||!Array.isArray(ops)||!ops.length||ops.length>128)refuse('OP_UNKNOWN');
   const domains=new Set(ops.map(x=>opGroup.get(x)));
   if(domains.has(undefined))refuse('OP_UNKNOWN');
   if(domains.size!==1)refuse('MIXED_PLAN');
