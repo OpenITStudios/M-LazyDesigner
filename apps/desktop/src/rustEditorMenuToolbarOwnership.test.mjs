@@ -9,6 +9,10 @@ test('Rust menu and toolbar preserve original labels, bindings and disabled gate
     read('./RustEditorPage.svelte'),read('./RustEditorMenuToolbar.svelte')
   ]);
   assert.match(page,/<RustEditorMenuToolbar\b/);
+  // Keep this disabled-state input derived from the actual parent stroke.
+  // The parent has no independent 'strokeActive' variable or bitmap owner.
+  assert.match(page,/<RustEditorMenuToolbar\\b[\\s\\S]*?strokeActive=\\{!!paintStroke\\}/);
+  assert.doesNotMatch(page,/\\{strokeActive\\}\\s+\\{liveReadAvailable\\}/);
   for(const n of ['menu','transformTool','reviewViewId'])
     assert.match(page,new RegExp('bind:'+n+'\\b'));
   for(const phrase of ['aria-label="Editor menu"','aria-label="Editor mode"',

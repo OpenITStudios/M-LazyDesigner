@@ -2666,7 +2666,7 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
 
 <div class="rust-editor" aria-label="LazyDesigner Rust native editor">
   <RustEditorMenuToolbar {snapshot} {busy} {loading} {workspaceMode}
-    {dockLayout} {selectedId} {selectedBoneId} {strokeActive} {liveReadAvailable}
+    {dockLayout} {selectedId} {selectedBoneId} strokeActive={!!paintStroke} {liveReadAvailable}
     liveReadPaired={!!livePairing} {validSemanticPreview} {validExternalPreview}
     bind:menu bind:transformTool bind:reviewViewId
     {requestNew} {requestOpen} {saveCopy} {openRecoveryDialog}
