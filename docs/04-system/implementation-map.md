@@ -23,6 +23,8 @@ in-memory session**.
 ```text
 apps/desktop/src/main.ts → RustEditorRoot.svelte → RustEditorPage.svelte
   ├─ rustOutlinerView.ts (pure hierarchy view/navigation)
+  ├─ rustSelectionOverlay.ts (read-only Paint mask canvas)
+  ├─ RustRecoveryDialog.svelte / RustLiveReadPairingDialog.svelte (display only)
   └─ RustViewport.svelte / rustAnimationPose.ts (derived UI/viewport)
           ↓ Tauri IPC
 apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)

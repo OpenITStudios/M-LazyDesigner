@@ -5,6 +5,8 @@
   import { onMount, tick } from 'svelte';
   import { recoveryCheckpointDelay, recoveryCheckpointNeeded } from './rustRecoverySchedule';
   import RustViewport from './RustViewport.svelte';
+  import RustRecoveryDialog from './RustRecoveryDialog.svelte';
+  import RustLiveReadPairingDialog from './RustLiveReadPairingDialog.svelte';
   import type { ReviewViewId } from './rustReviewCapture';
   import { prepareBoneTransformPose, samplePreparedBoneTransformPose, projectedTransformTimelineRows } from './rustAnimationPose';
   import { supportedFaceUvRotation } from './rustTextureProjection';
@@ -24,10 +26,11 @@
     type ExternalFaceTextureIntent,type ExternalFaceTextureDraft,
     type ExternalFaceTextureReceipt } from './rustExternalTexturePreview';
   import { extendPaintStroke, type PaintPoint } from './rustPaintStroke';
+  import {drawSurfaceSelectionOverlay} from './rustSelectionOverlay';
   import { protectedAtlasRectangle,
     type ProtectionRect,type SurfaceGesture,type SurfaceSampleHit } from './rustSurfacePaint';
   import {parseShadeRamp,bindSourceSelection,selectionStepsForStroke,
-    type SourceSelection,type SelectionStep,type SelectionMode,type SelectionRow,
+    type SourceSelection,type SelectionStep,type SelectionMode,
     type SelectionRaster} from './rustSurfaceTools';
   import {MAX_PAINT_ATLAS_SIDE} from './rustEditorTypes';
   import {matchingSelectedTexturePreview,selectedTexturePreviewSources,
@@ -1644,41 +1647,6 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
       contextKey:surfacePaintContextKey,
     };
     await selectFromViewport(hit,[...selection.steps,{mode:'invert'}]);
-  }
-  // Transient downscaled overlay: never bitmap, UV or Paint authority.
-  function drawSurfaceSelectionOverlay(canvas:HTMLCanvasElement,settings:{
-    rows:SelectionRow[];width:number;height:number;
-    raster:SelectionRaster|null;
-  }){
-    const draw=(data:typeof settings)=>{
-      const context=canvas.getContext('2d');
-      if(!context)return;
-      context.clearRect(0,0,canvas.width,canvas.height);
-      if(data.raster){
-        // Small view-only OR-occupancy overview, not an editable PNG layer.
-        try{
-          if(canvas.width!==data.raster.width||canvas.height!==data.raster.height)return;
-          const bytes=atob(data.raster.packed_mask_base64);
-          if(bytes.length!==Math.ceil(canvas.width*canvas.height/8))return;
-          const pixels=context.createImageData(canvas.width,canvas.height);
-          for(let i=0;i<canvas.width*canvas.height;i++){
-            if((bytes.charCodeAt(i>>3)&(1<<(i&7)))===0)continue;
-            const at=i*4;
-            pixels.data[at]=91;pixels.data[at+1]=177;
-            pixels.data[at+2]=241;pixels.data[at+3]=120;
-          }
-          context.putImageData(pixels,0,0);
-        }catch{/* Unsupported WebView preview never grants native edit permission. */}
-        return;
-      }
-      context.fillStyle='rgba(91,177,241,0.38)';
-      const sx=canvas.width/data.width,sy=canvas.height/data.height;
-      for(const row of data.rows){
-        context.fillRect(row.x0*sx,row.y*sy,(row.x1-row.x0)*sx,sy);
-      }
-    };
-    draw(settings);
-    return {update:draw};
   }
   function currentBrushSettings():BrushSettings{
     return {radius:surfaceBrushRadius,tip:surfaceBrushTip,inkMode:surfaceInkMode,
@@ -3673,6 +3641,20 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
   {/if}
 </div>
 
+{#if recoveryDialog}
+  <RustRecoveryDialog entries={recoveryEntries} bind:selectedId={recoverySelectedId}
+    bind:discardApproved={recoveryDiscardApproved} {busy}
+    dirty={Boolean(snapshot?.dirty)} onCancel={() => recoveryDialog = false}
+    onRestore={() => void restoreRecovery()}/>
+{/if}
+
+{#if livePairingDialog && livePairing}
+  <RustLiveReadPairingDialog pairing={livePairing}
+    bind:revealSecret={showLiveSecret}
+    onKeepPaired={() => livePairingDialog = false}
+    onDisconnect={() => void stopLiveRead()}/>
+{/if}
+
 {#if newDialog}
   <div class="rust-modal-backdrop" role="presentation">
     <section class="rust-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="new-model-title">
@@ -3704,79 +3686,7 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
 {/if}
 
 
-{#if recoveryDialog}
-  <div class="rust-modal-backdrop" role="presentation">
-    <section class="rust-editor-dialog" role="dialog" aria-modal="true"
-      aria-labelledby="recovery-title">
-      <h2 id="recovery-title">Recover unsaved Rust model</h2>
-      <p>Private checkpoints are recovery candidates, not verified saves.
-        Recovery opens a separate unsaved model. Save Copy afterward.</p>
-      {#if recoveryEntries.length}
-        <label for="recovery-select">Available checkpoint</label>
-        <select id="recovery-select" bind:value={recoverySelectedId}
-          disabled={busy}>
-          {#each recoveryEntries as entry (entry.id)}
-            <option value={entry.id}>
-              {new Date(entry.modifiedUnixMs).toLocaleString()} · revision {entry.revision} · {Math.ceil(entry.sizeBytes / 1024)} KiB
-            </option>
-          {/each}
-        </select>
-        {#if snapshot?.dirty}
-          <label class="recovery-discard">
-            <input type="checkbox" bind:checked={recoveryDiscardApproved}/>
-            Discard current unsaved edits to open the selected checkpoint
-          </label>
-        {/if}
-      {:else}
-        <p>No private recovery checkpoints were found.</p>
-      {/if}
-      <div class="dialog-buttons">
-        <button type="button" onclick={() => recoveryDialog = false}>Cancel</button>
-        <button type="button" class="primary"
-          disabled={busy || !recoverySelectedId || (Boolean(snapshot?.dirty) && !recoveryDiscardApproved)}
-          onclick={() => void restoreRecovery()}>Recover as unsaved</button>
-      </div>
-    </section>
-  </div>
-{/if}
-
-
-{#if livePairingDialog && livePairing}
-  <div class="rust-modal-backdrop" role="presentation">
-    <section class="rust-editor-dialog" role="dialog" aria-modal="true"
-      aria-labelledby="live-read-title">
-      <h2 id="live-read-title">Read-only Code Mode pairing</h2>
-      <p>This pairing reads only the active Rust model's identity and small
-        semantic pages. It cannot edit the model or grant authoring permission.
-        Pass these values only to your trusted local agent host.</p>
-      <label for="live-read-pipe">Local Windows pipe</label>
-      <input id="live-read-pipe" type="text" readonly value={livePairing.pipe}
-        autocomplete="off" spellcheck="false"/>
-      <label for="live-read-token">Private pairing capability</label>
-      <input id="live-read-token" type={showLiveSecret ? 'text' : 'password'}
-        readonly value={livePairing.token} autocomplete="off" spellcheck="false"/>
-      <label class="live-read-reveal"><input type="checkbox" bind:checked={showLiveSecret}/>
-        Show pairing capability</label>
-      <p class="hint">Bound to editor epoch {livePairing.epoch}. Read access
-        expires after at most 15 minutes; the UI attempts to disconnect
-        earlier. New/Open/Restore invalidates the old binding. The standard
-        build does not provide this experimental bridge.</p>
-      <div class="dialog-buttons">
-        <button type="button" onclick={() => livePairingDialog = false}>Keep paired</button>
-        <button type="button" class="danger" onclick={() => void stopLiveRead()}>
-          Disconnect
-        </button>
-      </div>
-    </section>
-  </div>
-{/if}
-
 <style>
-  .live-read-reveal { display: flex; align-items: center; gap: 8px; }
-  #live-read-pipe, #live-read-token { width: 100%; font-family: monospace; }
-  .recovery-discard { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; }
-  .recovery-discard input { flex: none; }
-  #recovery-select { width: 100%; min-width: 0; }
   .paint-starter { display: grid; gap: 8px; padding: 10px; border-top: 1px solid #374151; }
   .paint-starter label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
   .paint-starter select { min-width: 0; max-width: 100%; flex: 1; }

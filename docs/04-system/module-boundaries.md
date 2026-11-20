@@ -131,6 +131,14 @@ those validation decisions, guest capabilities, write authorization or
 Rust no-overwrite publisher. Existing host regressions still exercise
 these paths; focused source-authored regressions were added, not run.
 
+**Svelte view-only presentation (2026-11-20):** The canvas Paint selection
+overlay action, recovery list/dialog and opt-in read-only pairing dialog
+have separate UI-only modules. `RustEditorPage.svelte` still owns native
+restore/discard and dirty-session guards, source epoch/revision, focus,
+pairing lifetime and Tauri invocation. The child views cannot acquire
+model authoring, Code Mode privileges or change accepted artwork. UI
+regressions were authored but no Svelte build/Windows focus test executed.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
