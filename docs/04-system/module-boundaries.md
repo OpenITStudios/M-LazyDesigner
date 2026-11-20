@@ -268,6 +268,17 @@ bindings. These modules do not run Rust, grant permissions or implement
 Geometry/Paint; the original trusted host and CLI remain authoritative.
 Regression cases have been AUTHORED_NOT_RUN; native/Node parity not certified.
 
+**Trusted Code Mode material reference naming (2026-11-20):** The
+misleading internal `bindApprovedReference` function is now named
+`assertUniqueSavedMaterialTextureUuid` and owned by
+`material-reference-source-identity.mjs`. It checks exactly one selected
+source Texture UUID through bounded SHA-bound catalog reads and refuses
+missing, duplicate, malformed or incomplete results. It does not grant
+visual/artistic approval, publish a file or allow a model write. The
+existing trusted `host.mjs` still chooses the operator input, owns
+authorization/leases and calls this check at the same boundary.
+Source regressions were AUTHORED_NOT_RUN; native proof remains held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

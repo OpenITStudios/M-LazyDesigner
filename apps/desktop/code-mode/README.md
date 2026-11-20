@@ -1,6 +1,7 @@
 ## Current Rust Code Mode module owners (source-only)
 
-- `host.mjs`: trusted Deno RPC/session/approval, exact source leases and verified candidate handoff
+- `host.mjs`: sole trusted Deno RPC/session/approval and candidate handoff owner (no model engine)
+- `material-reference-source-identity.mjs`: SHA-bound unique Texture UUID verification for an operator-selected material reference; not visual approval or file authority
 - `trusted-local-files.mjs`: absolute paths, regular files and fresh sibling name admission; Rust alone publishes files
 - `visual-source-binding.mjs`: trusted operator PNG selection, image SHA binding, source landmark and fresh review-image leases
 - `source-face-coverage.mjs`: bounded SHA-bound Rust face coverage reads for external reviewers
