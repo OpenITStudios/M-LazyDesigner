@@ -29,6 +29,37 @@ AI: Deno permission-denied guest → trusted Node host + approval
 Legacy Local: Control → Gateway → Blockbench Runtime (preserved)
 ```
 
+### Rust operator boundary — external Agent App only (2026-11-20)
+
+The **only AI prompt/reasoning/execution surface** for Rust authoring is Codex
+or another explicitly authorized external Agent App. LazyDesigner's Tauri,
+Svelte and Three.js application is a native **manual editor and reviewer**,
+not an AI client. `apps/desktop/code-mode/` contains the standalone
+first-party agent-host integration, not a WebView or Tauri AI runner.
+
+The first supported handoff is an exact saved-file boundary, using existing
+operations instead of a new protocol:
+
+1. The external agent chooses an exact saved `.bbmodel` and binds its SHA;
+   unsaved GUI-only state is **not** implicitly available to the agent.
+2. Its trusted host authorizes a bounded Rust CLI transaction and publishes a
+   **new, non-overwritten sibling**. Code Mode itself never acquires native
+   GUI write authority or certifies aesthetic quality.
+3. The user selects that output through the existing GUI **Open Model…**.
+   The Rust GUI validates and opens the file only after the existing
+   dirty-session/discard guard; no automatic replacement or silent reload.
+4. The editor handles manual changes, inspection, recovery, Undo/Redo and
+   file exports as its existing native responsibilities. The user separately
+   reviews native/Blockbench/visual output before acceptance.
+
+Keep one Rust Core and **two adapters for different hosts**, not two AI
+products. Do not introduce embedded chat/prompt UI, a WebView script runner,
+an AI decision service, background file polling, a second file publisher or
+automatic live writes merely for convenience. The optional Windows pairing
+remains separately feature-gated, explicitly authorized and **read-only**;
+it is not required for the baseline. Local's legacy Gateway and domain
+Skills are preserved on their own branch.
+
 - **Rust Core is authoritative:** `AuthoringDocument`, typed edits,
   preflight, transaction/Undo/Redo, validation and file serialization
   belong to the shared Rust library. Domain modules own Geometry/UV,

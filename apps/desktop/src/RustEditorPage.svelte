@@ -3460,15 +3460,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
                 <button role="menuitem" onclick={requestOpen} disabled={busy || loading}>Open Model… <kbd>Ctrl+O</kbd></button>
                 <button role="menuitem" onclick={() => void saveCopy()} disabled={!snapshot || busy}>Save Copy… <kbd>Ctrl+Shift+S</kbd></button>
                 <button role="menuitem" onclick={() => void openRecoveryDialog()} disabled={busy || loading || !!paintStroke}>Recover Checkpoint…</button>
-                <button role="menuitem" onclick={() => void openLiveReadDialog()}
-                  disabled={!liveReadAvailable || !snapshot || busy || loading || !!paintStroke}
-                  title="Optional Windows read-only pairing, requiring an explicitly built feature. No live AI edits.">
-                  {livePairing ? 'Read-only Code Mode pairing…' : 'Pair Code Mode (read-only)…'}
-                </button>
-                {#if liveReadAvailable}
-                  <button role="menuitem" onclick={() => void stopLiveRead()}
-                    disabled={busy || loading}>Disconnect Code Mode read</button>
-                {/if}
                 <button role="menuitem" onclick={() => void exportGeometry()}
                   disabled={!snapshot || busy || loading || !!paintStroke}
                   title="Export a separate Minecraft Bedrock geometry JSON. This does not replace your editable .bbmodel.">
@@ -3479,6 +3470,18 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
                   title="Export a separate Minecraft Bedrock animation JSON. Unsupported curves are refused without affecting the editable .bbmodel.">
                   Export Bedrock Animations…
                 </button>
+                {#if liveReadAvailable}
+                  <div class="menu-rule"></div>
+                  <button role="menuitem" onclick={() => void openLiveReadDialog()}
+                    disabled={!snapshot || busy || loading || !!paintStroke}
+                    title="Optional native read-only access for an independently trusted agent. LazyDesigner does not execute AI prompts or edits.">
+                    {livePairing ? 'View read-only agent pairing…' : 'Pair external agent (read-only)…'}
+                  </button>
+                  {#if livePairing}
+                    <button role="menuitem" onclick={() => void stopLiveRead()}
+                      disabled={busy || loading}>Disconnect read-only agent</button>
+                  {/if}
+                {/if}
                 <div class="menu-rule"></div>
                 <button role="menuitem" onclick={openLegacyWorkspace}>Legacy Workspace</button>
               {:else if item === 'edit'}
@@ -3546,9 +3549,6 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       <button disabled={busy} onclick={requestNew}>New</button>
       <button disabled={busy} onclick={requestOpen}>Open</button>
       <button disabled={!snapshot || busy} onclick={() => void saveCopy()}>Save Copy</button>
-      <button disabled={!snapshot || busy || loading || !!paintStroke}
-        title="Export separate Minecraft Bedrock geometry without changing the editable .bbmodel"
-        onclick={() => void exportGeometry()}>Export Geo</button>
     </div>
     <div class="tool-separator"></div>
     <div class="tool-group" role="group" aria-label="Edit operations">
@@ -3660,7 +3660,7 @@ import type { CubeView, EditorSnapshot, EditOperation, HierarchyNode, TransformC
       {:else}
         <div class="empty-editor">
           <h2>{loading ? 'Loading editor…' : 'No model open'}</h2>
-          <p>Create a Bedrock Entity project or open a compatible Blockbench .bbmodel.</p>
+          <p>Open a saved .bbmodel from Codex or your Agent App, or create a model here.</p>
           <div class="empty-actions">
             <button onclick={requestNew} disabled={busy || loading}>New Model</button>
             <button onclick={requestOpen} disabled={busy || loading}>Open Model…</button>

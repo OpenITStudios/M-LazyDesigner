@@ -16,6 +16,9 @@ const config = JSON.parse(read('src-tauri/tauri.conf.json'));
 const rustEditor = read('src/RustEditorPage.svelte');
 const rustHost = read('src-tauri/src/main.rs');
 const rustAdapter = read('src-tauri/src/desktop_authoring.rs');
+const rustEntry = read('src/main.ts');
+const rustRoot = read('src/RustEditorRoot.svelte');
+const agentOperator = read('code-mode/run.mjs');
 
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
@@ -33,6 +36,26 @@ check(rustEditor.includes('onCloseRequested((event) =>') &&
   rustEditor.includes('unlistenClose?.()'),
   'Rust editor native close guard or teardown is missing');
 
+// Source-level architectural checks only: they do not prove host isolation,
+ // native file safety or that any Codex/agent integration is installed.
+check(rustEntry.includes("import RustEditorRoot from './RustEditorRoot.svelte'") &&
+  rustRoot.includes('<RustEditorPage onLegacy=') &&
+  rustEditor.includes("'rust_editor_open'") &&
+  rustAdapter.includes('pub async fn rust_editor_open('),
+  'Rust editor must use the existing native saved-model opening path');
+check([rustEntry, rustRoot, rustEditor, rustHost].every(source =>
+  !source.includes('sandbox-worker.mjs') &&
+  !source.includes('code-mode/run.mjs') &&
+  !source.includes('lazydesigner_code_mode(') &&
+  !source.includes('createCodeModeHost(')),
+  'Rust GUI/Tauri entrypoints must not embed Code Mode AI execution');
+check(agentOperator.includes('createCodeModeHost(') &&
+  agentOperator.includes("args['--deno']") &&
+  agentOperator.includes("args['--rust']"),
+  'External agent operator must own the Code Mode host boundary');
+check(rustEditor.includes('{#if liveReadAvailable}') &&
+  rustEditor.includes('Pair external agent (read-only)'),
+  'Experimental read-only agent pairing must stay behind native availability');
 check(rustEditor.includes('function openLegacyWorkspace()') &&
   rustEditor.includes('if (loading || busy || paintStroke || snapshot?.dirty)') &&
   rustEditor.includes('onclick={openLegacyWorkspace}'),

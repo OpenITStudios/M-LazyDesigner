@@ -53,6 +53,18 @@ runtime. Start at
 [Code Mode host setup](apps/desktop/code-mode/HOST_INTEGRATION.md) and
 [Code Mode migration contract](docs/04-system/code-mode-migration.md).
 
+**Rust operator flow (source contract, native unverified):** The user gives
+prompts only to **Codex or another authorized external Agent App**. Its trusted
+host runs Code Mode/Deno and the first-party Rust CLI against a specifically
+selected, saved `.bbmodel`, with per-write permission and source-SHA checks.
+The host publishes a **new sibling model**, not an automatic modification of
+the model open in LazyDesigner. The human opens that candidate using the
+existing **File → Open Model…** editor action, reviews it and saves/exports
+only through Rust-owned operations. The editor contains **no AI prompt/chat,
+agent executor or second authoring engine**. The optional native pairing is
+read-only, feature-gated and not needed for ordinary saved-file work.
+Neither file handoff nor a tool receipt implies visual acceptance.
+
 ## Existing Blockbench-hosted Product Flow (Local implementation baseline)
 ```text
 User request
