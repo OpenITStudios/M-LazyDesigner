@@ -239,6 +239,36 @@ export interface GeometryVoidEvidence {
   visual_verdict:"UNVERIFIED";
   write_authority:"NOT_GRANTED";
 }
+/** A1 source-bounded new looping rotation clip.
+ * No shader deformation, IK, motion clearance, native approval or Apply.
+ */
+export interface PeriodicRotationTrack {
+  bone_uuid:string;base_rotation:Vec3;amplitude:Vec3;phase_degrees:number;
+}
+export interface PeriodicRotationIntent {
+  expected_revision:0;animation_uuid:string;name:string;length_seconds:number;
+  max_error_degrees:number;tracks:PeriodicRotationTrack[];
+}
+export interface PeriodicRotationEvidence {
+  scope:"source_bound_periodic_bone_rotation_candidate";
+  animation_uuid:string;
+  sampling_strategy:"conservative_scalar_linear_sine_chord";
+  max_error_degrees:number;loop_mode:"loop";track_count:number;keyframe_count:number;
+  tracks:Array<{bone_uuid:string;segments:number;keyframe_count:number;
+    conservative_scalar_error_bound_degrees:number;
+    seam_endpoint_values_identical:true;}>;
+  source_identity:"EXACT_SAVED_BONE_UUIDS";
+  pose_contact_verdict:"UNVERIFIED";
+  continuous_euler_motion_verdict:"SCALAR_LINEAR_BOUND_ONLY";
+  native_playback_verdict:"NOT_EXECUTED";
+  visual_verdict:"UNVERIFIED";write_authority:"NOT_GRANTED";
+}
+export interface PeriodicRotationReceipt {
+  status:"OK";sha256:string;summary:DocumentSummary;
+  plan:{expected_revision:0;operations:EditOperation[];correction_scope:null};
+  preflight:PreflightReceipt["preflight"];motion_evidence:PeriodicRotationEvidence;
+  write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
+}
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */
   expected_revision: 0;
@@ -1342,6 +1372,9 @@ export interface RustCodeModeClient {
   planSemanticMaterial(input: {
     input:string;expectedSha256:string;intent:SemanticMaterialIntent;
   }):Promise<SemanticMaterialProposalReceipt>;
+  planPeriodicRotation(input:{
+    input:string;expectedSha256:string;intent:PeriodicRotationIntent;
+  }):Promise<PeriodicRotationReceipt>;
   planGeometryAttachment(input: {
     input: string; expectedSha256: string; attachment: GeometryFaceAttachmentRequest;
   }): Promise<GeometryFaceAttachmentReceipt>;
@@ -1446,6 +1479,7 @@ export interface RustCodeModeProject {
   preflight(input: {operations: EditOperation[]; correctionScope?: TextureCorrectionScope}): Promise<PreflightReceipt>;
   planGeometryAssembly(assembly: GeometryAssemblyRequest): Promise<GeometryAssemblyReceipt>;
   planSemanticMaterial(intent:SemanticMaterialIntent):Promise<SemanticMaterialProposalReceipt>;
+  planPeriodicRotation(intent:PeriodicRotationIntent):Promise<PeriodicRotationReceipt>;
   planGeometryAttachment(attachment: GeometryFaceAttachmentRequest): Promise<GeometryFaceAttachmentReceipt>;
   planGeometryResizePropagation(propagation: GeometryResizePropagationRequest): Promise<GeometryResizePropagationReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;

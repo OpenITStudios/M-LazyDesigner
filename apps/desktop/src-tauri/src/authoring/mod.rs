@@ -64,6 +64,8 @@ mod texture_coverage;
 mod subtree;
 mod bezier;
 mod animation_clip;
+mod animation_periodic;
+pub use animation_periodic::{PeriodicRotationIntent,PeriodicRotationProposal};
 mod animation_export;
 pub use animation_export::{export_bedrock_animations, bedrock_animation_curve_fidelity};
 mod asset_handoff;
@@ -3415,6 +3417,12 @@ impl EditorSession {
         &self, intent: &SemanticMaterialIntent,
     ) -> Result<SemanticMaterialProposal> {
         material_synthesis::compile(self, intent)
+    }
+    /// A1 read-only, bounded phase/amplitude Bone rotation plan.
+    pub fn plan_periodic_rotation(
+        &self, intent: &PeriodicRotationIntent,
+    ) -> Result<PeriodicRotationProposal> {
+        animation_periodic::compile(self,intent)
     }
 
     /// External editor pixels use the same immutable Rust transaction and

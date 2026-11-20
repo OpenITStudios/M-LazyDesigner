@@ -11,6 +11,7 @@ import type {
   GeometryFaceAttachmentRequest, GeometryFaceAttachmentReceipt,
   GeometryResizePropagationRequest, GeometryResizePropagationReceipt,
   SemanticMaterialIntent, SemanticMaterialProposalReceipt,
+  PeriodicRotationIntent, PeriodicRotationReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -154,6 +155,10 @@ export interface CodeModeGuestAPI {
   planSemanticMaterial(args:{
     project:string;intent:SemanticMaterialIntent;
   }):Promise<SemanticMaterialProposalReceipt>;
+  /** A1 read-only existing Rust planner; no host write grant. */
+  planPeriodicRotation(args:{
+    project:string;intent:PeriodicRotationIntent;
+  }):Promise<PeriodicRotationReceipt>;
   /** G2 read-only same-Bone face alignment, never a persistent relation. */
   planGeometryAttachment(args: {
     project:string; attachment:GeometryFaceAttachmentRequest;

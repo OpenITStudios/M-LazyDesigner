@@ -9,6 +9,7 @@ use lazydesigner::authoring::{
     GeometryAssemblyRequest, GeometryFaceAttachmentRequest, inspect_geometry_impact,
     GeometryVoidZone, check_geometry_void_zones,
     GeometryResizePropagationRequest, SemanticMaterialIntent,
+    PeriodicRotationIntent,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use lazydesigner::authoring::storage::{bbmodel, png, geometry_json, animation_json, publish_new, publish_new_png, publish_new_geometry, publish_new_animation, read_bounded, same_directory};
@@ -879,6 +880,26 @@ fn execute() -> Result<Value> {
             });
             if let Some(evidence)=void_evidence {receipt["void_evidence"]=evidence;}
             Ok(receipt)
+        }
+        "plan-periodic-rotation" => {
+            // A1 Rust-owned wave bake. Read-only source SHA, no publisher
+            // and no inference of contact, visual fit or write authority.
+            option_set(&options,&["--input","--intent","--expected-sha256"])?;
+            let input=PathBuf::from(option(&options,"--input")?);
+            let (bytes,actual_sha)=read_verified_source(
+                &input,option(&options,"--expected-sha256")?)?;
+            let data=read_bounded(
+                Path::new(option(&options,"--intent")?),MAX_PLAN_BYTES)?;
+            let request:PeriodicRotationIntent=serde_json::from_slice(&data)
+                .map_err(|_|fail("PERIODIC_ROTATION_INTENT_INVALID"))?;
+            let session=EditorSession::open(&bytes)?;
+            let proposal=session.plan_periodic_rotation(&request)?;
+            Ok(json!({
+                "status":"OK","sha256":actual_sha,"summary":session.summary(),
+                "plan":proposal.plan,"preflight":proposal.preflight,
+                "motion_evidence":proposal.motion_evidence,
+                "write_authority":"NOT_GRANTED","visual_verdict":"UNVERIFIED"
+            }))
         }
         "plan-semantic-material" => {
             // P0 only: bounded reviewer-authored material intent, Rust

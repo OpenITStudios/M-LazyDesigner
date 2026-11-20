@@ -973,6 +973,35 @@ Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.
 
 
+**A1 periodic Bone rotation planning (2026-11-20; SOURCE_ONLY):**
+The existing Code Mode guest accepts a **read-only**
+\`codemode.planPeriodicRotation({project,intent})\` call. One input
+declares \`expected_revision:0\`, a new clip \`animation_uuid\`, \`name\`,
+\`length_seconds\`, positive \`max_error_degrees\`, and
+\`tracks:[{bone_uuid,base_rotation:[x,y,z],amplitude:[x,y,z],phase_degrees}]\`.
+These values refer to **exact saved Bone identities** and authored rotation
+degrees, not image-inferred motion or shader animation.
+
+The separate Rust \`authoring/animation_periodic.rs\` compiler emits one
+periodic sine cycle, with independent per-Bone phase offsets, as editable
+numeric rotation keyframes. It chooses the smallest power-of-two segment
+count that satisfies the conservative scalar-linear interpolation bound
+\`max(|amplitude|)*(2π)^2/(8*segments²)\`, within the **existing** 128-op
+\`EditPlan\` budget; quality is not silently reduced if the budget is exceeded.
+Keyframe IDs derive from clip UUID, Bone UUID and dyadic time tick, not
+transient operation order. The loop end matches the start exactly.
+This bound is for *scalar Euler components*, **not** actual quaternion
+pose accuracy, joint clearance, smooth motion or artistic success.
+
+The original SHA-bound CLI, \`EditorSession::preflight\`, TypeScript
+contract, explicit trusted-host \`codemode.apply\` permission and native
+\`.bbmodel\` writer remain authoritative. A1 does not modify another clip,
+Geometry, Texture, Undo, Three.js or the application UI. Numeric values,
+unresolved Bones, duplicate tracks, unsupported time precision or an
+unrepresentable tolerance fail closed. Test fixtures are authored but
+NOT_EXECUTED under the repository hold; native playback and quality are
+unverified. Review actual moving poses before accepting an asset.
+
 **G6 deterministic rib-array construction (2026-11-20; SOURCE_ONLY):**
 A G1 `assembly.parts[].rib_arrays` optional entry can describe repeated,
 equally spaced **native Cube** panels (e.g., armor ribs, structural rails,

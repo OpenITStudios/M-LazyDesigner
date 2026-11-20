@@ -38,7 +38,8 @@ apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           │                         geometry_rib_array.rs (deterministic disjoint ribs),
           │                         subtree.rs, uv_sharing.rs
           ├─ Texture/Paint        → paint.rs, face_regions.rs, material_*.rs
-          ├─ Animation            → animation_clip.rs, bezier.rs,
+          ├─ Animation            → animation_clip.rs, animation_periodic.rs,
+          │                         bezier.rs,
           │                         effects.rs, timeline_markers.rs,
           │                         animation_export.rs
           ├─ Cross-domain QA      → asset_handoff.rs, texture_coverage.rs
@@ -58,6 +59,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
 | **Geometry impact reasoning (read-only)**: Bone ancestry, same-parent Cube candidates, common atlas users and matching animator keys | `authoring/geometry_impact.rs` | CLI `inspect-batch`, `code-mode/geometry-impact.mjs`, `client.mjs`, `client.d.mts` (advisory only, no mutation) |
 | **Geometri**: Cube/Bone hierarchy, pivot, bounds, UV-aware edits | `authoring/mod.rs` (`EditOperation`), `geometry_assembly.rs`, `geometry_sweep.rs`, `geometry_profile_sweep.rs`, `geometry_axial.rs` (pure helpers), `geometry_attachment.rs`, `geometry_propagation.rs`, `geometry_obb.rs`, `subtree.rs`, `geometry.rs`, `uv_sharing.rs` | `authoring/tests.rs`, `.bbmodel` + `.geo.json`, `RustViewport.svelte` |
 | **Texture**: RGBA8 Paint, face-local edits, atlas/material evidence | `authoring/paint.rs`, `face_regions.rs`, `palette.rs`, `material_styling.rs` | `correction_scope.rs`, `texture_coverage.rs`, `asset_handoff.rs`, Paint UI + PNG export |
+| **A1 periodic rotation (read-only)**: source-bound phase/amplitude rotation-to-keyframe proposal and Rust preflight | `authoring/animation_periodic.rs` | `plan-periodic-rotation` CLI, Code Mode SDK/host/guest, authored regression; no animation renderer or write bypass |
 | **Animasi**: clips, keyframes, curves, effects | `authoring/mod.rs`, `animation_clip.rs`, `bezier.rs`, `animation_export.rs` | `effects.rs`, `timeline_markers.rs`, `rustAnimationPose.ts` (view-only), .animation.json |
 | Editable Blockbench file and source provenance | `authoring/bbmodel.rs`, `storage.rs`, `asset_handoff.rs` | `EditorSession::export`, `authoring/tests.rs`, CLI `asset_handoff` inspector |
 | Desktop active model, recovery, optional live reads | `desktop_authoring.rs`, `editor_recovery.rs`, `live_read_bridge.rs` | `RustEditorPage.svelte` and snapshot/epoch guards; live-read default-off |

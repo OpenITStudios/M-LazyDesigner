@@ -14,6 +14,7 @@ import { isAbsolute, join } from 'node:path';
 import {normalizedMaterialWorkPacket,materialWorkPacketDigest} from './material-work-packet.mjs';
 import {validGeometryImpact} from './geometry-impact.mjs';
 import {normalizedGeometryVoidZones,validGeometryVoidEvidence} from './geometry-void.mjs';
+import {serializePeriodicRotation,validPeriodicRotationReceipt} from './periodic-rotation.mjs';
 
 const execFileAsync = promisify(execFile);
 const PLAN_LIMIT = 64 * 1024;
@@ -1313,6 +1314,22 @@ export function createRustCodeModeClient({
         await rm(directory, { recursive:true, force:true });
       }
     },
+    async planPeriodicRotation({input,expectedSha256,intent}) {
+      const digest=hash(expectedSha256).toLowerCase();
+      const payload=serializePeriodicRotation(intent);
+      const directory=await mkdtemp(join(tmpdir(),'lazydesigner-periodic-'));
+      try {
+        const file=join(directory,'periodic-intent.json');
+        await writeFile(file,payload,{encoding:'utf8',mode:0o600,flag:'wx'});
+        const receipt=await call('plan-periodic-rotation',{
+          input:absolute(input,'input'),'expected-sha256':digest,intent:file,
+        });
+        if(!validPeriodicRotationReceipt(receipt,intent,digest)){
+          throw new Error('CODE_MODE_PERIODIC_ROTATION_RECEIPT_INVALID');
+        }
+        return receipt;
+      } finally {await rm(directory,{recursive:true,force:true});}
+    },
     async planSemanticMaterial({ input, expectedSha256, intent }) {
       const digest=hash(expectedSha256).toLowerCase();
       const payload=serializeSemanticMaterialIntent(intent);
@@ -1653,6 +1670,8 @@ export async function openRustCodeModeProject(client, input) {
       client.planGeometryAssembly({ input:path, expectedSha256, assembly }),
     planSemanticMaterial: (intent) =>
       client.planSemanticMaterial({ input:path, expectedSha256, intent }),
+    planPeriodicRotation: (intent) =>
+      client.planPeriodicRotation({input:path,expectedSha256,intent}),
     planGeometryAttachment: (attachment) =>
       client.planGeometryAttachment({ input:path, expectedSha256, attachment }),
     planGeometryResizePropagation: (propagation) =>
