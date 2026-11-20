@@ -406,6 +406,18 @@ fresh sibling `storage::publish_new_geometry` /
 entrypoint authority are unchanged. Static source proof only;
 regression fixture AUTHORED_NOT_RUN; no Cargo/Windows/Bedrock proof.
 
+**Tauri material candidate preview ownership (2026-11-21):**
+The user-selected reference PNG, semantic material candidate and external
+edited-face PNG temporary-preview implementations are grouped into
+`desktop_authoring/material_candidate_previews.rs`. All three existing
+Tauri command names remain public at `desktop_authoring.rs` as thin
+wrappers. The original bounded PNG decode/source epoch/revision checks,
+temporary Rust candidate hash and "UNVERIFIED"/"NOT_GRANTED" receipt
+fields are unchanged. Both Apply commands, transaction/Undo,
+user approval, native writer and file publishers remain in the
+original parent. Source regression AUTHORED_NOT_RUN, Cargo/Windows/
+visual acceptance NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

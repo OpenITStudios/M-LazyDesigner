@@ -9,6 +9,13 @@ saved-file exports, recovery entrypoints and registered Tauri commands.
 `preview_texture.rs` derive display-only state from an already admitted
 Rust source. They cannot persist authoring state or grant user permissions.
 
+**Material candidate preview flows:** `material_candidate_previews.rs` implements
+the original user-selected reference PNG, ephemeral Rust semantic candidate
+preview, and user-selected external face PNG preview. Each checks live source
+epoch/revision, bounded image input and SHA-bound candidate identity;
+none persists or authorizes Paint. Public Tauri commands and both protected
+material Apply handlers remain in `../desktop_authoring.rs`.
+
 **Temporary candidate verification:** `material_candidate_verification.rs`
 rebuilds and checks provisional source-bound material candidates. Its helper
 may mutate a disposable `EditorSession` *argument* but never publishes the
