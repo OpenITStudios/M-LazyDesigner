@@ -82,6 +82,7 @@ apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)
       ├─ inspection-selectors.mjs (read-only selector transport)
       ├─ geometry-overlap-review.mjs (advisory same-Bone collision evidence)
       ├─ geometry-plan-input-transport.mjs (bounded Geometry plan payloads/IDs)
+      ├─ geometry-proposal-sdk-methods.mjs (three source-bound read-only Rust planning methods)
       ├─ texture-correction-contract.mjs (Texture scope and Rust receipt check)
       └─ semantic-material-intent-transport.mjs (bounded material input)
    → apps/desktop/src-tauri/src/bin/lazydesigner-authoring.rs

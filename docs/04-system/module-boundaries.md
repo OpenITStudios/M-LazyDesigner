@@ -339,6 +339,18 @@ Directory `README.md` distinguishes entrypoint, derived views and
 provisional/PNG validation without creating another authoring engine.
 SOURCE_REVIEWED, regressions AUTHORED_NOT_RUN; native tests held.
 
+**Typed Code Mode Geometry proposal SDK methods (2026-11-21):**
+Three read-only Rust planning routes (`planGeometryAssembly`,
+`planGeometryAttachment`, `planGeometryResizePropagation`) now belong
+to `code-mode/geometry-proposal-sdk-methods.mjs`; they share the original
+`client.mjs` CLI transport, bounded input serializers, exact source SHA
+and native proposal/visibility/void/overlap receipt checks. The SDK's
+`apply`, user approval lease, file publisher and project API names remain
+at the original owner and call sites. No independent Geometry engine,
+guest executor, write path or authorization object was added. Original
+method bodies were preserved; negative source-regression cases are
+AUTHORED_NOT_RUN under the CI/localtest hold.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
