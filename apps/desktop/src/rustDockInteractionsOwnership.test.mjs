@@ -32,7 +32,8 @@ test('Dock interactions use one live parent-owned state and unchanged CSS/view c
   }
   assert.match(actions,/window\.localStorage\.setItem\(RUST_DOCK_LAYOUT_KEY/);
   assert.match(actions,/target\.setPointerCapture\(event\.pointerId\)/);
-  assert.match(actions,/target\.releasePointerCapture\(event\.pointerId\)/);
+  // Cancellation is handled by the view's lost-pointer-capture events.
+  assert.match(page,/onlostpointercapture=\{\(event\) => finishFloating\(event, true\)\}/);
   assert.match(actions,/event\.preventDefault\(\)/);
   assert.match(inspector,/startInspectorResize/);
   assert.match(layout,/export function measureDocks/);
