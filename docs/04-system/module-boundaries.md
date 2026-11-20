@@ -378,6 +378,20 @@ disabled reasons and camera/PNG review warnings remain. A source-only
 regression was authored, TEST_AUTHORED_NOT_RUN; Svelte/Windows and native
 visual parity NOT_EXECUTED.
 
+**Source-bound material Apply admission (2026-11-21):** The trusted
+host's material correction intent/scope, reviewed sample/propagation,
+six-direction evidence, Rust face/UV binding and deterministic cluster
+operation preparation now have one named owner,
+`code-mode/material-apply-admission.mjs`. It returns only normalized
+source-bound *intent* for the original `host.mjs` Apply handler and
+shares its actual selected project, visual pair and reviewer maps;
+it neither requests user approval nor chooses a path or publishes.
+The host retains mutation authorization, final lease, Rust native
+Apply, verified output receipt, uncertain-publish freeze and handle
+registration. Original refusal and read-only source inspection paths
+are preserved. Negative source cases AUTHORED_NOT_RUN; no native,
+Node, Deno or Windows execution.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

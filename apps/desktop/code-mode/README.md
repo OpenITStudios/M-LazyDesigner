@@ -6,6 +6,7 @@
 - `visual-source-binding.mjs`: trusted operator PNG selection, image SHA binding, source landmark and fresh review-image leases
 - `source-face-coverage.mjs`: bounded SHA-bound Rust face coverage reads for external reviewers
 - `visual-review-policy.mjs`: trusted review declarations and guarded source-pixel correction scope
+- `material-apply-admission.mjs`: reviewed Paint operation/scope, sample/propagation and SHA-bound Rust face evidence checks *before* Apply; does not authorize or write
 - `selected-visual-pair-inspection.mjs`: SHA-bound multi-view PNG comparisons, reviewer face/criteria evidence and source-bound visual-read receipts; reads/writes only live host review state through explicit accessors, not a separate approval store
 - `client.mjs`: **only** typed Rust CLI transport and host-approved mutations, separate from permission-denied `sandbox-worker.mjs`; keeps existing exported API
 - `geometry-plan-input-transport.mjs`: bounded Geometry plan payloads and deterministic IDs (no JS Geometry engine)
