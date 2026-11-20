@@ -279,6 +279,17 @@ existing trusted `host.mjs` still chooses the operator input, owns
 authorization/leases and calls this check at the same boundary.
 Source regressions were AUTHORED_NOT_RUN; native proof remains held.
 
+**3D Paint control and brush preset view ownership (2026-11-20):**
+`RustSurfacePaintControls.svelte` renders brush radius/tip/pattern, Shade Ink,
+connected-color selection, seam and protected-region switches.
+`RustBrushPresetControls.svelte` renders only the browser-local preset form.
+The parent `RustEditorPage.svelte` still owns the 19 reactive form values,
+preset persistence, admission guards, Paint callbacks, Rust epoch/revision
+and Undo. Original sample/selection mutual exclusion, disabled states,
+notes and scoped label presentation were retained as source. No bitmap
+copy, new command, second store or authority introduced. Regression source
+AUTHORED_NOT_RUN; Svelte/Windows/native proof still held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

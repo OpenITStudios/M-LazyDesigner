@@ -10,6 +10,7 @@
   import RustPaintExternalCandidate from './RustPaintExternalCandidate.svelte';
   import RustPaintSemanticCandidate from './RustPaintSemanticCandidate.svelte';
   import RustPaintAtlasCanvas from './RustPaintAtlasCanvas.svelte';
+  import RustSurfacePaintControls from './RustSurfacePaintControls.svelte';
   import RustOutlinerPanel from './RustOutlinerPanel.svelte';
   import RustElementProperties from './RustElementProperties.svelte';
   import RustRecoveryDialog from './RustRecoveryDialog.svelte';
@@ -2439,168 +2440,19 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
             Import PNG…
           </button>
           <p class="hint">Import accepts embedded RGBA8 PNG at {snapshot.textureResolution[0]} × {snapshot.textureResolution[1]} px (up to 80 MiB, subject to project size); the local file is not modified.</p>
-          <div class="surface-paint-panel" aria-label="Source-bound 3D pixel painting">
-            <label><input type="checkbox" bind:checked={surfacePaint3d}
-              disabled={busy || loading || !!paintStroke || !!surfaceMaskDrag}/>
-              Paint directly on 3D Cube</label>
-            <label>Brush radius
-              <input type="number" min="1" max="4" step="1"
-                bind:value={surfaceBrushRadius}
-                disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
-            </label>
-            <label>Brush tip
-              <select bind:value={surfaceBrushTip}
-                disabled={busy || !!paintStroke || !!surfaceMaskDrag}>
-                <option value="square">Square</option>
-                <option value="diamond">Diamond</option>
-              </select>
-            </label>
-            <label>Pattern stencil
-              <select bind:value={surfacePatternMode}
-                disabled={busy || !!paintStroke || !!surfaceMaskDrag}>
-                <option value="none">Solid (no pattern)</option>
-                <option value="checker">Checker</option>
-                <option value="dots">Dots</option>
-                <option value="diagonal">Diagonal</option>
-              </select>
-            </label>
-            {#if surfacePatternMode!=='none'}
-              <label>Period (texels)
-                <input type="number" min="1" step="1"
-                  bind:value={surfacePatternPeriod}
-                  disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
-              </label>
-              <label>Offset X
-                <input type="number" min="0" step="1"
-                  bind:value={surfacePatternPhaseX}
-                  disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
-              </label>
-              <label>Offset Y
-                <input type="number" min="0" step="1"
-                  bind:value={surfacePatternPhaseY}
-                  disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
-              </label>
-              {#if !surfacePatternReady}
-                <p class="hint">Pattern requires whole-number period and offsets.</p>
-              {/if}
-            {/if}
-            <details class="brush-presets">
-              <summary>Brush presets</summary>
-              <div class="brush-presets-fields">
-                <label>Saved preset
-                  <select bind:value={selectedBrushPresetId} disabled={busy}>
-                    <option value="">Choose preset…</option>
-                    {#each brushPresets as preset (preset.id)}
-                      <option value={preset.id}>{preset.name}</option>
-                    {/each}
-                  </select>
-                </label>
-                <button type="button" disabled={busy || !selectedBrushPresetId}
-                  onclick={applyBrushPreset}>Apply preset</button>
-                <label>Preset name
-                  <input type="text" maxlength="80" bind:value={brushPresetName}
-                    placeholder="e.g. Soft highlight" disabled={busy}/>
-                </label>
-                <button type="button" disabled={busy || !!paintStroke}
-                  onclick={saveBrushPreset}>Save / Update</button>
-                <button type="button" disabled={busy || !selectedBrushPresetId}
-                  onclick={deleteBrushPreset}>Delete preset</button>
-              </div>
-              <p class="hint">Saved locally: brush, Shade Ink and pattern settings only.
-                No image, Cube identity, selection or Paint permission is stored.</p>
-              {#if brushPresetError}<p class="hint" role="status">{brushPresetError}</p>{/if}
-            </details>
-            <label><input type="checkbox" bind:checked={surfaceGrayscalePreview}
-              disabled={busy || !surfacePaint3d}/>
-              Grayscale viewport (read-only)</label>
-            <label><input type="checkbox" bind:checked={surfaceSampleMode}
-              onchange={() => {if(surfaceSampleMode)surfaceSelectMode=false;}}
-              disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
-              Pick original RGB from 3D (Rust)</label>
-            <label><input type="checkbox" bind:checked={surfaceSelectMode}
-              onchange={() => {if(surfaceSelectMode)surfaceSampleMode=false;}}
-              disabled={busy || !surfacePaint3d || !!surfaceMaskDrag}/>
-              Magic Wand: select connected source color</label>
-            <label>Selection operation
-              <select bind:value={surfaceSelectOperation} disabled={busy || !surfacePaint3d}>
-                <option value="replace">Replace</option>
-                <option value="add">Add</option>
-                <option value="subtract">Subtract</option>
-                <option value="intersect">Intersect</option>
-              </select>
-            </label>
-            <button type="button" onclick={() => void invertSurfaceSelection()}
-              disabled={busy || !validSurfaceSelection}>Invert within Cube face</button>
-            <p class="hint">Add, Subtract and Intersect use another original-color
-              island on the same Cube face. Invert works only inside that face.
-              Rust recomputes the selection from original pixels at Apply.</p>
-            {#if validSurfaceSelection}
-              <button type="button" onclick={clearSurfaceSelection}
-                disabled={busy || !!surfaceMaskDrag}>
-                Clear connected selection ({surfaceSelection?.pixelCount} px)
-              </button>
-            {/if}
-            <label>3D ink mode
-              <select bind:value={surfaceInkMode}
-                disabled={busy || !!paintStroke || !!surfaceMaskDrag}>
-                <option value="color">Opaque original-color Pencil</option>
-                <option value="shade_ink">Shade Ink (exact palette steps)</option>
-              </select>
-            </label>
-            {#if surfaceInkMode==='shade_ink'}
-              <label>Shade direction
-                <select bind:value={surfaceShadeDirection}
-                  disabled={busy || !!surfaceMaskDrag}>
-                  <option value="darken">Darken</option>
-                  <option value="lighten">Lighten</option>
-                </select>
-              </label>
-              <label class="surface-ramp-field">Artist shade ramp
-                (darkest to lightest, comma-separated)
-                <textarea rows="2" bind:value={surfaceShadeRamp}
-                  placeholder="#202a3b, #445870, #8297b0, #c5d8ed"
-                  disabled={busy || !!surfaceMaskDrag}></textarea>
-              </label>
-              <p class="hint">Ramp is artist-supplied, not quantized. Each
-                eligible pixel moves exactly one swatch per gesture. Other
-                colors remain unchanged. No fixed palette-count limit.</p>
-              {#if !surfaceShadeColors}
-                <p class="hint">Enter two or more unique #RRGGBB swatches
-                  to enable Shade Ink painting.</p>
-              {/if}
-            {/if}
-            <label><input type="checkbox" bind:checked={surfaceSeamEnabled}
-              disabled={busy || !surfacePaint3d || !!surfaceMaskDrag ||
-                surfaceInkMode==='shade_ink' || validSurfaceSelection || !!surfacePattern}/>
-              Bridge adjacent Cube faces (one Undo)</label>
-            <label>Original editable RGB
-              <input type="color" bind:value={surfaceSourceBase}
-                disabled={busy || !!paintStroke || !!surfaceMaskDrag}/>
-            </label>
-            <label><input type="checkbox" bind:checked={surfaceProtectMode}
-              disabled={busy || !!paintStroke || !!surfaceMaskDrag ||
-                validSemanticPreview || validExternalPreview}/>
-              Mark protected rectangle on atlas</label>
-            <button type="button" onclick={clearSurfaceProtection}
-              disabled={busy || !!surfaceMaskDrag || !guardedSurfaceMasks.length}>
-              Clear protected areas ({guardedSurfaceMasks.length})
-            </button>
-            <p class="hint">Brushes remain hard pixel clusters with radius 1–4.
-              All color changes use the exact original opaque RGBA from Rust;
-              other original colors, identity masks, alpha and shared UV are
-              protected. Optional two-face bridging only applies to adjacent
-              coplanar Cube faces in the same Bone and atlas; an unsupported
-              seam aborts the gesture. No automatic material generation.</p>
-            {#if surfaceSampleStatus}
-              <p class="hint" role="status">{surfaceSampleStatus}</p>
-            {/if}
-            {#if surfacePaint3d && !surfacePaintEnabled}
-              <p class="hint">3D Paint needs the Pencil tool, an editable
-                texture, opaque Alpha (255), no preview candidate, and an idle
-                Rust session. If the eager atlas preview was omitted, load
-                the selected atlas above without loading every PNG.</p>
-            {/if}
-          </div>
+          <RustSurfacePaintControls {busy} {loading}
+            strokeActive={!!paintStroke} selectionDragging={!!surfaceMaskDrag}
+            candidatePending={validSemanticPreview || validExternalPreview}
+            {surfacePatternReady} {surfacePaintEnabled} {validSurfaceSelection}
+            shadeRampValid={!!surfaceShadeColors} stencilActive={!!surfacePattern}
+            protectedRegionCount={guardedSurfaceMasks.length}
+            selectionPixelCount={surfaceSelection?.pixelCount ?? 0}
+            {surfaceSampleStatus} {brushPresets} {brushPresetError}
+            {applyBrushPreset} {saveBrushPreset} {deleteBrushPreset}
+            {invertSurfaceSelection} {clearSurfaceSelection} {clearSurfaceProtection}
+            bind:surfacePaint3d bind:surfaceBrushRadius bind:surfaceBrushTip bind:surfacePatternMode bind:surfacePatternPeriod bind:surfacePatternPhaseX bind:surfacePatternPhaseY
+            bind:selectedBrushPresetId bind:brushPresetName bind:surfaceGrayscalePreview bind:surfaceSampleMode bind:surfaceSelectMode bind:surfaceSelectOperation bind:surfaceInkMode
+            bind:surfaceShadeDirection bind:surfaceShadeRamp bind:surfaceSeamEnabled bind:surfaceSourceBase bind:surfaceProtectMode />
           {#if snapshot.paintAdoptableTextures[paintTextureIndex] &&
             selectedTextureSource}
             <button type="button" onclick={() => void enableImportedPaintTexture()}
