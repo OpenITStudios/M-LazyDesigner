@@ -35,7 +35,8 @@ apps/desktop/src/main.ts → RustEditorRoot.svelte → RustEditorPage.svelte
           ↓ Tauri IPC
 apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
   ├─ desktop_authoring/preview_animation.rs (read-only clip projection)
-  └─ desktop_authoring/preview_texture.rs (read-only texture/UV preview projection)
+  ├─ desktop_authoring/preview_texture.rs (read-only texture/UV preview projection)
+  └─ desktop_authoring/snapshot_projection.rs (bounded frozen GUI snapshot)
           ↓
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           ├─ document_validation.rs (document identity/Outliner validation)

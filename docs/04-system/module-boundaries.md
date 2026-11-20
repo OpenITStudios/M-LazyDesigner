@@ -245,6 +245,16 @@ visibility and the original public UV admission re-export change.
 Authored source regression remains TEST_AUTHORED_NOT_RUN; Rust compile
 and native behavior are NOT_EXECUTED. No second document or history.
 
+**Tauri immutable snapshot owner (2026-11-20):** Read-only
+`EditorSnapshot` projection, ephemeral `ProjectionReuse` source keys,
+immutable model freezing and bounded Texture/Animation/Outliner projection
+have moved to `desktop_authoring/snapshot_projection.rs`. The original
+`desktop_authoring.rs` still owns native Tauri commands, the store/lock,
+revision and epoch admission, detached-edit publication, recovery and files.
+The original projection bodies and tests remain, and parent-private symbols
+continue to serve the same callers. Source regression AUTHORED_NOT_RUN;
+Rust compile and Windows UI/native parity NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
