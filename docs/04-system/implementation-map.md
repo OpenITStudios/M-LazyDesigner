@@ -44,6 +44,7 @@ apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
   ├─ desktop_authoring/material_candidate_previews.rs (source-bound preview flows)
   ├─ desktop_authoring/review_capture_validation.rs (saved-model/PNG checks)
   ├─ desktop_authoring/bedrock_resource_exports.rs (native new-file JSON export flows)
+  ├─ desktop_authoring/paint_texture_io.rs (atlas preview and native PNG I/O)
   └─ desktop_authoring/README.md (module responsibility/authority map)
           ↓
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)

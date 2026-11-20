@@ -5,6 +5,13 @@ Tauri adapter for the canonical Rust `EditorSession`. It owns the active store,
 epoch/revision admission, provisional edit publication, user file pickers,
 saved-file exports, recovery entrypoints and registered Tauri commands.
 
+**Paint Texture I/O:** `paint_texture_io.rs` implements the original Tauri
+selected atlas PNG preview, user-selected PNG import through one
+`detached_edit` transaction, and save-to-new-file PNG export with the
+original write lease/source SHA verification. Public command entrypoints
+stay in `../desktop_authoring.rs`; the separate `preview_texture.rs`
+continues to own read-only Texture/UV projection rules, not file I/O.
+
 **Derived views:** `snapshot_projection.rs`, `preview_animation.rs`, and
 `preview_texture.rs` derive display-only state from an already admitted
 Rust source. They cannot persist authoring state or grant user permissions.

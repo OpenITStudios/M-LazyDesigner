@@ -418,6 +418,18 @@ user approval, native writer and file publishers remain in the
 original parent. Source regression AUTHORED_NOT_RUN, Cargo/Windows/
 visual acceptance NOT_EXECUTED.
 
+**Paint Texture I/O command implementation split (2026-11-21):**
+The selected atlas preview, bounded user PNG import, and no-overwrite
+Texture PNG export now live in `desktop_authoring/paint_texture_io.rs`.
+Their three public Tauri command names/signatures are preserved in
+`desktop_authoring.rs`; the new module calls the same single
+`EditorState`, `detached_edit`, epoch/revision, PNG size and SHA
+guards, original native user picker, lease and fresh-only publisher.
+`preview_texture.rs` still owns Texture/UV projection primitives and
+Rust core owns actual bitmap edits/Undo. Exact original implementation
+bodies and refusal messages were preserved; source regression authored
+NOT_EXECUTED. Cargo/Windows/Bedrock acceptance remains held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
