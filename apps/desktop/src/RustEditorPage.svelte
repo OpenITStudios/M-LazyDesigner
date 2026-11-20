@@ -3641,20 +3641,6 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
   {/if}
 </div>
 
-{#if recoveryDialog}
-  <RustRecoveryDialog entries={recoveryEntries} bind:selectedId={recoverySelectedId}
-    bind:discardApproved={recoveryDiscardApproved} {busy}
-    dirty={Boolean(snapshot?.dirty)} onCancel={() => recoveryDialog = false}
-    onRestore={() => void restoreRecovery()}/>
-{/if}
-
-{#if livePairingDialog && livePairing}
-  <RustLiveReadPairingDialog pairing={livePairing}
-    bind:revealSecret={showLiveSecret}
-    onKeepPaired={() => livePairingDialog = false}
-    onDisconnect={() => void stopLiveRead()}/>
-{/if}
-
 {#if newDialog}
   <div class="rust-modal-backdrop" role="presentation">
     <section class="rust-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="new-model-title">
@@ -3685,6 +3671,20 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
   </div>
 {/if}
 
+
+{#if recoveryDialog}
+  <RustRecoveryDialog entries={recoveryEntries} bind:selectedId={recoverySelectedId}
+    bind:discardApproved={recoveryDiscardApproved} {busy}
+    dirty={Boolean(snapshot?.dirty)} onCancel={() => recoveryDialog = false}
+    onRestore={() => void restoreRecovery()}/>
+{/if}
+
+{#if livePairingDialog && livePairing}
+  <RustLiveReadPairingDialog pairing={livePairing}
+    bind:revealSecret={showLiveSecret}
+    onKeepPaired={() => livePairingDialog = false}
+    onDisconnect={() => void stopLiveRead()}/>
+{/if}
 
 <style>
   .paint-starter { display: grid; gap: 8px; padding: 10px; border-top: 1px solid #374151; }

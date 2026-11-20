@@ -13,6 +13,11 @@ test('dialog presentation retains parent-native restore and pairing authority',a
   assert.match(page,/bind:revealSecret=\{showLiveSecret\}/);
   assert.match(page,/function restoreRecovery\(/);
   assert.match(page,/function stopLiveRead\(/);
+  // Keep the original focus/modal DOM sequence after component extraction.
+  const order=['{#if newDialog}','{#if confirmDiscard}',
+    '{#if recoveryDialog}','{#if livePairingDialog && livePairing}'];
+  assert.ok(order.every((key,i)=>i===0 ||
+    page.indexOf(order[i-1]) < page.indexOf(key)));
   assert.match(recovery,/Recover as unsaved/);
   assert.match(pair,/Read-only Code Mode pairing/);
   // Parent controls mount/unmount. Child components must never import
