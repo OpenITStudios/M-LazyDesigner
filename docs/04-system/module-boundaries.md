@@ -222,6 +222,16 @@ binary root. No new binary, entrypoint, authoring engine, command name, file
 publisher or write authority is introduced. Existing child Rust tests can
 still reference parent-imported helpers. Source regression NOT_EXECUTED.
 
+**Rust Outliner and Properties panels (2026-11-20):** The
+`RustEditorPage.svelte` Outliner hierarchy rows and Cube/Bone/UV property
+forms now render in independent `RustOutlinerPanel.svelte` and
+`RustElementProperties.svelte` view components. They reuse the same
+source-derived hierarchy helpers, selected Rust snapshot, disabled edit gates
+and parent callbacks. Dock layout/resizing, focus hotkeys, native model
+mutations and revision/Undo state remain parent/Tauri responsibilities.
+No second model, mutator, or UI framework. Source regression authored
+NOT_EXECUTED; Svelte/Windows focus and visual parity held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

@@ -23,6 +23,8 @@ in-memory session**.
 ```text
 apps/desktop/src/main.ts → RustEditorRoot.svelte → RustEditorPage.svelte
   ├─ rustOutlinerView.ts (pure hierarchy view/navigation)
+  ├─ RustOutlinerPanel.svelte (hierarchy/visibility presentation only)
+  ├─ RustElementProperties.svelte (Cube/Bone/UV property presentation only)
   ├─ RustAnimationWorkspace.svelte (Animation UI, parent-owned operations)
   ├─ RustTexturesDock.svelte (Texture list/dock UI, parent-owned selection)
   ├─ RustPaintExternalCandidate.svelte / RustPaintSemanticCandidate.svelte (review UI)

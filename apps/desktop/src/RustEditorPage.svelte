@@ -10,6 +10,8 @@
   import RustPaintExternalCandidate from './RustPaintExternalCandidate.svelte';
   import RustPaintSemanticCandidate from './RustPaintSemanticCandidate.svelte';
   import RustPaintAtlasCanvas from './RustPaintAtlasCanvas.svelte';
+  import RustOutlinerPanel from './RustOutlinerPanel.svelte';
+  import RustElementProperties from './RustElementProperties.svelte';
   import RustRecoveryDialog from './RustRecoveryDialog.svelte';
   import RustLiveReadPairingDialog from './RustLiveReadPairingDialog.svelte';
   import type { ReviewViewId } from './rustReviewCapture';
@@ -2701,49 +2703,10 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
       </button>
     {:else}
 
-      <section class="dock-panel outliner" style:flex-basis={dockLayout.inspectorSplit + '%'}>
-        <div class="dock-title">
-          <span>OUTLINER</span>
-          {#if side !== 'float' && side !== 'tabs'}
-            <div class="dock-controls">
-              <button type="button" title="Move Outliner and Properties to the opposite side"
-                onclick={swapDocks}>Move</button>
-              <button type="button" title="Float Outliner and Properties in the editor"
-                onclick={() => floatPanel('inspector')}>Float</button>
-              <button type="button" title="Fold Outliner and Properties"
-                onclick={() => hideDock('inspector', true)}>Fold</button>
-            </div>
-          {/if}
-        </div>
-        {#if rows.length}
-          <div class="outliner-list" role="tree" aria-label="Model hierarchy">
-            {#each rows as row (row.uuid)}
-              <div class="outliner-row" class:selected={selectedId === row.uuid || selectedBoneId === row.uuid}
-                class:muted={!row.visible}
-                style:padding-left={(6 + row.depth * 14) + 'px'} role="presentation">
-                {#if row.kind === 'bone'}
-                  <button class="collapse" aria-label="Toggle group" aria-expanded={!collapsed.has(row.uuid)}
-                    onclick={() => toggleBone(row.uuid)}>{collapsed.has(row.uuid) ? '▸' : '▾'}</button>
-                {:else}
-                  <span class="collapse-spacer"></span>
-                {/if}
-                <button class="outliner-label" role="treeitem" aria-selected={selectedId === row.uuid || selectedBoneId === row.uuid}
-                  onclick={() => selectRow(row)}>
-                  <span class="item-kind" aria-hidden="true">{row.kind === 'bone' ? '◇' : '□'}</span>
-                  <span class="truncate" title={row.name}>{row.name}</span>
-                </button>
-                <button type="button" class="outliner-visibility" class:is-hidden={!row.visible}
-                  disabled={busy || loading || !!paintStroke}
-                  aria-label={(row.visible ? 'Hide ' : 'Show ') + row.kind + ' ' + row.name}
-                  title={(row.visible ? 'Hide ' : 'Show ') + row.kind + (row.kind === 'bone' ? ' and descendants' : '')}
-                  onclick={() => toggleRowVisibility(row)}>{row.visible ? 'Hide' : 'Show'}</button>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="empty-label">No model elements</p>
-        {/if}
-      </section>
+      <RustOutlinerPanel rows={rows} {collapsed} {selectedId} {selectedBoneId}
+        {busy} {loading} strokeActive={!!paintStroke}
+        inspectorSplit={dockLayout.inspectorSplit}
+        {toggleBone} {selectRow} {toggleRowVisibility} />
       <div class="dock-splitter-horizontal" role="separator" aria-label="Resize Outliner and Properties"
         aria-orientation="horizontal" tabindex="0"
         aria-valuemin="20" aria-valuemax="80" aria-valuenow={dockLayout.inspectorSplit}
@@ -2753,185 +2716,12 @@ import type { EditorSnapshot, EditOperation, TransformChannel, TransformKeyframe
         onlostpointercapture={(event) => finishInspectorResize(event, true)}
         onkeydown={keyInspectorResize}></div>
 
-      <section class="dock-panel properties">
-        <div class="dock-title">ELEMENT</div>
-        {#if selectedCube}
-          <div class="property-scroll">
-            <div class="property-group">
-              <label for={'rust-cube-name-' + selectedCube.uuid}>Cube name</label>
-              <input id={'rust-cube-name-' + selectedCube.uuid} class="node-name-input"
-                aria-label="Rename selected Cube" type="text" maxlength="128"
-                value={selectedCube.name} autocomplete="off"
-                disabled={busy || loading || !!paintStroke || workspaceMode !== 'edit'}
-                onchange={(event) => void renameSelected(
-                  selectedCube.uuid, selectedCube.name, event.currentTarget)}/>
-            </div>
-            <div class="property-group">
-              <label>Parent Bone</label>
-              <select aria-label="Move Cube to another Bone"
-                title="Reparent the selected Cube without changing its stored local coordinates"
-                value={outlinerParentId(snapshot?.hierarchy ?? [], selectedCube.uuid)}
-                disabled={busy || loading || workspaceMode !== 'edit' || !snapshot?.bones.length}
-                onchange={(event) => void reparentSelected(event.currentTarget.value || null)}>
-                <option value="" disabled>Select Bone</option>
-                {#each snapshot?.bones ?? [] as bone (bone.uuid)}
-                  <option value={bone.uuid}>{bone.name}</option>
-                {/each}
-              </select>
-              <p class="hint">Keep local transforms. World-space pose can change if the new Bone is rotated.</p>
-            </div>
-            <div class="property-group">
-              <label>Position</label>
-              <div class="xyz-fields">
-                {#each [0,1,2] as axis}
-                  <label class="axis-input"><span>{AXES[axis]}</span>
-                    <input aria-label={'Position ' + AXES[axis]} type="number" step="any"
-                      disabled={busy}
-                      title="Change Cube position (Auto UV remaps in Rust)"
-                      value={selectedCube.from[axis]}
-                      onchange={(event) => position(axis, event.currentTarget.value)}/>
-                  </label>
-                {/each}
-              </div>
-            </div>
-            <div class="property-group">
-              <label>Size</label>
-              <div class="xyz-fields">
-                {#each [0,1,2] as axis}
-                  <label class="axis-input"><span>{AXES[axis]}</span>
-                    <input aria-label={'Size ' + AXES[axis]} type="number" step="any" min="0.001"
-                      disabled={busy}
-                      title="Change Cube size (one edge at a time; UV remaps in Rust)"
-                      value={selectedCube.to[axis] - selectedCube.from[axis]}
-                      onchange={(event) => size(axis, event.currentTarget.value)}/>
-                  </label>
-                {/each}
-              </div>
-            </div>
-            <div class="property-group">
-              <label>Rotation (degrees)</label>
-              <div class="xyz-fields">
-                {#each [0,1,2] as axis}
-                  <label class="axis-input"><span>{AXES[axis]}</span>
-                    <input aria-label={'Rotation ' + AXES[axis]} type="number" step="any"
-                      disabled={busy} value={selectedCube.rotation[axis]}
-                      onchange={(event) => rotation(axis, event.currentTarget.value)}/>
-                  </label>
-                {/each}
-              </div>
-            </div>
-            {#if selectedCube.boxUv}
-              <p class="hint">Box UV remaps Size and preserves the box offset. Per-face UV editing remains unavailable.</p>
-            {:else if selectedCube.autoUv !== 0}
-              <p class="hint">Auto UV mode {selectedCube.autoUv} remaps Move and single-edge Size in Rust. Manual face UV edits disable Auto UV for the selected Cube.</p>
-            {/if}
-            <div class="property-group">
-              <label for="uv-face">UV Face</label>
-              <select id="uv-face" bind:value={selectedFace}
-                onchange={clearSemanticPreview}
-                disabled={busy || selectedCube.boxUv}>
-                {#each FACES as face}
-                  <option value={face}>{face}</option>
-                {/each}
-              </select>
-              {#if selectedCube.boxUv}
-                <p class="hint">Box UV face rectangles are derived from Cube bounds and atlas offset.</p>
-                <div class="uv-fields">
-                  {#each [0,1] as axis}
-                    <label><span>{axis === 0 ? 'U' : 'V'}</span>
-                      <input aria-label={'Box UV offset ' + (axis === 0 ? 'U' : 'V')}
-                        type="number" step="1" disabled={busy}
-                        value={selectedCube.uvOffset[axis]}
-                        onchange={(event) => boxOffset(axis, event.currentTarget.value)}/>
-                    </label>
-                  {/each}
-                </div>
-              {:else}
-                <div class="uv-fields">
-                  {#each [0,1,2,3] as i}
-                    <label><span>{['U1','V1','U2','V2'][i]}</span>
-                      <input aria-label={'UV ' + (i + 1)} type="number" step="any"
-                        disabled={busy}
-                        title={selectedCube.autoUv !== 0 ? 'Manual UV edits disable Auto UV on this Cube' : 'Change face UV'}
-                        value={faceUv[i] ?? 0}
-                        onchange={(event) => uvEdit(i, event.currentTarget.value)}/>
-                    </label>
-                  {/each}
-                </div>
-                <div class="uv-fields">
-                  <label><span>UV Rotation</span>
-                    <select aria-label={'UV rotation for ' + selectedFace}
-                      disabled={busy || loading || workspaceMode !== 'edit' || faceRotation === null}
-                      title="Rotate the selected Cube face UV without changing atlas pixels; manual edits disable Auto UV"
-                      value={faceRotation ?? ''}
-                      onchange={(event) => uvRotate(event.currentTarget.value)}>
-                      {#each [0,90,180,270] as degrees}
-                        <option value={degrees}>{degrees}°</option>
-                      {/each}
-                    </select>
-                  </label>
-                </div>
-                {#if faceRotation === null}
-                  <p class="hint">Unsupported imported face rotation is preserved and cannot be edited.</p>
-                {/if}
-              {/if}
-            </div>
-          </div>
-        {:else if selectedBone}
-          <div class="property-scroll">
-            <div class="property-group">
-              <label for={'rust-bone-name-' + selectedBone.uuid}>Bone name</label>
-              <input id={'rust-bone-name-' + selectedBone.uuid} class="node-name-input"
-                aria-label="Rename selected Bone" type="text" maxlength="128"
-                value={selectedBone.name} autocomplete="off"
-                disabled={busy || loading || !!paintStroke || workspaceMode !== 'edit'}
-                onchange={(event) => void renameSelected(
-                  selectedBone.uuid, selectedBone.name, event.currentTarget)}/>
-            </div>
-            <div class="property-group">
-              <label>Parent Bone</label>
-              <select aria-label="Move Bone to another parent"
-                title="Reparent the selected Bone without changing saved local transforms"
-                value={outlinerParentId(snapshot?.hierarchy ?? [], selectedBone.uuid)}
-                disabled={busy || loading || workspaceMode !== 'edit'}
-                onchange={(event) => void reparentSelected(event.currentTarget.value || null)}>
-                <option value="">Root</option>
-                {#each snapshot?.bones ?? [] as bone (bone.uuid)}
-                  {#if bone.uuid !== selectedBone.uuid &&
-                    !boneContains(snapshot?.hierarchy ?? [], selectedBone.uuid, bone.uuid)}
-                    <option value={bone.uuid}>{bone.name}</option>
-                  {/if}
-                {/each}
-              </select>
-              <p class="hint">Keep local transforms. Reparenting can change the world-space pose.</p>
-            </div>
-            <div class="property-group">
-              <label>Bone origin (read-only)</label>
-              <p class="hint">{selectedBone.origin.join(', ')}</p>
-            </div>
-            <div class="property-group">
-              <label>Bone bind rotation (degrees)</label>
-              <div class="xyz-fields">
-                {#each [0, 1, 2] as axis}
-                  <label class="axis-input"><span>{AXES[axis]}</span>
-                    <input aria-label={'Bone rotation ' + AXES[axis]}
-                      type="number" step="any"
-                      disabled={busy || workspaceMode !== 'edit'}
-                      title="Change the Bone bind rotation using one Rust Undo transaction"
-                      value={selectedBone.rotation[axis]}
-                      onchange={(event) => boneRotation(axis, event.currentTarget.value)}/>
-                  </label>
-                {/each}
-              </div>
-            </div>
-            <p class="hint">{workspaceMode === 'edit'
-              ? 'Bone bind rotation is stored in Rust and affects its child Cubes.'
-              : 'Switch to Edit to change the bind pose. Animation keyframes remain in Animate.'}</p>
-          </div>
-        {:else}
-          <p class="empty-label">Select a Cube to edit Position, Size or UV.</p>
-        {/if}
-      </section>
+      <RustElementProperties {snapshot} {selectedCube} {selectedBone}
+        {busy} {loading} strokeActive={!!paintStroke} {workspaceMode}
+        {faceUv} {faceRotation} {faces} axes={AXES} bind:selectedFace
+        {renameSelected} {reparentSelected} {position} {size} {rotation}
+        {boneRotation} {boxOffset} {uvEdit} {uvRotate}
+        {clearSemanticPreview} />
     {/if}
   </aside>
 {/snippet}
