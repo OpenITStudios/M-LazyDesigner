@@ -314,6 +314,18 @@ bounds are retained. A short directory `README.md` names each canonical
 and entrypoint owner. Source regressions AUTHORED_NOT_RUN; Cargo/Windows
 behavior NOT_EXECUTED.
 
+**Observed Blockbench snapshot admission (2026-11-20):** The
+per-profile snapshot path/format validation, schema 4 and generation
+checks, bounded source read, recycled-history filtering, revision token,
+session TTL check and live-open view now live in the explicitly named
+`project_navigation/blockbench_navigation_snapshot.rs`.
+`project_navigation.rs` still owns all original snapshot data types,
+the public `probe` entrypoint, Project commands and registered delete
+checks. No new snapshot storage, Blockbench process control or native
+permission was added. Original 11 helper bodies and existing Rust tests
+retain the same selectors. Source regression AUTHORED_NOT_RUN; real
+Windows/Cargo behavior remains held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
