@@ -973,6 +973,24 @@ Source-only regressions AUTHORED_NOT_RUN; host/AI review effectiveness
 and asset acceptance remain unverified.
 
 
+**G6 deterministic rib-array construction (2026-11-20; SOURCE_ONLY):**
+A G1 `assembly.parts[].rib_arrays` optional entry can describe repeated,
+equally spaced **native Cube** panels (e.g., armor ribs, structural rails,
+grilles, mechanical fins) using `name`, `uuid_seed`, integer `from`/`to`,
+`axis` X/Y/Z, `count` and integer `thickness`. Rust, not the AI/Node
+SDK, expands the structure into one G1 read-only EditPlan and preflight.
+Every rib has its own stable seed/index-derived UUID, parent Bone and
+provisional Box UV; gaps must be positive, exactly representable and
+unoccupied **within the generated rib array**. Foreign Cubes and actual
+visual clearances remain UNVERIFIED; use G5 optional `void_zones` when a
+specific negative-space volume needs an additional guard. Shared operation
+budgets and G1 textured-project refusal remain; no extra arbitrary palette
+or Cube-density limit is added. Changing count may move an indexed Cube,
+so this is not a persistent parametric object or permission to reuse an old
+visual approval. Three.js, PNG source, Animation, guest RPC list and
+Apply permissions are unchanged. Rust/Node regression source authored but
+NOT_EXECUTED; native Blockbench/editability/quality/performance unverified.
+
 **G5 opt-in negative-space guard for existing G1 compiler (2026-11-20; SOURCE_ONLY):**
 `codemode.planGeometryAssembly({project,assembly})` may include
 `assembly.void_zones: [{bone_uuid,from,to}]` (1–16, exact model-unit

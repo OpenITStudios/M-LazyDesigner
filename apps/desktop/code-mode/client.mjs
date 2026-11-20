@@ -1076,7 +1076,8 @@ export function createRustCodeModeClient({
               (part.profile_sweeps !== undefined &&
                 !Array.isArray(part.profile_sweeps)) ||
               (part.lofts !== undefined && !Array.isArray(part.lofts)) ||
-              (part.revolves !== undefined && !Array.isArray(part.revolves))) {
+              (part.revolves !== undefined && !Array.isArray(part.revolves)) ||
+              (part.rib_arrays !== undefined && !Array.isArray(part.rib_arrays))) {
             declarationValid = false;
             break;
           }
@@ -1229,6 +1230,37 @@ export function createRustCodeModeClient({
               if (count === 0) { declarationValid=false; break; }
             }
             if (!declarationValid) break;
+          }
+          // G6: stable per-seed indices for a uniform, integer-spaced
+          // sequence of native Cubes. Rust computes the actual boxes,
+          // validates source UV and runs the canonical G1 preflight.
+          for (const rib of part.rib_arrays ?? []) {
+            const axis = {X:0,Y:1,Z:2}[rib?.axis];
+            const bounds = rib && Array.isArray(rib.from) &&
+              Array.isArray(rib.to) && rib.from.length===3 &&
+              rib.to.length===3 && rib.from.every((v,i) =>
+                Number.isInteger(v) && Number.isInteger(rib.to[i]) &&
+                v>=-2147483648 && v<=2147483647 &&
+                rib.to[i]>=-2147483648 && rib.to[i]<=2147483647 &&
+                rib.to[i]>v);
+            const valid = bounds && Number.isInteger(axis) &&
+              typeof rib.name==='string' && !!rib.name.trim() &&
+              typeof rib.uuid_seed==='string' && !!rib.uuid_seed &&
+              Number.isInteger(rib.count) && rib.count>=2 &&
+              rib.count<=128 && Number.isInteger(rib.thickness) &&
+              rib.thickness>0 && rib.thickness<=4294967295;
+            if (!valid) { declarationValid=false; break; }
+            const width = rib.to[axis]-rib.from[axis];
+            const gapRoom = width-rib.count*rib.thickness;
+            if (gapRoom<=0 || gapRoom%(rib.count-1)!==0) {
+              declarationValid=false; break;
+            }
+            for (let i=0;i<rib.count;i++) {
+              const uuid=generatedBlockoutCubeUuid(
+                'geometry-rib-array-v1',rib.uuid_seed,i);
+              declare(uuid,'add_cube',part.bone.uuid,
+                rib.name+'_rib_'+i,true);
+            }
           }
         }
         const used = new Set();

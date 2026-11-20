@@ -12,6 +12,7 @@ use serde_json::{json, Map, Value};
 use super::geometry_sweep::{self, GeometrySphereSweep};
 use super::geometry_profile_sweep::{self, GeometryProfileSweep};
 use super::geometry_axial::{self, GeometryAxialLoft, GeometryAxialRevolve};
+use super::geometry_rib_array::{self, GeometryRibArray};
 use std::collections::HashSet;
 
 /// The parent is an existing or simultaneously declared Bone UUID.
@@ -44,6 +45,9 @@ pub struct GeometryAssemblyPart {
     pub lofts: Vec<GeometryAxialLoft>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub revolves: Vec<GeometryAxialRevolve>,
+    /// G6 opt-in, exact integer-spaced ribs; native editable Cubes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rib_arrays: Vec<GeometryRibArray>,
 }
 
 /// Source-authored through-opening. Axis is the normal to its opening;
@@ -403,6 +407,10 @@ pub(super) fn compile(
             .and_then(|panels| panels.checked_add(part.profile_sweeps.len()))
             .and_then(|panels| panels.checked_add(part.lofts.len()))
             .and_then(|panels| panels.checked_add(part.revolves.len()))
+            // Repeats have a known exact Cube count. Reserve it before
+            // any allocation; the shared G1 EditPlan budget is authoritative.
+            .and_then(|panels| part.rib_arrays.iter().try_fold(panels,
+                |sum, rib| sum.checked_add(rib.count)))
             .and_then(|panels| 1usize.checked_add(part.cubes.len())?
                 .checked_add(panels))
             .ok_or_else(|| fail("GEOMETRY_ASSEMBLY_OPERATION_LIMIT"))?;
@@ -429,6 +437,9 @@ pub(super) fn compile(
             }
             if !part.lofts.is_empty() || !part.revolves.is_empty() {
                 return Err(fail("GEOMETRY_AXIAL_TEXTURED_PROJECT_UNSUPPORTED"));
+            }
+            if !part.rib_arrays.is_empty() {
+                return Err(fail("GEOMETRY_RIB_TEXTURED_PROJECT_UNSUPPORTED"));
             }
         }
         let mut panels = Vec::with_capacity(additions - 1 - part.cubes.len());
@@ -516,6 +527,14 @@ pub(super) fn compile(
             }
             panels.extend(cubes);
         }
+        let rib_start = panels.len();
+        for rib in &part.rib_arrays {
+            let cubes = geometry_rib_array::compile(rib,
+                part.bone.origin.ok_or_else(||
+                    fail("GEOMETRY_ASSEMBLY_PIVOT_REQUIRED"))?,
+                MAX_OPERATIONS - count + rib.count)?;
+            panels.extend(cubes);
+        }
         // Bind UUID membership to the source request, not temporary Cubes.
         // These IDs outlive the generated operation buffer and preflight.
         for uuid in part.cubes.iter().map(|cube| cube.uuid.as_str())
@@ -561,7 +580,9 @@ pub(super) fn compile(
                     "GEOMETRY_PROFILE_UV_ATLAS_TOO_SMALL"
                 } else if index < revolve_start {
                     "GEOMETRY_LOFT_UV_ATLAS_TOO_SMALL"
-                } else { "GEOMETRY_REVOLVE_UV_ATLAS_TOO_SMALL" };
+                } else if index < rib_start {
+                    "GEOMETRY_REVOLVE_UV_ATLAS_TOO_SMALL"
+                } else { "GEOMETRY_RIB_UV_ATLAS_TOO_SMALL" };
                 return Err(fail(code));
             }
         }
@@ -648,7 +669,38 @@ mod tests {
             frames: Vec::new(), hollow_boxes: Vec::new(),
             arches: Vec::new(), sweeps: Vec::new(),
             profile_sweeps: Vec::new(), lofts: Vec::new(), revolves: Vec::new(),
+            rib_arrays: Vec::new(),
         }
+    }
+
+    #[test]
+    fn g6_ribs_share_g1_preflight_and_g5_void_without_model_mutation() {
+        let session=EditorSession::from_document(
+            AuthoringDocument::new_bedrock("Rib Array", "rib_array").unwrap()
+        ).unwrap();
+        let before=session.document().clone();
+        let mut body=part(ROOT,"body",None,CUBE_A);
+        body.cubes.clear();
+        body.rib_arrays.push(GeometryRibArray {
+            name:"fin".into(),
+            uuid_seed:"00000000-0000-4000-8000-000000007901".into(),
+            from:[0,0,0],to:[20,4,6],axis:"X".into(),
+            count:4,thickness:2,
+        });
+        let proposal=compile(&session,&GeometryAssemblyRequest {
+            expected_revision:0,parts:vec![body],
+        }).unwrap();
+        assert_eq!(proposal.plan.operations.len(),5);
+        assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
+        let zone=super::super::GeometryVoidZone {
+            bone_uuid:ROOT.into(),from:[3.0,1.0,1.0],to:[5.0,3.0,5.0],
+        };
+        let evidence=super::super::check_geometry_void_zones(
+            &proposal.plan,&[zone]).unwrap();
+        assert_eq!(evidence["local_bounds_verdict"],
+            "CLEAR_OF_PROPOSED_AXIS_ALIGNED_CUBES");
+        assert_eq!(session.document(),&before);
+        assert_eq!(session.summary().revision,0);
     }
 
     #[test]

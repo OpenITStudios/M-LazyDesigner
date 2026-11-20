@@ -22,6 +22,8 @@ pub use geometry_sweep::{GeometrySphereSweep, GeometrySweepStation};
 mod geometry_profile_sweep;
 pub use geometry_profile_sweep::{GeometryProfileSweep, GeometryProfileStation};
 mod geometry_axial;
+mod geometry_rib_array;
+pub use geometry_rib_array::GeometryRibArray;
 pub use geometry_axial::{GeometryAxialLoft, GeometryLoftSection, GeometryAxialRevolve, GeometryRevolveSection};
 pub use geometry_assembly::{GeometryAssemblyPart, GeometryAssemblyProposal, GeometryAssemblyRequest, GeometryRectangularFrame, GeometryHollowBox, GeometryArch};
 mod geometry_attachment;

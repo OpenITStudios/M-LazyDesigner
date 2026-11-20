@@ -194,6 +194,18 @@ export interface GeometryAxialRevolve {
   name: string; uuid_seed: string; origin: Vec3; axis: "X"|"Y"|"Z";
   sections: {height:number;outer_radius:number;inner_radius:number}[];
 }
+/** G6 exact equally spaced native Cube ribs. This is not a shader,
+ * texture pattern or persistent parametric object.
+ */
+export interface GeometryRibArray {
+  name:string;
+  uuid_seed:string;
+  from:[number,number,number];
+  to:[number,number,number];
+  axis:"X"|"Y"|"Z";
+  count:number;
+  thickness:number;
+}
 export interface GeometryAssemblyPart {
   bone: Bone & { origin: Vec3 };
   parent_uuid: string | null;
@@ -205,6 +217,7 @@ export interface GeometryAssemblyPart {
   profile_sweeps?: GeometryProfileSweep[];
   lofts?: GeometryAxialLoft[];
   revolves?: GeometryAxialRevolve[];
+  rib_arrays?: GeometryRibArray[];
 }
 /** Optional exact source-local space which the G1 candidate must leave
  * unfilled. This does NOT prove a through-hole, full-model collision clearance
