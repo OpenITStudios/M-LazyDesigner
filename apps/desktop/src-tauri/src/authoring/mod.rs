@@ -66,6 +66,8 @@ mod bezier;
 mod animation_clip;
 mod animation_periodic;
 pub use animation_periodic::{PeriodicRotationIntent,PeriodicRotationProposal};
+mod animation_semantic;
+pub use animation_semantic::{SemanticAnimationIntent,SemanticAnimationProposal};
 mod animation_export;
 pub use animation_export::{export_bedrock_animations, bedrock_animation_curve_fidelity};
 mod asset_handoff;
@@ -3452,6 +3454,12 @@ impl EditorSession {
         &self, intent: &PeriodicRotationIntent,
     ) -> Result<PeriodicRotationProposal> {
         animation_periodic::compile(self,intent)
+    }
+
+    /// Bounded read-only P0 semantic key-pose planner and temporal review hints.
+    pub fn plan_semantic_animation(&self, intent: &SemanticAnimationIntent)
+        -> Result<SemanticAnimationProposal> {
+        animation_semantic::compile(self,intent)
     }
 
     /// External editor pixels use the same immutable Rust transaction and

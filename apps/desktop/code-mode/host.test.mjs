@@ -231,6 +231,7 @@ test('Code Mode exposes a single host-side code tool, with read-only RPC', () =>
     assert.match(tool.description, /planGeometryAssembly/);
     assert.match(tool.description, /planSemanticMaterial/);
     assert.match(tool.description, /planPeriodicRotation/);
+    assert.match(tool.description, /planSemanticAnimation/);
     assert.match(tool.description, /Do NOT call preflightGuidance or standalone preflight again/);
     assert.match(tool.description, /source SHA, operations and correction_scope are unchanged/);
     assert.match(tool.description, /Apply independently revalidates SHA\/revision/);

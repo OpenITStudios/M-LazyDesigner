@@ -2,6 +2,8 @@
 
 **Research snapshot:** `ada279dab3e064dbc17e15cf7bdbab1ee79f1f1d`, 2026-10-30. **Current state:** 145 sources indexed, 30 research decision families mapped, 4 paired K2 decision cases documented, one compiler guard and regression authored. **Bun/typecheck/CI/native/visual/Golden: NOT EXECUTED.** This file is a source adoption map, not a new animation policy, runtime registry, score or approval owner.
 
+**Rust-native source continuation (2026-11-20, separate from the pinned `Local` snapshot):** `apps/desktop/src-tauri/src/authoring/animation_semantic.rs` proposes explicit semantic key poses and declared contact windows through one preflighted, read-only numeric clip plan. Bounded per-track authored velocities, Euler-step/loop evidence and review-time hints do **not** provide IK/contact corrections, native playback, continuous 3D trajectory truth or visual acceptance. Source tests authored; not run under repository hold. This is **not** a new K0 capability family or K3 acceptance claim.
+
 ## K0 — Existing family-level capabilities
 
 Legend: **POLICY** = semantic guidance exists; **SOURCE** = canonical implementation located (not tested here); **PARTIAL** = executable/diagnostic subset does not prove the full user outcome; **LIVE_PENDING** = native or visual proof missing, not evidence of a broken feature; **UNMEASURED** = no accepted-cost baseline. Owner paths are relative to `mcp/lib/animation/` unless another path is written.

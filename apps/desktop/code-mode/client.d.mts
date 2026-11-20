@@ -269,6 +269,48 @@ export interface PeriodicRotationReceipt {
   preflight:PreflightReceipt["preflight"];motion_evidence:PeriodicRotationEvidence;
   write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
 }
+/** Source-only semantic pose compilation for a NEW numeric Bone clip.
+ * Contact windows are review hypotheses, not planted-foot IK or native proof.
+ */
+export interface SemanticAnimationTransform {
+  bone_uuid:string;channel:"rotation"|"position"|"scale";value:Vec3;
+}
+export interface SemanticAnimationPose {
+  time:number;
+  phase:"neutral"|"anticipation"|"action"|"impact"|"recovery"|
+    "stance"|"pass"|"lift"|"settle"|"contact";
+  transforms:SemanticAnimationTransform[];
+}
+export interface SemanticContactWindow {
+  bone_uuid:string;kind:"planted"|"grip";start:number;end:number;
+}
+export interface SemanticAnimationIntent {
+  expected_revision:0;animation_uuid:string;name:string;length_seconds:number;
+  loop_mode:"once"|"loop"|"hold";poses:SemanticAnimationPose[];
+  contacts:SemanticContactWindow[];
+}
+export interface SemanticAnimationEvidence {
+  scope:"source_bound_semantic_pose_candidate";animation_uuid:string;
+  loop_mode:"once"|"loop"|"hold";pose_count:number;keyframe_count:number;track_count:number;
+  tracks:Array<{bone_uuid:string;channel:"rotation"|"position"|"scale";
+    key_count:number;maximum_authored_segment_speed:number;
+    has_large_euler_step:boolean;
+    loop_endpoint_equal:boolean|null;loop_endpoint_velocity_delta:number|null}>;
+  contact_windows:Array<{bone_uuid:string;kind:"planted"|"grip";
+    start:number;end:number;observed_world_samples:0;
+    contact_verdict:"REQUIRES_NATIVE_WORLD_SPACE_OBSERVATION"}>;
+  temporal_review_times:number[];
+  numeric_motion_verdict:"AUTHORED_LINEAR_SEGMENTS_ONLY";
+  world_contact_verdict:"UNVERIFIED";
+  native_playback_verdict:"NOT_EXECUTED";
+  visual_verdict:"UNVERIFIED";write_authority:"NOT_GRANTED";
+}
+export interface SemanticAnimationReceipt {
+  status:"OK";sha256:string;summary:DocumentSummary;
+  plan:{expected_revision:0;operations:EditOperation[];correction_scope:null};
+  preflight:PreflightReceipt["preflight"];motion_evidence:SemanticAnimationEvidence;
+  write_authority:"NOT_GRANTED";visual_verdict:"UNVERIFIED";
+}
 export interface GeometryAssemblyRequest {
   /** Headless saved-file sessions start at revision zero. */
   expected_revision: 0;
@@ -1375,6 +1417,9 @@ export interface RustCodeModeClient {
   planPeriodicRotation(input:{
     input:string;expectedSha256:string;intent:PeriodicRotationIntent;
   }):Promise<PeriodicRotationReceipt>;
+  planSemanticAnimation(input:{
+    input:string;expectedSha256:string;intent:SemanticAnimationIntent;
+  }):Promise<SemanticAnimationReceipt>;
   planGeometryAttachment(input: {
     input: string; expectedSha256: string; attachment: GeometryFaceAttachmentRequest;
   }): Promise<GeometryFaceAttachmentReceipt>;
@@ -1480,6 +1525,7 @@ export interface RustCodeModeProject {
   planGeometryAssembly(assembly: GeometryAssemblyRequest): Promise<GeometryAssemblyReceipt>;
   planSemanticMaterial(intent:SemanticMaterialIntent):Promise<SemanticMaterialProposalReceipt>;
   planPeriodicRotation(intent:PeriodicRotationIntent):Promise<PeriodicRotationReceipt>;
+  planSemanticAnimation(intent:SemanticAnimationIntent):Promise<SemanticAnimationReceipt>;
   planGeometryAttachment(attachment: GeometryFaceAttachmentRequest): Promise<GeometryFaceAttachmentReceipt>;
   planGeometryResizePropagation(propagation: GeometryResizePropagationRequest): Promise<GeometryResizePropagationReceipt>;
   audit(): Promise<InspectReceipt & {audit: StaticModelAudit}>;

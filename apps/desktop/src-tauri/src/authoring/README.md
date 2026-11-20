@@ -1,3 +1,8 @@
+**2026-11-20 — Semantic Animation source plan (SOURCE_ONLY / NOT_EXECUTED)**
+
+- `animation_semantic.rs` compiles **explicit** timed, phased Bone rotation/position/scale values for one new numeric clip through the existing `EditPlan` and `EditorSession::preflight`; operation IDs, loop state, effect/geometry ownership and Undo remain canonical Rust. No extra renderer/IK solver, auto keyframe insertion on an existing clip or implicit Apply.
+- Bounded authored-segment speeds, Euler large-step candidates, numeric loop endpoint/tangent differences, and up to eight review times provide **source** QA hints. A declared planted/grip interval is not a sampled world contact or evidence of foot locking. Current editability, Blockbench interpolation/render, saved/exported parity and motion quality remain `UNVERIFIED`.
+
 **2026-11-20 — Native Texturing scale continuation (SOURCE_COMMITTED / NOT_EXECUTED)**
 
 - Source-connected selection is bit-packed and span-traversed, not bounded by row-overlay complexity. Read-only downsampled occupancy is only a visual fallback.

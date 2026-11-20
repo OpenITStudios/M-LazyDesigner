@@ -12,6 +12,7 @@ import type {
   GeometryResizePropagationRequest, GeometryResizePropagationReceipt,
   SemanticMaterialIntent, SemanticMaterialProposalReceipt,
   PeriodicRotationIntent, PeriodicRotationReceipt,
+  SemanticAnimationIntent, SemanticAnimationReceipt,
 } from './client.mjs';
 
 export interface CodeModeProjectReference {
@@ -159,6 +160,10 @@ export interface CodeModeGuestAPI {
   planPeriodicRotation(args:{
     project:string;intent:PeriodicRotationIntent;
   }):Promise<PeriodicRotationReceipt>;
+  /** Read-only exact pose compiler; contacts require independent native proof. */
+  planSemanticAnimation(args:{
+    project:string;intent:SemanticAnimationIntent;
+  }):Promise<SemanticAnimationReceipt>;
   /** G2 read-only same-Bone face alignment, never a persistent relation. */
   planGeometryAttachment(args: {
     project:string; attachment:GeometryFaceAttachmentRequest;
