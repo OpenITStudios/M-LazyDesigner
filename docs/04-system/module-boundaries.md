@@ -191,6 +191,17 @@ checks to `geometry-overlap-review.mjs`. No new SDK, sandbox, authorizer,
 publisher or permissive fallback is created. Existing export names stay in
 `client.mjs`; read-only source regression authored, NOT_EXECUTED.
 
+**Trusted-host texturing readiness domain (2026-11-20):** The
+read-only full-model Texture face coverage/reviewer-declaration decision
+moves from the Code Mode RPC composition block to
+`code-mode/texturing-readiness.mjs`. `host.mjs` still owns live visual
+session/lease state, Deno RPC, user mutation permission, Rust publisher
+and final response. Dynamic getter access retains current host revision
+at the time the read occurs; existing fail-closed face count, source SHA,
+visual reference freshness and no-false-artistic-PASS conditions remain.
+No second workflow, reviewed-image store or write path is introduced.
+Source regression authored NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
