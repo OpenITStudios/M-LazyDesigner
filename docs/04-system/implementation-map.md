@@ -36,7 +36,7 @@ apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           ├─ edit_operations.rs (typed edit dispatcher; no history owner)
           ├─ inspections.rs (source-bound, read-only inspection facade)
-          ├─ Geometry/Rig/UV      → geometry.rs, geometry_assembly.rs,
+          ├─ Geometry/Rig/UV      → geometry.rs, geometry_assembly.rs (tests: geometry_assembly/tests.rs),
           │                         geometry_sweep.rs, geometry_profile_sweep.rs,
           │                         geometry_axial.rs
           │                         (pure G1 helpers, shared voxel partition),
@@ -51,7 +51,7 @@ apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
           │                         bezier.rs,
           │                         effects.rs, timeline_markers.rs,
           │                         animation_export.rs
-          ├─ Cross-domain QA      → asset_handoff.rs, texture_coverage.rs
+          ├─ Cross-domain QA      → asset_handoff.rs (tests: asset_handoff/tests.rs), texture_coverage.rs
           └─ Formats/Persistence  → bbmodel.rs, storage.rs
 
 apps/desktop/code-mode/sandbox-worker.mjs (Deno guest, denied by default)

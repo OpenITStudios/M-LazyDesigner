@@ -149,6 +149,16 @@ Original markup and disabled controls are preserved in source; static
 regressions AUTHORED_NOT_RUN, native/Windows parity NOT_EXECUTED.
 Paint workspace and the reactive parent remain substantial.
 
+**Rust domain fixture ownership (2026-11-20):** The existing
+`authoring/asset_handoff.rs` and `authoring/geometry_assembly.rs` retain
+their read-only cross-domain handoff and deterministic geometry compilation
+implementation. Their original in-module `#[cfg(test)]` suites now reside in
+`asset_handoff/tests.rs` (handoff: PNG/UV/Animation) and
+`geometry_assembly/tests.rs` (Geometry: frames/voids/sweeps); the original
+private-parent imports and actual fixture paths were adjusted for nesting.
+No production logic, transaction, validation or test assertions changed.
+These regressions remain TEST_AUTHORED_NOT_RUN under the project hold.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
