@@ -8,7 +8,6 @@
   export let onCancel:()=>void;
   export let onRestore:()=>void;
 </script>
-{#if recoveryDialog}
   <div class="rust-modal-backdrop" role="presentation">
     <section class="rust-editor-dialog" role="dialog" aria-modal="true"
       aria-labelledby="recovery-title">

@@ -15,6 +15,12 @@ test('dialog presentation retains parent-native restore and pairing authority',a
   assert.match(page,/function stopLiveRead\(/);
   assert.match(recovery,/Recover as unsaved/);
   assert.match(pair,/Read-only Code Mode pairing/);
+  // Parent controls mount/unmount. Child components must never import
+  // missing parent state or leave a dangling Svelte conditional.
+  assert.doesNotMatch(recovery,/{#if recoveryDialog}/);
+  assert.doesNotMatch(pair,/{#if livePairingDialog/);
+  assert.match(recovery,/aria-labelledby="recovery-title"/);
+  assert.match(pair,/aria-labelledby="live-read-title"/);
   for(const view of [recovery,pair]){
     assert.doesNotMatch(view,/\binvoke\s*\(/);
     assert.doesNotMatch(view,/createCodeModeHost|rust_editor_apply/);

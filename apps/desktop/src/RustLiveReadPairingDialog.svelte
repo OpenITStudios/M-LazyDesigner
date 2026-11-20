@@ -5,7 +5,6 @@
   export let onKeepPaired:()=>void;
   export let onDisconnect:()=>void;
 </script>
-{#if livePairingDialog && livePairing}
   <div class="rust-modal-backdrop" role="presentation">
     <section class="rust-editor-dialog" role="dialog" aria-modal="true"
       aria-labelledby="live-read-title">
