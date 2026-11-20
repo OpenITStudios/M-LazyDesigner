@@ -351,6 +351,21 @@ guest executor, write path or authorization object was added. Original
 method bodies were preserved; negative source-regression cases are
 AUTHORED_NOT_RUN under the CI/localtest hold.
 
+**Code Mode visual-pair inspection ownership (2026-11-21):**
+The bounded, SHA-bound `inspectSelectedVisualPair` read path is now in
+`code-mode/selected-visual-pair-inspection.mjs`. This module validates
+operator-selected PNG pair reads, multi-view/reviewer declarations,
+paged source-face coverage, optional material cohort bindings and
+Geometry landmark evidence. The host still owns one current visual lease,
+review maps/ledger, active Deno execution lifecycle, user mutation
+authorization, stage gate, candidate registration and Rust publisher.
+Dynamic getters/setters to host-owned `activeExecution`,
+`verifiedMultiViewRead`, `pagedFaceLedger` and
+`verifiedGeometryLandmark` preserve async freshness and ownership
+without making a second review database. Original inspection body
+and refusal codes retained; source regression AUTHORED_NOT_RUN.
+No Node/Deno/Windows/native runtime validation was performed.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
