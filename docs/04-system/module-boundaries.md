@@ -139,6 +139,16 @@ pairing lifetime and Tauri invocation. The child views cannot acquire
 model authoring, Code Mode privileges or change accepted artwork. UI
 regressions were authored but no Svelte build/Windows focus test executed.
 
+**Rust Animation and Texture UI owners (2026-11-20):** The view-only
+`RustAnimationWorkspace.svelte` and `RustTexturesDock.svelte` now render
+the prior Animation workspace and Texture dock controls. `RustEditorPage.svelte`
+still owns selected animation, keyframe/playback clock, texture changes, native
+revision/epoch, document commands, Undo/Redo and dirty-session guards.
+Children receive typed projections/callbacks, not document or AI authority.
+Original markup and disabled controls are preserved in source; static
+regressions AUTHORED_NOT_RUN, native/Windows parity NOT_EXECUTED.
+Paint workspace and the reactive parent remain substantial.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
