@@ -294,12 +294,19 @@ export interface SemanticAnimationFollower {
   channel:"rotation"|"position";
   lag_seconds:number;gain:number;rest_value:Vec3;
 }
+/** One bounded point in a source Bone's pivot-local coordinates. */
+export interface SemanticAnimationProbe {
+  bone_uuid:string;kind:"path"|"planted";local_point:Vec3;
+  start:number;end:number;
+}
 export interface SemanticAnimationIntent {
   expected_revision:0;animation_uuid:string;name:string;length_seconds:number;
   loop_mode:"once"|"loop"|"hold";poses:SemanticAnimationPose[];
   contacts:SemanticContactWindow[];
   /** Optional: up to eight explicit, non-overwriting source-linear followers. */
   followers?:SemanticAnimationFollower[];
+  /** Optional: at most four source-model 3D trajectory review markers. */
+  probes?:SemanticAnimationProbe[];
 }
 export interface SemanticAnimationEvidence {
   scope:"source_bound_semantic_pose_candidate";animation_uuid:string;
@@ -312,6 +319,22 @@ export interface SemanticAnimationEvidence {
     start:number;end:number;observed_world_samples:0;
     contact_verdict:"REQUIRES_NATIVE_WORLD_SPACE_OBSERVATION"}>;
   temporal_review_times:number[];
+  /** Present only for explicit source-bound markers, never native contact. */
+  spatial_diagnostic?:"SOURCE_MODEL_ZYX_LINEAR_PROXY_ONLY";
+  marker_trajectories?:Array<{
+    bone_uuid:string;kind:"path"|"planted";local_point:Vec3;
+    start:number;end:number;
+    source_space:"RUST_EDITOR_MODEL_ZYX_PROXY";
+    source_interpolation:"LINEAR_KEYS_ONLY";
+    sample_count:number;
+    samples:Array<{time:number;position:Vec3}>;
+    sampled_path_length:number;
+    max_sampled_displacement_from_start:number;
+    max_sampled_speed:number;
+    contact_verdict:"UNVERIFIED";
+    continuous_trajectory_verdict:"UNVERIFIED";
+    native_parity:"NOT_EXECUTED";
+  }>;
   /** Present only when follower links were explicitly supplied. */
   secondary_verdict?:"SOURCE_LINEAR_LAG_ONLY";
   secondary_followers?:Array<{

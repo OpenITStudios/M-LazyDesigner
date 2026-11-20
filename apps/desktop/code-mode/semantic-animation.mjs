@@ -17,13 +17,18 @@ const fields=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
 
 function inputPlan(intent) {
   const followers=intent?.followers??[];
+  const probes=intent?.probes??[];
   if(Object.hasOwn(intent??{},'followers')&&!Array.isArray(intent.followers)){
     throw new TypeError('CODE_MODE_SEMANTIC_FOLLOWER_INPUT_INVALID');
   }
-  const base=['expected_revision','animation_uuid','name',
+  if(Object.hasOwn(intent??{},'probes')&&!Array.isArray(intent.probes)){
+    throw new TypeError('CODE_MODE_SEMANTIC_TRAJECTORY_INPUT_INVALID');
+  }
+  const keys=['expected_revision','animation_uuid','name',
     'length_seconds','loop_mode','poses','contacts'];
-  if(!fields(intent,Object.hasOwn(intent??{},'followers')?
-      [...base,'followers']:base)||
+  if(Object.hasOwn(intent??{},'followers')) keys.push('followers');
+  if(Object.hasOwn(intent??{},'probes')) keys.push('probes');
+  if(!fields(intent,keys)||
     intent.expected_revision!==0||
     typeof intent.animation_uuid!=='string'||!id.test(intent.animation_uuid)||
     typeof intent.name!=='string'||intent.name!==intent.name.trim()||
@@ -34,7 +39,8 @@ function inputPlan(intent) {
     !Array.isArray(intent.poses)||intent.poses.length<2||
     intent.poses.length>32||!Array.isArray(intent.contacts)||
     intent.contacts.length>16||
-    !Array.isArray(followers)||followers.length>8){
+    !Array.isArray(followers)||followers.length>8||
+    !Array.isArray(probes)||probes.length>4){
     throw new TypeError('CODE_MODE_SEMANTIC_ANIMATION_INPUT_INVALID');
   }
   const operations=[{op:'create_animation',
@@ -104,6 +110,18 @@ function inputPlan(intent) {
   operations.push(...interpolationOps);
   const nonlinearOwners=new Set(interpolationOps.map(
     op=>op.bone_uuid+'\0'+op.channel));
+  for(const p of probes){
+    if(!fields(p,['bone_uuid','kind','local_point','start','end'])||
+      typeof p.bone_uuid!=='string'||!id.test(p.bone_uuid)||
+      !['path','planted'].includes(p.kind)||!vec(p.local_point)||
+      !clock(p.start)||!clock(p.end)||p.start>=p.end||
+      p.end>intent.length_seconds||
+      (p.kind==='planted'&&!intent.contacts.some(c=>
+        c.bone_uuid===p.bone_uuid&&c.kind==='planted'&&
+        c.start===p.start&&c.end===p.end))){
+      throw new TypeError('CODE_MODE_SEMANTIC_TRAJECTORY_INPUT_INVALID');
+    }
+  }
   const assigned=new Set();
   for(const f of followers){
     if(!fields(f,['driver_bone_uuid','follower_bone_uuid',
@@ -127,7 +145,7 @@ function inputPlan(intent) {
   }
   operations.push({op:'set_animation_loop_mode',
     animation_uuid:intent.animation_uuid,mode:intent.loop_mode});
-  return {operations,trackMap,followers};
+  return {operations,trackMap,followers,probes};
 }
 export function serializeSemanticAnimation(intent){
   inputPlan(intent);
@@ -138,7 +156,7 @@ export function serializeSemanticAnimation(intent){
 }
 export function validSemanticAnimationReceipt(receipt,intent,expectedSha){
   try{
-    const {operations,trackMap,followers}=inputPlan(intent);
+    const {operations,trackMap,followers,probes}=inputPlan(intent);
     const p=receipt?.plan,pre=receipt?.preflight,e=receipt?.motion_evidence;
     const declared=operations.slice(0,-1);
     // Only the trusted Rust CLI produces the derived values. The SDK checks
@@ -277,6 +295,37 @@ export function validSemanticAnimationReceipt(receipt,intent,expectedSha){
       }
     }else if(e.secondary_verdict!==undefined||
       e.secondary_followers!==undefined)return false;
+    if(probes.length){
+      if(e.spatial_diagnostic!=='SOURCE_MODEL_ZYX_LINEAR_PROXY_ONLY'||
+        !Array.isArray(e.marker_trajectories)||
+        e.marker_trajectories.length!==probes.length)return false;
+      for(let i=0;i<probes.length;i++){
+        const p=probes[i],v=e.marker_trajectories[i];
+        if(v?.bone_uuid!==p.bone_uuid||v.kind!==p.kind||
+          v.start!==p.start||v.end!==p.end||
+          JSON.stringify(v.local_point)!==JSON.stringify(p.local_point)||
+          v.source_space!=='RUST_EDITOR_MODEL_ZYX_PROXY'||
+          v.source_interpolation!=='LINEAR_KEYS_ONLY'||
+          v.contact_verdict!=='UNVERIFIED'||
+          v.continuous_trajectory_verdict!=='UNVERIFIED'||
+          v.native_parity!=='NOT_EXECUTED'||
+          !Array.isArray(v.samples)||v.samples.length<2||v.samples.length>8||
+          v.sample_count!==v.samples.length||
+          v.samples[0]?.time!==p.start||
+          v.samples.at(-1)?.time!==p.end||
+          v.samples.some((sample,k)=>
+            !fields(sample,['time','position'])||
+            !clock(sample.time)||sample.time<p.start||sample.time>p.end||
+            (k>0&&sample.time-v.samples[k-1].time<=1e-9)||
+            !vec(sample.position))||
+          [v.sampled_path_length,v.max_sampled_displacement_from_start,
+           v.max_sampled_speed].some(metric=>typeof metric!=='number'||
+            !Number.isFinite(metric)||metric<0||metric>800000)){
+          return false;
+        }
+      }
+    }else if(e.spatial_diagnostic!==undefined||
+      e.marker_trajectories!==undefined)return false;
     return true;
   }catch{return false;}
 }

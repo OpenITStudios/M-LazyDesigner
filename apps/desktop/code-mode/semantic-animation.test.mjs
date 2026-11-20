@@ -265,3 +265,70 @@ test('semantic pose author may select native Step and Catmull-Rom without extra 
    numeric_motion_verdict:'AUTHORED_LINEAR_SEGMENTS_ONLY'}},
  ]) assert.equal(validSemanticAnimationReceipt(forged,nativeInput,SHA),false);
 });
+
+
+// SOURCE_AUTHORED_NOT_RUN: geometry/clip source traces are hints; these
+// forged-runner fixtures do not execute Blockbench, Tauri or Minecraft.
+test('source 3D marker trajectory is bounded, read-only and refuses fake contact',async()=>{
+ const p={bone_uuid:bone,kind:'path',local_point:[0,1,0],start:0,end:1};
+ const input={...intent,probes:[p]};
+ const dist=Math.sqrt(2-2*Math.cos(Math.PI/6));
+ const sourceMotion={
+  ...evidence,
+  spatial_diagnostic:'SOURCE_MODEL_ZYX_LINEAR_PROXY_ONLY',
+  marker_trajectories:[{
+   ...p,source_space:'RUST_EDITOR_MODEL_ZYX_PROXY',
+   source_interpolation:'LINEAR_KEYS_ONLY',
+   sample_count:3,samples:[
+    {time:0,position:[0,1,0]},
+    {time:0.5,position:[0,Math.cos(Math.PI/6),Math.sin(Math.PI/6)]},
+    {time:1,position:[0,1,0]},
+   ],
+   sampled_path_length:2*dist,
+   max_sampled_displacement_from_start:dist,
+   max_sampled_speed:2*dist,
+   contact_verdict:'UNVERIFIED',
+   continuous_trajectory_verdict:'UNVERIFIED',
+   native_parity:'NOT_EXECUTED',
+  }],
+ };
+ const candidate={...receipt(),motion_evidence:sourceMotion};
+ assert.equal(validSemanticAnimationReceipt(candidate,input,SHA),true);
+ let calls=0,approvals=0;
+ const client=createRustCodeModeClient({binary:'/trusted/rust',
+  runner:async argv=>{
+   calls++;
+   assert.equal(argv[0],'plan-semantic-animation');
+   assert.equal(argv[argv.indexOf('--expected-sha256')+1],SHA);
+   assert.deepEqual(JSON.parse(await readFile(argv[argv.indexOf('--intent')+1],'utf8')),input);
+   return candidate;
+  },
+  authorizeMutation:async()=>{approvals++;return true;},
+ });
+ const result=await client.planSemanticAnimation({
+  input:'/abs/model.bbmodel',expectedSha256:SHA,intent:input,
+ });
+ assert.equal(result.motion_evidence.spatial_diagnostic,
+  'SOURCE_MODEL_ZYX_LINEAR_PROXY_ONLY');
+ assert.equal(calls,1);assert.equal(approvals,0);
+ for(const invalid of [
+  {...intent,probes:null},
+  {...intent,probes:[{...p,local_point:[Infinity,0,0]}]},
+  {...intent,probes:[{...p,kind:'planted'}]},
+  {...intent,probes:[{...p,start:0.6,end:0.4}]},
+  {...intent,probes:[{...p,unknown:true}]},
+ ])assert.throws(()=>serializeSemanticAnimation(invalid));
+ for(const forged of [
+  {...candidate,motion_evidence:{...sourceMotion,
+   spatial_diagnostic:'LIVE_BLOCKBENCH_APPROVED'}},
+  {...candidate,motion_evidence:{...sourceMotion,
+   marker_trajectories:[{...sourceMotion.marker_trajectories[0],
+    contact_verdict:'PLANTED'}]}},
+  {...candidate,motion_evidence:{...sourceMotion,
+   marker_trajectories:[{...sourceMotion.marker_trajectories[0],
+    samples:[{time:0,position:[0,1,0]},{time:1.2,position:[0,2,0]}]}]}},
+  {...candidate,motion_evidence:{...sourceMotion,
+   marker_trajectories:[{...sourceMotion.marker_trajectories[0],
+    sample_count:99}]}},
+ ])assert.equal(validSemanticAnimationReceipt(forged,input,SHA),false);
+});

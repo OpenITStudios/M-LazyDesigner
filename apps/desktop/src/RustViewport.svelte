@@ -456,6 +456,13 @@
           if (!bone) continue;
           const pivot = new THREE.Group();
           pivot.position.copy(vector(bone.origin).sub(vector(parentOrigin)));
+          // A static, rotated parent Bone must already have its saved bind
+          // orientation before animation begins. Without this, an unkeyed
+          // ancestor wrongly appears neutral until its own channel animates.
+          pivot.rotation.set(
+            deg(bone.rotation[0]), deg(bone.rotation[1]),
+            deg(bone.rotation[2]), 'ZYX',
+          );
           // Preserve the Rust bind pose; the admitted preview offset is
           // applied in-place on top of it by applyPreviewPose().
           bonePivots.set(bone.uuid, {

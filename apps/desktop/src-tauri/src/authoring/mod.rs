@@ -68,6 +68,7 @@ mod animation_periodic;
 pub use animation_periodic::{PeriodicRotationIntent,PeriodicRotationProposal};
 mod animation_semantic;
 pub use animation_semantic::{SemanticAnimationIntent,SemanticAnimationProposal};
+mod animation_trajectory;
 mod animation_export;
 pub use animation_export::{export_bedrock_animations, bedrock_animation_curve_fidelity};
 mod asset_handoff;

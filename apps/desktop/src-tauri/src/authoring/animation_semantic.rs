@@ -33,6 +33,18 @@ pub struct SemanticContactWindow {
     pub start: f64,
     pub end: f64,
 }
+/// One explicitly placed point in a Bone's pivot-local coordinates.
+/// Path is diagnostic; planted requires a matching declared contact window.
+/// No entity-root travel, collision or native gameplay contact is inferred.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SemanticAnimationProbe {
+    pub bone_uuid: String,
+    pub kind: String,
+    pub local_point: [f64; 3],
+    pub start: f64,
+    pub end: f64,
+}
 /// A single-level, artist-selected lag response on an otherwise unauthored
 /// Bone channel. This is source-linear keyframe shifting, not simulated cloth,
 /// spring integration, IK, geometric attachment or world-space contact.
@@ -59,6 +71,9 @@ pub struct SemanticAnimationIntent {
     /// Optional, no secondary authority; existing explicit-pose packets stay valid.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub followers: Vec<SemanticAnimationFollower>,
+    /// Optional: at most four bounded source-model-space marker trajectories.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub probes: Vec<SemanticAnimationProbe>,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct SemanticAnimationProposal {
@@ -66,7 +81,7 @@ pub struct SemanticAnimationProposal {
     pub preflight: Value,
     pub motion_evidence: Value,
 }
-fn exact_time(value: f64) -> bool {
+pub(super) fn exact_time(value: f64) -> bool {
     value.is_finite() && (0.0..=3600.0).contains(&value) &&
         format!("{value:.9}").parse::<f64>().is_ok_and(|rounded|
             (rounded - value).abs() <= 1e-10)
@@ -122,7 +137,8 @@ pub(super) fn compile(
        !exact_time(request.length_seconds) || request.length_seconds <= 0.0 ||
        !matches!(request.loop_mode.as_str(), "once" | "loop" | "hold") ||
        !(2..=32).contains(&request.poses.len()) ||
-       request.contacts.len() > 16 || request.followers.len() > 8 {
+       request.contacts.len() > 16 || request.followers.len() > 8 ||
+       request.probes.len() > 4 {
         return Err("SEMANTIC_ANIMATION_INPUT_INVALID".into());
     }
     let bones: HashSet<&str> = session.document().bones.iter()
@@ -325,6 +341,13 @@ pub(super) fn compile(
         }));
         tracks.insert(owner,derived);
     }
+    // Derive model-space marker evidence only from known ZYX saved Bone
+    // hierarchy and numeric linear tracks. An unsupported/opaque chain
+    // refuses this optional diagnosis without changing authored assets.
+    let trajectory_reports = super::animation_trajectory::review(
+        session.document(), &request.poses, &request.contacts,
+        &request.probes, &tracks, &nonlinear_owners, request.length_seconds,
+    )?;
     if operations.len() >= MAX_OPERATIONS {
         return Err("SEMANTIC_ANIMATION_OPERATION_BUDGET".into());
     }
@@ -421,6 +444,10 @@ pub(super) fn compile(
         evidence["secondary_followers"]=json!(follower_reports);
         evidence["secondary_verdict"]=json!("SOURCE_LINEAR_LAG_ONLY");
     }
+    if !trajectory_reports.is_empty() {
+        evidence["marker_trajectories"]=json!(trajectory_reports);
+        evidence["spatial_diagnostic"]=json!("SOURCE_MODEL_ZYX_LINEAR_PROXY_ONLY");
+    }
     Ok(SemanticAnimationProposal { plan, preflight, motion_evidence: evidence })
 }
 
@@ -453,6 +480,7 @@ mod tests {
                 start: 0.25, end: 0.75,
             }],
             followers: vec![],
+            probes: vec![],
         }
     }
     #[test]
@@ -658,6 +686,49 @@ mod tests {
         }];
         assert_eq!(compile(&session,&r).unwrap_err(),
             "SEMANTIC_FOLLOWER_DRIVER_INTERPOLATION_UNSUPPORTED");
+    }
+    #[test]
+    fn 3d_marker_preview_uses_source_bone_and_does_not_certify_contact() {
+        let s=EditorSession::open(SOURCE).unwrap();
+        let before=s.export().unwrap();
+        let mut r=request();
+        r.probes=vec![SemanticAnimationProbe {
+            bone_uuid:BONE.into(),kind:"path".into(),
+            local_point:[0.0,1.0,0.0],start:0.0,end:1.0,
+        }];
+        let proposal=compile(&s,&r).unwrap();
+        assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
+        let report=&proposal.motion_evidence["marker_trajectories"][0];
+        assert_eq!(proposal.motion_evidence["spatial_diagnostic"],
+            "SOURCE_MODEL_ZYX_LINEAR_PROXY_ONLY");
+        assert_eq!(report["source_space"],"RUST_EDITOR_MODEL_ZYX_PROXY");
+        assert_eq!(report["sample_count"],3);
+        assert!(report["max_sampled_displacement_from_start"]
+            .as_f64().unwrap()>0.1);
+        assert_eq!(report["contact_verdict"],"UNVERIFIED");
+        assert_eq!(report["native_parity"],"NOT_EXECUTED");
+        assert_eq!(s.export().unwrap(),before);
+    }
+    #[test]
+    fn planted_probe_needs_exact_contact_and_linear_participating_chain() {
+        let s=EditorSession::open(SOURCE).unwrap();
+        let mut r=request();
+        r.probes=vec![SemanticAnimationProbe {
+            bone_uuid:BONE.into(),kind:"planted".into(),
+            local_point:[0.0,1.0,0.0],start:0.25,end:0.75,
+        }];
+        assert_eq!(compile(&s,&r).unwrap_err(),"TRAJECTORY_PROBE_INVALID");
+        r.contacts[0].kind="planted".into();
+        let p=compile(&s,&r).unwrap();
+        assert_eq!(p.motion_evidence["marker_trajectories"][0]["contact_verdict"],
+            "UNVERIFIED");
+        r.poses[0].transforms[0].interpolation=Some("step".into());
+        assert_eq!(compile(&s,&r).unwrap_err(),
+            "TRAJECTORY_NONLINEAR_SOURCE_UNSUPPORTED");
+        r.poses[0].transforms[0].interpolation=None;
+        r.probes[0].bone_uuid="unknown".into();
+        assert_eq!(compile(&s,&r).unwrap_err(),
+            "TRAJECTORY_PROBE_INVALID");
     }
     #[test]
     fn legacy_semantic_pose_json_defaults_to_no_followers() {
