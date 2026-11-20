@@ -84,6 +84,7 @@ export function validPeriodicRotationReceipt(r,intent,expectedSha){
        entry.seam_endpoint_values_identical!==true||
        typeof entry.conservative_scalar_error_bound_degrees!=='number'||
        !Number.isFinite(entry.conservative_scalar_error_bound_degrees)||
+       entry.conservative_scalar_error_bound_degrees<0||
        entry.conservative_scalar_error_bound_degrees>intent.max_error_degrees)
       return false;
     let first=null,last=null,previous=-1;

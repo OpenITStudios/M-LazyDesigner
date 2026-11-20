@@ -353,6 +353,88 @@ test('G1 assembly guest RPC is read-only and keeps apply authorization distinct'
     assert.equal(approvals.length,0);
   }));
 
+// SOURCE_AUTHORED_NOT_RUN: actual guest/Node/Rust/Blockbench execution held.
+// The new A1 guest RPC must use the original SHA-pinned read-only planner,
+// return no Apply authority and create no file publisher or mutation.
+test('A1 periodic Bone motion guest RPC remains a read-only Rust proposal',()=>
+  fixture(async input=>{
+    const bone='00000000-0000-4000-8000-000000000001';
+    const clip='00000000-0000-4000-8000-000000007801';
+    const intent={expected_revision:0,animation_uuid:clip,
+      name:'antenna_idle',length_seconds:1,max_error_degrees:10,
+      tracks:[{bone_uuid:bone,base_rotation:[0,0,0],
+        amplitude:[0,2,0],phase_degrees:0}]};
+    const key=t=>{
+      const h=createHash('sha256').update(
+        'lazydesigner:animation-periodic-rotation-v1\0'+clip+
+        '\0'+bone+'\0'+t).digest('hex');
+      return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+
+        '-8'+h.slice(17,20)+'-'+h.slice(20,32);
+    };
+    const frames=Array.from({length:5},(_,i)=>({
+      op:'add_bone_transform_keyframe',animation_uuid:clip,
+      bone_uuid:bone,keyframe_uuid:key(i*16384),
+      channel:'rotation',time:i/4,
+      value:[0,i===4?0:2*Math.sin(Math.PI*2*i/4),0],
+    }));
+    const operations=[
+      {op:'create_animation',uuid:clip,name:intent.name,length:1},
+      ...frames,
+      {op:'set_animation_loop_mode',animation_uuid:clip,mode:'loop'},
+    ];
+    const report={status:'OK',sha256:HASH,summary:SUMMARY,
+      plan:{expected_revision:0,operations,correction_scope:null},
+      preflight:{status:'VALIDATED_NOT_APPLIED',base_revision:0,
+        mutation:{revision:1,operation_count:operations.length,
+          changed_uuids:[clip,...frames.map(frame=>frame.keyframe_uuid)]},
+        candidate_sha256:'b'.repeat(64),candidate_summary:{revision:1},
+        write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED'},
+      motion_evidence:{
+        scope:'source_bound_periodic_bone_rotation_candidate',
+        animation_uuid:clip,sampling_strategy:'conservative_scalar_linear_sine_chord',
+        max_error_degrees:10,loop_mode:'loop',track_count:1,keyframe_count:5,
+        tracks:[{bone_uuid:bone,segments:4,keyframe_count:5,
+          conservative_scalar_error_bound_degrees:0.6168502751,
+          seam_endpoint_values_identical:true}],
+        source_identity:'EXACT_SAVED_BONE_UUIDS',
+        pose_contact_verdict:'UNVERIFIED',
+        continuous_euler_motion_verdict:'SCALAR_LINEAR_BOUND_ONLY',
+        native_playback_verdict:'NOT_EXECUTED',visual_verdict:'UNVERIFIED',
+        write_authority:'NOT_GRANTED',
+      },
+      write_authority:'NOT_GRANTED',visual_verdict:'UNVERIFIED',
+    };
+    let approvals=0;
+    const calls=[];
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='inspect')return {status:'OK',sha256:HASH,summary:SUMMARY};
+        assert.equal(argv[0],'plan-periodic-rotation');
+        assert.equal(argv[argv.indexOf('--expected-sha256')+1],HASH);
+        assert.deepEqual(JSON.parse(await readFile(
+          argv[argv.indexOf('--intent')+1],'utf8')),intent);
+        return report;
+      },
+      spawnImpl:()=>fakeGuest({method:'planPeriodicRotation',args:{
+        project:'p0',intent,
+      }},result=>{
+        assert.equal(result.ok,true);
+        assert.equal(result.result.motion_evidence.keyframe_count,5);
+        assert.equal(result.result.write_authority,'NOT_GRANTED');
+        return {status:result.result.preflight.status};
+      }),
+    });
+    const result=await host.execute({
+      code:'return codemode.planPeriodicRotation({});',
+    });
+    assert.equal(result.value.status,'VALIDATED_NOT_APPLIED');
+    assert.deepEqual(calls,['inspect','plan-periodic-rotation']);
+    assert.equal(approvals,0);
+  }));
+
 // SOURCE_AUTHORED_NOT_RUN: G3 frames reuse G1's single Deno -> Node ->
 // Rust read-only route. Shape generation and native Apply stay out of Deno.
 test('G3 through-frame reaches the G1 Rust adapter without write approval',()=>
