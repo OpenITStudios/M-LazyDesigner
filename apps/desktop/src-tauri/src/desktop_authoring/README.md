@@ -18,6 +18,13 @@ live store; the original Tauri edit command owns that boundary.
 bounded WebGL preview PNG and exact saved canonical `.bbmodel` source; it
 does not certify visual quality, choose paths or write PNG files.
 
+**Bedrock resource exports:** `bedrock_resource_exports.rs` implements the existing
+native user-selected Geometry and Animation JSON export flows. It obtains
+the same active-session revision checks and exclusive export lease,
+rechecks on-disk source identity, and uses the original fresh-only Rust
+storage publishers. The *Tauri commands and their public names* remain
+registered in `../desktop_authoring.rs`; no guest authority or extra writer.
+
 **Native regressions:** `tests.rs` contains existing Tauri and candidate /
 capture tests. They are `TEST_AUTHORED_NOT_RUN` under the project hold.
 

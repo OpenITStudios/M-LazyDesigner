@@ -392,6 +392,20 @@ registration. Original refusal and read-only source inspection paths
 are preserved. Negative source cases AUTHORED_NOT_RUN; no native,
 Node, Deno or Windows execution.
 
+**Tauri Bedrock resource export ownership (2026-11-21):** The existing
+Geometry and Animation JSON export flows have one named internal
+`desktop_authoring/bedrock_resource_exports.rs` implementation.
+Original `rust_editor_export_bedrock_geometry` and
+`rust_editor_export_bedrock_animations` remain Tauri commands in
+`desktop_authoring.rs` with unchanged argument/return contracts.
+The child preserves the same native file picker, cancellation, source
+epoch/revision checks, exclusive write lease, current SHA verification,
+fresh sibling `storage::publish_new_geometry` /
+`storage::publish_new_animation`, and fidelity receipt. The core
+`AuthoringDocument`/Undo, active model, save-copy, recovery and native
+entrypoint authority are unchanged. Static source proof only;
+regression fixture AUTHORED_NOT_RUN; no Cargo/Windows/Bedrock proof.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
