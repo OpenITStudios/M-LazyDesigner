@@ -96,6 +96,14 @@ export interface PreflightGuidance {
 export interface CodeModeRunReceipt {
   status: "OK";
   value: unknown;
+  /** Optional most recent Rust-reopened New/Apply/Import model from THIS
+   * successful Code Mode script only; not guest-return-dependent, not a
+   * path, artistic approval or automatic GUI handoff.
+   */
+  latestCandidate?:{
+    project:string;candidateFile:string;sha256:string;
+    visual_verdict:"UNVERIFIED";
+  };
   logs: string[];
   /** Count of guest-to-host RPC calls, not model-facing tool invocations. */
   rpc_calls: number;

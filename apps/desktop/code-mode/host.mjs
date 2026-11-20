@@ -1246,6 +1246,15 @@ export async function createCodeModeHost({
     const handle = 'p' + nextProject++;
     if(workflowGate!==null)workflowGate.register(path,project.expectedSha256);
     projects.set(handle, project);
+    // A host-visible final candidate does not depend on the guest choosing
+    // to echo the file in its return JSON. Never reuse a previous script's
+    // candidate or report an unverified/uncertain native publication.
+    if(activeExecution && !activeExecution.closed) {
+      activeExecution.latestCandidate=Object.freeze({
+        project:handle,candidateFile:basename(path),
+        sha256:project.expectedSha256,visual_verdict:'UNVERIFIED',
+      });
+    }
     // Exact Rust-verified candidate filename for manual GUI selection.
     // Never a visual approval or an automatic replacement of the GUI model.
     return { project: handle, sha256: project.expectedSha256,
@@ -2530,6 +2539,7 @@ export async function createCodeModeHost({
     }
     const execution = {
       closed: false, pendingApproval: false, pause: () => {}, resume: () => {},
+      latestCandidate:null,
       metrics: createExecutionMetrics(pureLiveRead ? 'NO_DISK_RUST' :
         (runner ? 'INJECTED_RUNNER' : 'CLI_EXECFILE')),
     };
@@ -2748,6 +2758,9 @@ export async function createCodeModeHost({
           }
           resolve(Object.freeze({
             status: 'OK', value: concluded.value ?? null,
+            ...(execution.latestCandidate?{
+              latestCandidate:execution.latestCandidate,
+            }:{}),
             logs: Array.isArray(concluded.logs) ?
               concluded.logs.slice(0, 12) : [],
             rpc_calls: calls,
@@ -2796,7 +2809,7 @@ export function createCodeModeTool(host) {
   return Object.freeze({
     name: 'lazydesigner_code_mode',
     description: [
-      'Use ONE isolated Code Mode script over the typed Rust SDK. Return only decision-relevant JSON, current source SHA and blockers, never entire native receipts. Rust owns document, UV/PNG, animation, Undo and file publication. At Start/Resume read codemode.initial.workflow once when supplied: SOURCE_BOUND means only file/stage declarations match, not artistic approval; BLOCKED means reconcile the existing asset README/source before any write. The host rechecks it before mutation.',
+      'Use ONE isolated Code Mode script over the typed Rust SDK. Return only decision-relevant JSON, current source SHA and blockers, never entire native receipts. Rust owns document, UV/PNG, animation, Undo and file publication. At Start/Resume use codemode.initial.project, sha256, summary and workflow; do not request projectInfo for unchanged initial facts. SOURCE_BOUND means only file/stage declarations match, not artistic approval; BLOCKED means reconcile the existing asset README/source before any write. The host rechecks it before mutation.',
       'Choose the smallest source lookup ONCE: known UUID => focused inspect or direct typed edit; one unknown saved name => taskContext (one verified authoring_target read); several related facts => inspectBatch. Do not call taskContext AND inspectBatch for the same lookup. Never guess UUIDs from names or screenshots.',
       'Unknown-name example: const t=await codemode.taskContext({project:codemode.initial.project,domain:"texturing",category:"cubes",name:"Helmet"}); return {sha:t.source_model_sha256,status:t.status,uuid:t.target?.uuid??null,blockers:t.source_blockers,candidates:t.status==="EXACT_MATCH"?undefined:t.candidates};',
       'Geometry: one known Cube/Bone correction => bounded EditPlan; dependent structural cohort => planGeometryAssembly with explicit Bone pivots and UUIDs, including frames/hollow_boxes/arches/sweeps/profile_sweeps/lofts/revolves/rib_arrays as needed. Use planGeometryAttachment or planGeometryResizePropagation only for supported same-Bone relationships. Optional void_zones and geometry_impact are bounded advisories, not whole-model collision, motion, UV or visual proof.',
@@ -2807,7 +2820,7 @@ export function createCodeModeTool(host) {
       ...(host.initial?.liveReadOnly ? [
         'A paired GUI live session supports liveSessionInfo and liveSemanticMap READ ONLY with exact epoch/revision; it is separate from saved-file Code Mode. Never attempt live writes.'
       ] : []),
-      'Apply only after exact source selection and trusted-host mutation approval, preferably in the SAME Code Mode script after necessary inspection. Group related work without unrelated changes; no implicit saves, unreviewed texture propagation, blind retry of uncertain outcomes, shell, network or direct file access. After New/Apply/Import return one latest candidateFile and sha256 from a verified saved receipt for manual LazyDesigner review, never as artistic approval. Review affected consumers and fresh full visual views where quality acceptance requires them.'
+      'Apply only after exact source selection and trusted-host mutation approval, preferably in the SAME Code Mode script after necessary inspection. Group related work without unrelated changes; no implicit saves, unreviewed texture propagation, blind retry of uncertain outcomes, shell, network or direct file access. After New/Apply/Import the host-level latestCandidate identifies one verified saved sibling even when the script omits its filename; it is not approval or a GUI live handoff. Review affected consumers and fresh full visual views where quality acceptance requires them.'
     ].join(' '),
     inputSchema: Object.freeze({
       type: 'object',

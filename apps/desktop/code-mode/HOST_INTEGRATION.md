@@ -1300,12 +1300,26 @@ invalid or stale declarations, without suppressing read-only inspections.
 Neither status is independent artistic review or write approval. All
 writes still recheck the current README, source SHA and host authorization.
 
-New/Apply/Import now returns `candidateFile` with the existing saved
-project handle and SHA. The final candidate is manually opened in the
-GUI; no automatic file switch, state writer or second AI interface was
-added. On a Stage transition record only the real accepted evidence and
-current candidate file/SHA in the same README before starting a new
-host session.
+New/Apply/Import returns `candidateFile` with the saved project handle and
+SHA. In addition, the trusted host returns one optional
+`latestCandidate: {project,candidateFile,sha256,visual_verdict:"UNVERIFIED"}`
+in a successful Code Mode **tool result**, even when the guest's returned
+JSON omits the candidate name. It is the last Rust-reopened model produced
+during that script, never a previous script's saved output. No extra
+native inspection or script-to-host RPC is required beyond the existing
+publication verification. Never interpret `latestCandidate` as artistic
+acceptance, a hidden file write, or automatic GUI file switching. The
+user still opens the candidate manually. After a Stage transition, bind
+actual accepted evidence and the current candidate file/SHA in the same
+README before starting a new host session.
+
+To reduce needless RPC calls, use the already-provided
+`codemode.initial.project`, `sha256`, `summary` and `workflow`
+for initial orientation instead of querying `projectInfo` again.
+The `projectInfo` method remains available for previously returned
+sibling handles; it is read-only host metadata and does not itself recheck
+disk freshness. Real inspections, preflight and mutation still revalidate
+SHA through Rust.
 
 ~~~js
 const workflow = codemode.initial.workflow;

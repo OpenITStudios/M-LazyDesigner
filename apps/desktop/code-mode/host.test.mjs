@@ -240,6 +240,7 @@ test('Code Mode exposes a single host-side code tool, with read-only RPC', () =>
     assert.match(tool.description, /trusted-host mutation approval/);
     assert.match(tool.description, /SAME Code Mode script/);
     assert.match(tool.description, /Return only decision-relevant JSON/);
+    assert.match(tool.description, /do not request projectInfo for unchanged initial facts/);
     assert.deepEqual(tool.inputSchema.required, ['code']);
     const result = await tool.execute({ code: "return { x: 1 };" });
     assert.equal(result.status, 'OK');
@@ -5546,4 +5547,57 @@ test('Code Mode exposes missing workspace as read-only BLOCKED orientation',()=>
     assert.equal(response.value.readOnly,true);
     assert.equal(approvals,0);
     assert.equal(nativeMutations,0);
+  }));
+
+
+// SOURCE-AUTHORED_NOT_RUN. Verified host-only candidate, no extra Rust call.
+test('host reports the latest Rust-reopened model despite an opaque guest response, then resets',()=>
+  fixture(async input=>{
+    let scripts=0,approvals=0;
+    const calls=[];
+    const nextSha='b'.repeat(64);
+    const host=await createCodeModeHost({
+      rustBinary:'/trusted/rust',denoBinary:'/trusted/deno',input,
+      authorizeMutation:()=>{approvals++;return true;},
+      runner:async argv=>{
+        calls.push(argv[0]);
+        if(argv[0]==='apply')return {
+          status:'OK',source_sha256:HASH,output_sha256:nextSha,
+          summary:{...SUMMARY,revision:1},
+          mutation:{revision:1,operation_count:1,changed_uuids:['cube-1']},
+        };
+        const out=basename(argv[argv.indexOf('--input')+1]);
+        return {status:'OK',sha256:out==='candidate.bbmodel'?nextSha:HASH,
+          summary:{...SUMMARY,revision:out==='candidate.bbmodel'?1:0}};
+      },
+      spawnImpl:()=>{
+        if(scripts++===0)return fakeGuest({method:'apply',args:{
+          project:'p0',output:'candidate.bbmodel',
+          operations:[{op:'translate_cube',uuid:'cube-1',delta:[1,0,0]}],
+        }},response=>{
+          assert.equal(response.ok,true);
+          assert.equal(response.result.candidateFile,'candidate.bbmodel');
+          return {message:'model updated'}; // guest omits name and SHA
+        });
+        return fakeGuest({method:'projectInfo',args:{project:'p1'}},
+          response=>{
+            assert.equal(response.ok,true);
+            assert.equal(response.result.sha256,nextSha);
+            return {readOnly:true};
+          });
+      },
+    });
+    const first=await host.execute({code:'return codemode.apply({});'});
+    assert.deepEqual(first.value,{message:'model updated'});
+    assert.deepEqual(first.latestCandidate,{
+      project:'p1',candidateFile:'candidate.bbmodel',sha256:nextSha,
+      visual_verdict:'UNVERIFIED',
+    });
+    assert.equal(first.model_result_bytes,
+      Buffer.byteLength(JSON.stringify(first.value),'utf8'));
+    const second=await host.execute({code:'return codemode.projectInfo({project:"p1"});'});
+    assert.deepEqual(second.value,{readOnly:true});
+    assert.equal(second.latestCandidate,undefined);
+    assert.deepEqual(calls,['inspect','apply','inspect']);
+    assert.equal(approvals,1);
   }));

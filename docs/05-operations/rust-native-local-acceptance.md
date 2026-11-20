@@ -32,8 +32,14 @@ selected file/SHA matches the README, otherwise BLOCKED with a bounded
 reason. A missing README must not prevent read-only inspection. Neither
 status attests artistic review or skips later write checks.
 Each successful New/Apply/Import must return the actual `candidateFile`
-and `sha256` for manual Open Model review. Stage transitions update the
-same README and require a new host session.
+and `sha256` for manual Open Model review. The successful outer host
+receipt also reports a `latestCandidate` if that script published a
+Rust-verified sibling, even when the guest return value omits its name.
+A following read-only script must NOT repeat an older latestCandidate,
+and neither receipt establishes visual approval. The initial
+`codemode.initial` summary should not require a repeated
+`projectInfo` request; exact source inspections still go to Rust.
+Stage transitions update the same README and require a new host session.
 
 Positive: Geometry plan/read/preflight and one independently approved new sibling; same-session revision continuation; after actual Geometry approval, rebind file/SHA for UV, then Texturing after UV PASS, and Animation only after Texture approval if required. Open the candidate using the **manual** GUI File → Open action. Negative: premature Texture/Animation, mixed operations, unknown operation, stale/missing/duplicate SHA field, changed README during approval, denied permission, invalid path/filename, crash/unknown write outcome. Every refusal must leave the original safe; do not blindly replay an uncertain write.
 
