@@ -232,6 +232,19 @@ mutations and revision/Undo state remain parent/Tauri responsibilities.
 No second model, mutator, or UI framework. Source regression authored
 NOT_EXECUTED; Svelte/Windows focus and visual parity held.
 
+**Rust Core source-owner extraction (2026-11-20):** The single
+`authoring/mod.rs` retains all `AuthoringDocument` and `EditorSession`
+types, EditPlan admission, source revision, transaction, Undo/Redo and public
+file/export surface. Original private helpers are categorized into
+`document_validation.rs` (identity and Outliner integrity),
+`cube_uv_rules.rs` (Box/Auto UV and Cube admission),
+`hierarchy_rules.rs` (tree, visibility and external UUID references), and
+`animation_frame_rules.rs` (strict saved Bone animation acceptance).
+Original function bodies and refusal codes are preserved; only parent
+visibility and the original public UV admission re-export change.
+Authored source regression remains TEST_AUTHORED_NOT_RUN; Rust compile
+and native behavior are NOT_EXECUTED. No second document or history.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

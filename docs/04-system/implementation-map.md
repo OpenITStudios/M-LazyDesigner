@@ -38,6 +38,10 @@ apps/desktop/src-tauri/src/desktop_authoring.rs (GUI session + revision)
   └─ desktop_authoring/preview_texture.rs (read-only texture/UV preview projection)
           ↓
 apps/desktop/src-tauri/src/lib.rs → authoring/mod.rs (single Rust core)
+          ├─ document_validation.rs (document identity/Outliner validation)
+          ├─ cube_uv_rules.rs (Cube admission, Box UV and Auto UV)
+          ├─ hierarchy_rules.rs (source-safe tree and UUID reference helpers)
+          ├─ animation_frame_rules.rs (saved numeric Bone-track admission)
           ├─ edit_operations.rs (single 64-arm semantic category router; no history owner)
           │    └─ edit_operations/{hierarchy,geometry,animation,texture,uv}_edits.rs
           ├─ inspections.rs (source-bound, read-only inspection facade)
