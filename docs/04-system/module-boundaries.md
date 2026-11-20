@@ -326,6 +326,19 @@ permission was added. Original 11 helper bodies and existing Rust tests
 retain the same selectors. Source regression AUTHORED_NOT_RUN; real
 Windows/Cargo behavior remains held.
 
+**Desktop candidate and review-capture checks (2026-11-21):**
+`desktop_authoring/material_candidate_verification.rs` owns the two
+private provisional semantic-material checks (Rust candidate preflight,
+source/candidate SHA, no-authority and atomic provisional replacement);
+`desktop_authoring/review_capture_validation.rs` owns bounded WebGL PNG
+decode and exact on-disk saved `.bbmodel` admission.
+`desktop_authoring.rs` retains every Tauri command, user file picker,
+revision/epoch/write lease, live-store mutation and file publisher. The
+original four helper bodies and existing Rust regression calls are retained.
+Directory `README.md` distinguishes entrypoint, derived views and
+provisional/PNG validation without creating another authoring engine.
+SOURCE_REVIEWED, regressions AUTHORED_NOT_RUN; native tests held.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

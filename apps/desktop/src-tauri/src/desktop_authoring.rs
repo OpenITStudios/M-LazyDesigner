@@ -44,6 +44,12 @@ mod preview_animation;
 mod preview_texture;
 mod snapshot_projection;
 use snapshot_projection::*;
+mod material_candidate_verification;
+use material_candidate_verification::{
+    preview_semantic_candidate, apply_checked_semantic_candidate,
+};
+mod review_capture_validation;
+use review_capture_validation::{decode_review_capture_png, review_capture_source};
 use preview_animation::animation_views;
 use preview_texture::{
     texture_preview_side,embedded_png_preview_candidate,
@@ -627,25 +633,6 @@ pub async fn rust_editor_choose_semantic_reference(
     }))
 }
 
-fn preview_semantic_candidate(
-    source:&EditorSession, intent:&SemanticMaterialIntent,
-) -> Result<(SemanticMaterialProposal,EditorSession),DesktopError> {
-    let proposal=source.plan_semantic_material(intent).map_err(model_failure)?;
-    let mut candidate=source.clone();
-    candidate.apply_with_correction_scope(
-        intent.expected_revision,&proposal.plan.operations,
-        proposal.plan.correction_scope.as_ref(),
-    ).map_err(model_failure)?;
-    let candidate_sha=candidate.canonical_sha256().map_err(model_failure)?;
-    if proposal.preflight["candidate_sha256"].as_str()!=Some(candidate_sha.as_str()) ||
-       proposal.preflight["visual_verdict"]!="UNVERIFIED" ||
-       proposal.preflight["write_authority"]!="NOT_GRANTED" {
-        return Err(failure("SEMANTIC_PREVIEW_NATIVE_MISMATCH",
-            "The provisional candidate did not match the Rust dry-run."));
-    }
-    Ok((proposal,candidate))
-}
-
 /// Generate a candidate from an immutable in-memory Rust source. The
 /// published EditorStore, Undo and original .bbmodel are never touched.
 #[tauri::command(async)]
@@ -775,37 +762,6 @@ pub fn rust_editor_apply_external_face_png(
             *session=candidate;
             Ok(())
         })
-}
-
-/// The same exact source/model/candidate contract applies to direct-user
-/// commits as to the last ephemeral visual preview. Never partially mutate
-/// even an intermediate EditorSession if the final candidate SHA diverges.
-fn apply_checked_semantic_candidate(
-    session:&mut EditorSession,
-    intent:&SemanticMaterialIntent,
-    expected_source_sha:&str,
-    expected_candidate_sha:&str,
-) -> Result<(),DesktopError> {
-    if session.canonical_sha256().map_err(model_failure)?!=expected_source_sha {
-        return Err(failure("SEMANTIC_PREVIEW_SOURCE_STALE",
-            "The original model changed since the candidate preview."));
-    }
-    let proposal=session.plan_semantic_material(intent).map_err(model_failure)?;
-    if proposal.preflight["candidate_sha256"].as_str()!=Some(expected_candidate_sha) {
-        return Err(failure("SEMANTIC_PREVIEW_CANDIDATE_STALE",
-            "Regenerate and inspect the current material preview."));
-    }
-    let mut candidate=session.clone();
-    candidate.apply_with_correction_scope(
-        intent.expected_revision,&proposal.plan.operations,
-        proposal.plan.correction_scope.as_ref(),
-    ).map_err(model_failure)?;
-    if candidate.canonical_sha256().map_err(model_failure)?!=expected_candidate_sha {
-        return Err(failure("SEMANTIC_PREVIEW_APPLY_MISMATCH",
-            "The candidate changed during the protected Paint transaction."));
-    }
-    *session=candidate; // Publish only after all checksum/source guards pass.
-    Ok(())
 }
 
 /// Direct, explicit editor-user Apply of precisely the last previewed source
@@ -1092,59 +1048,6 @@ pub async fn rust_editor_import_paint_png(
             Ok(())
         },
     ).map(Some)
-}
-
-/// Verify a bounded encoded WebGL PNG. The browser canvas is a *preview*,
-/// never a proof of native Minecraft fidelity or a writable model asset.
-fn decode_review_capture_png(data_url: &str) -> Result<Vec<u8>, DesktopError> {
-    let encoded = data_url.strip_prefix("data:image/png;base64,")
-        .ok_or_else(|| failure("REVIEW_CAPTURE_FORMAT_INVALID", "Expected a PNG canvas capture."))?;
-    if encoded.is_empty() || encoded.len() > 3 * 1024 * 1024 {
-        return Err(failure("REVIEW_CAPTURE_SIZE_INVALID", "Captured PNG exceeds the review budget."));
-    }
-    let bytes = STANDARD.decode(encoded).map_err(|_| failure(
-        "REVIEW_CAPTURE_FORMAT_INVALID", "Captured PNG Base64 is not valid."))?;
-    if bytes.is_empty() || bytes.len() > MAX_EXPORT_PNG_BYTES {
-        return Err(failure("REVIEW_CAPTURE_SIZE_INVALID", "Captured PNG is too large."));
-    }
-    let decoder = png::Decoder::new(std::io::Cursor::new(bytes.as_slice()));
-    let mut reader = decoder.read_info().map_err(|_| failure(
-        "REVIEW_CAPTURE_PNG_INVALID", "Captured PNG could not be decoded."))?;
-    let info = reader.info();
-    if !(32..=2048).contains(&info.width) || !(32..=2048).contains(&info.height) ||
-       info.width.saturating_mul(info.height) > 2_097_152 ||
-       info.bit_depth != png::BitDepth::Eight ||
-       !matches!(info.color_type, png::ColorType::Rgb | png::ColorType::Rgba) {
-        return Err(failure("REVIEW_CAPTURE_PNG_UNSUPPORTED", "Capture PNG dimensions or color are unsupported."));
-    }
-    let mut image = vec![0u8; reader.output_buffer_size()];
-    reader.next_frame(&mut image).map_err(|_| failure(
-        "REVIEW_CAPTURE_PNG_INVALID", "Captured PNG pixel data is invalid."))?;
-    Ok(bytes)
-}
-
-/// A review capture must match the exact saved on-disk model used by Code
-/// Mode; an unsaved scene or imported noncanonical source cannot masquerade
-/// as its saved .bbmodel. Save Copy creates that canonical source boundary.
-fn review_capture_source(source: &FrozenPublication) -> Result<(PathBuf, String), DesktopError> {
-    if source.dirty {
-        return Err(failure("REVIEW_CAPTURE_MODEL_UNSAVED", "Save Copy before capturing review images."));
-    }
-    let path = source.source_path.as_ref().ok_or_else(|| failure(
-        "REVIEW_CAPTURE_MODEL_UNSAVED", "This model has no saved .bbmodel source."))?;
-    let disk_sha = source.source_sha.as_ref().ok_or_else(|| failure(
-        "REVIEW_CAPTURE_SOURCE_UNKNOWN", "Saved .bbmodel identity is unavailable."))?;
-    let canonical = source.session.canonical_sha256().map_err(model_failure)?;
-    if canonical != *disk_sha || source.saved_canonical_sha.as_ref() != Some(&canonical) {
-        return Err(failure("REVIEW_CAPTURE_CANONICAL_COPY_REQUIRED",
-            "Save Copy to bind this preview to exact canonical .bbmodel bytes."));
-    }
-    let current = storage::read_bounded(path, MAX_MODEL_BYTES).map_err(model_failure)?;
-    if sha256(&current) != canonical {
-        return Err(failure("RUST_EDITOR_SOURCE_CHANGED",
-            "Saved model changed on disk; review capture was refused."));
-    }
-    Ok((path.clone(), canonical))
 }
 
 /// Capture is explicitly initiated by the user, not by Code Mode guest
