@@ -290,6 +290,18 @@ notes and scoped label presentation were retained as source. No bitmap
 copy, new command, second store or authority introduced. Regression source
 AUTHORED_NOT_RUN; Svelte/Windows/native proof still held.
 
+**Saved Desktop Project preferences owner (2026-11-20):** All
+schema-bounded saved preference reads, registered/pinned ID validation,
+compare-and-replace writes, backup integrity checks and safe restoration
+now belong to `project_navigation/saved_project_preferences.rs`.
+The original `project_navigation.rs` keeps the one preference schema,
+project identity, folder/model discovery, project navigation commands,
+live Blockbench snapshot and path selectors. The original 14 helper
+bodies and user-visible refusal text are preserved; tests using the
+parent module still refer to the same helpers. No extra file writer,
+new project database or change to destructive folder authorization.
+Source regression AUTHORED_NOT_RUN; Windows and Cargo not executed.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial

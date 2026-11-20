@@ -279,7 +279,7 @@ Compatibility paths `control/developmentIntent.ts`, `control/sourceOwners.ts`, `
 
 ## Data lifecycle
 
-`docs/04-system/data-lifecycle.md` owns the data safety contract. `mcp/scripts/development/data-inventory.ts` is a derived, on-demand Git-tracked audit with no independent state. `apps/desktop/src-tauri/src/metadata_io.rs` protects only small Desktop-owned metadata written by `project_navigation.rs`, never native asset files.
+`docs/04-system/data-lifecycle.md` owns the data safety contract. `mcp/scripts/development/data-inventory.ts` is a derived, on-demand Git-tracked audit with no independent state. `apps/desktop/src-tauri/src/metadata_io.rs` protects only small Desktop-owned metadata written by `project_navigation.rs`, never native asset files. The parent-private `project_navigation/saved_project_preferences.rs` owns validated preference read, compare-and-replace, and backup recovery, while navigation commands and visible Project models stay in `project_navigation.rs`.
 
 ## Gateway Development Intelligence
 
