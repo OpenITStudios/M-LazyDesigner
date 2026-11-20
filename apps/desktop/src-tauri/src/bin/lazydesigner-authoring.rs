@@ -527,6 +527,12 @@ fn inspect_batch_with_view(
     if requests.is_empty() || requests.len() > MAX_INSPECT_BATCH_QUERIES {
         return Err(fail("INSPECT_BATCH_SIZE_INVALID"));
     }
+    // Only repeated Geometry Impact questions justify an atlas-user index.
+    // A single target still takes the original no-extra-allocation scanner.
+    let repeated_impact = validated.is_some() &&
+        requests.iter().filter(|query|
+            matches!(query, &&InspectBatchQuery::GeometryImpact { .. }))
+            .take(2).count() == 2;
     let mut results = Vec::with_capacity(requests.len());
     for query in requests {
         let entry = match query {
@@ -557,7 +563,11 @@ fn inspect_batch_with_view(
                 json!({"kind":"cube_face_alpha","face_alpha":face_alpha})
             },
             InspectBatchQuery::GeometryImpact { cube_uuid, change } => {
-                let impact = inspect_geometry_impact(doc, batch_id(&cube_uuid)?, &change)?;
+                let uuid = batch_id(&cube_uuid)?;
+                let impact = match (repeated_impact, validated) {
+                    (true, Some(view)) => view.geometry_impact(uuid, &change)?,
+                    _ => inspect_geometry_impact(doc, uuid, &change)?,
+                };
                 json!({"kind":"geometry_impact","impact":impact})
             },
             InspectBatchQuery::CubeUvSharing { uuid, texture_uuid } => {
@@ -1597,6 +1607,57 @@ mod tests {
         let b:InspectBatchInput=serde_json::from_value(invalid).unwrap();
         assert_eq!(inspect_batch_session(&session,a.requests).unwrap_err(),
             inspect_batch(session.document(),b.requests).unwrap_err());
+        assert_eq!(session.document(),&before);
+    }
+
+    // SOURCE_AUTHORED_NOT_RUN: repeated Geometry Impact queries use the
+    // same transient atlas membership index; one-query calls keep their
+    // direct inspector. Both must produce identical saved-source reports.
+    #[test]
+    fn code_mode_repeated_geometry_impact_batch_preserves_public_reports() {
+        let mut session=EditorSession::open(
+            include_bytes!("../../fixtures/bedrock-basic.bbmodel")
+        ).unwrap();
+        let cube="00000000-0000-4000-8000-000000000002";
+        let copied="00000000-0000-4000-8000-000000009981";
+        let texture="00000000-0000-4000-8000-000000009982";
+        session.apply(0,&[
+            EditOperation::CreatePaintTexture {
+                uuid:texture.into(),name:"shared.png".into(),
+            },
+            EditOperation::AssignCubeTexture {
+                cube_uuid:cube.into(),texture_uuid:texture.into(),
+            },
+            EditOperation::DuplicateCube {
+                source_uuid:cube.into(),new_uuid:copied.into(),
+            },
+        ]).unwrap();
+        let before=session.document().clone();
+        let mixed=json!({"requests":[
+            {"kind":"geometry_impact","cube_uuid":cube,"change":"reshape"},
+            {"kind":"geometry_impact","cube_uuid":copied,"change":"texture"},
+            {"kind":"geometry_impact","cube_uuid":cube,"change":"pose"},
+            {"kind":"cube","uuid":copied}
+        ]});
+        let direct:InspectBatchInput=serde_json::from_value(mixed.clone()).unwrap();
+        let indexed:InspectBatchInput=serde_json::from_value(mixed).unwrap();
+        assert_eq!(inspect_batch_session(&session,indexed.requests).unwrap(),
+            inspect_batch(session.document(),direct.requests).unwrap());
+        let one=json!({"requests":[
+            {"kind":"geometry_impact","cube_uuid":cube,"change":"reshape"}
+        ]});
+        let direct:InspectBatchInput=serde_json::from_value(one.clone()).unwrap();
+        let indexed:InspectBatchInput=serde_json::from_value(one).unwrap();
+        assert_eq!(inspect_batch_session(&session,indexed.requests).unwrap(),
+            inspect_batch(session.document(),direct.requests).unwrap());
+        let bad=json!({"requests":[
+            {"kind":"geometry_impact","cube_uuid":"unknown","change":"reshape"},
+            {"kind":"geometry_impact","cube_uuid":copied,"change":"texture"}
+        ]});
+        let direct:InspectBatchInput=serde_json::from_value(bad.clone()).unwrap();
+        let indexed:InspectBatchInput=serde_json::from_value(bad).unwrap();
+        assert_eq!(inspect_batch_session(&session,indexed.requests).unwrap_err(),
+            inspect_batch(session.document(),direct.requests).unwrap_err());
         assert_eq!(session.document(),&before);
     }
 

@@ -2,6 +2,7 @@
 //! plan, UV overlap, animated pose, visual approval or source mutation.
 use super::{AuthoringDocument, Cube, OutlinerNode, Result};
 use serde_json::{json, Value};
+use std::collections::{BTreeSet, HashMap};
 const MAX_RELATED: usize = 12;
 const MAX_ANCESTORS: usize = 24;
 const MAX_BYTES: usize = 16 * 1024;
@@ -58,17 +59,66 @@ fn declared_atlases(doc: &AuthoringDocument, cube: &Cube) -> (Vec<String>, bool)
     (refs, unknown)
 }
 
+/// Ephemeral atlas relation index for multiple geometry-impact selectors
+/// from ONE already validated immutable Rust batch. A single-Cube read keeps
+/// the direct source path and allocates no atlas index.
+pub(super) struct GeometryImpactIndex {
+    cube_positions: HashMap<String, usize>,
+    cube_atlases: Vec<(Vec<String>, bool)>,
+    atlas_users: HashMap<String, Vec<usize>>,
+    any_unknown_texture_link: bool,
+}
+
+impl GeometryImpactIndex {
+    pub(super) fn new(doc: &AuthoringDocument) -> Self {
+        let mut cube_positions = HashMap::with_capacity(doc.cubes.len());
+        let mut cube_atlases = Vec::with_capacity(doc.cubes.len());
+        let mut atlas_users: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut any_unknown_texture_link = false;
+        for (position, cube) in doc.cubes.iter().enumerate() {
+            let (atlases, unknown) = declared_atlases(doc, cube);
+            any_unknown_texture_link |= unknown;
+            for atlas in &atlases {
+                atlas_users.entry(atlas.clone()).or_default().push(position);
+            }
+            cube_positions.insert(cube.uuid.clone(), position);
+            cube_atlases.push((atlases, unknown));
+        }
+        Self { cube_positions, cube_atlases, atlas_users,
+            any_unknown_texture_link }
+    }
+}
+
+/// A validated batch with several related Cube-impact queries may share
+/// this index; it never survives the immutable CLI inspection call.
+pub(super) fn inspect_geometry_impact_indexed(
+    doc: &AuthoringDocument, cube_uuid: &str, change: &str,
+    index: &GeometryImpactIndex,
+) -> Result<Value> {
+    inspect_geometry_impact_with_index(doc, cube_uuid, change, Some(index))
+}
+
 /// Interpret one explicitly selected Cube only. Parent/texture/animator
 /// relations are exact saved facts; peers are advisory and may be unrelated.
 /// The caller MUST use the canonical source validation and SHA admission.
 pub fn inspect_geometry_impact(doc: &AuthoringDocument, cube_uuid: &str, change: &str)
     -> Result<Value>
 {
+    inspect_geometry_impact_with_index(doc, cube_uuid, change, None)
+}
+
+fn inspect_geometry_impact_with_index(
+    doc: &AuthoringDocument, cube_uuid: &str, change: &str,
+    index: Option<&GeometryImpactIndex>,
+) -> Result<Value> {
     if !matches!(change, "reshape" | "translate" | "texture" | "pose") {
         return Err("GEOMETRY_IMPACT_CHANGE_INVALID".into());
     }
-    let cube = doc.cubes.iter().find(|c| c.uuid == cube_uuid)
+    let cube_position = index
+        .map(|index| index.cube_positions.get(cube_uuid).copied())
+        .unwrap_or_else(|| doc.cubes.iter().position(|c| c.uuid == cube_uuid))
         .ok_or_else(|| "GEOMETRY_IMPACT_CUBE_NOT_FOUND".to_string())?;
+    let cube = &doc.cubes[cube_position];
     let mut ancestors = Vec::new();
     if !path_for(&doc.hierarchy, cube_uuid, &mut ancestors) {
         return Err("GEOMETRY_IMPACT_HIERARCHY_UNKNOWN".into());
@@ -89,16 +139,38 @@ pub fn inspect_geometry_impact(doc: &AuthoringDocument, cube_uuid: &str, change:
             }
         }
     }
-    let (atlas_ids, mut unknown_texture_links) = declared_atlases(doc, cube);
+    let (atlas_ids, mut unknown_texture_links) = match index {
+        Some(index) => index.cube_atlases[cube_position].clone(),
+        None => declared_atlases(doc, cube),
+    };
     let mut peer_ids = Vec::new();
     let mut peer_count = 0;
     if !atlas_ids.is_empty() {
-        for other in doc.cubes.iter().filter(|c| c.uuid != cube_uuid) {
-            let (refs, unknown) = declared_atlases(doc, other);
-            unknown_texture_links |= unknown;
-            if refs.iter().any(|id| atlas_ids.contains(id)) {
-                peer_count += 1;
-                if peer_ids.len() < MAX_RELATED { peer_ids.push(other.uuid.clone()); }
+        if let Some(index) = index {
+            // The direct scanner ORs unknown bindings from ALL other Cubes
+            // whenever the target has an atlas; preserve that exact contract.
+            unknown_texture_links |= index.any_unknown_texture_link;
+            let mut peers = BTreeSet::new();
+            for atlas in &atlas_ids {
+                if let Some(users) = index.atlas_users.get(atlas) {
+                    for &position in users {
+                        if position != cube_position { peers.insert(position); }
+                    }
+                }
+            }
+            peer_count = peers.len();
+            // BTreeSet positions follow the same saved Cube order as the
+            // original scan, including the first twelve reported peers.
+            peer_ids = peers.into_iter().take(MAX_RELATED)
+                .map(|position| doc.cubes[position].uuid.clone()).collect();
+        } else {
+            for other in doc.cubes.iter().filter(|c| c.uuid != cube_uuid) {
+                let (refs, unknown) = declared_atlases(doc, other);
+                unknown_texture_links |= unknown;
+                if refs.iter().any(|id| atlas_ids.contains(id)) {
+                    peer_count += 1;
+                    if peer_ids.len() < MAX_RELATED { peer_ids.push(other.uuid.clone()); }
+                }
             }
         }
     }
@@ -212,6 +284,67 @@ mod tests {
         assert_eq!(s.export().unwrap(),before);
         assert_eq!(s.summary().revision,1);
     }
+    // SOURCE_AUTHORED_NOT_RUN: index never creates a second semantic owner.
+    // Multiple same-atlas targets, >12 deterministic peers and unresolved
+    // links must match the original single-read report byte-for-byte.
+    #[test]
+    fn transient_index_matches_direct_impacts_and_preserves_peer_order() {
+        let mut session=EditorSession::open(SAMPLE).unwrap();
+        let cube="00000000-0000-4000-8000-000000000002";
+        let texture="00000000-0000-4000-8000-000000007499";
+        let mut operations=vec![
+            EditOperation::CreatePaintTexture {
+                uuid:texture.into(),name:"shared.png".into(),
+            },
+            EditOperation::AssignCubeTexture {
+                cube_uuid:cube.into(),texture_uuid:texture.into(),
+            },
+        ];
+        for number in 0..17 {
+            operations.push(EditOperation::DuplicateCube {
+                source_uuid:cube.into(),
+                new_uuid:format!("00000000-0000-4000-8000-{:012x}",0x7600+number),
+            });
+        }
+        session.apply(0,&operations).unwrap();
+        let original=session.document().clone();
+        let index=GeometryImpactIndex::new(&original);
+        for target in original.cubes.iter().map(|item|item.uuid.as_str()) {
+            for change in ["reshape","translate","texture","pose"] {
+                assert_eq!(
+                    inspect_geometry_impact_indexed(&original,target,change,&index).unwrap(),
+                    inspect_geometry_impact(&original,target,change).unwrap()
+                );
+            }
+        }
+        let report=inspect_geometry_impact_indexed(&original,cube,"reshape",&index).unwrap();
+        assert_eq!(report["same_atlas_cube_count"],17);
+        assert_eq!(report["same_atlas_truncated"],true);
+        assert_eq!(report["same_atlas_cube_uuids"],json!(
+            original.cubes.iter().filter(|item|item.uuid!=cube)
+                .take(MAX_RELATED).map(|item|item.uuid.clone()).collect::<Vec<_>>()
+        ));
+        // The source scanner must not turn an unknown face link on ANY
+        // other atlas user into a false "all texture relations complete".
+        let mut ambiguous=original.clone();
+        ambiguous.cubes.last_mut().unwrap().faces
+            .get_mut("north").unwrap().as_object_mut().unwrap()
+            .remove("texture");
+        let index=GeometryImpactIndex::new(&ambiguous);
+        let cached=inspect_geometry_impact_indexed(
+            &ambiguous,cube,"texture",&index).unwrap();
+        let direct=inspect_geometry_impact(&ambiguous,cube,"texture").unwrap();
+        assert_eq!(cached,direct);
+        assert_eq!(cached["texture_relations_complete"],false);
+        assert_eq!(inspect_geometry_impact_indexed(
+            &original,"not-a-cube","reshape",&GeometryImpactIndex::new(&original)
+        ).unwrap_err(),"GEOMETRY_IMPACT_CUBE_NOT_FOUND");
+        assert_eq!(inspect_geometry_impact_indexed(
+            &original,cube,"unknown",&GeometryImpactIndex::new(&original)
+        ).unwrap_err(),"GEOMETRY_IMPACT_CHANGE_INVALID");
+        assert_eq!(session.document(),&original);
+    }
+
     #[test]
     fn refuses_unknown_cube_or_unrecognised_intent() {
         let s = EditorSession::from_document(

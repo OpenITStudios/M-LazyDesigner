@@ -3341,11 +3341,20 @@ pub struct ValidatedInspection<'a> {
     // caches survive this borrowed validated EditorSession read.
     texture_indices: OnceCell<HashMap<&'a str, usize>>,
     decoded_pngs: RefCell<Vec<(usize, Vec<u8>)>>,
+    geometry_impact_index: OnceCell<geometry_impact::GeometryImpactIndex>,
 }
 
 impl<'a> ValidatedInspection<'a> {
     fn texture_indices(&self) -> &HashMap<&'a str, usize> {
         self.texture_indices.get_or_init(|| indexed_texture_uuids(self.doc))
+    }
+
+    /// Only the repeated Geometry Impact path needs an atlas-user index;
+    /// it is borrowed from this validated document and discarded afterwards.
+    pub fn geometry_impact(&self, uuid: &str, change: &str) -> Result<Value> {
+        let index = self.geometry_impact_index.get_or_init(||
+            geometry_impact::GeometryImpactIndex::new(self.doc));
+        geometry_impact::inspect_geometry_impact_indexed(self.doc, uuid, change, index)
     }
 
     pub fn cube_surfaces(&self, uuid: &str) -> Result<Value> {
@@ -3529,6 +3538,7 @@ impl EditorSession {
             doc: self.doc.as_ref(),
             texture_indices: OnceCell::new(),
             decoded_pngs: RefCell::new(Vec::new()),
+            geometry_impact_index: OnceCell::new(),
         }
     }
     pub fn can_undo(&self) -> bool { !self.undo.is_empty() }

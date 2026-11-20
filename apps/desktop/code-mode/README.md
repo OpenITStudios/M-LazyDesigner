@@ -1076,6 +1076,16 @@ existing targeted UV/Animation/Geometry inspectors and actual source-bound
 multi-view review before any correction. Code Mode verifies the receipt and
 rejects a forged permission or visual verdict. No new guest RPC method,
 model store, shape generator, renderer, automatic Apply or asset approval.
+When a SHA-bound `inspectBatch` contains **two or more**
+`geometry_impact` queries, its already validated Rust document now
+uses one ephemeral atlas-user index for all of them. One impact selector
+still performs its original direct scan. The index expires after that
+single immutable batch, cannot authorize an edit, and preserves saved
+Cube ordering, peer counts/truncation and conservative unknown-link
+flags. No persistent model graph, JS mirror or additional RPC is added.
+Source JSON-parity/unknown-target/over-12-peer fixtures are
+AUTHORED_NOT_RUN; runtime latency and memory benefit are NOT_MEASURED.
+
 Rust/Node fixture checks are SOURCE_AUTHORED_NOT_RUN under the existing hold.
 
 **G3.7 operator-bound semantic Geometry correction (2026-11-19; SOURCE ONLY):**
