@@ -302,6 +302,18 @@ parent module still refer to the same helpers. No extra file writer,
 new project database or change to destructive folder authorization.
 Source regression AUTHORED_NOT_RUN; Windows and Cargo not executed.
 
+**Saved Project manifest identity ownership (2026-11-20):** Project
+manifest parsing, stable identity and duplicate-ID collision fallback,
+model-root inference, plus the original test-only bounded manifest
+writer now reside in `project_navigation/project_manifest_identity.rs`.
+The parent `project_navigation.rs` keeps the canonical Project structs,
+model discovery, commands and registered-only delete authorization;
+`saved_project_preferences.rs` remains the single metadata preference
+read/write/restore owner. All 10 original function bodies and test-only
+bounds are retained. A short directory `README.md` names each canonical
+and entrypoint owner. Source regressions AUTHORED_NOT_RUN; Cargo/Windows
+behavior NOT_EXECUTED.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
