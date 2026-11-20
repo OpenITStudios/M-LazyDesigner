@@ -284,10 +284,18 @@ export interface SemanticAnimationPose {
 export interface SemanticContactWindow {
   bone_uuid:string;kind:"planted"|"grip";start:number;end:number;
 }
+/** One-level lagged source-Bone delta; not procedural IK or physics. */
+export interface SemanticAnimationFollower {
+  driver_bone_uuid:string;follower_bone_uuid:string;
+  channel:"rotation"|"position";
+  lag_seconds:number;gain:number;rest_value:Vec3;
+}
 export interface SemanticAnimationIntent {
   expected_revision:0;animation_uuid:string;name:string;length_seconds:number;
   loop_mode:"once"|"loop"|"hold";poses:SemanticAnimationPose[];
   contacts:SemanticContactWindow[];
+  /** Optional: up to eight explicit, non-overwriting source-linear followers. */
+  followers?:SemanticAnimationFollower[];
 }
 export interface SemanticAnimationEvidence {
   scope:"source_bound_semantic_pose_candidate";animation_uuid:string;
@@ -300,6 +308,16 @@ export interface SemanticAnimationEvidence {
     start:number;end:number;observed_world_samples:0;
     contact_verdict:"REQUIRES_NATIVE_WORLD_SPACE_OBSERVATION"}>;
   temporal_review_times:number[];
+  /** Present only when follower links were explicitly supplied. */
+  secondary_verdict?:"SOURCE_LINEAR_LAG_ONLY";
+  secondary_followers?:Array<{
+    driver_bone_uuid:string;follower_bone_uuid:string;
+    channel:"rotation"|"position";gain:number;lag_seconds:number;rest_value:Vec3;
+    driver_key_count:number;derived_key_count:number;
+    sampling_model:"SOURCE_LINEAR_DELAYED_DELTA";
+    contact_verdict:"UNVERIFIED";
+    loop_or_settle_endpoint_values_equal:boolean;
+  }>;
   numeric_motion_verdict:"AUTHORED_LINEAR_SEGMENTS_ONLY";
   world_contact_verdict:"UNVERIFIED";
   native_playback_verdict:"NOT_EXECUTED";

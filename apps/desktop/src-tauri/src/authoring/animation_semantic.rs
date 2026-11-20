@@ -29,6 +29,19 @@ pub struct SemanticContactWindow {
     pub start: f64,
     pub end: f64,
 }
+/// A single-level, artist-selected lag response on an otherwise unauthored
+/// Bone channel. This is source-linear keyframe shifting, not simulated cloth,
+/// spring integration, IK, geometric attachment or world-space contact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SemanticAnimationFollower {
+    pub driver_bone_uuid: String,
+    pub follower_bone_uuid: String,
+    pub channel: String,
+    pub lag_seconds: f64,
+    pub gain: f64,
+    pub rest_value: [f64; 3],
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SemanticAnimationIntent {
@@ -39,6 +52,9 @@ pub struct SemanticAnimationIntent {
     pub loop_mode: String,
     pub poses: Vec<SemanticAnimationPose>,
     pub contacts: Vec<SemanticContactWindow>,
+    /// Optional, no secondary authority; existing explicit-pose packets stay valid.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub followers: Vec<SemanticAnimationFollower>,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct SemanticAnimationProposal {
@@ -67,6 +83,28 @@ fn add_review_time(times: &mut Vec<f64>, time: f64) {
         times.push(time);
     }
 }
+// Interpolation is deliberately linear and limited to the exact authored
+// driver keys. Follow-through here is a deterministic delay, not an animation
+// solver or an inference of a Bone's true world-space motion.
+fn driver_at(keys: &[(f64, [f64; 3])], time: f64) -> [f64; 3] {
+    if time <= keys[0].0 { return keys[0].1; }
+    if time >= keys[keys.len()-1].0 { return keys[keys.len()-1].1; }
+    let next = keys.partition_point(|(t,_)| *t < time);
+    let (a, b) = (&keys[next-1], &keys[next]);
+    let weight = (time-a.0)/(b.0-a.0);
+    std::array::from_fn(|axis| a.1[axis] + (b.1[axis]-a.1[axis])*weight)
+}
+fn follower_time(time: f64, lag: f64, length: f64, looping: bool) -> Result<f64> {
+    let shifted = if looping { (time+lag).rem_euclid(length) } else { time+lag };
+    let rounded = format!("{shifted:.9}").parse::<f64>()
+        .map_err(|_|"SEMANTIC_FOLLOWER_TIME_INVALID".to_owned())?;
+    if !exact_time(rounded) || rounded > length {
+        return Err("SEMANTIC_FOLLOWER_TIME_INVALID".into());
+    }
+    if looping && (length-rounded).abs() <= 1e-9 {
+        Ok(0.0)
+    } else { Ok(rounded) }
+}
 pub(super) fn compile(
     session: &EditorSession, request: &SemanticAnimationIntent,
 ) -> Result<SemanticAnimationProposal> {
@@ -80,7 +118,7 @@ pub(super) fn compile(
        !exact_time(request.length_seconds) || request.length_seconds <= 0.0 ||
        !matches!(request.loop_mode.as_str(), "once" | "loop" | "hold") ||
        !(2..=32).contains(&request.poses.len()) ||
-       request.contacts.len() > 16 {
+       request.contacts.len() > 16 || request.followers.len() > 8 {
         return Err("SEMANTIC_ANIMATION_INPUT_INVALID".into());
     }
     let bones: HashSet<&str> = session.document().bones.iter()
@@ -144,6 +182,103 @@ pub(super) fn compile(
             "contact_verdict": "REQUIRES_NATIVE_WORLD_SPACE_OBSERVATION"
         }));
     }
+    // Secondary is strictly derived from EXPLICIT primary keys. Refuse
+    // generated chains, channel overwrites, unclear Euler wraps, truncated
+    // recovery and uncertain clip seams. Never mutate the source rig.
+    let primary_track_ids: HashSet<(String,String)> =
+        tracks.keys().cloned().collect();
+    let mut follower_reports = Vec::new();
+    let mut owned_followers = HashSet::new();
+    for follower in &request.followers {
+        let owner = (follower.follower_bone_uuid.clone(),follower.channel.clone());
+        if !valid_uuid(&follower.driver_bone_uuid) ||
+           !valid_uuid(&follower.follower_bone_uuid) ||
+           follower.driver_bone_uuid == follower.follower_bone_uuid ||
+           !bones.contains(follower.driver_bone_uuid.as_str()) ||
+           !bones.contains(follower.follower_bone_uuid.as_str()) ||
+           !matches!(follower.channel.as_str(), "rotation" | "position") ||
+           !exact_time(follower.lag_seconds) || follower.lag_seconds <= 1e-6 ||
+           follower.lag_seconds > request.length_seconds * 0.5 ||
+           !follower.gain.is_finite() || !(1e-9..=2.0).contains(&follower.gain.abs()) ||
+           !valid_animation_transform_value(&follower.channel, follower.rest_value) ||
+           !owned_followers.insert(owner.clone()) ||
+           tracks.contains_key(&owner) ||
+           request.contacts.iter().any(|c|c.bone_uuid==follower.follower_bone_uuid) {
+            return Err("SEMANTIC_FOLLOWER_INTENT_INVALID".into());
+        }
+        let driver_key = (follower.driver_bone_uuid.clone(),follower.channel.clone());
+        if !primary_track_ids.contains(&driver_key) {
+            return Err("SEMANTIC_FOLLOWER_DRIVER_UNAUTHORED".into());
+        }
+        let source = tracks.get(&driver_key)
+            .ok_or_else(||"SEMANTIC_FOLLOWER_DRIVER_UNAUTHORED".to_owned())?.clone();
+        // No inferred rest, closing gait, or rotation winding. To preserve a
+        // non-looping return, primary must settle before the lagged tail ends.
+        let looping = request.loop_mode == "loop";
+        let first = &source[0];
+        let last = &source[source.len()-1];
+        if source.len()<2 || first.0 != 0.0 ||
+           (looping && last.0 != request.length_seconds) ||
+           (!looping && last.0 > request.length_seconds-follower.lag_seconds+1e-9) ||
+           (0..3).any(|axis| (first.1[axis]-last.1[axis]).abs()>1e-6) ||
+           !source.windows(2).any(|pair|
+               (0..3).any(|axis| (pair[0].1[axis]-pair[1].1[axis]).abs()>1e-6)) ||
+           (follower.channel=="rotation" && source.windows(2).any(|pair|
+               (0..3).any(|axis| (pair[0].1[axis]-pair[1].1[axis]).abs()>=180.0))) {
+            return Err("SEMANTIC_FOLLOWER_DRIVER_UNSAFE".into());
+        }
+        let mut times=vec![0.0,request.length_seconds];
+        for (source_time,_) in &source {
+            let raw = source_time+follower.lag_seconds;
+            if !looping && raw>request.length_seconds { continue; }
+            times.push(follower_time(*source_time,follower.lag_seconds,
+                request.length_seconds,looping)?);
+        }
+        times.sort_by(f64::total_cmp);
+        times.dedup_by(|a,b|(*a-*b).abs()<=1e-9);
+        if times.len()<3 || times.windows(2).any(|pair|pair[1]-pair[0]<=1e-6) {
+            return Err("SEMANTIC_FOLLOWER_TIME_COLLISION".into());
+        }
+        if operations.len().saturating_add(times.len()+1)>MAX_OPERATIONS {
+            return Err("SEMANTIC_ANIMATION_OPERATION_BUDGET".into());
+        }
+        let mut derived: Vec<(f64,[f64;3])>=Vec::with_capacity(times.len());
+        for (index,&time) in times.iter().enumerate() {
+            let sample_time=if looping {
+                (time-follower.lag_seconds).rem_euclid(request.length_seconds)
+            }else { (time-follower.lag_seconds).max(0.0) };
+            let sample=driver_at(&source,sample_time);
+            let mut value: [f64;3]=std::array::from_fn(|axis|
+                follower.rest_value[axis] +
+                follower.gain*(sample[axis]-first.1[axis]));
+            if looping && index==times.len()-1 { value=derived[0].1; }
+            if !valid_animation_transform_value(&follower.channel,value) {
+                return Err("SEMANTIC_FOLLOWER_VALUE_INVALID".into());
+            }
+            operations.push(EditOperation::AddBoneTransformKeyframe {
+                animation_uuid:request.animation_uuid.clone(),
+                bone_uuid:follower.follower_bone_uuid.clone(),
+                keyframe_uuid:key_uuid(&request.animation_uuid,
+                    &follower.follower_bone_uuid,&follower.channel,index),
+                channel:follower.channel.clone(),time,value,
+            });
+            derived.push((time,value));
+        }
+        follower_reports.push(json!({
+            "driver_bone_uuid":follower.driver_bone_uuid,
+            "follower_bone_uuid":follower.follower_bone_uuid,
+            "channel":follower.channel,"gain":follower.gain,
+            "lag_seconds":follower.lag_seconds,
+            "rest_value":follower.rest_value,
+            "driver_key_count":source.len(),
+            "derived_key_count":derived.len(),
+            "sampling_model":"SOURCE_LINEAR_DELAYED_DELTA",
+            "contact_verdict":"UNVERIFIED",
+            "loop_or_settle_endpoint_values_equal":
+                (0..3).all(|a|(derived[0].1[a]-derived[derived.len()-1].1[a]).abs()<=1e-6)
+        }));
+        tracks.insert(owner,derived);
+    }
     if operations.len() >= MAX_OPERATIONS {
         return Err("SEMANTIC_ANIMATION_OPERATION_BUDGET".into());
     }
@@ -204,9 +339,18 @@ pub(super) fn compile(
             add_review_time(&mut review_times, pose.time);
         }
     }
+    // Secondary delay can peak between primary landmarks. Include its
+    // authored event times only when review headroom remains, not by
+    // polling every equal timeline interval.
+    for follower in &request.followers {
+        if let Some(keys)=tracks.get(&(follower.follower_bone_uuid.clone(),
+            follower.channel.clone())) {
+            for &(time,_) in keys { add_review_time(&mut review_times,time); }
+        }
+    }
     for pose in &request.poses { add_review_time(&mut review_times, pose.time); }
     review_times.sort_by(f64::total_cmp);
-    let evidence = json!({
+    let mut evidence = json!({
         "scope": "source_bound_semantic_pose_candidate",
         "animation_uuid": request.animation_uuid,
         "loop_mode": request.loop_mode,
@@ -222,6 +366,10 @@ pub(super) fn compile(
         "visual_verdict": "UNVERIFIED",
         "write_authority": "NOT_GRANTED",
     });
+    if !follower_reports.is_empty() {
+        evidence["secondary_followers"]=json!(follower_reports);
+        evidence["secondary_verdict"]=json!("SOURCE_LINEAR_LAG_ONLY");
+    }
     Ok(SemanticAnimationProposal { plan, preflight, motion_evidence: evidence })
 }
 
@@ -253,6 +401,7 @@ mod tests {
                 bone_uuid: BONE.into(), kind: "grip".into(),
                 start: 0.25, end: 0.75,
             }],
+            followers: vec![],
         }
     }
     #[test]
@@ -295,6 +444,127 @@ mod tests {
         r=request(); let duplicate=r.poses[0].transforms[0].clone();
         r.poses[0].transforms.push(duplicate);
         assert_eq!(compile(&s,&r).unwrap_err(), "SEMANTIC_ANIMATION_TRANSFORM_INVALID");
+    }
+    const FOLLOWER: &str = "00000000-0000-4000-8000-000000008812";
+    fn source_with_follower() -> EditorSession {
+        let mut session=EditorSession::open(SOURCE).unwrap();
+        session.apply(0,&[EditOperation::AddBone {
+            bone:super::super::Bone {
+                uuid:FOLLOWER.into(),name:"cape".into(),
+                origin:Some([0.0,0.0,0.0]),extra:serde_json::Map::new(),
+            },parent_uuid:Some(BONE.into()),
+        }]).unwrap();
+        session
+    }
+    #[test]
+    fn secondary_lagged_bone_keys_are_deterministic_and_undoable() {
+        let session=source_with_follower();
+        let before=session.export().unwrap();
+        let mut r=request();
+        r.expected_revision=1;
+        r.contacts.clear();
+        r.poses[1].time=0.4;
+        r.poses[2].time=0.8;
+        r.followers=vec![SemanticAnimationFollower {
+            driver_bone_uuid:BONE.into(),follower_bone_uuid:FOLLOWER.into(),
+            channel:"rotation".into(),lag_seconds:0.1,gain:0.5,
+            rest_value:[0.0;3],
+        }];
+        let proposal=compile(&session,&r).unwrap();
+        let again=compile(&session,&r).unwrap();
+        assert_eq!(serde_json::to_value(&proposal.plan).unwrap(),
+            serde_json::to_value(&again.plan).unwrap());
+        assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
+        assert_eq!(proposal.motion_evidence["track_count"],2);
+        assert_eq!(proposal.motion_evidence["keyframe_count"],8);
+        assert_eq!(proposal.motion_evidence["secondary_followers"][0]["derived_key_count"],5);
+        assert_eq!(proposal.motion_evidence["secondary_verdict"],"SOURCE_LINEAR_LAG_ONLY");
+        assert_eq!(proposal.motion_evidence["temporal_review_times"],
+            json!([0.0,0.1,0.4,0.5,0.8,0.9,1.0]));
+        assert_eq!(session.export().unwrap(),before);
+        let follower_keys:Vec<_>=proposal.plan.operations.iter()
+            .filter_map(|op|if let EditOperation::AddBoneTransformKeyframe {
+                bone_uuid,time,value,..}=op {
+                (bone_uuid.as_str()==FOLLOWER).then_some((*time,*value))
+            }else{None}).collect();
+        assert_eq!(follower_keys.len(),5);
+        assert_eq!(follower_keys[0],(0.0,[0.0;3]));
+        assert_eq!(follower_keys[2],(0.5,[15.0,0.0,0.0]));
+        assert_eq!(follower_keys[4],(1.0,[0.0;3]));
+        let mut edited=session.clone();
+        edited.apply(1,&proposal.plan.operations).unwrap();
+        assert_eq!(edited.document().animation_assets.last().unwrap()["name"],"slam");
+        assert_eq!(edited.undo(2).unwrap().revision,3);
+        assert_eq!(edited.export().unwrap(),before);
+    }
+    #[test]
+    fn periodic_follower_preserves_equal_end_values_without_native_claim() {
+        let session=source_with_follower();
+        let mut r=request(); r.expected_revision=1;
+        r.contacts.clear();r.loop_mode="loop".into();r.poses[1].time=0.4;
+        r.followers=vec![SemanticAnimationFollower {
+            driver_bone_uuid:BONE.into(),follower_bone_uuid:FOLLOWER.into(),
+            channel:"rotation".into(),lag_seconds:0.1,gain:0.5,
+            rest_value:[0.0;3],
+        }];
+        let p=compile(&session,&r).unwrap();
+        assert_eq!(p.motion_evidence["secondary_followers"][0]
+            ["loop_or_settle_endpoint_values_equal"],true);
+        assert_eq!(p.motion_evidence["native_playback_verdict"],"NOT_EXECUTED");
+        let keys:Vec<_>=p.plan.operations.iter().filter_map(|op|
+            if let EditOperation::AddBoneTransformKeyframe{bone_uuid,time,value,..}=op {
+                (bone_uuid.as_str()==FOLLOWER).then_some((*time,*value))
+            }else{None}).collect();
+        assert_eq!(keys[0].0,0.0);
+        assert_eq!(keys.last().unwrap().0,1.0);
+        assert_eq!(keys[0].1,keys.last().unwrap().1);
+    }
+    #[test]
+    fn follower_refuses_wrong_owner_wrap_tail_and_contact_risks() {
+        let session=source_with_follower();
+        let mut r=request();r.expected_revision=1;r.contacts.clear();
+        r.poses[1].time=0.4;r.poses[2].time=0.8;
+        r.followers=vec![SemanticAnimationFollower {
+            driver_bone_uuid:BONE.into(),follower_bone_uuid:FOLLOWER.into(),
+            channel:"rotation".into(),lag_seconds:0.1,gain:0.5,
+            rest_value:[0.0;3],
+        }];
+        let original=session.export().unwrap();
+        let mut bad=r.clone();
+        bad.followers[0].driver_bone_uuid=FOLLOWER.into();
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_FOLLOWER_DRIVER_UNAUTHORED");
+        bad=r.clone();bad.followers[0].follower_bone_uuid=BONE.into();
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_FOLLOWER_INTENT_INVALID");
+        bad=r.clone();bad.contacts.push(SemanticContactWindow {
+            bone_uuid:FOLLOWER.into(),kind:"grip".into(),
+            start:0.1,end:0.4,
+        });
+        // Contact requires a primary authored channel and cannot be invented
+        // for a derived follower; known source-only contact owners refuse.
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_ANIMATION_CONTACT_INVALID");
+        bad=r.clone();bad.followers[0].lag_seconds=0.3;
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_FOLLOWER_DRIVER_UNSAFE");
+        bad=r.clone();bad.poses[1].transforms[0].value=[200.0,0.0,0.0];
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_FOLLOWER_DRIVER_UNSAFE");
+        bad=r.clone();bad.loop_mode="loop".into();
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_FOLLOWER_DRIVER_UNSAFE");
+        bad=r.clone();bad.followers.push(bad.followers[0].clone());
+        assert_eq!(compile(&session,&bad).unwrap_err(),
+            "SEMANTIC_FOLLOWER_INTENT_INVALID");
+        assert_eq!(session.export().unwrap(),original);
+    }
+    #[test]
+    fn legacy_semantic_pose_json_defaults_to_no_followers() {
+        let old=serde_json::to_value(request()).unwrap();
+        assert!(old.get("followers").is_none());
+        let parsed:SemanticAnimationIntent=serde_json::from_value(old).unwrap();
+        assert!(parsed.followers.is_empty());
     }
     #[test]
     fn loop_same_values_do_not_certify_tangent_continuity() {
