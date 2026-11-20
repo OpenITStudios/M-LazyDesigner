@@ -40,6 +40,7 @@ function inputPlan(intent) {
   const operations=[{op:'create_animation',
     uuid:intent.animation_uuid,name:intent.name,length:intent.length_seconds}];
   const trackMap=new Map();
+  const interpolationOps=[];
   let previous=-1;
   for(let index=0;index<intent.poses.length;index++){
     const p=intent.poses[index];
@@ -51,10 +52,15 @@ function inputPlan(intent) {
     previous=p.time;
     const touched=new Set();
     for(const t of p.transforms){
-      if(!fields(t,['bone_uuid','channel','value'])||
+      if(!fields(t,t?.interpolation===undefined?
+         ['bone_uuid','channel','value']:
+         ['bone_uuid','channel','value','interpolation'])||
         typeof t.bone_uuid!=='string'||!id.test(t.bone_uuid)||
         !channels.has(t.channel)||!vec(t.value)||
-        (t.channel==='scale'&&t.value.some(v=>v<0||v>100))){
+        (t.channel==='scale'&&t.value.some(v=>v<0||v>100))||
+        (t.interpolation!==undefined&&
+          !['linear','step','catmullrom'].includes(t.interpolation))||
+        (t.interpolation==='catmullrom'&&t.channel==='scale')){
         throw new TypeError('CODE_MODE_SEMANTIC_ANIMATION_TRANSFORM_INVALID');
       }
       const k=t.bone_uuid+'\0'+t.channel;
@@ -70,6 +76,11 @@ function inputPlan(intent) {
         animation_uuid:intent.animation_uuid,bone_uuid:t.bone_uuid,
         keyframe_uuid,channel:t.channel,time:p.time,value:t.value});
       trackMap.set(k,(trackMap.get(k)??0)+1);
+      if(t.interpolation!==undefined&&t.interpolation!=='linear'){
+        interpolationOps.push({op:'set_bone_transform_keyframe_interpolation',
+          animation_uuid:intent.animation_uuid,bone_uuid:t.bone_uuid,
+          keyframe_uuid,channel:t.channel,interpolation:t.interpolation});
+      }
       if(operations.length>=128)
         throw new TypeError('CODE_MODE_SEMANTIC_ANIMATION_OPERATION_BUDGET');
     }
@@ -83,6 +94,16 @@ function inputPlan(intent) {
       ![...trackMap.keys()].some(k=>k.startsWith(c.bone_uuid+'\0')))
       throw new TypeError('CODE_MODE_SEMANTIC_ANIMATION_CONTACT_INVALID');
   }
+  if(interpolationOps.some(op=>op.interpolation==='catmullrom'&&
+      intent.contacts.some(c=>c.bone_uuid===op.bone_uuid))){
+    throw new TypeError('CODE_MODE_SEMANTIC_INTERPOLATION_CONTACT_UNSAFE');
+  }
+  if(operations.length+interpolationOps.length>=128){
+    throw new TypeError('CODE_MODE_SEMANTIC_ANIMATION_OPERATION_BUDGET');
+  }
+  operations.push(...interpolationOps);
+  const nonlinearOwners=new Set(interpolationOps.map(
+    op=>op.bone_uuid+'\0'+op.channel));
   const assigned=new Set();
   for(const f of followers){
     if(!fields(f,['driver_bone_uuid','follower_bone_uuid',
@@ -96,6 +117,7 @@ function inputPlan(intent) {
       typeof f.gain!=='number'||!Number.isFinite(f.gain)||
       Math.abs(f.gain)<1e-9||Math.abs(f.gain)>2||!vec(f.rest_value)||
       !trackMap.has(f.driver_bone_uuid+'\0'+f.channel)||
+      nonlinearOwners.has(f.driver_bone_uuid+'\0'+f.channel)||
       trackMap.has(f.follower_bone_uuid+'\0'+f.channel)||
       assigned.has(f.follower_bone_uuid+'\0'+f.channel)||
       intent.contacts.some(c=>c.bone_uuid===f.follower_bone_uuid)) {
@@ -179,6 +201,11 @@ export function validSemanticAnimationReceipt(receipt,intent,expectedSha){
       (followers.length?secondary.length===followers.length:
         JSON.stringify(planned)===JSON.stringify(operations));
     const totalOperations=Array.isArray(planned)?planned.length:0;
+    const actualKeyCount=Array.isArray(planned)?planned.filter(
+      op=>op?.op==='add_bone_transform_keyframe').length:0;
+    const numericVerdict=operations.some(op=>
+      op.op==='set_bone_transform_keyframe_interpolation')?
+      'AUTHORED_KEY_SEGMENTS_NOT_INTERPOLATED':'AUTHORED_LINEAR_SEGMENTS_ONLY';
     if(!eligible||receipt?.status!=='OK'||typeof receipt.sha256!=='string'||
       !sha.test(receipt.sha256)||receipt.sha256.toLowerCase()!==expectedSha.toLowerCase()||
       receipt.summary?.revision!==0||p?.expected_revision!==0||
@@ -193,8 +220,8 @@ export function validSemanticAnimationReceipt(receipt,intent,expectedSha){
       e?.scope!=='source_bound_semantic_pose_candidate'||
       e.animation_uuid!==intent.animation_uuid||e.loop_mode!==intent.loop_mode||
       e.pose_count!==intent.poses.length||
-      e.keyframe_count!==totalOperations-2||e.track_count!==expectedTracks.size||
-      e.numeric_motion_verdict!=='AUTHORED_LINEAR_SEGMENTS_ONLY'||
+      e.keyframe_count!==actualKeyCount||e.track_count!==expectedTracks.size||
+      e.numeric_motion_verdict!==numericVerdict||
       e.world_contact_verdict!=='UNVERIFIED'||
       e.native_playback_verdict!=='NOT_EXECUTED'||
       e.visual_verdict!=='UNVERIFIED'||e.write_authority!=='NOT_GRANTED'||

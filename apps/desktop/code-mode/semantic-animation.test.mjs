@@ -203,3 +203,65 @@ test('explicit one-level cape follower stays within Bone/channel and one preflig
   ]}},
  ]) assert.equal(validSemanticAnimationReceipt(forged,input,SHA),false);
 });
+
+
+// SOURCE_AUTHORED_NOT_RUN: native interpolation is existing Rust edit syntax,
+// not a new guest-side curve solver or verified Bedrock visual result.
+test('semantic pose author may select native Step and Catmull-Rom without extra pose keys',async()=>{
+ const nativeInput={...intent,contacts:[],poses:intent.poses.map((p,i)=>({
+  ...p,transforms:p.transforms.map(t=>({
+   ...t,...(i<2?{interpolation:i===0?'step':'catmullrom'}:{}),
+  })),
+ }))};
+ const interpolate=(i,name)=>({
+  op:'set_bone_transform_keyframe_interpolation',
+  animation_uuid:clip,bone_uuid:bone,keyframe_uuid:key(i),
+  channel:'rotation',interpolation:name,
+ });
+ const nativeOps=[...operations.slice(0,-1),
+  interpolate(0,'step'),interpolate(1,'catmullrom'),operations.at(-1)];
+ const nativeEvidence={
+  ...evidence,contact_windows:[],temporal_review_times:[0,0.5,1],
+  numeric_motion_verdict:'AUTHORED_KEY_SEGMENTS_NOT_INTERPOLATED',
+ };
+ const response={
+  ...receipt(),plan:{...receipt().plan,operations:nativeOps},
+  preflight:{...receipt().preflight,mutation:{
+   ...receipt().preflight.mutation,operation_count:nativeOps.length,
+  }},
+  motion_evidence:nativeEvidence,
+ };
+ assert.equal(serializeSemanticAnimation(nativeInput).includes('catmullrom'),true);
+ assert.equal(validSemanticAnimationReceipt(response,nativeInput,SHA),true);
+ let approvals=0;
+ const client=createRustCodeModeClient({binary:'/trusted/rust',
+  authorizeMutation:async()=>{approvals++;return true;},
+  runner:async argv=>{
+   assert.equal(argv[0],'plan-semantic-animation');
+   assert.equal(argv[argv.indexOf('--expected-sha256')+1],SHA);
+   assert.deepEqual(JSON.parse(await readFile(argv[argv.indexOf('--intent')+1],'utf8')),
+    nativeInput);
+   return response;
+  }});
+ const proposal=await client.planSemanticAnimation({
+  input:'/abs/model.bbmodel',expectedSha256:SHA,intent:nativeInput,
+ });
+ assert.equal(proposal.motion_evidence.keyframe_count,3);
+ assert.equal(proposal.plan.operations.length,7);
+ assert.equal(approvals,0);
+ for(const invalid of [
+  {...nativeInput,poses:nativeInput.poses.map((p,i)=>
+   i===0?{...p,transforms:[{...p.transforms[0],interpolation:'bezier'}]}:p)},
+  {...nativeInput,contacts:[{bone_uuid:bone,kind:'planted',start:0.2,end:0.4}]},
+ ])assert.throws(()=>serializeSemanticAnimation(invalid));
+ for(const forged of [
+  {...response,plan:{...response.plan,operations:[
+   ...nativeOps.slice(0,-1).filter(op=>
+     op.op!=='set_bone_transform_keyframe_interpolation'),nativeOps.at(-1),
+  ]}},
+  {...response,plan:{...response.plan,operations:nativeOps.map(op=>
+   op.interpolation==='step'?{...op,interpolation:'bezier'}:op)}},
+  {...response,motion_evidence:{...nativeEvidence,
+   numeric_motion_verdict:'AUTHORED_LINEAR_SEGMENTS_ONLY'}},
+ ]) assert.equal(validSemanticAnimationReceipt(forged,nativeInput,SHA),false);
+});

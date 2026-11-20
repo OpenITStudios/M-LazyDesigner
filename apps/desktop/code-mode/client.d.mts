@@ -274,6 +274,10 @@ export interface PeriodicRotationReceipt {
  */
 export interface SemanticAnimationTransform {
   bone_uuid:string;channel:"rotation"|"position"|"scale";value:Vec3;
+  /** Existing Rust native key interpolation; optional linear is the default.
+   * Bezier handles require the separate explicit editor operation.
+   */
+  interpolation?:"linear"|"step"|"catmullrom";
 }
 export interface SemanticAnimationPose {
   time:number;
@@ -318,7 +322,8 @@ export interface SemanticAnimationEvidence {
     contact_verdict:"UNVERIFIED";
     loop_or_settle_endpoint_values_equal:boolean;
   }>;
-  numeric_motion_verdict:"AUTHORED_LINEAR_SEGMENTS_ONLY";
+  numeric_motion_verdict:"AUTHORED_LINEAR_SEGMENTS_ONLY"|
+    "AUTHORED_KEY_SEGMENTS_NOT_INTERPOLATED";
   world_contact_verdict:"UNVERIFIED";
   native_playback_verdict:"NOT_EXECUTED";
   visual_verdict:"UNVERIFIED";write_authority:"NOT_GRANTED";

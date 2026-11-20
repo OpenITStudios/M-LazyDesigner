@@ -13,6 +13,10 @@ pub struct SemanticAnimationTransform {
     pub bone_uuid: String,
     pub channel: String,
     pub value: [f64; 3],
+    /// Optional native outgoing interpolation on this exact authored key.
+    /// Bezier is intentionally left to the existing explicit-handle editor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpolation: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -129,6 +133,7 @@ pub(super) fn compile(
     }];
     let mut tracks: BTreeMap<(String, String), Vec<(f64, [f64; 3])>> =
         BTreeMap::new();
+    let mut requested_interpolations = Vec::new();
     let mut previous_time = -1.0;
     for (pose_index, pose) in request.poses.iter().enumerate() {
         if !exact_time(pose.time) || pose.time > request.length_seconds ||
@@ -145,20 +150,33 @@ pub(super) fn compile(
             if !valid_uuid(&transform.bone_uuid) ||
                !bones.contains(transform.bone_uuid.as_str()) ||
                !valid_animation_transform_value(&transform.channel, transform.value) ||
+               transform.interpolation.as_deref().is_some_and(|mode|
+                   !matches!(mode, "linear" | "step" | "catmullrom")) ||
+               (transform.interpolation.as_deref()==Some("catmullrom") &&
+                   transform.channel=="scale") ||
                !touched.insert((&transform.bone_uuid, &transform.channel)) {
                 return Err("SEMANTIC_ANIMATION_TRANSFORM_INVALID".into());
             }
             if operations.len() >= MAX_OPERATIONS - 1 {
                 return Err("SEMANTIC_ANIMATION_OPERATION_BUDGET".into());
             }
+            let keyframe_uuid=key_uuid(&request.animation_uuid,
+                &transform.bone_uuid, &transform.channel, pose_index);
             operations.push(EditOperation::AddBoneTransformKeyframe {
                 animation_uuid: request.animation_uuid.clone(),
                 bone_uuid: transform.bone_uuid.clone(),
-                keyframe_uuid: key_uuid(&request.animation_uuid,
-                    &transform.bone_uuid, &transform.channel, pose_index),
+                keyframe_uuid:keyframe_uuid.clone(),
                 channel: transform.channel.clone(),
                 time: pose.time, value: transform.value,
             });
+            if let Some(mode)=&transform.interpolation {
+                if mode!="linear" {
+                    requested_interpolations.push((
+                        transform.bone_uuid.clone(),transform.channel.clone(),
+                        keyframe_uuid,mode.clone(),
+                    ));
+                }
+            }
             tracks.entry((transform.bone_uuid.clone(), transform.channel.clone()))
                 .or_default().push((pose.time, transform.value));
         }
@@ -181,6 +199,31 @@ pub(super) fn compile(
             "observed_world_samples": 0,
             "contact_verdict": "REQUIRES_NATIVE_WORLD_SPACE_OBSERVATION"
         }));
+    }
+    // Keep the user-selected interpolation on exactly its original key.
+    // Catmull-Rom may overshoot contacts/scale and Euler winding; do not
+    // invent a native sample or hide the danger with more keyframes.
+    let nonlinear_owners: HashSet<(String,String)> = requested_interpolations
+        .iter().map(|(bone,channel,_,_)|(bone.clone(),channel.clone())).collect();
+    for (bone,channel,keyframe_uuid,mode) in &requested_interpolations {
+        if mode=="catmullrom" {
+            if request.contacts.iter().any(|c|c.bone_uuid.as_str()==bone.as_str()) {
+                return Err("SEMANTIC_ANIMATION_INTERPOLATION_CONTACT_UNSAFE".into());
+            }
+            if channel=="rotation" && tracks.get(&(bone.clone(),channel.clone()))
+                .is_some_and(|keys|keys.windows(2).any(|pair|
+                    (0..3).any(|axis|(pair[0].1[axis]-pair[1].1[axis]).abs()>=180.0))) {
+                return Err("SEMANTIC_ANIMATION_INTERPOLATION_EULER_AMBIGUOUS".into());
+            }
+        }
+        if operations.len() >= MAX_OPERATIONS-1 {
+            return Err("SEMANTIC_ANIMATION_OPERATION_BUDGET".into());
+        }
+        operations.push(EditOperation::SetBoneTransformKeyframeInterpolation {
+            animation_uuid:request.animation_uuid.clone(),
+            bone_uuid:bone.clone(),keyframe_uuid:keyframe_uuid.clone(),
+            channel:channel.clone(),interpolation:mode.clone(),
+        });
     }
     // Secondary is strictly derived from EXPLICIT primary keys. Refuse
     // generated chains, channel overwrites, unclear Euler wraps, truncated
@@ -207,6 +250,9 @@ pub(super) fn compile(
             return Err("SEMANTIC_FOLLOWER_INTENT_INVALID".into());
         }
         let driver_key = (follower.driver_bone_uuid.clone(),follower.channel.clone());
+        if nonlinear_owners.contains(&driver_key) {
+            return Err("SEMANTIC_FOLLOWER_DRIVER_INTERPOLATION_UNSUPPORTED".into());
+        }
         if !primary_track_ids.contains(&driver_key) {
             return Err("SEMANTIC_FOLLOWER_DRIVER_UNAUTHORED".into());
         }
@@ -350,17 +396,22 @@ pub(super) fn compile(
     }
     for pose in &request.poses { add_review_time(&mut review_times, pose.time); }
     review_times.sort_by(f64::total_cmp);
+    let authored_keyframe_count: usize=tracks.values().map(Vec::len).sum();
     let mut evidence = json!({
         "scope": "source_bound_semantic_pose_candidate",
         "animation_uuid": request.animation_uuid,
         "loop_mode": request.loop_mode,
         "pose_count": request.poses.len(),
-        "keyframe_count": plan.operations.len()-2,
+        "keyframe_count": authored_keyframe_count,
         "track_count": tracks.len(),
         "contact_windows": contact_reports,
         "tracks": track_reports,
         "temporal_review_times": review_times,
-        "numeric_motion_verdict": "AUTHORED_LINEAR_SEGMENTS_ONLY",
+        "numeric_motion_verdict": if requested_interpolations.is_empty() {
+            "AUTHORED_LINEAR_SEGMENTS_ONLY"
+        } else {
+            "AUTHORED_KEY_SEGMENTS_NOT_INTERPOLATED"
+        },
         "world_contact_verdict": "UNVERIFIED",
         "native_playback_verdict": "NOT_EXECUTED",
         "visual_verdict": "UNVERIFIED",
@@ -386,15 +437,15 @@ mod tests {
             poses: vec![
                 SemanticAnimationPose { time: 0.0, phase: "neutral".into(),
                     transforms: vec![SemanticAnimationTransform {
-                        bone_uuid: BONE.into(), channel: "rotation".into(), value: [0.0;3],
+                        bone_uuid: BONE.into(), channel: "rotation".into(), value: [0.0;3], interpolation:None,
                     }] },
                 SemanticAnimationPose { time: 0.5, phase: "impact".into(),
                     transforms: vec![SemanticAnimationTransform {
-                        bone_uuid: BONE.into(), channel: "rotation".into(), value: [30.0,0.0,0.0],
+                        bone_uuid: BONE.into(), channel: "rotation".into(), value: [30.0,0.0,0.0], interpolation:None,
                     }] },
                 SemanticAnimationPose { time: 1.0, phase: "recovery".into(),
                     transforms: vec![SemanticAnimationTransform {
-                        bone_uuid: BONE.into(), channel: "rotation".into(), value: [0.0;3],
+                        bone_uuid: BONE.into(), channel: "rotation".into(), value: [0.0;3], interpolation:None,
                     }] }
             ],
             contacts: vec![SemanticContactWindow {
@@ -558,6 +609,55 @@ mod tests {
         assert_eq!(compile(&session,&bad).unwrap_err(),
             "SEMANTIC_FOLLOWER_INTENT_INVALID");
         assert_eq!(session.export().unwrap(),original);
+    }
+    #[test]
+    fn explicit_native_key_interpolation_reuses_existing_edit_plan() {
+        let session=EditorSession::open(SOURCE).unwrap();
+        let original=session.export().unwrap();
+        let mut r=request();r.contacts.clear();
+        r.poses[0].transforms[0].interpolation=Some("step".into());
+        r.poses[1].transforms[0].interpolation=Some("catmullrom".into());
+        let proposal=compile(&session,&r).unwrap();
+        assert_eq!(proposal.plan.operations.len(),7);
+        assert_eq!(proposal.motion_evidence["keyframe_count"],3);
+        assert_eq!(proposal.motion_evidence["numeric_motion_verdict"],
+            "AUTHORED_KEY_SEGMENTS_NOT_INTERPOLATED");
+        assert_eq!(proposal.preflight["status"],"VALIDATED_NOT_APPLIED");
+        let mut changed=session.clone();
+        changed.apply(0,&proposal.plan.operations).unwrap();
+        let frames=&changed.document().animation_assets.last().unwrap()
+            ["animators"][BONE]["keyframes"];
+        assert_eq!(frames[0]["interpolation"],"step");
+        assert_eq!(frames[1]["interpolation"],"catmullrom");
+        assert_eq!(frames[2]["interpolation"],"linear");
+        assert_eq!(changed.undo(1).unwrap().revision,2);
+        assert_eq!(changed.export().unwrap(),original);
+    }
+    #[test]
+    fn ambiguous_or_contact_unsafe_interpolation_refuses() {
+        let session=EditorSession::open(SOURCE).unwrap();
+        let mut r=request();
+        r.poses[0].transforms[0].interpolation=Some("bezier".into());
+        assert_eq!(compile(&session,&r).unwrap_err(),
+            "SEMANTIC_ANIMATION_TRANSFORM_INVALID");
+        r=request();r.poses[0].transforms[0].interpolation=Some("catmullrom".into());
+        assert_eq!(compile(&session,&r).unwrap_err(),
+            "SEMANTIC_ANIMATION_INTERPOLATION_CONTACT_UNSAFE");
+        r=request();r.contacts.clear();
+        r.poses[0].transforms[0].interpolation=Some("catmullrom".into());
+        r.poses[1].transforms[0].value=[180.0,0.0,0.0];
+        assert_eq!(compile(&session,&r).unwrap_err(),
+            "SEMANTIC_ANIMATION_INTERPOLATION_EULER_AMBIGUOUS");
+        let session=source_with_follower();
+        r=request();r.expected_revision=1;r.contacts.clear();
+        r.poses[1].time=0.4;r.poses[2].time=0.8;
+        r.poses[0].transforms[0].interpolation=Some("step".into());
+        r.followers=vec![SemanticAnimationFollower {
+            driver_bone_uuid:BONE.into(),follower_bone_uuid:FOLLOWER.into(),
+            channel:"rotation".into(),lag_seconds:0.1,gain:0.5,rest_value:[0.0;3],
+        }];
+        assert_eq!(compile(&session,&r).unwrap_err(),
+            "SEMANTIC_FOLLOWER_DRIVER_INTERPOLATION_UNSUPPORTED");
     }
     #[test]
     fn legacy_semantic_pose_json_defaults_to_no_followers() {
