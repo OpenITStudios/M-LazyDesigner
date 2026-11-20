@@ -202,6 +202,16 @@ visual reference freshness and no-false-artistic-PASS conditions remain.
 No second workflow, reviewed-image store or write path is introduced.
 Source regression authored NOT_EXECUTED.
 
+**Additional Rust test-only categories (2026-11-20):** Existing
+`project_navigation`, `analytics`, `system_status`, `authoring/geometry`,
+`authoring/animation_semantic` and `authoring/animation_export`
+test bodies now live under their corresponding child `tests.rs` modules.
+All 83 named `#[test]` functions and original Rust assertions remain;
+relative `include_bytes!` / `include_str!` paths were adjusted for
+one deeper module directory. Production source, public functions, file
+permission boundaries and native Rust authoring state were not changed.
+No tests or compilation were executed due to the active test hold.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
