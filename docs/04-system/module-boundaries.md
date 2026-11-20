@@ -111,6 +111,16 @@ UI tests are included in the future canonical `verify:source` command
 alongside Code Mode and Cargo checks. Nothing has been compiled or
 executed in the held source-development phase.
 
+**Source-bound Rust inspection ownership (2026-11-20):** Bounded
+Geometry/Animation/Paint inspection functions and the ephemeral
+`ValidatedInspection` facade now belong to `authoring/inspections.rs`.
+The original function bodies are preserved; only parent-visible fields
+and test-only private selectors are exposed within the same crate module.
+The canonical Rust `EditorSession`, EditPlan validation, transactions,
+Undo/Redo and saved file publisher remain unchanged in their owners.
+No second model, bitmap cache, or editor engine was introduced. All
+Rust tests remain NOT_EXECUTED under the active hold.
+
 **Remaining large stateful owners:** `RustEditorPage.svelte` is a reactive
 UI controller/template; `authoring/mod.rs` is the Rust document/edit
 authority; `desktop_authoring.rs` and `host.mjs` remain substantial
